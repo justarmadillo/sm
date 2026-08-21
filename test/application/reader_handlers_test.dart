@@ -4,19 +4,18 @@ import 'package:incremental_reader/src/application/ports/repositories.dart';
 import 'package:incremental_reader/src/application/reader/reader_commands.dart';
 import 'package:incremental_reader/src/application/reader/reader_handlers.dart';
 import 'package:incremental_reader/src/core/clock.dart';
-import 'package:incremental_reader/src/core/ids.dart';
 import 'package:incremental_reader/src/core/result.dart';
 import 'package:incremental_reader/src/core/tracing.dart';
-import 'package:incremental_reader/src/data/database/app_database.dart';
 import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/data/repositories/drift_repositories.dart';
 import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
 import 'package:incremental_reader/src/domain/content/source.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/interval_profile.dart';
 import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:test/test.dart';
+
+import '../support/app_harness.dart';
 
 const String _markdown = '''
 # Chapter One
@@ -28,44 +27,12 @@ A second paragraph, further down the page.
 A third paragraph, further still.
 ''';
 
-/// Everything a handler needs, wired to a real database.
-final class _Harness {
-  _Harness(this.database, this.clock)
-    : content = DriftContentRepository(database),
-      learning = DriftLearningRepository(database),
-      transfer = DriftTransferRepository(
-        database,
-        FakeIdGenerator(prefix: 'dataset'),
-        'test-device',
-      ),
-      diagnostics = RecordingDiagnosticSink();
-
-  final AppDatabase database;
-  final FakeClock clock;
-  final DriftContentRepository content;
-  final DriftLearningRepository learning;
-  final DriftTransferRepository transfer;
-  final RecordingDiagnosticSink diagnostics;
-
-  late final ReaderHandlers handlers = ReaderHandlers(
-    content: content,
-    learning: learning,
-    transfer: transfer,
-    transactions: DriftTransactionRunner(database),
-    clock: clock,
-    ids: FakeIdGenerator(),
-    calendar: const StudyDayCalendar(zone: FixedOffsetZone.utc),
-    profiles: IntervalProfiles.defaults(),
-    diagnostics: diagnostics,
-  );
-
-  int _operations = 0;
-
-  /// A fresh operation id, as a ViewModel would mint one per user action.
-  OperationId nextOperation() => OperationId('op-${++_operations}');
+/// This suite's fixtures, over the shared stack.
+extension _Fixtures on AppHarness {
+  OperationId nextOperation() => operation();
 
   Future<Source> importFixture({String title = 'Chapter'}) async {
-    final result = await handlers.importSource(
+    final result = await reader.importSource(
       ImportSource(nextOperation(), title: title, markdown: _markdown),
     );
     expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
@@ -121,13 +88,28 @@ final class TopicStateSnapshot {
       'step=$stepIndex ${lifecycle.name} ${deferralKind.name}';
 }
 
+/// Pins the fixed-sequence pacing model.
+///
+/// These suites are about handler behaviour — exactly-once terminal commands,
+/// interruption never counting as progress, lifecycle transitions — and the
+/// A-factor's arithmetic is exercised in its own domain tests. Fixing the
+/// model here keeps the dates in these assertions readable.
+Future<void> _useFixedSequences(AppHarness harness) => harness.tuneSettings(
+  (AppSettings settings) => settings.copyWith(
+    topics: settings.topics.copyWith(
+      pacing: TopicPacingMode.intervalProfile,
+    ),
+  ),
+);
+
 void main() {
-  late _Harness harness;
+  late AppHarness harness;
   late FakeClock clock;
 
-  setUp(() {
+  setUp(() async {
     clock = FakeClock(DateTime.utc(2026, 3, 5, 10));
-    harness = _Harness(openInMemoryDatabase(), clock);
+    harness = AppHarness(database: openInMemoryDatabase(), clock: clock);
+    await _useFixedSequences(harness);
   });
 
   tearDown(() => harness.database.close());
@@ -157,12 +139,12 @@ void main() {
     });
 
     test('rejects empty markdown and empty titles', () async {
-      final blank = await harness.handlers.importSource(
+      final blank = await harness.reader.importSource(
         ImportSource(harness.nextOperation(), title: 'x', markdown: '   '),
       );
       expect(blank.failureOrNull, isA<ValidationFailure>());
 
-      final untitled = await harness.handlers.importSource(
+      final untitled = await harness.reader.importSource(
         ImportSource(harness.nextOperation(), title: '  ', markdown: '# hi'),
       );
       expect(untitled.failureOrNull, isA<ValidationFailure>());
@@ -192,7 +174,7 @@ void main() {
         blockId: document!.blocks[1].id,
         utf8Offset: 21,
       );
-      final result = await harness.handlers.moveResumeMarker(
+      final result = await harness.reader.moveResumeMarker(
         MoveResumeMarker(
           harness.nextOperation(),
           sourceId: source.id,
@@ -211,7 +193,7 @@ void main() {
         final before = await harness.topicOf(source.id);
         final document = await harness.content.findDocument(source.id);
 
-        await harness.handlers.saveSoftPosition(
+        await harness.reader.saveSoftPosition(
           SaveSoftPosition(
             harness.nextOperation(),
             sourceId: source.id,
@@ -235,7 +217,7 @@ void main() {
       final before = (await harness.learning.recentActivity()).length;
 
       for (var i = 0; i < 3; i++) {
-        await harness.handlers.saveSoftPosition(
+        await harness.reader.saveSoftPosition(
           SaveSoftPosition(
             harness.nextOperation(),
             sourceId: source.id,
@@ -257,14 +239,14 @@ void main() {
         utf8Offset: 4,
       );
 
-      await harness.handlers.saveSoftPosition(
+      await harness.reader.saveSoftPosition(
         SaveSoftPosition(
           harness.nextOperation(),
           sourceId: source.id,
           anchor: anchor,
         ),
       );
-      final confirmed = await harness.handlers.confirmSoftPosition(
+      final confirmed = await harness.reader.confirmSoftPosition(
         ConfirmSoftPosition(harness.nextOperation(), sourceId: source.id),
       );
 
@@ -274,7 +256,7 @@ void main() {
 
     test('an anchor from another source is rejected', () async {
       final source = await harness.importFixture();
-      final result = await harness.handlers.moveResumeMarker(
+      final result = await harness.reader.moveResumeMarker(
         MoveResumeMarker(
           harness.nextOperation(),
           sourceId: source.id,
@@ -290,7 +272,7 @@ void main() {
       final source = await harness.importFixture();
       final ref = ElementRef(id: source.id, type: ElementType.source);
 
-      final result = await harness.handlers.completeEncounter(
+      final result = await harness.reader.completeEncounter(
         CompleteTopicEncounter(
           harness.nextOperation(),
           ref: ref,
@@ -315,10 +297,10 @@ void main() {
       final ref = ElementRef(id: source.id, type: ElementType.source);
       final operation = harness.nextOperation();
 
-      final first = await harness.handlers.completeEncounter(
+      final first = await harness.reader.completeEncounter(
         CompleteTopicEncounter(operation, ref: ref),
       );
-      final retry = await harness.handlers.completeEncounter(
+      final retry = await harness.reader.completeEncounter(
         CompleteTopicEncounter(operation, ref: ref),
       );
 
@@ -340,11 +322,11 @@ void main() {
       final source = await harness.importFixture();
       final ref = ElementRef(id: source.id, type: ElementType.source);
 
-      await harness.handlers.completeEncounter(
+      await harness.reader.completeEncounter(
         CompleteTopicEncounter(harness.nextOperation(), ref: ref),
       );
       clock.advance(const Duration(days: 1));
-      await harness.handlers.completeEncounter(
+      await harness.reader.completeEncounter(
         CompleteTopicEncounter(harness.nextOperation(), ref: ref),
       );
 
@@ -356,7 +338,7 @@ void main() {
     test('advances the dataset generation', () async {
       final source = await harness.importFixture();
       final before = (await harness.transfer.currentIdentity()).generation;
-      await harness.handlers.completeEncounter(
+      await harness.reader.completeEncounter(
         CompleteTopicEncounter(
           harness.nextOperation(),
           ref: ElementRef(id: source.id, type: ElementType.source),
@@ -374,7 +356,7 @@ void main() {
       final source = await harness.importFixture();
       final ref = ElementRef(id: source.id, type: ElementType.source);
 
-      await harness.handlers.postpone(
+      await harness.reader.postpone(
         PostponeElement(
           harness.nextOperation(),
           ref: ref,
@@ -383,7 +365,11 @@ void main() {
       );
 
       final snapshot = await harness.topicOf(source.id);
-      expect(snapshot.stepIndex, 0);
+      expect(
+        snapshot.stepIndex,
+        0,
+        reason: 'Later moves eligibility and nothing else',
+      );
       expect(snapshot.dueDay, '2026-03-05');
       expect(snapshot.effectiveDueDay, '2026-03-08');
       expect(snapshot.deferralKind, DeferralKind.manual);
@@ -391,7 +377,7 @@ void main() {
 
     test('a postponed source drops out of today and returns later', () async {
       final source = await harness.importFixture();
-      await harness.handlers.postpone(
+      await harness.reader.postpone(
         PostponeElement(
           harness.nextOperation(),
           ref: ElementRef(id: source.id, type: ElementType.source),
@@ -416,7 +402,7 @@ void main() {
       'Finish removes a source from the queue but keeps its content',
       () async {
         final source = await harness.importFixture();
-        await harness.handlers.finishSource(
+        await harness.reader.finishSource(
           FinishSource(harness.nextOperation(), sourceId: source.id),
         );
 
@@ -440,15 +426,15 @@ void main() {
       () async {
         final source = await harness.importFixture();
         final ref = ElementRef(id: source.id, type: ElementType.source);
-        await harness.handlers.completeEncounter(
+        await harness.reader.completeEncounter(
           CompleteTopicEncounter(harness.nextOperation(), ref: ref),
         );
-        await harness.handlers.finishSource(
+        await harness.reader.finishSource(
           FinishSource(harness.nextOperation(), sourceId: source.id),
         );
 
         clock.advance(const Duration(days: 10));
-        await harness.handlers.reactivate(
+        await harness.reader.reactivate(
           ReactivateElement(harness.nextOperation(), ref: ref),
         );
 
@@ -462,11 +448,11 @@ void main() {
     test('changing pace keeps the position and the interval step', () async {
       final source = await harness.importFixture();
       final ref = ElementRef(id: source.id, type: ElementType.source);
-      await harness.handlers.completeEncounter(
+      await harness.reader.completeEncounter(
         CompleteTopicEncounter(harness.nextOperation(), ref: ref),
       );
 
-      await harness.handlers.setReadingPace(
+      await harness.reader.setReadingPace(
         SetReadingPace(
           harness.nextOperation(),
           sourceId: source.id,
@@ -487,7 +473,7 @@ void main() {
       'deleting a source retains content and independent descendants',
       () async {
         final source = await harness.importFixture();
-        await harness.handlers.deleteSource(
+        await harness.reader.deleteSource(
           DeleteSource(harness.nextOperation(), sourceId: source.id),
         );
 
@@ -518,20 +504,26 @@ void main() {
       }
     });
 
-    _Harness openHarness() => _Harness(
-      openDatabaseAt(File('${workspace.path}/db/$kDatabaseFileName')),
-      FakeClock(DateTime.utc(2026, 3, 5, 10)),
-    );
+    Future<AppHarness> openHarness() async {
+      final AppHarness opened = AppHarness(
+        database: openDatabaseAt(
+          File('${workspace.path}/db/$kDatabaseFileName'),
+        ),
+        clock: FakeClock(DateTime.utc(2026, 3, 5, 10)),
+      );
+      await _useFixedSequences(opened);
+      return opened;
+    }
 
     test('resumes mid-paragraph after a full restart', () async {
-      final first = openHarness();
+      final first = await openHarness();
       final source = await first.importFixture();
       final document = await first.content.findDocument(source.id);
       final anchor = ReaderAnchor(
         blockId: document!.blocks[1].id,
         utf8Offset: 21,
       );
-      await first.handlers.moveResumeMarker(
+      await first.reader.moveResumeMarker(
         MoveResumeMarker(
           first.nextOperation(),
           sourceId: source.id,
@@ -541,7 +533,7 @@ void main() {
       final beforeSchedule = await first.topicOf(source.id);
       await first.database.close();
 
-      final second = openHarness();
+      final second = await openHarness();
       addTearDown(second.database.close);
       final reopened = await second.content.findSource(source.id);
       final reopenedDocument = await second.content.findDocument(source.id);
@@ -559,14 +551,14 @@ void main() {
     test(
       'a session killed without a marker reopens at the soft position',
       () async {
-        final first = openHarness();
+        final first = await openHarness();
         final source = await first.importFixture();
         final document = await first.content.findDocument(source.id);
         final soft = ReaderAnchor(
           blockId: document!.blocks[2].id,
           utf8Offset: 0,
         );
-        await first.handlers.saveSoftPosition(
+        await first.reader.saveSoftPosition(
           SaveSoftPosition(
             first.nextOperation(),
             sourceId: source.id,
@@ -577,7 +569,7 @@ void main() {
         // written must already be durable in the file.
         addTearDown(first.database.close);
 
-        final second = openHarness();
+        final second = await openHarness();
         addTearDown(second.database.close);
         final reopened = await second.content.findSource(source.id);
 

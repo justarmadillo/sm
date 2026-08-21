@@ -237,8 +237,13 @@ void main() {
           )
           .requireValue;
       expect(state.isDone, isTrue);
-      expect(state.topic.stepIndex, 1);
+      expect(state.topic.encounters, 1);
+      // The only article in the collection is by definition the most
+      // important one in it, so its priority-derived first interval is a
+      // single day. No marker was placed, so the completion term sits at its
+      // floor and A clamps to 1.0, carrying that day forward unchanged.
       expect(state.topic.schedule.dueDay.toString(), '2026-03-06');
+      expect(state.topic.intervalDays, greaterThan(0));
 
       final logged = await container
           .read(learningRepositoryProvider)

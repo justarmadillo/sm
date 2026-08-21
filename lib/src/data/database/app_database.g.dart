@@ -3427,6 +3427,15 @@ class $ElementSchedulesTable extends ElementSchedules
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _rootIdMeta = const VerificationMeta('rootId');
+  @override
+  late final GeneratedColumn<String> rootId = GeneratedColumn<String>(
+    'root_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _zoneIdMeta = const VerificationMeta('zoneId');
   @override
   late final GeneratedColumn<String> zoneId = GeneratedColumn<String>(
@@ -3446,6 +3455,7 @@ class $ElementSchedulesTable extends ElementSchedules
     originalDueDay,
     deferredUntil,
     deferralKind,
+    rootId,
     zoneId,
   ];
   @override
@@ -3535,6 +3545,12 @@ class $ElementSchedulesTable extends ElementSchedules
         ),
       );
     }
+    if (data.containsKey('root_id')) {
+      context.handle(
+        _rootIdMeta,
+        rootId.isAcceptableOrUnknown(data['root_id']!, _rootIdMeta),
+      );
+    }
     if (data.containsKey('zone_id')) {
       context.handle(
         _zoneIdMeta,
@@ -3584,6 +3600,10 @@ class $ElementSchedulesTable extends ElementSchedules
         DriftSqlType.int,
         data['${effectivePrefix}deferral_kind'],
       )!,
+      rootId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}root_id'],
+      ),
       zoneId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}zone_id'],
@@ -3623,6 +3643,14 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
   /// Recalling same-day overload deferrals must not undo what the user
   /// deliberately pushed away, so the two are distinguishable in storage.
   final int deferralKind;
+
+  /// Source at the root of this element's provenance, denormalized.
+  ///
+  /// Walking up the tree on every queue build would be a needless join, and
+  /// the queue needs it on every element to stop one article's subtree from
+  /// taking over a session. Denormalizing also means a card keeps its
+  /// citation if its source is ever removed.
+  final String? rootId;
   final String zoneId;
   const ScheduleRow({
     required this.elementId,
@@ -3633,6 +3661,7 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
     required this.originalDueDay,
     this.deferredUntil,
     required this.deferralKind,
+    this.rootId,
     required this.zoneId,
   });
   @override
@@ -3648,6 +3677,9 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
       map['deferred_until'] = Variable<int>(deferredUntil);
     }
     map['deferral_kind'] = Variable<int>(deferralKind);
+    if (!nullToAbsent || rootId != null) {
+      map['root_id'] = Variable<String>(rootId);
+    }
     map['zone_id'] = Variable<String>(zoneId);
     return map;
   }
@@ -3664,6 +3696,9 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
           ? const Value.absent()
           : Value(deferredUntil),
       deferralKind: Value(deferralKind),
+      rootId: rootId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rootId),
       zoneId: Value(zoneId),
     );
   }
@@ -3682,6 +3717,7 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
       originalDueDay: serializer.fromJson<int>(json['originalDueDay']),
       deferredUntil: serializer.fromJson<int?>(json['deferredUntil']),
       deferralKind: serializer.fromJson<int>(json['deferralKind']),
+      rootId: serializer.fromJson<String?>(json['rootId']),
       zoneId: serializer.fromJson<String>(json['zoneId']),
     );
   }
@@ -3697,6 +3733,7 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
       'originalDueDay': serializer.toJson<int>(originalDueDay),
       'deferredUntil': serializer.toJson<int?>(deferredUntil),
       'deferralKind': serializer.toJson<int>(deferralKind),
+      'rootId': serializer.toJson<String?>(rootId),
       'zoneId': serializer.toJson<String>(zoneId),
     };
   }
@@ -3710,6 +3747,7 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
     int? originalDueDay,
     Value<int?> deferredUntil = const Value.absent(),
     int? deferralKind,
+    Value<String?> rootId = const Value.absent(),
     String? zoneId,
   }) => ScheduleRow(
     elementId: elementId ?? this.elementId,
@@ -3722,6 +3760,7 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
         ? deferredUntil.value
         : this.deferredUntil,
     deferralKind: deferralKind ?? this.deferralKind,
+    rootId: rootId.present ? rootId.value : this.rootId,
     zoneId: zoneId ?? this.zoneId,
   );
   ScheduleRow copyWithCompanion(ElementSchedulesCompanion data) {
@@ -3744,6 +3783,7 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
       deferralKind: data.deferralKind.present
           ? data.deferralKind.value
           : this.deferralKind,
+      rootId: data.rootId.present ? data.rootId.value : this.rootId,
       zoneId: data.zoneId.present ? data.zoneId.value : this.zoneId,
     );
   }
@@ -3759,6 +3799,7 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
           ..write('originalDueDay: $originalDueDay, ')
           ..write('deferredUntil: $deferredUntil, ')
           ..write('deferralKind: $deferralKind, ')
+          ..write('rootId: $rootId, ')
           ..write('zoneId: $zoneId')
           ..write(')'))
         .toString();
@@ -3774,6 +3815,7 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
     originalDueDay,
     deferredUntil,
     deferralKind,
+    rootId,
     zoneId,
   );
   @override
@@ -3788,6 +3830,7 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
           other.originalDueDay == this.originalDueDay &&
           other.deferredUntil == this.deferredUntil &&
           other.deferralKind == this.deferralKind &&
+          other.rootId == this.rootId &&
           other.zoneId == this.zoneId);
 }
 
@@ -3800,6 +3843,7 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
   final Value<int> originalDueDay;
   final Value<int?> deferredUntil;
   final Value<int> deferralKind;
+  final Value<String?> rootId;
   final Value<String> zoneId;
   final Value<int> rowid;
   const ElementSchedulesCompanion({
@@ -3811,6 +3855,7 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     this.originalDueDay = const Value.absent(),
     this.deferredUntil = const Value.absent(),
     this.deferralKind = const Value.absent(),
+    this.rootId = const Value.absent(),
     this.zoneId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -3823,6 +3868,7 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     required int originalDueDay,
     this.deferredUntil = const Value.absent(),
     this.deferralKind = const Value.absent(),
+    this.rootId = const Value.absent(),
     required String zoneId,
     this.rowid = const Value.absent(),
   }) : elementId = Value(elementId),
@@ -3841,6 +3887,7 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     Expression<int>? originalDueDay,
     Expression<int>? deferredUntil,
     Expression<int>? deferralKind,
+    Expression<String>? rootId,
     Expression<String>? zoneId,
     Expression<int>? rowid,
   }) {
@@ -3853,6 +3900,7 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
       if (originalDueDay != null) 'original_due_day': originalDueDay,
       if (deferredUntil != null) 'deferred_until': deferredUntil,
       if (deferralKind != null) 'deferral_kind': deferralKind,
+      if (rootId != null) 'root_id': rootId,
       if (zoneId != null) 'zone_id': zoneId,
       if (rowid != null) 'rowid': rowid,
     });
@@ -3867,6 +3915,7 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     Value<int>? originalDueDay,
     Value<int?>? deferredUntil,
     Value<int>? deferralKind,
+    Value<String?>? rootId,
     Value<String>? zoneId,
     Value<int>? rowid,
   }) {
@@ -3879,6 +3928,7 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
       originalDueDay: originalDueDay ?? this.originalDueDay,
       deferredUntil: deferredUntil ?? this.deferredUntil,
       deferralKind: deferralKind ?? this.deferralKind,
+      rootId: rootId ?? this.rootId,
       zoneId: zoneId ?? this.zoneId,
       rowid: rowid ?? this.rowid,
     );
@@ -3911,6 +3961,9 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     if (deferralKind.present) {
       map['deferral_kind'] = Variable<int>(deferralKind.value);
     }
+    if (rootId.present) {
+      map['root_id'] = Variable<String>(rootId.value);
+    }
     if (zoneId.present) {
       map['zone_id'] = Variable<String>(zoneId.value);
     }
@@ -3931,6 +3984,7 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
           ..write('originalDueDay: $originalDueDay, ')
           ..write('deferredUntil: $deferredUntil, ')
           ..write('deferralKind: $deferralKind, ')
+          ..write('rootId: $rootId, ')
           ..write('zoneId: $zoneId, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -3990,12 +4044,109 @@ class $TopicStatesTable extends TopicStates
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _intervalDaysMeta = const VerificationMeta(
+    'intervalDays',
+  );
+  @override
+  late final GeneratedColumn<double> intervalDays = GeneratedColumn<double>(
+    'interval_days',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(intervalDays).isBiggerOrEqualValue(0),
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _aFactorMeta = const VerificationMeta(
+    'aFactor',
+  );
+  @override
+  late final GeneratedColumn<double> aFactor = GeneratedColumn<double>(
+    'a_factor',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(aFactor).isBiggerOrEqualValue(0),
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _yieldEwmaMeta = const VerificationMeta(
+    'yieldEwma',
+  );
+  @override
+  late final GeneratedColumn<double> yieldEwma = GeneratedColumn<double>(
+    'yield_ewma',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(yieldEwma).isBiggerOrEqualValue(0),
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _encountersMeta = const VerificationMeta(
+    'encounters',
+  );
+  @override
+  late final GeneratedColumn<int> encounters = GeneratedColumn<int>(
+    'encounters',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(encounters).isBiggerOrEqualValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _postponeCountMeta = const VerificationMeta(
+    'postponeCount',
+  );
+  @override
+  late final GeneratedColumn<int> postponeCount = GeneratedColumn<int>(
+    'postpone_count',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(postponeCount).isBiggerOrEqualValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _encountersSinceLastCardMeta =
+      const VerificationMeta('encountersSinceLastCard');
+  @override
+  late final GeneratedColumn<int> encountersSinceLastCard =
+      GeneratedColumn<int>(
+        'encounters_since_last_card',
+        aliasedName,
+        false,
+        check: () =>
+            ComparableExpr(encountersSinceLastCard).isBiggerOrEqualValue(0),
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(0),
+      );
+  static const VerificationMeta _lastEncounterDayMeta = const VerificationMeta(
+    'lastEncounterDay',
+  );
+  @override
+  late final GeneratedColumn<int> lastEncounterDay = GeneratedColumn<int>(
+    'last_encounter_day',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     elementId,
     elementType,
     profileId,
     stepIndex,
+    intervalDays,
+    aFactor,
+    yieldEwma,
+    encounters,
+    postponeCount,
+    encountersSinceLastCard,
+    lastEncounterDay,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4044,6 +4195,60 @@ class $TopicStatesTable extends TopicStates
     } else if (isInserting) {
       context.missing(_stepIndexMeta);
     }
+    if (data.containsKey('interval_days')) {
+      context.handle(
+        _intervalDaysMeta,
+        intervalDays.isAcceptableOrUnknown(
+          data['interval_days']!,
+          _intervalDaysMeta,
+        ),
+      );
+    }
+    if (data.containsKey('a_factor')) {
+      context.handle(
+        _aFactorMeta,
+        aFactor.isAcceptableOrUnknown(data['a_factor']!, _aFactorMeta),
+      );
+    }
+    if (data.containsKey('yield_ewma')) {
+      context.handle(
+        _yieldEwmaMeta,
+        yieldEwma.isAcceptableOrUnknown(data['yield_ewma']!, _yieldEwmaMeta),
+      );
+    }
+    if (data.containsKey('encounters')) {
+      context.handle(
+        _encountersMeta,
+        encounters.isAcceptableOrUnknown(data['encounters']!, _encountersMeta),
+      );
+    }
+    if (data.containsKey('postpone_count')) {
+      context.handle(
+        _postponeCountMeta,
+        postponeCount.isAcceptableOrUnknown(
+          data['postpone_count']!,
+          _postponeCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('encounters_since_last_card')) {
+      context.handle(
+        _encountersSinceLastCardMeta,
+        encountersSinceLastCard.isAcceptableOrUnknown(
+          data['encounters_since_last_card']!,
+          _encountersSinceLastCardMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_encounter_day')) {
+      context.handle(
+        _lastEncounterDayMeta,
+        lastEncounterDay.isAcceptableOrUnknown(
+          data['last_encounter_day']!,
+          _lastEncounterDayMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -4069,6 +4274,34 @@ class $TopicStatesTable extends TopicStates
         DriftSqlType.int,
         data['${effectivePrefix}step_index'],
       )!,
+      intervalDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}interval_days'],
+      )!,
+      aFactor: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}a_factor'],
+      )!,
+      yieldEwma: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}yield_ewma'],
+      )!,
+      encounters: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}encounters'],
+      )!,
+      postponeCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}postpone_count'],
+      )!,
+      encountersSinceLastCard: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}encounters_since_last_card'],
+      )!,
+      lastEncounterDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_encounter_day'],
+      ),
     );
   }
 
@@ -4082,16 +4315,48 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
   final String elementId;
   final int elementType;
 
-  /// Which configured interval sequence paces this topic.
+  /// Which configured interval sequence paces this topic in profile mode.
   final String profileId;
 
   /// Position in that sequence. The final value repeats.
   final int stepIndex;
+
+  /// Current interval in days, carried unrounded so that an A-factor only
+  /// slightly above 1.0 still accumulates instead of being rounded away on
+  /// every encounter.
+  final double intervalDays;
+
+  /// The A-factor last applied. Zero until the first encounter computes one.
+  final double aFactor;
+
+  /// Smoothed extraction density, in extracts per thousand words read.
+  final double yieldEwma;
+
+  /// Completed encounters so far.
+  final int encounters;
+
+  /// Deferrals so far, manual and automatic together. Diagnostic only: a high
+  /// count means the element is being avoided and probably wants a lower
+  /// priority rather than another postponement.
+  final int postponeCount;
+
+  /// Encounters since the last card was formulated from this element.
+  final int encountersSinceLastCard;
+
+  /// Day of the last completed encounter, in days since the Unix epoch.
+  final int? lastEncounterDay;
   const TopicStateRow({
     required this.elementId,
     required this.elementType,
     required this.profileId,
     required this.stepIndex,
+    required this.intervalDays,
+    required this.aFactor,
+    required this.yieldEwma,
+    required this.encounters,
+    required this.postponeCount,
+    required this.encountersSinceLastCard,
+    this.lastEncounterDay,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4100,6 +4365,15 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
     map['element_type'] = Variable<int>(elementType);
     map['profile_id'] = Variable<String>(profileId);
     map['step_index'] = Variable<int>(stepIndex);
+    map['interval_days'] = Variable<double>(intervalDays);
+    map['a_factor'] = Variable<double>(aFactor);
+    map['yield_ewma'] = Variable<double>(yieldEwma);
+    map['encounters'] = Variable<int>(encounters);
+    map['postpone_count'] = Variable<int>(postponeCount);
+    map['encounters_since_last_card'] = Variable<int>(encountersSinceLastCard);
+    if (!nullToAbsent || lastEncounterDay != null) {
+      map['last_encounter_day'] = Variable<int>(lastEncounterDay);
+    }
     return map;
   }
 
@@ -4109,6 +4383,15 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
       elementType: Value(elementType),
       profileId: Value(profileId),
       stepIndex: Value(stepIndex),
+      intervalDays: Value(intervalDays),
+      aFactor: Value(aFactor),
+      yieldEwma: Value(yieldEwma),
+      encounters: Value(encounters),
+      postponeCount: Value(postponeCount),
+      encountersSinceLastCard: Value(encountersSinceLastCard),
+      lastEncounterDay: lastEncounterDay == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastEncounterDay),
     );
   }
 
@@ -4122,6 +4405,15 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
       elementType: serializer.fromJson<int>(json['elementType']),
       profileId: serializer.fromJson<String>(json['profileId']),
       stepIndex: serializer.fromJson<int>(json['stepIndex']),
+      intervalDays: serializer.fromJson<double>(json['intervalDays']),
+      aFactor: serializer.fromJson<double>(json['aFactor']),
+      yieldEwma: serializer.fromJson<double>(json['yieldEwma']),
+      encounters: serializer.fromJson<int>(json['encounters']),
+      postponeCount: serializer.fromJson<int>(json['postponeCount']),
+      encountersSinceLastCard: serializer.fromJson<int>(
+        json['encountersSinceLastCard'],
+      ),
+      lastEncounterDay: serializer.fromJson<int?>(json['lastEncounterDay']),
     );
   }
   @override
@@ -4132,6 +4424,15 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
       'elementType': serializer.toJson<int>(elementType),
       'profileId': serializer.toJson<String>(profileId),
       'stepIndex': serializer.toJson<int>(stepIndex),
+      'intervalDays': serializer.toJson<double>(intervalDays),
+      'aFactor': serializer.toJson<double>(aFactor),
+      'yieldEwma': serializer.toJson<double>(yieldEwma),
+      'encounters': serializer.toJson<int>(encounters),
+      'postponeCount': serializer.toJson<int>(postponeCount),
+      'encountersSinceLastCard': serializer.toJson<int>(
+        encountersSinceLastCard,
+      ),
+      'lastEncounterDay': serializer.toJson<int?>(lastEncounterDay),
     };
   }
 
@@ -4140,11 +4441,28 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
     int? elementType,
     String? profileId,
     int? stepIndex,
+    double? intervalDays,
+    double? aFactor,
+    double? yieldEwma,
+    int? encounters,
+    int? postponeCount,
+    int? encountersSinceLastCard,
+    Value<int?> lastEncounterDay = const Value.absent(),
   }) => TopicStateRow(
     elementId: elementId ?? this.elementId,
     elementType: elementType ?? this.elementType,
     profileId: profileId ?? this.profileId,
     stepIndex: stepIndex ?? this.stepIndex,
+    intervalDays: intervalDays ?? this.intervalDays,
+    aFactor: aFactor ?? this.aFactor,
+    yieldEwma: yieldEwma ?? this.yieldEwma,
+    encounters: encounters ?? this.encounters,
+    postponeCount: postponeCount ?? this.postponeCount,
+    encountersSinceLastCard:
+        encountersSinceLastCard ?? this.encountersSinceLastCard,
+    lastEncounterDay: lastEncounterDay.present
+        ? lastEncounterDay.value
+        : this.lastEncounterDay,
   );
   TopicStateRow copyWithCompanion(TopicStatesCompanion data) {
     return TopicStateRow(
@@ -4154,6 +4472,23 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
           : this.elementType,
       profileId: data.profileId.present ? data.profileId.value : this.profileId,
       stepIndex: data.stepIndex.present ? data.stepIndex.value : this.stepIndex,
+      intervalDays: data.intervalDays.present
+          ? data.intervalDays.value
+          : this.intervalDays,
+      aFactor: data.aFactor.present ? data.aFactor.value : this.aFactor,
+      yieldEwma: data.yieldEwma.present ? data.yieldEwma.value : this.yieldEwma,
+      encounters: data.encounters.present
+          ? data.encounters.value
+          : this.encounters,
+      postponeCount: data.postponeCount.present
+          ? data.postponeCount.value
+          : this.postponeCount,
+      encountersSinceLastCard: data.encountersSinceLastCard.present
+          ? data.encountersSinceLastCard.value
+          : this.encountersSinceLastCard,
+      lastEncounterDay: data.lastEncounterDay.present
+          ? data.lastEncounterDay.value
+          : this.lastEncounterDay,
     );
   }
 
@@ -4163,13 +4498,32 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
           ..write('elementId: $elementId, ')
           ..write('elementType: $elementType, ')
           ..write('profileId: $profileId, ')
-          ..write('stepIndex: $stepIndex')
+          ..write('stepIndex: $stepIndex, ')
+          ..write('intervalDays: $intervalDays, ')
+          ..write('aFactor: $aFactor, ')
+          ..write('yieldEwma: $yieldEwma, ')
+          ..write('encounters: $encounters, ')
+          ..write('postponeCount: $postponeCount, ')
+          ..write('encountersSinceLastCard: $encountersSinceLastCard, ')
+          ..write('lastEncounterDay: $lastEncounterDay')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(elementId, elementType, profileId, stepIndex);
+  int get hashCode => Object.hash(
+    elementId,
+    elementType,
+    profileId,
+    stepIndex,
+    intervalDays,
+    aFactor,
+    yieldEwma,
+    encounters,
+    postponeCount,
+    encountersSinceLastCard,
+    lastEncounterDay,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -4177,7 +4531,14 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
           other.elementId == this.elementId &&
           other.elementType == this.elementType &&
           other.profileId == this.profileId &&
-          other.stepIndex == this.stepIndex);
+          other.stepIndex == this.stepIndex &&
+          other.intervalDays == this.intervalDays &&
+          other.aFactor == this.aFactor &&
+          other.yieldEwma == this.yieldEwma &&
+          other.encounters == this.encounters &&
+          other.postponeCount == this.postponeCount &&
+          other.encountersSinceLastCard == this.encountersSinceLastCard &&
+          other.lastEncounterDay == this.lastEncounterDay);
 }
 
 class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
@@ -4185,12 +4546,26 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
   final Value<int> elementType;
   final Value<String> profileId;
   final Value<int> stepIndex;
+  final Value<double> intervalDays;
+  final Value<double> aFactor;
+  final Value<double> yieldEwma;
+  final Value<int> encounters;
+  final Value<int> postponeCount;
+  final Value<int> encountersSinceLastCard;
+  final Value<int?> lastEncounterDay;
   final Value<int> rowid;
   const TopicStatesCompanion({
     this.elementId = const Value.absent(),
     this.elementType = const Value.absent(),
     this.profileId = const Value.absent(),
     this.stepIndex = const Value.absent(),
+    this.intervalDays = const Value.absent(),
+    this.aFactor = const Value.absent(),
+    this.yieldEwma = const Value.absent(),
+    this.encounters = const Value.absent(),
+    this.postponeCount = const Value.absent(),
+    this.encountersSinceLastCard = const Value.absent(),
+    this.lastEncounterDay = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TopicStatesCompanion.insert({
@@ -4198,6 +4573,13 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
     required int elementType,
     required String profileId,
     required int stepIndex,
+    this.intervalDays = const Value.absent(),
+    this.aFactor = const Value.absent(),
+    this.yieldEwma = const Value.absent(),
+    this.encounters = const Value.absent(),
+    this.postponeCount = const Value.absent(),
+    this.encountersSinceLastCard = const Value.absent(),
+    this.lastEncounterDay = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : elementId = Value(elementId),
        elementType = Value(elementType),
@@ -4208,6 +4590,13 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
     Expression<int>? elementType,
     Expression<String>? profileId,
     Expression<int>? stepIndex,
+    Expression<double>? intervalDays,
+    Expression<double>? aFactor,
+    Expression<double>? yieldEwma,
+    Expression<int>? encounters,
+    Expression<int>? postponeCount,
+    Expression<int>? encountersSinceLastCard,
+    Expression<int>? lastEncounterDay,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -4215,6 +4604,14 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
       if (elementType != null) 'element_type': elementType,
       if (profileId != null) 'profile_id': profileId,
       if (stepIndex != null) 'step_index': stepIndex,
+      if (intervalDays != null) 'interval_days': intervalDays,
+      if (aFactor != null) 'a_factor': aFactor,
+      if (yieldEwma != null) 'yield_ewma': yieldEwma,
+      if (encounters != null) 'encounters': encounters,
+      if (postponeCount != null) 'postpone_count': postponeCount,
+      if (encountersSinceLastCard != null)
+        'encounters_since_last_card': encountersSinceLastCard,
+      if (lastEncounterDay != null) 'last_encounter_day': lastEncounterDay,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -4224,6 +4621,13 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
     Value<int>? elementType,
     Value<String>? profileId,
     Value<int>? stepIndex,
+    Value<double>? intervalDays,
+    Value<double>? aFactor,
+    Value<double>? yieldEwma,
+    Value<int>? encounters,
+    Value<int>? postponeCount,
+    Value<int>? encountersSinceLastCard,
+    Value<int?>? lastEncounterDay,
     Value<int>? rowid,
   }) {
     return TopicStatesCompanion(
@@ -4231,6 +4635,14 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
       elementType: elementType ?? this.elementType,
       profileId: profileId ?? this.profileId,
       stepIndex: stepIndex ?? this.stepIndex,
+      intervalDays: intervalDays ?? this.intervalDays,
+      aFactor: aFactor ?? this.aFactor,
+      yieldEwma: yieldEwma ?? this.yieldEwma,
+      encounters: encounters ?? this.encounters,
+      postponeCount: postponeCount ?? this.postponeCount,
+      encountersSinceLastCard:
+          encountersSinceLastCard ?? this.encountersSinceLastCard,
+      lastEncounterDay: lastEncounterDay ?? this.lastEncounterDay,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -4250,6 +4662,29 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
     if (stepIndex.present) {
       map['step_index'] = Variable<int>(stepIndex.value);
     }
+    if (intervalDays.present) {
+      map['interval_days'] = Variable<double>(intervalDays.value);
+    }
+    if (aFactor.present) {
+      map['a_factor'] = Variable<double>(aFactor.value);
+    }
+    if (yieldEwma.present) {
+      map['yield_ewma'] = Variable<double>(yieldEwma.value);
+    }
+    if (encounters.present) {
+      map['encounters'] = Variable<int>(encounters.value);
+    }
+    if (postponeCount.present) {
+      map['postpone_count'] = Variable<int>(postponeCount.value);
+    }
+    if (encountersSinceLastCard.present) {
+      map['encounters_since_last_card'] = Variable<int>(
+        encountersSinceLastCard.value,
+      );
+    }
+    if (lastEncounterDay.present) {
+      map['last_encounter_day'] = Variable<int>(lastEncounterDay.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -4263,6 +4698,13 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
           ..write('elementType: $elementType, ')
           ..write('profileId: $profileId, ')
           ..write('stepIndex: $stepIndex, ')
+          ..write('intervalDays: $intervalDays, ')
+          ..write('aFactor: $aFactor, ')
+          ..write('yieldEwma: $yieldEwma, ')
+          ..write('encounters: $encounters, ')
+          ..write('postponeCount: $postponeCount, ')
+          ..write('encountersSinceLastCard: $encountersSinceLastCard, ')
+          ..write('lastEncounterDay: $lastEncounterDay, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -4395,6 +4837,19 @@ class $CardMemoriesTable extends CardMemories
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _postponeCountMeta = const VerificationMeta(
+    'postponeCount',
+  );
+  @override
+  late final GeneratedColumn<int> postponeCount = GeneratedColumn<int>(
+    'postpone_count',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(postponeCount).isBiggerOrEqualValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _schedulerVersionMeta = const VerificationMeta(
     'schedulerVersion',
   );
@@ -4431,6 +4886,7 @@ class $CardMemoriesTable extends CardMemories
     dueAtUtc,
     originalDueAtUtc,
     deferredUntilUtc,
+    postponeCount,
     schedulerVersion,
     parametersVersion,
   ];
@@ -4529,6 +4985,15 @@ class $CardMemoriesTable extends CardMemories
         ),
       );
     }
+    if (data.containsKey('postpone_count')) {
+      context.handle(
+        _postponeCountMeta,
+        postponeCount.isAcceptableOrUnknown(
+          data['postpone_count']!,
+          _postponeCountMeta,
+        ),
+      );
+    }
     if (data.containsKey('scheduler_version')) {
       context.handle(
         _schedulerVersionMeta,
@@ -4604,6 +5069,10 @@ class $CardMemoriesTable extends CardMemories
         DriftSqlType.int,
         data['${effectivePrefix}deferred_until_utc'],
       ),
+      postponeCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}postpone_count'],
+      )!,
       schedulerVersion: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}scheduler_version'],
@@ -4642,6 +5111,9 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
   final int originalDueAtUtc;
   final int? deferredUntilUtc;
 
+  /// Deferrals so far. Never a review, so it lives apart from [reps].
+  final int postponeCount;
+
   /// Pinned scheduler build and parameter set, recorded so history stays
   /// interpretable after either changes.
   final String schedulerVersion;
@@ -4658,6 +5130,7 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     required this.dueAtUtc,
     required this.originalDueAtUtc,
     this.deferredUntilUtc,
+    required this.postponeCount,
     required this.schedulerVersion,
     required this.parametersVersion,
   });
@@ -4685,6 +5158,7 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     if (!nullToAbsent || deferredUntilUtc != null) {
       map['deferred_until_utc'] = Variable<int>(deferredUntilUtc);
     }
+    map['postpone_count'] = Variable<int>(postponeCount);
     map['scheduler_version'] = Variable<String>(schedulerVersion);
     map['parameters_version'] = Variable<String>(parametersVersion);
     return map;
@@ -4711,6 +5185,7 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
       deferredUntilUtc: deferredUntilUtc == null && nullToAbsent
           ? const Value.absent()
           : Value(deferredUntilUtc),
+      postponeCount: Value(postponeCount),
       schedulerVersion: Value(schedulerVersion),
       parametersVersion: Value(parametersVersion),
     );
@@ -4733,6 +5208,7 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
       dueAtUtc: serializer.fromJson<int>(json['dueAtUtc']),
       originalDueAtUtc: serializer.fromJson<int>(json['originalDueAtUtc']),
       deferredUntilUtc: serializer.fromJson<int?>(json['deferredUntilUtc']),
+      postponeCount: serializer.fromJson<int>(json['postponeCount']),
       schedulerVersion: serializer.fromJson<String>(json['schedulerVersion']),
       parametersVersion: serializer.fromJson<String>(json['parametersVersion']),
     );
@@ -4752,6 +5228,7 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
       'dueAtUtc': serializer.toJson<int>(dueAtUtc),
       'originalDueAtUtc': serializer.toJson<int>(originalDueAtUtc),
       'deferredUntilUtc': serializer.toJson<int?>(deferredUntilUtc),
+      'postponeCount': serializer.toJson<int>(postponeCount),
       'schedulerVersion': serializer.toJson<String>(schedulerVersion),
       'parametersVersion': serializer.toJson<String>(parametersVersion),
     };
@@ -4769,6 +5246,7 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     int? dueAtUtc,
     int? originalDueAtUtc,
     Value<int?> deferredUntilUtc = const Value.absent(),
+    int? postponeCount,
     String? schedulerVersion,
     String? parametersVersion,
   }) => CardMemoryRow(
@@ -4787,6 +5265,7 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     deferredUntilUtc: deferredUntilUtc.present
         ? deferredUntilUtc.value
         : this.deferredUntilUtc,
+    postponeCount: postponeCount ?? this.postponeCount,
     schedulerVersion: schedulerVersion ?? this.schedulerVersion,
     parametersVersion: parametersVersion ?? this.parametersVersion,
   );
@@ -4811,6 +5290,9 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
       deferredUntilUtc: data.deferredUntilUtc.present
           ? data.deferredUntilUtc.value
           : this.deferredUntilUtc,
+      postponeCount: data.postponeCount.present
+          ? data.postponeCount.value
+          : this.postponeCount,
       schedulerVersion: data.schedulerVersion.present
           ? data.schedulerVersion.value
           : this.schedulerVersion,
@@ -4834,6 +5316,7 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
           ..write('dueAtUtc: $dueAtUtc, ')
           ..write('originalDueAtUtc: $originalDueAtUtc, ')
           ..write('deferredUntilUtc: $deferredUntilUtc, ')
+          ..write('postponeCount: $postponeCount, ')
           ..write('schedulerVersion: $schedulerVersion, ')
           ..write('parametersVersion: $parametersVersion')
           ..write(')'))
@@ -4853,6 +5336,7 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     dueAtUtc,
     originalDueAtUtc,
     deferredUntilUtc,
+    postponeCount,
     schedulerVersion,
     parametersVersion,
   );
@@ -4871,6 +5355,7 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
           other.dueAtUtc == this.dueAtUtc &&
           other.originalDueAtUtc == this.originalDueAtUtc &&
           other.deferredUntilUtc == this.deferredUntilUtc &&
+          other.postponeCount == this.postponeCount &&
           other.schedulerVersion == this.schedulerVersion &&
           other.parametersVersion == this.parametersVersion);
 }
@@ -4887,6 +5372,7 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
   final Value<int> dueAtUtc;
   final Value<int> originalDueAtUtc;
   final Value<int?> deferredUntilUtc;
+  final Value<int> postponeCount;
   final Value<String> schedulerVersion;
   final Value<String> parametersVersion;
   final Value<int> rowid;
@@ -4902,6 +5388,7 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     this.dueAtUtc = const Value.absent(),
     this.originalDueAtUtc = const Value.absent(),
     this.deferredUntilUtc = const Value.absent(),
+    this.postponeCount = const Value.absent(),
     this.schedulerVersion = const Value.absent(),
     this.parametersVersion = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -4918,6 +5405,7 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     required int dueAtUtc,
     required int originalDueAtUtc,
     this.deferredUntilUtc = const Value.absent(),
+    this.postponeCount = const Value.absent(),
     required String schedulerVersion,
     required String parametersVersion,
     this.rowid = const Value.absent(),
@@ -4939,6 +5427,7 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     Expression<int>? dueAtUtc,
     Expression<int>? originalDueAtUtc,
     Expression<int>? deferredUntilUtc,
+    Expression<int>? postponeCount,
     Expression<String>? schedulerVersion,
     Expression<String>? parametersVersion,
     Expression<int>? rowid,
@@ -4955,6 +5444,7 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
       if (dueAtUtc != null) 'due_at_utc': dueAtUtc,
       if (originalDueAtUtc != null) 'original_due_at_utc': originalDueAtUtc,
       if (deferredUntilUtc != null) 'deferred_until_utc': deferredUntilUtc,
+      if (postponeCount != null) 'postpone_count': postponeCount,
       if (schedulerVersion != null) 'scheduler_version': schedulerVersion,
       if (parametersVersion != null) 'parameters_version': parametersVersion,
       if (rowid != null) 'rowid': rowid,
@@ -4973,6 +5463,7 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     Value<int>? dueAtUtc,
     Value<int>? originalDueAtUtc,
     Value<int?>? deferredUntilUtc,
+    Value<int>? postponeCount,
     Value<String>? schedulerVersion,
     Value<String>? parametersVersion,
     Value<int>? rowid,
@@ -4989,6 +5480,7 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
       dueAtUtc: dueAtUtc ?? this.dueAtUtc,
       originalDueAtUtc: originalDueAtUtc ?? this.originalDueAtUtc,
       deferredUntilUtc: deferredUntilUtc ?? this.deferredUntilUtc,
+      postponeCount: postponeCount ?? this.postponeCount,
       schedulerVersion: schedulerVersion ?? this.schedulerVersion,
       parametersVersion: parametersVersion ?? this.parametersVersion,
       rowid: rowid ?? this.rowid,
@@ -5031,6 +5523,9 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     if (deferredUntilUtc.present) {
       map['deferred_until_utc'] = Variable<int>(deferredUntilUtc.value);
     }
+    if (postponeCount.present) {
+      map['postpone_count'] = Variable<int>(postponeCount.value);
+    }
     if (schedulerVersion.present) {
       map['scheduler_version'] = Variable<String>(schedulerVersion.value);
     }
@@ -5057,6 +5552,7 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
           ..write('dueAtUtc: $dueAtUtc, ')
           ..write('originalDueAtUtc: $originalDueAtUtc, ')
           ..write('deferredUntilUtc: $deferredUntilUtc, ')
+          ..write('postponeCount: $postponeCount, ')
           ..write('schedulerVersion: $schedulerVersion, ')
           ..write('parametersVersion: $parametersVersion, ')
           ..write('rowid: $rowid')
@@ -5758,6 +6254,2527 @@ class ReviewEventsCompanion extends UpdateCompanion<ReviewEventRow> {
           ..write('parametersVersion: $parametersVersion, ')
           ..write('isPractice: $isPractice, ')
           ..write('operationId: $operationId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RevlogEntriesTable extends RevlogEntries
+    with TableInfo<$RevlogEntriesTable, RevlogRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RevlogEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operationIdMeta = const VerificationMeta(
+    'operationId',
+  );
+  @override
+  late final GeneratedColumn<String> operationId = GeneratedColumn<String>(
+    'operation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _elementIdMeta = const VerificationMeta(
+    'elementId',
+  );
+  @override
+  late final GeneratedColumn<String> elementId = GeneratedColumn<String>(
+    'element_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _elementTypeMeta = const VerificationMeta(
+    'elementType',
+  );
+  @override
+  late final GeneratedColumn<int> elementType = GeneratedColumn<int>(
+    'element_type',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(elementType).isBetweenValues(0, 2),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _eventTypeMeta = const VerificationMeta(
+    'eventType',
+  );
+  @override
+  late final GeneratedColumn<int> eventType = GeneratedColumn<int>(
+    'event_type',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(eventType).isBetweenValues(1, 15),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _atUtcMeta = const VerificationMeta('atUtc');
+  @override
+  late final GeneratedColumn<int> atUtc = GeneratedColumn<int>(
+    'at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _gradeMeta = const VerificationMeta('grade');
+  @override
+  late final GeneratedColumn<int> grade = GeneratedColumn<int>(
+    'grade',
+    aliasedName,
+    true,
+    check: () => ComparableExpr(grade).isBetweenValues(1, 4),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _elapsedDaysMeta = const VerificationMeta(
+    'elapsedDays',
+  );
+  @override
+  late final GeneratedColumn<double> elapsedDays = GeneratedColumn<double>(
+    'elapsed_days',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _scheduledDaysMeta = const VerificationMeta(
+    'scheduledDays',
+  );
+  @override
+  late final GeneratedColumn<double> scheduledDays = GeneratedColumn<double>(
+    'scheduled_days',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _durationMsMeta = const VerificationMeta(
+    'durationMs',
+  );
+  @override
+  late final GeneratedColumn<int> durationMs = GeneratedColumn<int>(
+    'duration_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _postponeCountMeta = const VerificationMeta(
+    'postponeCount',
+  );
+  @override
+  late final GeneratedColumn<int> postponeCount = GeneratedColumn<int>(
+    'postpone_count',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _dueBeforeUtcMeta = const VerificationMeta(
+    'dueBeforeUtc',
+  );
+  @override
+  late final GeneratedColumn<int> dueBeforeUtc = GeneratedColumn<int>(
+    'due_before_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _dueAfterUtcMeta = const VerificationMeta(
+    'dueAfterUtc',
+  );
+  @override
+  late final GeneratedColumn<int> dueAfterUtc = GeneratedColumn<int>(
+    'due_after_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _intervalBeforeMeta = const VerificationMeta(
+    'intervalBefore',
+  );
+  @override
+  late final GeneratedColumn<double> intervalBefore = GeneratedColumn<double>(
+    'interval_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _intervalAfterMeta = const VerificationMeta(
+    'intervalAfter',
+  );
+  @override
+  late final GeneratedColumn<double> intervalAfter = GeneratedColumn<double>(
+    'interval_after',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _aFactorBeforeMeta = const VerificationMeta(
+    'aFactorBefore',
+  );
+  @override
+  late final GeneratedColumn<double> aFactorBefore = GeneratedColumn<double>(
+    'a_factor_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _aFactorAfterMeta = const VerificationMeta(
+    'aFactorAfter',
+  );
+  @override
+  late final GeneratedColumn<double> aFactorAfter = GeneratedColumn<double>(
+    'a_factor_after',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stabilityBeforeMeta = const VerificationMeta(
+    'stabilityBefore',
+  );
+  @override
+  late final GeneratedColumn<double> stabilityBefore = GeneratedColumn<double>(
+    'stability_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stabilityAfterMeta = const VerificationMeta(
+    'stabilityAfter',
+  );
+  @override
+  late final GeneratedColumn<double> stabilityAfter = GeneratedColumn<double>(
+    'stability_after',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _difficultyBeforeMeta = const VerificationMeta(
+    'difficultyBefore',
+  );
+  @override
+  late final GeneratedColumn<double> difficultyBefore = GeneratedColumn<double>(
+    'difficulty_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _difficultyAfterMeta = const VerificationMeta(
+    'difficultyAfter',
+  );
+  @override
+  late final GeneratedColumn<double> difficultyAfter = GeneratedColumn<double>(
+    'difficulty_after',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stateBeforeMeta = const VerificationMeta(
+    'stateBefore',
+  );
+  @override
+  late final GeneratedColumn<int> stateBefore = GeneratedColumn<int>(
+    'state_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stateAfterMeta = const VerificationMeta(
+    'stateAfter',
+  );
+  @override
+  late final GeneratedColumn<int> stateAfter = GeneratedColumn<int>(
+    'state_after',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _repsBeforeMeta = const VerificationMeta(
+    'repsBefore',
+  );
+  @override
+  late final GeneratedColumn<int> repsBefore = GeneratedColumn<int>(
+    'reps_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lapsesBeforeMeta = const VerificationMeta(
+    'lapsesBefore',
+  );
+  @override
+  late final GeneratedColumn<int> lapsesBefore = GeneratedColumn<int>(
+    'lapses_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _priorityBeforeMeta = const VerificationMeta(
+    'priorityBefore',
+  );
+  @override
+  late final GeneratedColumn<String> priorityBefore = GeneratedColumn<String>(
+    'priority_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _priorityAfterMeta = const VerificationMeta(
+    'priorityAfter',
+  );
+  @override
+  late final GeneratedColumn<String> priorityAfter = GeneratedColumn<String>(
+    'priority_after',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pressureBeforeMeta = const VerificationMeta(
+    'pressureBefore',
+  );
+  @override
+  late final GeneratedColumn<double> pressureBefore = GeneratedColumn<double>(
+    'pressure_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pressureAfterMeta = const VerificationMeta(
+    'pressureAfter',
+  );
+  @override
+  late final GeneratedColumn<double> pressureAfter = GeneratedColumn<double>(
+    'pressure_after',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _readFractionBeforeMeta =
+      const VerificationMeta('readFractionBefore');
+  @override
+  late final GeneratedColumn<double> readFractionBefore =
+      GeneratedColumn<double>(
+        'read_fraction_before',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _readFractionAfterMeta = const VerificationMeta(
+    'readFractionAfter',
+  );
+  @override
+  late final GeneratedColumn<double> readFractionAfter =
+      GeneratedColumn<double>(
+        'read_fraction_after',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lifecycleBeforeMeta = const VerificationMeta(
+    'lifecycleBefore',
+  );
+  @override
+  late final GeneratedColumn<int> lifecycleBefore = GeneratedColumn<int>(
+    'lifecycle_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lifecycleAfterMeta = const VerificationMeta(
+    'lifecycleAfter',
+  );
+  @override
+  late final GeneratedColumn<int> lifecycleAfter = GeneratedColumn<int>(
+    'lifecycle_after',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schedulerVersionMeta = const VerificationMeta(
+    'schedulerVersion',
+  );
+  @override
+  late final GeneratedColumn<String> schedulerVersion = GeneratedColumn<String>(
+    'scheduler_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _parametersVersionMeta = const VerificationMeta(
+    'parametersVersion',
+  );
+  @override
+  late final GeneratedColumn<String> parametersVersion =
+      GeneratedColumn<String>(
+        'parameters_version',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _metadataJsonMeta = const VerificationMeta(
+    'metadataJson',
+  );
+  @override
+  late final GeneratedColumn<String> metadataJson = GeneratedColumn<String>(
+    'metadata_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    operationId,
+    elementId,
+    elementType,
+    eventType,
+    atUtc,
+    grade,
+    elapsedDays,
+    scheduledDays,
+    durationMs,
+    postponeCount,
+    dueBeforeUtc,
+    dueAfterUtc,
+    intervalBefore,
+    intervalAfter,
+    aFactorBefore,
+    aFactorAfter,
+    stabilityBefore,
+    stabilityAfter,
+    difficultyBefore,
+    difficultyAfter,
+    stateBefore,
+    stateAfter,
+    repsBefore,
+    lapsesBefore,
+    priorityBefore,
+    priorityAfter,
+    pressureBefore,
+    pressureAfter,
+    readFractionBefore,
+    readFractionAfter,
+    lifecycleBefore,
+    lifecycleAfter,
+    schedulerVersion,
+    parametersVersion,
+    metadataJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'revlog_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RevlogRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('operation_id')) {
+      context.handle(
+        _operationIdMeta,
+        operationId.isAcceptableOrUnknown(
+          data['operation_id']!,
+          _operationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_operationIdMeta);
+    }
+    if (data.containsKey('element_id')) {
+      context.handle(
+        _elementIdMeta,
+        elementId.isAcceptableOrUnknown(data['element_id']!, _elementIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_elementIdMeta);
+    }
+    if (data.containsKey('element_type')) {
+      context.handle(
+        _elementTypeMeta,
+        elementType.isAcceptableOrUnknown(
+          data['element_type']!,
+          _elementTypeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_elementTypeMeta);
+    }
+    if (data.containsKey('event_type')) {
+      context.handle(
+        _eventTypeMeta,
+        eventType.isAcceptableOrUnknown(data['event_type']!, _eventTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_eventTypeMeta);
+    }
+    if (data.containsKey('at_utc')) {
+      context.handle(
+        _atUtcMeta,
+        atUtc.isAcceptableOrUnknown(data['at_utc']!, _atUtcMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_atUtcMeta);
+    }
+    if (data.containsKey('grade')) {
+      context.handle(
+        _gradeMeta,
+        grade.isAcceptableOrUnknown(data['grade']!, _gradeMeta),
+      );
+    }
+    if (data.containsKey('elapsed_days')) {
+      context.handle(
+        _elapsedDaysMeta,
+        elapsedDays.isAcceptableOrUnknown(
+          data['elapsed_days']!,
+          _elapsedDaysMeta,
+        ),
+      );
+    }
+    if (data.containsKey('scheduled_days')) {
+      context.handle(
+        _scheduledDaysMeta,
+        scheduledDays.isAcceptableOrUnknown(
+          data['scheduled_days']!,
+          _scheduledDaysMeta,
+        ),
+      );
+    }
+    if (data.containsKey('duration_ms')) {
+      context.handle(
+        _durationMsMeta,
+        durationMs.isAcceptableOrUnknown(data['duration_ms']!, _durationMsMeta),
+      );
+    }
+    if (data.containsKey('postpone_count')) {
+      context.handle(
+        _postponeCountMeta,
+        postponeCount.isAcceptableOrUnknown(
+          data['postpone_count']!,
+          _postponeCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('due_before_utc')) {
+      context.handle(
+        _dueBeforeUtcMeta,
+        dueBeforeUtc.isAcceptableOrUnknown(
+          data['due_before_utc']!,
+          _dueBeforeUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('due_after_utc')) {
+      context.handle(
+        _dueAfterUtcMeta,
+        dueAfterUtc.isAcceptableOrUnknown(
+          data['due_after_utc']!,
+          _dueAfterUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('interval_before')) {
+      context.handle(
+        _intervalBeforeMeta,
+        intervalBefore.isAcceptableOrUnknown(
+          data['interval_before']!,
+          _intervalBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('interval_after')) {
+      context.handle(
+        _intervalAfterMeta,
+        intervalAfter.isAcceptableOrUnknown(
+          data['interval_after']!,
+          _intervalAfterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('a_factor_before')) {
+      context.handle(
+        _aFactorBeforeMeta,
+        aFactorBefore.isAcceptableOrUnknown(
+          data['a_factor_before']!,
+          _aFactorBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('a_factor_after')) {
+      context.handle(
+        _aFactorAfterMeta,
+        aFactorAfter.isAcceptableOrUnknown(
+          data['a_factor_after']!,
+          _aFactorAfterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('stability_before')) {
+      context.handle(
+        _stabilityBeforeMeta,
+        stabilityBefore.isAcceptableOrUnknown(
+          data['stability_before']!,
+          _stabilityBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('stability_after')) {
+      context.handle(
+        _stabilityAfterMeta,
+        stabilityAfter.isAcceptableOrUnknown(
+          data['stability_after']!,
+          _stabilityAfterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('difficulty_before')) {
+      context.handle(
+        _difficultyBeforeMeta,
+        difficultyBefore.isAcceptableOrUnknown(
+          data['difficulty_before']!,
+          _difficultyBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('difficulty_after')) {
+      context.handle(
+        _difficultyAfterMeta,
+        difficultyAfter.isAcceptableOrUnknown(
+          data['difficulty_after']!,
+          _difficultyAfterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('state_before')) {
+      context.handle(
+        _stateBeforeMeta,
+        stateBefore.isAcceptableOrUnknown(
+          data['state_before']!,
+          _stateBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('state_after')) {
+      context.handle(
+        _stateAfterMeta,
+        stateAfter.isAcceptableOrUnknown(data['state_after']!, _stateAfterMeta),
+      );
+    }
+    if (data.containsKey('reps_before')) {
+      context.handle(
+        _repsBeforeMeta,
+        repsBefore.isAcceptableOrUnknown(data['reps_before']!, _repsBeforeMeta),
+      );
+    }
+    if (data.containsKey('lapses_before')) {
+      context.handle(
+        _lapsesBeforeMeta,
+        lapsesBefore.isAcceptableOrUnknown(
+          data['lapses_before']!,
+          _lapsesBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('priority_before')) {
+      context.handle(
+        _priorityBeforeMeta,
+        priorityBefore.isAcceptableOrUnknown(
+          data['priority_before']!,
+          _priorityBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('priority_after')) {
+      context.handle(
+        _priorityAfterMeta,
+        priorityAfter.isAcceptableOrUnknown(
+          data['priority_after']!,
+          _priorityAfterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('pressure_before')) {
+      context.handle(
+        _pressureBeforeMeta,
+        pressureBefore.isAcceptableOrUnknown(
+          data['pressure_before']!,
+          _pressureBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('pressure_after')) {
+      context.handle(
+        _pressureAfterMeta,
+        pressureAfter.isAcceptableOrUnknown(
+          data['pressure_after']!,
+          _pressureAfterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('read_fraction_before')) {
+      context.handle(
+        _readFractionBeforeMeta,
+        readFractionBefore.isAcceptableOrUnknown(
+          data['read_fraction_before']!,
+          _readFractionBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('read_fraction_after')) {
+      context.handle(
+        _readFractionAfterMeta,
+        readFractionAfter.isAcceptableOrUnknown(
+          data['read_fraction_after']!,
+          _readFractionAfterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('lifecycle_before')) {
+      context.handle(
+        _lifecycleBeforeMeta,
+        lifecycleBefore.isAcceptableOrUnknown(
+          data['lifecycle_before']!,
+          _lifecycleBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('lifecycle_after')) {
+      context.handle(
+        _lifecycleAfterMeta,
+        lifecycleAfter.isAcceptableOrUnknown(
+          data['lifecycle_after']!,
+          _lifecycleAfterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('scheduler_version')) {
+      context.handle(
+        _schedulerVersionMeta,
+        schedulerVersion.isAcceptableOrUnknown(
+          data['scheduler_version']!,
+          _schedulerVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('parameters_version')) {
+      context.handle(
+        _parametersVersionMeta,
+        parametersVersion.isAcceptableOrUnknown(
+          data['parameters_version']!,
+          _parametersVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('metadata_json')) {
+      context.handle(
+        _metadataJsonMeta,
+        metadataJson.isAcceptableOrUnknown(
+          data['metadata_json']!,
+          _metadataJsonMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RevlogRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RevlogRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      operationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation_id'],
+      )!,
+      elementId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}element_id'],
+      )!,
+      elementType: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}element_type'],
+      )!,
+      eventType: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}event_type'],
+      )!,
+      atUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}at_utc'],
+      )!,
+      grade: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}grade'],
+      ),
+      elapsedDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}elapsed_days'],
+      ),
+      scheduledDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}scheduled_days'],
+      ),
+      durationMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_ms'],
+      ),
+      postponeCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}postpone_count'],
+      ),
+      dueBeforeUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}due_before_utc'],
+      ),
+      dueAfterUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}due_after_utc'],
+      ),
+      intervalBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}interval_before'],
+      ),
+      intervalAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}interval_after'],
+      ),
+      aFactorBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}a_factor_before'],
+      ),
+      aFactorAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}a_factor_after'],
+      ),
+      stabilityBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}stability_before'],
+      ),
+      stabilityAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}stability_after'],
+      ),
+      difficultyBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}difficulty_before'],
+      ),
+      difficultyAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}difficulty_after'],
+      ),
+      stateBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}state_before'],
+      ),
+      stateAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}state_after'],
+      ),
+      repsBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}reps_before'],
+      ),
+      lapsesBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lapses_before'],
+      ),
+      priorityBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}priority_before'],
+      ),
+      priorityAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}priority_after'],
+      ),
+      pressureBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}pressure_before'],
+      ),
+      pressureAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}pressure_after'],
+      ),
+      readFractionBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}read_fraction_before'],
+      ),
+      readFractionAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}read_fraction_after'],
+      ),
+      lifecycleBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lifecycle_before'],
+      ),
+      lifecycleAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lifecycle_after'],
+      ),
+      schedulerVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scheduler_version'],
+      ),
+      parametersVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parameters_version'],
+      ),
+      metadataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}metadata_json'],
+      ),
+    );
+  }
+
+  @override
+  $RevlogEntriesTable createAlias(String alias) {
+    return $RevlogEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class RevlogRow extends DataClass implements Insertable<RevlogRow> {
+  final String id;
+  final String operationId;
+  final String elementId;
+  final int elementType;
+
+  /// Stable [RevlogEventType] value. Never the enum index.
+  final int eventType;
+  final int atUtc;
+
+  /// 1–4 on review and practice rows, null everywhere else. A postpone has no
+  /// grade because it was never a retention test.
+  final int? grade;
+
+  /// Days that actually passed since the previous repetition.
+  final double? elapsedDays;
+
+  /// Days the interval had been set to. The gap between this and
+  /// [elapsedDays] is the signal an optimizer needs.
+  final double? scheduledDays;
+  final int? durationMs;
+  final int? postponeCount;
+  final int? dueBeforeUtc;
+  final int? dueAfterUtc;
+  final double? intervalBefore;
+  final double? intervalAfter;
+  final double? aFactorBefore;
+  final double? aFactorAfter;
+  final double? stabilityBefore;
+  final double? stabilityAfter;
+  final double? difficultyBefore;
+  final double? difficultyAfter;
+  final int? stateBefore;
+  final int? stateAfter;
+  final int? repsBefore;
+  final int? lapsesBefore;
+  final String? priorityBefore;
+  final String? priorityAfter;
+
+  /// Priority pressure at the moment of the event, stored rather than
+  /// recomputed: the collection's order moves, and what mattered to the
+  /// decision is where the element stood then.
+  final double? pressureBefore;
+  final double? pressureAfter;
+  final double? readFractionBefore;
+  final double? readFractionAfter;
+  final int? lifecycleBefore;
+  final int? lifecycleAfter;
+  final String? schedulerVersion;
+  final String? parametersVersion;
+
+  /// Free-form detail: the A-factor's terms, a delay formula's inputs, the
+  /// cap that triggered a deferral. Never element content.
+  final String? metadataJson;
+  const RevlogRow({
+    required this.id,
+    required this.operationId,
+    required this.elementId,
+    required this.elementType,
+    required this.eventType,
+    required this.atUtc,
+    this.grade,
+    this.elapsedDays,
+    this.scheduledDays,
+    this.durationMs,
+    this.postponeCount,
+    this.dueBeforeUtc,
+    this.dueAfterUtc,
+    this.intervalBefore,
+    this.intervalAfter,
+    this.aFactorBefore,
+    this.aFactorAfter,
+    this.stabilityBefore,
+    this.stabilityAfter,
+    this.difficultyBefore,
+    this.difficultyAfter,
+    this.stateBefore,
+    this.stateAfter,
+    this.repsBefore,
+    this.lapsesBefore,
+    this.priorityBefore,
+    this.priorityAfter,
+    this.pressureBefore,
+    this.pressureAfter,
+    this.readFractionBefore,
+    this.readFractionAfter,
+    this.lifecycleBefore,
+    this.lifecycleAfter,
+    this.schedulerVersion,
+    this.parametersVersion,
+    this.metadataJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['operation_id'] = Variable<String>(operationId);
+    map['element_id'] = Variable<String>(elementId);
+    map['element_type'] = Variable<int>(elementType);
+    map['event_type'] = Variable<int>(eventType);
+    map['at_utc'] = Variable<int>(atUtc);
+    if (!nullToAbsent || grade != null) {
+      map['grade'] = Variable<int>(grade);
+    }
+    if (!nullToAbsent || elapsedDays != null) {
+      map['elapsed_days'] = Variable<double>(elapsedDays);
+    }
+    if (!nullToAbsent || scheduledDays != null) {
+      map['scheduled_days'] = Variable<double>(scheduledDays);
+    }
+    if (!nullToAbsent || durationMs != null) {
+      map['duration_ms'] = Variable<int>(durationMs);
+    }
+    if (!nullToAbsent || postponeCount != null) {
+      map['postpone_count'] = Variable<int>(postponeCount);
+    }
+    if (!nullToAbsent || dueBeforeUtc != null) {
+      map['due_before_utc'] = Variable<int>(dueBeforeUtc);
+    }
+    if (!nullToAbsent || dueAfterUtc != null) {
+      map['due_after_utc'] = Variable<int>(dueAfterUtc);
+    }
+    if (!nullToAbsent || intervalBefore != null) {
+      map['interval_before'] = Variable<double>(intervalBefore);
+    }
+    if (!nullToAbsent || intervalAfter != null) {
+      map['interval_after'] = Variable<double>(intervalAfter);
+    }
+    if (!nullToAbsent || aFactorBefore != null) {
+      map['a_factor_before'] = Variable<double>(aFactorBefore);
+    }
+    if (!nullToAbsent || aFactorAfter != null) {
+      map['a_factor_after'] = Variable<double>(aFactorAfter);
+    }
+    if (!nullToAbsent || stabilityBefore != null) {
+      map['stability_before'] = Variable<double>(stabilityBefore);
+    }
+    if (!nullToAbsent || stabilityAfter != null) {
+      map['stability_after'] = Variable<double>(stabilityAfter);
+    }
+    if (!nullToAbsent || difficultyBefore != null) {
+      map['difficulty_before'] = Variable<double>(difficultyBefore);
+    }
+    if (!nullToAbsent || difficultyAfter != null) {
+      map['difficulty_after'] = Variable<double>(difficultyAfter);
+    }
+    if (!nullToAbsent || stateBefore != null) {
+      map['state_before'] = Variable<int>(stateBefore);
+    }
+    if (!nullToAbsent || stateAfter != null) {
+      map['state_after'] = Variable<int>(stateAfter);
+    }
+    if (!nullToAbsent || repsBefore != null) {
+      map['reps_before'] = Variable<int>(repsBefore);
+    }
+    if (!nullToAbsent || lapsesBefore != null) {
+      map['lapses_before'] = Variable<int>(lapsesBefore);
+    }
+    if (!nullToAbsent || priorityBefore != null) {
+      map['priority_before'] = Variable<String>(priorityBefore);
+    }
+    if (!nullToAbsent || priorityAfter != null) {
+      map['priority_after'] = Variable<String>(priorityAfter);
+    }
+    if (!nullToAbsent || pressureBefore != null) {
+      map['pressure_before'] = Variable<double>(pressureBefore);
+    }
+    if (!nullToAbsent || pressureAfter != null) {
+      map['pressure_after'] = Variable<double>(pressureAfter);
+    }
+    if (!nullToAbsent || readFractionBefore != null) {
+      map['read_fraction_before'] = Variable<double>(readFractionBefore);
+    }
+    if (!nullToAbsent || readFractionAfter != null) {
+      map['read_fraction_after'] = Variable<double>(readFractionAfter);
+    }
+    if (!nullToAbsent || lifecycleBefore != null) {
+      map['lifecycle_before'] = Variable<int>(lifecycleBefore);
+    }
+    if (!nullToAbsent || lifecycleAfter != null) {
+      map['lifecycle_after'] = Variable<int>(lifecycleAfter);
+    }
+    if (!nullToAbsent || schedulerVersion != null) {
+      map['scheduler_version'] = Variable<String>(schedulerVersion);
+    }
+    if (!nullToAbsent || parametersVersion != null) {
+      map['parameters_version'] = Variable<String>(parametersVersion);
+    }
+    if (!nullToAbsent || metadataJson != null) {
+      map['metadata_json'] = Variable<String>(metadataJson);
+    }
+    return map;
+  }
+
+  RevlogEntriesCompanion toCompanion(bool nullToAbsent) {
+    return RevlogEntriesCompanion(
+      id: Value(id),
+      operationId: Value(operationId),
+      elementId: Value(elementId),
+      elementType: Value(elementType),
+      eventType: Value(eventType),
+      atUtc: Value(atUtc),
+      grade: grade == null && nullToAbsent
+          ? const Value.absent()
+          : Value(grade),
+      elapsedDays: elapsedDays == null && nullToAbsent
+          ? const Value.absent()
+          : Value(elapsedDays),
+      scheduledDays: scheduledDays == null && nullToAbsent
+          ? const Value.absent()
+          : Value(scheduledDays),
+      durationMs: durationMs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(durationMs),
+      postponeCount: postponeCount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(postponeCount),
+      dueBeforeUtc: dueBeforeUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dueBeforeUtc),
+      dueAfterUtc: dueAfterUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dueAfterUtc),
+      intervalBefore: intervalBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(intervalBefore),
+      intervalAfter: intervalAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(intervalAfter),
+      aFactorBefore: aFactorBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(aFactorBefore),
+      aFactorAfter: aFactorAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(aFactorAfter),
+      stabilityBefore: stabilityBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stabilityBefore),
+      stabilityAfter: stabilityAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stabilityAfter),
+      difficultyBefore: difficultyBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(difficultyBefore),
+      difficultyAfter: difficultyAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(difficultyAfter),
+      stateBefore: stateBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stateBefore),
+      stateAfter: stateAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stateAfter),
+      repsBefore: repsBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repsBefore),
+      lapsesBefore: lapsesBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lapsesBefore),
+      priorityBefore: priorityBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(priorityBefore),
+      priorityAfter: priorityAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(priorityAfter),
+      pressureBefore: pressureBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pressureBefore),
+      pressureAfter: pressureAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pressureAfter),
+      readFractionBefore: readFractionBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(readFractionBefore),
+      readFractionAfter: readFractionAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(readFractionAfter),
+      lifecycleBefore: lifecycleBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lifecycleBefore),
+      lifecycleAfter: lifecycleAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lifecycleAfter),
+      schedulerVersion: schedulerVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(schedulerVersion),
+      parametersVersion: parametersVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parametersVersion),
+      metadataJson: metadataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(metadataJson),
+    );
+  }
+
+  factory RevlogRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RevlogRow(
+      id: serializer.fromJson<String>(json['id']),
+      operationId: serializer.fromJson<String>(json['operationId']),
+      elementId: serializer.fromJson<String>(json['elementId']),
+      elementType: serializer.fromJson<int>(json['elementType']),
+      eventType: serializer.fromJson<int>(json['eventType']),
+      atUtc: serializer.fromJson<int>(json['atUtc']),
+      grade: serializer.fromJson<int?>(json['grade']),
+      elapsedDays: serializer.fromJson<double?>(json['elapsedDays']),
+      scheduledDays: serializer.fromJson<double?>(json['scheduledDays']),
+      durationMs: serializer.fromJson<int?>(json['durationMs']),
+      postponeCount: serializer.fromJson<int?>(json['postponeCount']),
+      dueBeforeUtc: serializer.fromJson<int?>(json['dueBeforeUtc']),
+      dueAfterUtc: serializer.fromJson<int?>(json['dueAfterUtc']),
+      intervalBefore: serializer.fromJson<double?>(json['intervalBefore']),
+      intervalAfter: serializer.fromJson<double?>(json['intervalAfter']),
+      aFactorBefore: serializer.fromJson<double?>(json['aFactorBefore']),
+      aFactorAfter: serializer.fromJson<double?>(json['aFactorAfter']),
+      stabilityBefore: serializer.fromJson<double?>(json['stabilityBefore']),
+      stabilityAfter: serializer.fromJson<double?>(json['stabilityAfter']),
+      difficultyBefore: serializer.fromJson<double?>(json['difficultyBefore']),
+      difficultyAfter: serializer.fromJson<double?>(json['difficultyAfter']),
+      stateBefore: serializer.fromJson<int?>(json['stateBefore']),
+      stateAfter: serializer.fromJson<int?>(json['stateAfter']),
+      repsBefore: serializer.fromJson<int?>(json['repsBefore']),
+      lapsesBefore: serializer.fromJson<int?>(json['lapsesBefore']),
+      priorityBefore: serializer.fromJson<String?>(json['priorityBefore']),
+      priorityAfter: serializer.fromJson<String?>(json['priorityAfter']),
+      pressureBefore: serializer.fromJson<double?>(json['pressureBefore']),
+      pressureAfter: serializer.fromJson<double?>(json['pressureAfter']),
+      readFractionBefore: serializer.fromJson<double?>(
+        json['readFractionBefore'],
+      ),
+      readFractionAfter: serializer.fromJson<double?>(
+        json['readFractionAfter'],
+      ),
+      lifecycleBefore: serializer.fromJson<int?>(json['lifecycleBefore']),
+      lifecycleAfter: serializer.fromJson<int?>(json['lifecycleAfter']),
+      schedulerVersion: serializer.fromJson<String?>(json['schedulerVersion']),
+      parametersVersion: serializer.fromJson<String?>(
+        json['parametersVersion'],
+      ),
+      metadataJson: serializer.fromJson<String?>(json['metadataJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'operationId': serializer.toJson<String>(operationId),
+      'elementId': serializer.toJson<String>(elementId),
+      'elementType': serializer.toJson<int>(elementType),
+      'eventType': serializer.toJson<int>(eventType),
+      'atUtc': serializer.toJson<int>(atUtc),
+      'grade': serializer.toJson<int?>(grade),
+      'elapsedDays': serializer.toJson<double?>(elapsedDays),
+      'scheduledDays': serializer.toJson<double?>(scheduledDays),
+      'durationMs': serializer.toJson<int?>(durationMs),
+      'postponeCount': serializer.toJson<int?>(postponeCount),
+      'dueBeforeUtc': serializer.toJson<int?>(dueBeforeUtc),
+      'dueAfterUtc': serializer.toJson<int?>(dueAfterUtc),
+      'intervalBefore': serializer.toJson<double?>(intervalBefore),
+      'intervalAfter': serializer.toJson<double?>(intervalAfter),
+      'aFactorBefore': serializer.toJson<double?>(aFactorBefore),
+      'aFactorAfter': serializer.toJson<double?>(aFactorAfter),
+      'stabilityBefore': serializer.toJson<double?>(stabilityBefore),
+      'stabilityAfter': serializer.toJson<double?>(stabilityAfter),
+      'difficultyBefore': serializer.toJson<double?>(difficultyBefore),
+      'difficultyAfter': serializer.toJson<double?>(difficultyAfter),
+      'stateBefore': serializer.toJson<int?>(stateBefore),
+      'stateAfter': serializer.toJson<int?>(stateAfter),
+      'repsBefore': serializer.toJson<int?>(repsBefore),
+      'lapsesBefore': serializer.toJson<int?>(lapsesBefore),
+      'priorityBefore': serializer.toJson<String?>(priorityBefore),
+      'priorityAfter': serializer.toJson<String?>(priorityAfter),
+      'pressureBefore': serializer.toJson<double?>(pressureBefore),
+      'pressureAfter': serializer.toJson<double?>(pressureAfter),
+      'readFractionBefore': serializer.toJson<double?>(readFractionBefore),
+      'readFractionAfter': serializer.toJson<double?>(readFractionAfter),
+      'lifecycleBefore': serializer.toJson<int?>(lifecycleBefore),
+      'lifecycleAfter': serializer.toJson<int?>(lifecycleAfter),
+      'schedulerVersion': serializer.toJson<String?>(schedulerVersion),
+      'parametersVersion': serializer.toJson<String?>(parametersVersion),
+      'metadataJson': serializer.toJson<String?>(metadataJson),
+    };
+  }
+
+  RevlogRow copyWith({
+    String? id,
+    String? operationId,
+    String? elementId,
+    int? elementType,
+    int? eventType,
+    int? atUtc,
+    Value<int?> grade = const Value.absent(),
+    Value<double?> elapsedDays = const Value.absent(),
+    Value<double?> scheduledDays = const Value.absent(),
+    Value<int?> durationMs = const Value.absent(),
+    Value<int?> postponeCount = const Value.absent(),
+    Value<int?> dueBeforeUtc = const Value.absent(),
+    Value<int?> dueAfterUtc = const Value.absent(),
+    Value<double?> intervalBefore = const Value.absent(),
+    Value<double?> intervalAfter = const Value.absent(),
+    Value<double?> aFactorBefore = const Value.absent(),
+    Value<double?> aFactorAfter = const Value.absent(),
+    Value<double?> stabilityBefore = const Value.absent(),
+    Value<double?> stabilityAfter = const Value.absent(),
+    Value<double?> difficultyBefore = const Value.absent(),
+    Value<double?> difficultyAfter = const Value.absent(),
+    Value<int?> stateBefore = const Value.absent(),
+    Value<int?> stateAfter = const Value.absent(),
+    Value<int?> repsBefore = const Value.absent(),
+    Value<int?> lapsesBefore = const Value.absent(),
+    Value<String?> priorityBefore = const Value.absent(),
+    Value<String?> priorityAfter = const Value.absent(),
+    Value<double?> pressureBefore = const Value.absent(),
+    Value<double?> pressureAfter = const Value.absent(),
+    Value<double?> readFractionBefore = const Value.absent(),
+    Value<double?> readFractionAfter = const Value.absent(),
+    Value<int?> lifecycleBefore = const Value.absent(),
+    Value<int?> lifecycleAfter = const Value.absent(),
+    Value<String?> schedulerVersion = const Value.absent(),
+    Value<String?> parametersVersion = const Value.absent(),
+    Value<String?> metadataJson = const Value.absent(),
+  }) => RevlogRow(
+    id: id ?? this.id,
+    operationId: operationId ?? this.operationId,
+    elementId: elementId ?? this.elementId,
+    elementType: elementType ?? this.elementType,
+    eventType: eventType ?? this.eventType,
+    atUtc: atUtc ?? this.atUtc,
+    grade: grade.present ? grade.value : this.grade,
+    elapsedDays: elapsedDays.present ? elapsedDays.value : this.elapsedDays,
+    scheduledDays: scheduledDays.present
+        ? scheduledDays.value
+        : this.scheduledDays,
+    durationMs: durationMs.present ? durationMs.value : this.durationMs,
+    postponeCount: postponeCount.present
+        ? postponeCount.value
+        : this.postponeCount,
+    dueBeforeUtc: dueBeforeUtc.present ? dueBeforeUtc.value : this.dueBeforeUtc,
+    dueAfterUtc: dueAfterUtc.present ? dueAfterUtc.value : this.dueAfterUtc,
+    intervalBefore: intervalBefore.present
+        ? intervalBefore.value
+        : this.intervalBefore,
+    intervalAfter: intervalAfter.present
+        ? intervalAfter.value
+        : this.intervalAfter,
+    aFactorBefore: aFactorBefore.present
+        ? aFactorBefore.value
+        : this.aFactorBefore,
+    aFactorAfter: aFactorAfter.present ? aFactorAfter.value : this.aFactorAfter,
+    stabilityBefore: stabilityBefore.present
+        ? stabilityBefore.value
+        : this.stabilityBefore,
+    stabilityAfter: stabilityAfter.present
+        ? stabilityAfter.value
+        : this.stabilityAfter,
+    difficultyBefore: difficultyBefore.present
+        ? difficultyBefore.value
+        : this.difficultyBefore,
+    difficultyAfter: difficultyAfter.present
+        ? difficultyAfter.value
+        : this.difficultyAfter,
+    stateBefore: stateBefore.present ? stateBefore.value : this.stateBefore,
+    stateAfter: stateAfter.present ? stateAfter.value : this.stateAfter,
+    repsBefore: repsBefore.present ? repsBefore.value : this.repsBefore,
+    lapsesBefore: lapsesBefore.present ? lapsesBefore.value : this.lapsesBefore,
+    priorityBefore: priorityBefore.present
+        ? priorityBefore.value
+        : this.priorityBefore,
+    priorityAfter: priorityAfter.present
+        ? priorityAfter.value
+        : this.priorityAfter,
+    pressureBefore: pressureBefore.present
+        ? pressureBefore.value
+        : this.pressureBefore,
+    pressureAfter: pressureAfter.present
+        ? pressureAfter.value
+        : this.pressureAfter,
+    readFractionBefore: readFractionBefore.present
+        ? readFractionBefore.value
+        : this.readFractionBefore,
+    readFractionAfter: readFractionAfter.present
+        ? readFractionAfter.value
+        : this.readFractionAfter,
+    lifecycleBefore: lifecycleBefore.present
+        ? lifecycleBefore.value
+        : this.lifecycleBefore,
+    lifecycleAfter: lifecycleAfter.present
+        ? lifecycleAfter.value
+        : this.lifecycleAfter,
+    schedulerVersion: schedulerVersion.present
+        ? schedulerVersion.value
+        : this.schedulerVersion,
+    parametersVersion: parametersVersion.present
+        ? parametersVersion.value
+        : this.parametersVersion,
+    metadataJson: metadataJson.present ? metadataJson.value : this.metadataJson,
+  );
+  RevlogRow copyWithCompanion(RevlogEntriesCompanion data) {
+    return RevlogRow(
+      id: data.id.present ? data.id.value : this.id,
+      operationId: data.operationId.present
+          ? data.operationId.value
+          : this.operationId,
+      elementId: data.elementId.present ? data.elementId.value : this.elementId,
+      elementType: data.elementType.present
+          ? data.elementType.value
+          : this.elementType,
+      eventType: data.eventType.present ? data.eventType.value : this.eventType,
+      atUtc: data.atUtc.present ? data.atUtc.value : this.atUtc,
+      grade: data.grade.present ? data.grade.value : this.grade,
+      elapsedDays: data.elapsedDays.present
+          ? data.elapsedDays.value
+          : this.elapsedDays,
+      scheduledDays: data.scheduledDays.present
+          ? data.scheduledDays.value
+          : this.scheduledDays,
+      durationMs: data.durationMs.present
+          ? data.durationMs.value
+          : this.durationMs,
+      postponeCount: data.postponeCount.present
+          ? data.postponeCount.value
+          : this.postponeCount,
+      dueBeforeUtc: data.dueBeforeUtc.present
+          ? data.dueBeforeUtc.value
+          : this.dueBeforeUtc,
+      dueAfterUtc: data.dueAfterUtc.present
+          ? data.dueAfterUtc.value
+          : this.dueAfterUtc,
+      intervalBefore: data.intervalBefore.present
+          ? data.intervalBefore.value
+          : this.intervalBefore,
+      intervalAfter: data.intervalAfter.present
+          ? data.intervalAfter.value
+          : this.intervalAfter,
+      aFactorBefore: data.aFactorBefore.present
+          ? data.aFactorBefore.value
+          : this.aFactorBefore,
+      aFactorAfter: data.aFactorAfter.present
+          ? data.aFactorAfter.value
+          : this.aFactorAfter,
+      stabilityBefore: data.stabilityBefore.present
+          ? data.stabilityBefore.value
+          : this.stabilityBefore,
+      stabilityAfter: data.stabilityAfter.present
+          ? data.stabilityAfter.value
+          : this.stabilityAfter,
+      difficultyBefore: data.difficultyBefore.present
+          ? data.difficultyBefore.value
+          : this.difficultyBefore,
+      difficultyAfter: data.difficultyAfter.present
+          ? data.difficultyAfter.value
+          : this.difficultyAfter,
+      stateBefore: data.stateBefore.present
+          ? data.stateBefore.value
+          : this.stateBefore,
+      stateAfter: data.stateAfter.present
+          ? data.stateAfter.value
+          : this.stateAfter,
+      repsBefore: data.repsBefore.present
+          ? data.repsBefore.value
+          : this.repsBefore,
+      lapsesBefore: data.lapsesBefore.present
+          ? data.lapsesBefore.value
+          : this.lapsesBefore,
+      priorityBefore: data.priorityBefore.present
+          ? data.priorityBefore.value
+          : this.priorityBefore,
+      priorityAfter: data.priorityAfter.present
+          ? data.priorityAfter.value
+          : this.priorityAfter,
+      pressureBefore: data.pressureBefore.present
+          ? data.pressureBefore.value
+          : this.pressureBefore,
+      pressureAfter: data.pressureAfter.present
+          ? data.pressureAfter.value
+          : this.pressureAfter,
+      readFractionBefore: data.readFractionBefore.present
+          ? data.readFractionBefore.value
+          : this.readFractionBefore,
+      readFractionAfter: data.readFractionAfter.present
+          ? data.readFractionAfter.value
+          : this.readFractionAfter,
+      lifecycleBefore: data.lifecycleBefore.present
+          ? data.lifecycleBefore.value
+          : this.lifecycleBefore,
+      lifecycleAfter: data.lifecycleAfter.present
+          ? data.lifecycleAfter.value
+          : this.lifecycleAfter,
+      schedulerVersion: data.schedulerVersion.present
+          ? data.schedulerVersion.value
+          : this.schedulerVersion,
+      parametersVersion: data.parametersVersion.present
+          ? data.parametersVersion.value
+          : this.parametersVersion,
+      metadataJson: data.metadataJson.present
+          ? data.metadataJson.value
+          : this.metadataJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RevlogRow(')
+          ..write('id: $id, ')
+          ..write('operationId: $operationId, ')
+          ..write('elementId: $elementId, ')
+          ..write('elementType: $elementType, ')
+          ..write('eventType: $eventType, ')
+          ..write('atUtc: $atUtc, ')
+          ..write('grade: $grade, ')
+          ..write('elapsedDays: $elapsedDays, ')
+          ..write('scheduledDays: $scheduledDays, ')
+          ..write('durationMs: $durationMs, ')
+          ..write('postponeCount: $postponeCount, ')
+          ..write('dueBeforeUtc: $dueBeforeUtc, ')
+          ..write('dueAfterUtc: $dueAfterUtc, ')
+          ..write('intervalBefore: $intervalBefore, ')
+          ..write('intervalAfter: $intervalAfter, ')
+          ..write('aFactorBefore: $aFactorBefore, ')
+          ..write('aFactorAfter: $aFactorAfter, ')
+          ..write('stabilityBefore: $stabilityBefore, ')
+          ..write('stabilityAfter: $stabilityAfter, ')
+          ..write('difficultyBefore: $difficultyBefore, ')
+          ..write('difficultyAfter: $difficultyAfter, ')
+          ..write('stateBefore: $stateBefore, ')
+          ..write('stateAfter: $stateAfter, ')
+          ..write('repsBefore: $repsBefore, ')
+          ..write('lapsesBefore: $lapsesBefore, ')
+          ..write('priorityBefore: $priorityBefore, ')
+          ..write('priorityAfter: $priorityAfter, ')
+          ..write('pressureBefore: $pressureBefore, ')
+          ..write('pressureAfter: $pressureAfter, ')
+          ..write('readFractionBefore: $readFractionBefore, ')
+          ..write('readFractionAfter: $readFractionAfter, ')
+          ..write('lifecycleBefore: $lifecycleBefore, ')
+          ..write('lifecycleAfter: $lifecycleAfter, ')
+          ..write('schedulerVersion: $schedulerVersion, ')
+          ..write('parametersVersion: $parametersVersion, ')
+          ..write('metadataJson: $metadataJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    operationId,
+    elementId,
+    elementType,
+    eventType,
+    atUtc,
+    grade,
+    elapsedDays,
+    scheduledDays,
+    durationMs,
+    postponeCount,
+    dueBeforeUtc,
+    dueAfterUtc,
+    intervalBefore,
+    intervalAfter,
+    aFactorBefore,
+    aFactorAfter,
+    stabilityBefore,
+    stabilityAfter,
+    difficultyBefore,
+    difficultyAfter,
+    stateBefore,
+    stateAfter,
+    repsBefore,
+    lapsesBefore,
+    priorityBefore,
+    priorityAfter,
+    pressureBefore,
+    pressureAfter,
+    readFractionBefore,
+    readFractionAfter,
+    lifecycleBefore,
+    lifecycleAfter,
+    schedulerVersion,
+    parametersVersion,
+    metadataJson,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RevlogRow &&
+          other.id == this.id &&
+          other.operationId == this.operationId &&
+          other.elementId == this.elementId &&
+          other.elementType == this.elementType &&
+          other.eventType == this.eventType &&
+          other.atUtc == this.atUtc &&
+          other.grade == this.grade &&
+          other.elapsedDays == this.elapsedDays &&
+          other.scheduledDays == this.scheduledDays &&
+          other.durationMs == this.durationMs &&
+          other.postponeCount == this.postponeCount &&
+          other.dueBeforeUtc == this.dueBeforeUtc &&
+          other.dueAfterUtc == this.dueAfterUtc &&
+          other.intervalBefore == this.intervalBefore &&
+          other.intervalAfter == this.intervalAfter &&
+          other.aFactorBefore == this.aFactorBefore &&
+          other.aFactorAfter == this.aFactorAfter &&
+          other.stabilityBefore == this.stabilityBefore &&
+          other.stabilityAfter == this.stabilityAfter &&
+          other.difficultyBefore == this.difficultyBefore &&
+          other.difficultyAfter == this.difficultyAfter &&
+          other.stateBefore == this.stateBefore &&
+          other.stateAfter == this.stateAfter &&
+          other.repsBefore == this.repsBefore &&
+          other.lapsesBefore == this.lapsesBefore &&
+          other.priorityBefore == this.priorityBefore &&
+          other.priorityAfter == this.priorityAfter &&
+          other.pressureBefore == this.pressureBefore &&
+          other.pressureAfter == this.pressureAfter &&
+          other.readFractionBefore == this.readFractionBefore &&
+          other.readFractionAfter == this.readFractionAfter &&
+          other.lifecycleBefore == this.lifecycleBefore &&
+          other.lifecycleAfter == this.lifecycleAfter &&
+          other.schedulerVersion == this.schedulerVersion &&
+          other.parametersVersion == this.parametersVersion &&
+          other.metadataJson == this.metadataJson);
+}
+
+class RevlogEntriesCompanion extends UpdateCompanion<RevlogRow> {
+  final Value<String> id;
+  final Value<String> operationId;
+  final Value<String> elementId;
+  final Value<int> elementType;
+  final Value<int> eventType;
+  final Value<int> atUtc;
+  final Value<int?> grade;
+  final Value<double?> elapsedDays;
+  final Value<double?> scheduledDays;
+  final Value<int?> durationMs;
+  final Value<int?> postponeCount;
+  final Value<int?> dueBeforeUtc;
+  final Value<int?> dueAfterUtc;
+  final Value<double?> intervalBefore;
+  final Value<double?> intervalAfter;
+  final Value<double?> aFactorBefore;
+  final Value<double?> aFactorAfter;
+  final Value<double?> stabilityBefore;
+  final Value<double?> stabilityAfter;
+  final Value<double?> difficultyBefore;
+  final Value<double?> difficultyAfter;
+  final Value<int?> stateBefore;
+  final Value<int?> stateAfter;
+  final Value<int?> repsBefore;
+  final Value<int?> lapsesBefore;
+  final Value<String?> priorityBefore;
+  final Value<String?> priorityAfter;
+  final Value<double?> pressureBefore;
+  final Value<double?> pressureAfter;
+  final Value<double?> readFractionBefore;
+  final Value<double?> readFractionAfter;
+  final Value<int?> lifecycleBefore;
+  final Value<int?> lifecycleAfter;
+  final Value<String?> schedulerVersion;
+  final Value<String?> parametersVersion;
+  final Value<String?> metadataJson;
+  final Value<int> rowid;
+  const RevlogEntriesCompanion({
+    this.id = const Value.absent(),
+    this.operationId = const Value.absent(),
+    this.elementId = const Value.absent(),
+    this.elementType = const Value.absent(),
+    this.eventType = const Value.absent(),
+    this.atUtc = const Value.absent(),
+    this.grade = const Value.absent(),
+    this.elapsedDays = const Value.absent(),
+    this.scheduledDays = const Value.absent(),
+    this.durationMs = const Value.absent(),
+    this.postponeCount = const Value.absent(),
+    this.dueBeforeUtc = const Value.absent(),
+    this.dueAfterUtc = const Value.absent(),
+    this.intervalBefore = const Value.absent(),
+    this.intervalAfter = const Value.absent(),
+    this.aFactorBefore = const Value.absent(),
+    this.aFactorAfter = const Value.absent(),
+    this.stabilityBefore = const Value.absent(),
+    this.stabilityAfter = const Value.absent(),
+    this.difficultyBefore = const Value.absent(),
+    this.difficultyAfter = const Value.absent(),
+    this.stateBefore = const Value.absent(),
+    this.stateAfter = const Value.absent(),
+    this.repsBefore = const Value.absent(),
+    this.lapsesBefore = const Value.absent(),
+    this.priorityBefore = const Value.absent(),
+    this.priorityAfter = const Value.absent(),
+    this.pressureBefore = const Value.absent(),
+    this.pressureAfter = const Value.absent(),
+    this.readFractionBefore = const Value.absent(),
+    this.readFractionAfter = const Value.absent(),
+    this.lifecycleBefore = const Value.absent(),
+    this.lifecycleAfter = const Value.absent(),
+    this.schedulerVersion = const Value.absent(),
+    this.parametersVersion = const Value.absent(),
+    this.metadataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RevlogEntriesCompanion.insert({
+    required String id,
+    required String operationId,
+    required String elementId,
+    required int elementType,
+    required int eventType,
+    required int atUtc,
+    this.grade = const Value.absent(),
+    this.elapsedDays = const Value.absent(),
+    this.scheduledDays = const Value.absent(),
+    this.durationMs = const Value.absent(),
+    this.postponeCount = const Value.absent(),
+    this.dueBeforeUtc = const Value.absent(),
+    this.dueAfterUtc = const Value.absent(),
+    this.intervalBefore = const Value.absent(),
+    this.intervalAfter = const Value.absent(),
+    this.aFactorBefore = const Value.absent(),
+    this.aFactorAfter = const Value.absent(),
+    this.stabilityBefore = const Value.absent(),
+    this.stabilityAfter = const Value.absent(),
+    this.difficultyBefore = const Value.absent(),
+    this.difficultyAfter = const Value.absent(),
+    this.stateBefore = const Value.absent(),
+    this.stateAfter = const Value.absent(),
+    this.repsBefore = const Value.absent(),
+    this.lapsesBefore = const Value.absent(),
+    this.priorityBefore = const Value.absent(),
+    this.priorityAfter = const Value.absent(),
+    this.pressureBefore = const Value.absent(),
+    this.pressureAfter = const Value.absent(),
+    this.readFractionBefore = const Value.absent(),
+    this.readFractionAfter = const Value.absent(),
+    this.lifecycleBefore = const Value.absent(),
+    this.lifecycleAfter = const Value.absent(),
+    this.schedulerVersion = const Value.absent(),
+    this.parametersVersion = const Value.absent(),
+    this.metadataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       operationId = Value(operationId),
+       elementId = Value(elementId),
+       elementType = Value(elementType),
+       eventType = Value(eventType),
+       atUtc = Value(atUtc);
+  static Insertable<RevlogRow> custom({
+    Expression<String>? id,
+    Expression<String>? operationId,
+    Expression<String>? elementId,
+    Expression<int>? elementType,
+    Expression<int>? eventType,
+    Expression<int>? atUtc,
+    Expression<int>? grade,
+    Expression<double>? elapsedDays,
+    Expression<double>? scheduledDays,
+    Expression<int>? durationMs,
+    Expression<int>? postponeCount,
+    Expression<int>? dueBeforeUtc,
+    Expression<int>? dueAfterUtc,
+    Expression<double>? intervalBefore,
+    Expression<double>? intervalAfter,
+    Expression<double>? aFactorBefore,
+    Expression<double>? aFactorAfter,
+    Expression<double>? stabilityBefore,
+    Expression<double>? stabilityAfter,
+    Expression<double>? difficultyBefore,
+    Expression<double>? difficultyAfter,
+    Expression<int>? stateBefore,
+    Expression<int>? stateAfter,
+    Expression<int>? repsBefore,
+    Expression<int>? lapsesBefore,
+    Expression<String>? priorityBefore,
+    Expression<String>? priorityAfter,
+    Expression<double>? pressureBefore,
+    Expression<double>? pressureAfter,
+    Expression<double>? readFractionBefore,
+    Expression<double>? readFractionAfter,
+    Expression<int>? lifecycleBefore,
+    Expression<int>? lifecycleAfter,
+    Expression<String>? schedulerVersion,
+    Expression<String>? parametersVersion,
+    Expression<String>? metadataJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (operationId != null) 'operation_id': operationId,
+      if (elementId != null) 'element_id': elementId,
+      if (elementType != null) 'element_type': elementType,
+      if (eventType != null) 'event_type': eventType,
+      if (atUtc != null) 'at_utc': atUtc,
+      if (grade != null) 'grade': grade,
+      if (elapsedDays != null) 'elapsed_days': elapsedDays,
+      if (scheduledDays != null) 'scheduled_days': scheduledDays,
+      if (durationMs != null) 'duration_ms': durationMs,
+      if (postponeCount != null) 'postpone_count': postponeCount,
+      if (dueBeforeUtc != null) 'due_before_utc': dueBeforeUtc,
+      if (dueAfterUtc != null) 'due_after_utc': dueAfterUtc,
+      if (intervalBefore != null) 'interval_before': intervalBefore,
+      if (intervalAfter != null) 'interval_after': intervalAfter,
+      if (aFactorBefore != null) 'a_factor_before': aFactorBefore,
+      if (aFactorAfter != null) 'a_factor_after': aFactorAfter,
+      if (stabilityBefore != null) 'stability_before': stabilityBefore,
+      if (stabilityAfter != null) 'stability_after': stabilityAfter,
+      if (difficultyBefore != null) 'difficulty_before': difficultyBefore,
+      if (difficultyAfter != null) 'difficulty_after': difficultyAfter,
+      if (stateBefore != null) 'state_before': stateBefore,
+      if (stateAfter != null) 'state_after': stateAfter,
+      if (repsBefore != null) 'reps_before': repsBefore,
+      if (lapsesBefore != null) 'lapses_before': lapsesBefore,
+      if (priorityBefore != null) 'priority_before': priorityBefore,
+      if (priorityAfter != null) 'priority_after': priorityAfter,
+      if (pressureBefore != null) 'pressure_before': pressureBefore,
+      if (pressureAfter != null) 'pressure_after': pressureAfter,
+      if (readFractionBefore != null)
+        'read_fraction_before': readFractionBefore,
+      if (readFractionAfter != null) 'read_fraction_after': readFractionAfter,
+      if (lifecycleBefore != null) 'lifecycle_before': lifecycleBefore,
+      if (lifecycleAfter != null) 'lifecycle_after': lifecycleAfter,
+      if (schedulerVersion != null) 'scheduler_version': schedulerVersion,
+      if (parametersVersion != null) 'parameters_version': parametersVersion,
+      if (metadataJson != null) 'metadata_json': metadataJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RevlogEntriesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? operationId,
+    Value<String>? elementId,
+    Value<int>? elementType,
+    Value<int>? eventType,
+    Value<int>? atUtc,
+    Value<int?>? grade,
+    Value<double?>? elapsedDays,
+    Value<double?>? scheduledDays,
+    Value<int?>? durationMs,
+    Value<int?>? postponeCount,
+    Value<int?>? dueBeforeUtc,
+    Value<int?>? dueAfterUtc,
+    Value<double?>? intervalBefore,
+    Value<double?>? intervalAfter,
+    Value<double?>? aFactorBefore,
+    Value<double?>? aFactorAfter,
+    Value<double?>? stabilityBefore,
+    Value<double?>? stabilityAfter,
+    Value<double?>? difficultyBefore,
+    Value<double?>? difficultyAfter,
+    Value<int?>? stateBefore,
+    Value<int?>? stateAfter,
+    Value<int?>? repsBefore,
+    Value<int?>? lapsesBefore,
+    Value<String?>? priorityBefore,
+    Value<String?>? priorityAfter,
+    Value<double?>? pressureBefore,
+    Value<double?>? pressureAfter,
+    Value<double?>? readFractionBefore,
+    Value<double?>? readFractionAfter,
+    Value<int?>? lifecycleBefore,
+    Value<int?>? lifecycleAfter,
+    Value<String?>? schedulerVersion,
+    Value<String?>? parametersVersion,
+    Value<String?>? metadataJson,
+    Value<int>? rowid,
+  }) {
+    return RevlogEntriesCompanion(
+      id: id ?? this.id,
+      operationId: operationId ?? this.operationId,
+      elementId: elementId ?? this.elementId,
+      elementType: elementType ?? this.elementType,
+      eventType: eventType ?? this.eventType,
+      atUtc: atUtc ?? this.atUtc,
+      grade: grade ?? this.grade,
+      elapsedDays: elapsedDays ?? this.elapsedDays,
+      scheduledDays: scheduledDays ?? this.scheduledDays,
+      durationMs: durationMs ?? this.durationMs,
+      postponeCount: postponeCount ?? this.postponeCount,
+      dueBeforeUtc: dueBeforeUtc ?? this.dueBeforeUtc,
+      dueAfterUtc: dueAfterUtc ?? this.dueAfterUtc,
+      intervalBefore: intervalBefore ?? this.intervalBefore,
+      intervalAfter: intervalAfter ?? this.intervalAfter,
+      aFactorBefore: aFactorBefore ?? this.aFactorBefore,
+      aFactorAfter: aFactorAfter ?? this.aFactorAfter,
+      stabilityBefore: stabilityBefore ?? this.stabilityBefore,
+      stabilityAfter: stabilityAfter ?? this.stabilityAfter,
+      difficultyBefore: difficultyBefore ?? this.difficultyBefore,
+      difficultyAfter: difficultyAfter ?? this.difficultyAfter,
+      stateBefore: stateBefore ?? this.stateBefore,
+      stateAfter: stateAfter ?? this.stateAfter,
+      repsBefore: repsBefore ?? this.repsBefore,
+      lapsesBefore: lapsesBefore ?? this.lapsesBefore,
+      priorityBefore: priorityBefore ?? this.priorityBefore,
+      priorityAfter: priorityAfter ?? this.priorityAfter,
+      pressureBefore: pressureBefore ?? this.pressureBefore,
+      pressureAfter: pressureAfter ?? this.pressureAfter,
+      readFractionBefore: readFractionBefore ?? this.readFractionBefore,
+      readFractionAfter: readFractionAfter ?? this.readFractionAfter,
+      lifecycleBefore: lifecycleBefore ?? this.lifecycleBefore,
+      lifecycleAfter: lifecycleAfter ?? this.lifecycleAfter,
+      schedulerVersion: schedulerVersion ?? this.schedulerVersion,
+      parametersVersion: parametersVersion ?? this.parametersVersion,
+      metadataJson: metadataJson ?? this.metadataJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (operationId.present) {
+      map['operation_id'] = Variable<String>(operationId.value);
+    }
+    if (elementId.present) {
+      map['element_id'] = Variable<String>(elementId.value);
+    }
+    if (elementType.present) {
+      map['element_type'] = Variable<int>(elementType.value);
+    }
+    if (eventType.present) {
+      map['event_type'] = Variable<int>(eventType.value);
+    }
+    if (atUtc.present) {
+      map['at_utc'] = Variable<int>(atUtc.value);
+    }
+    if (grade.present) {
+      map['grade'] = Variable<int>(grade.value);
+    }
+    if (elapsedDays.present) {
+      map['elapsed_days'] = Variable<double>(elapsedDays.value);
+    }
+    if (scheduledDays.present) {
+      map['scheduled_days'] = Variable<double>(scheduledDays.value);
+    }
+    if (durationMs.present) {
+      map['duration_ms'] = Variable<int>(durationMs.value);
+    }
+    if (postponeCount.present) {
+      map['postpone_count'] = Variable<int>(postponeCount.value);
+    }
+    if (dueBeforeUtc.present) {
+      map['due_before_utc'] = Variable<int>(dueBeforeUtc.value);
+    }
+    if (dueAfterUtc.present) {
+      map['due_after_utc'] = Variable<int>(dueAfterUtc.value);
+    }
+    if (intervalBefore.present) {
+      map['interval_before'] = Variable<double>(intervalBefore.value);
+    }
+    if (intervalAfter.present) {
+      map['interval_after'] = Variable<double>(intervalAfter.value);
+    }
+    if (aFactorBefore.present) {
+      map['a_factor_before'] = Variable<double>(aFactorBefore.value);
+    }
+    if (aFactorAfter.present) {
+      map['a_factor_after'] = Variable<double>(aFactorAfter.value);
+    }
+    if (stabilityBefore.present) {
+      map['stability_before'] = Variable<double>(stabilityBefore.value);
+    }
+    if (stabilityAfter.present) {
+      map['stability_after'] = Variable<double>(stabilityAfter.value);
+    }
+    if (difficultyBefore.present) {
+      map['difficulty_before'] = Variable<double>(difficultyBefore.value);
+    }
+    if (difficultyAfter.present) {
+      map['difficulty_after'] = Variable<double>(difficultyAfter.value);
+    }
+    if (stateBefore.present) {
+      map['state_before'] = Variable<int>(stateBefore.value);
+    }
+    if (stateAfter.present) {
+      map['state_after'] = Variable<int>(stateAfter.value);
+    }
+    if (repsBefore.present) {
+      map['reps_before'] = Variable<int>(repsBefore.value);
+    }
+    if (lapsesBefore.present) {
+      map['lapses_before'] = Variable<int>(lapsesBefore.value);
+    }
+    if (priorityBefore.present) {
+      map['priority_before'] = Variable<String>(priorityBefore.value);
+    }
+    if (priorityAfter.present) {
+      map['priority_after'] = Variable<String>(priorityAfter.value);
+    }
+    if (pressureBefore.present) {
+      map['pressure_before'] = Variable<double>(pressureBefore.value);
+    }
+    if (pressureAfter.present) {
+      map['pressure_after'] = Variable<double>(pressureAfter.value);
+    }
+    if (readFractionBefore.present) {
+      map['read_fraction_before'] = Variable<double>(readFractionBefore.value);
+    }
+    if (readFractionAfter.present) {
+      map['read_fraction_after'] = Variable<double>(readFractionAfter.value);
+    }
+    if (lifecycleBefore.present) {
+      map['lifecycle_before'] = Variable<int>(lifecycleBefore.value);
+    }
+    if (lifecycleAfter.present) {
+      map['lifecycle_after'] = Variable<int>(lifecycleAfter.value);
+    }
+    if (schedulerVersion.present) {
+      map['scheduler_version'] = Variable<String>(schedulerVersion.value);
+    }
+    if (parametersVersion.present) {
+      map['parameters_version'] = Variable<String>(parametersVersion.value);
+    }
+    if (metadataJson.present) {
+      map['metadata_json'] = Variable<String>(metadataJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RevlogEntriesCompanion(')
+          ..write('id: $id, ')
+          ..write('operationId: $operationId, ')
+          ..write('elementId: $elementId, ')
+          ..write('elementType: $elementType, ')
+          ..write('eventType: $eventType, ')
+          ..write('atUtc: $atUtc, ')
+          ..write('grade: $grade, ')
+          ..write('elapsedDays: $elapsedDays, ')
+          ..write('scheduledDays: $scheduledDays, ')
+          ..write('durationMs: $durationMs, ')
+          ..write('postponeCount: $postponeCount, ')
+          ..write('dueBeforeUtc: $dueBeforeUtc, ')
+          ..write('dueAfterUtc: $dueAfterUtc, ')
+          ..write('intervalBefore: $intervalBefore, ')
+          ..write('intervalAfter: $intervalAfter, ')
+          ..write('aFactorBefore: $aFactorBefore, ')
+          ..write('aFactorAfter: $aFactorAfter, ')
+          ..write('stabilityBefore: $stabilityBefore, ')
+          ..write('stabilityAfter: $stabilityAfter, ')
+          ..write('difficultyBefore: $difficultyBefore, ')
+          ..write('difficultyAfter: $difficultyAfter, ')
+          ..write('stateBefore: $stateBefore, ')
+          ..write('stateAfter: $stateAfter, ')
+          ..write('repsBefore: $repsBefore, ')
+          ..write('lapsesBefore: $lapsesBefore, ')
+          ..write('priorityBefore: $priorityBefore, ')
+          ..write('priorityAfter: $priorityAfter, ')
+          ..write('pressureBefore: $pressureBefore, ')
+          ..write('pressureAfter: $pressureAfter, ')
+          ..write('readFractionBefore: $readFractionBefore, ')
+          ..write('readFractionAfter: $readFractionAfter, ')
+          ..write('lifecycleBefore: $lifecycleBefore, ')
+          ..write('lifecycleAfter: $lifecycleAfter, ')
+          ..write('schedulerVersion: $schedulerVersion, ')
+          ..write('parametersVersion: $parametersVersion, ')
+          ..write('metadataJson: $metadataJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SearchDocumentsTable extends SearchDocuments
+    with TableInfo<$SearchDocumentsTable, SearchDocumentRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SearchDocumentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _elementIdMeta = const VerificationMeta(
+    'elementId',
+  );
+  @override
+  late final GeneratedColumn<String> elementId = GeneratedColumn<String>(
+    'element_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _elementTypeMeta = const VerificationMeta(
+    'elementType',
+  );
+  @override
+  late final GeneratedColumn<int> elementType = GeneratedColumn<int>(
+    'element_type',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(elementType).isBetweenValues(0, 2),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bodyMeta = const VerificationMeta('body');
+  @override
+  late final GeneratedColumn<String> body = GeneratedColumn<String>(
+    'body',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtUtcMeta = const VerificationMeta(
+    'updatedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAtUtc = GeneratedColumn<int>(
+    'updated_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    elementId,
+    elementType,
+    title,
+    body,
+    sourceId,
+    updatedAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'search_documents';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SearchDocumentRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('element_id')) {
+      context.handle(
+        _elementIdMeta,
+        elementId.isAcceptableOrUnknown(data['element_id']!, _elementIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_elementIdMeta);
+    }
+    if (data.containsKey('element_type')) {
+      context.handle(
+        _elementTypeMeta,
+        elementType.isAcceptableOrUnknown(
+          data['element_type']!,
+          _elementTypeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_elementTypeMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('body')) {
+      context.handle(
+        _bodyMeta,
+        body.isAcceptableOrUnknown(data['body']!, _bodyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bodyMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    }
+    if (data.containsKey('updated_at_utc')) {
+      context.handle(
+        _updatedAtUtcMeta,
+        updatedAtUtc.isAcceptableOrUnknown(
+          data['updated_at_utc']!,
+          _updatedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtUtcMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {elementId, elementType};
+  @override
+  SearchDocumentRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SearchDocumentRow(
+      elementId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}element_id'],
+      )!,
+      elementType: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}element_type'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      body: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      ),
+      updatedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at_utc'],
+      )!,
+    );
+  }
+
+  @override
+  $SearchDocumentsTable createAlias(String alias) {
+    return $SearchDocumentsTable(attachedDatabase, alias);
+  }
+}
+
+class SearchDocumentRow extends DataClass
+    implements Insertable<SearchDocumentRow> {
+  final String elementId;
+  final int elementType;
+  final String title;
+  final String body;
+
+  /// Root source, so results can be grouped by article without a join.
+  final String? sourceId;
+  final int updatedAtUtc;
+  const SearchDocumentRow({
+    required this.elementId,
+    required this.elementType,
+    required this.title,
+    required this.body,
+    this.sourceId,
+    required this.updatedAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['element_id'] = Variable<String>(elementId);
+    map['element_type'] = Variable<int>(elementType);
+    map['title'] = Variable<String>(title);
+    map['body'] = Variable<String>(body);
+    if (!nullToAbsent || sourceId != null) {
+      map['source_id'] = Variable<String>(sourceId);
+    }
+    map['updated_at_utc'] = Variable<int>(updatedAtUtc);
+    return map;
+  }
+
+  SearchDocumentsCompanion toCompanion(bool nullToAbsent) {
+    return SearchDocumentsCompanion(
+      elementId: Value(elementId),
+      elementType: Value(elementType),
+      title: Value(title),
+      body: Value(body),
+      sourceId: sourceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceId),
+      updatedAtUtc: Value(updatedAtUtc),
+    );
+  }
+
+  factory SearchDocumentRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SearchDocumentRow(
+      elementId: serializer.fromJson<String>(json['elementId']),
+      elementType: serializer.fromJson<int>(json['elementType']),
+      title: serializer.fromJson<String>(json['title']),
+      body: serializer.fromJson<String>(json['body']),
+      sourceId: serializer.fromJson<String?>(json['sourceId']),
+      updatedAtUtc: serializer.fromJson<int>(json['updatedAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'elementId': serializer.toJson<String>(elementId),
+      'elementType': serializer.toJson<int>(elementType),
+      'title': serializer.toJson<String>(title),
+      'body': serializer.toJson<String>(body),
+      'sourceId': serializer.toJson<String?>(sourceId),
+      'updatedAtUtc': serializer.toJson<int>(updatedAtUtc),
+    };
+  }
+
+  SearchDocumentRow copyWith({
+    String? elementId,
+    int? elementType,
+    String? title,
+    String? body,
+    Value<String?> sourceId = const Value.absent(),
+    int? updatedAtUtc,
+  }) => SearchDocumentRow(
+    elementId: elementId ?? this.elementId,
+    elementType: elementType ?? this.elementType,
+    title: title ?? this.title,
+    body: body ?? this.body,
+    sourceId: sourceId.present ? sourceId.value : this.sourceId,
+    updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+  );
+  SearchDocumentRow copyWithCompanion(SearchDocumentsCompanion data) {
+    return SearchDocumentRow(
+      elementId: data.elementId.present ? data.elementId.value : this.elementId,
+      elementType: data.elementType.present
+          ? data.elementType.value
+          : this.elementType,
+      title: data.title.present ? data.title.value : this.title,
+      body: data.body.present ? data.body.value : this.body,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      updatedAtUtc: data.updatedAtUtc.present
+          ? data.updatedAtUtc.value
+          : this.updatedAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SearchDocumentRow(')
+          ..write('elementId: $elementId, ')
+          ..write('elementType: $elementType, ')
+          ..write('title: $title, ')
+          ..write('body: $body, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('updatedAtUtc: $updatedAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(elementId, elementType, title, body, sourceId, updatedAtUtc);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SearchDocumentRow &&
+          other.elementId == this.elementId &&
+          other.elementType == this.elementType &&
+          other.title == this.title &&
+          other.body == this.body &&
+          other.sourceId == this.sourceId &&
+          other.updatedAtUtc == this.updatedAtUtc);
+}
+
+class SearchDocumentsCompanion extends UpdateCompanion<SearchDocumentRow> {
+  final Value<String> elementId;
+  final Value<int> elementType;
+  final Value<String> title;
+  final Value<String> body;
+  final Value<String?> sourceId;
+  final Value<int> updatedAtUtc;
+  final Value<int> rowid;
+  const SearchDocumentsCompanion({
+    this.elementId = const Value.absent(),
+    this.elementType = const Value.absent(),
+    this.title = const Value.absent(),
+    this.body = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.updatedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SearchDocumentsCompanion.insert({
+    required String elementId,
+    required int elementType,
+    required String title,
+    required String body,
+    this.sourceId = const Value.absent(),
+    required int updatedAtUtc,
+    this.rowid = const Value.absent(),
+  }) : elementId = Value(elementId),
+       elementType = Value(elementType),
+       title = Value(title),
+       body = Value(body),
+       updatedAtUtc = Value(updatedAtUtc);
+  static Insertable<SearchDocumentRow> custom({
+    Expression<String>? elementId,
+    Expression<int>? elementType,
+    Expression<String>? title,
+    Expression<String>? body,
+    Expression<String>? sourceId,
+    Expression<int>? updatedAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (elementId != null) 'element_id': elementId,
+      if (elementType != null) 'element_type': elementType,
+      if (title != null) 'title': title,
+      if (body != null) 'body': body,
+      if (sourceId != null) 'source_id': sourceId,
+      if (updatedAtUtc != null) 'updated_at_utc': updatedAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SearchDocumentsCompanion copyWith({
+    Value<String>? elementId,
+    Value<int>? elementType,
+    Value<String>? title,
+    Value<String>? body,
+    Value<String?>? sourceId,
+    Value<int>? updatedAtUtc,
+    Value<int>? rowid,
+  }) {
+    return SearchDocumentsCompanion(
+      elementId: elementId ?? this.elementId,
+      elementType: elementType ?? this.elementType,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      sourceId: sourceId ?? this.sourceId,
+      updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (elementId.present) {
+      map['element_id'] = Variable<String>(elementId.value);
+    }
+    if (elementType.present) {
+      map['element_type'] = Variable<int>(elementType.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (body.present) {
+      map['body'] = Variable<String>(body.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (updatedAtUtc.present) {
+      map['updated_at_utc'] = Variable<int>(updatedAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SearchDocumentsCompanion(')
+          ..write('elementId: $elementId, ')
+          ..write('elementType: $elementType, ')
+          ..write('title: $title, ')
+          ..write('body: $body, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('updatedAtUtc: $updatedAtUtc, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -6884,6 +9901,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TopicStatesTable topicStates = $TopicStatesTable(this);
   late final $CardMemoriesTable cardMemories = $CardMemoriesTable(this);
   late final $ReviewEventsTable reviewEvents = $ReviewEventsTable(this);
+  late final $RevlogEntriesTable revlogEntries = $RevlogEntriesTable(this);
+  late final $SearchDocumentsTable searchDocuments = $SearchDocumentsTable(
+    this,
+  );
   late final $ActivityEventsTable activityEvents = $ActivityEventsTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
   late final $DatasetMetaTable datasetMeta = $DatasetMetaTable(this);
@@ -6901,6 +9922,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     topicStates,
     cardMemories,
     reviewEvents,
+    revlogEntries,
+    searchDocuments,
     activityEvents,
     settings,
     datasetMeta,
@@ -9740,6 +12763,7 @@ typedef $$ElementSchedulesTableCreateCompanionBuilder =
       required int originalDueDay,
       Value<int?> deferredUntil,
       Value<int> deferralKind,
+      Value<String?> rootId,
       required String zoneId,
       Value<int> rowid,
     });
@@ -9753,6 +12777,7 @@ typedef $$ElementSchedulesTableUpdateCompanionBuilder =
       Value<int> originalDueDay,
       Value<int?> deferredUntil,
       Value<int> deferralKind,
+      Value<String?> rootId,
       Value<String> zoneId,
       Value<int> rowid,
     });
@@ -9803,6 +12828,11 @@ class $$ElementSchedulesTableFilterComposer
 
   ColumnFilters<int> get deferralKind => $composableBuilder(
     column: $table.deferralKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rootId => $composableBuilder(
+    column: $table.rootId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9861,6 +12891,11 @@ class $$ElementSchedulesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get rootId => $composableBuilder(
+    column: $table.rootId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get zoneId => $composableBuilder(
     column: $table.zoneId,
     builder: (column) => ColumnOrderings(column),
@@ -9910,6 +12945,9 @@ class $$ElementSchedulesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get rootId =>
+      $composableBuilder(column: $table.rootId, builder: (column) => column);
+
   GeneratedColumn<String> get zoneId =>
       $composableBuilder(column: $table.zoneId, builder: (column) => column);
 }
@@ -9955,6 +12993,7 @@ class $$ElementSchedulesTableTableManager
                 Value<int> originalDueDay = const Value.absent(),
                 Value<int?> deferredUntil = const Value.absent(),
                 Value<int> deferralKind = const Value.absent(),
+                Value<String?> rootId = const Value.absent(),
                 Value<String> zoneId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ElementSchedulesCompanion(
@@ -9966,6 +13005,7 @@ class $$ElementSchedulesTableTableManager
                 originalDueDay: originalDueDay,
                 deferredUntil: deferredUntil,
                 deferralKind: deferralKind,
+                rootId: rootId,
                 zoneId: zoneId,
                 rowid: rowid,
               ),
@@ -9979,6 +13019,7 @@ class $$ElementSchedulesTableTableManager
                 required int originalDueDay,
                 Value<int?> deferredUntil = const Value.absent(),
                 Value<int> deferralKind = const Value.absent(),
+                Value<String?> rootId = const Value.absent(),
                 required String zoneId,
                 Value<int> rowid = const Value.absent(),
               }) => ElementSchedulesCompanion.insert(
@@ -9990,6 +13031,7 @@ class $$ElementSchedulesTableTableManager
                 originalDueDay: originalDueDay,
                 deferredUntil: deferredUntil,
                 deferralKind: deferralKind,
+                rootId: rootId,
                 zoneId: zoneId,
                 rowid: rowid,
               ),
@@ -10024,6 +13066,13 @@ typedef $$TopicStatesTableCreateCompanionBuilder =
       required int elementType,
       required String profileId,
       required int stepIndex,
+      Value<double> intervalDays,
+      Value<double> aFactor,
+      Value<double> yieldEwma,
+      Value<int> encounters,
+      Value<int> postponeCount,
+      Value<int> encountersSinceLastCard,
+      Value<int?> lastEncounterDay,
       Value<int> rowid,
     });
 typedef $$TopicStatesTableUpdateCompanionBuilder =
@@ -10032,6 +13081,13 @@ typedef $$TopicStatesTableUpdateCompanionBuilder =
       Value<int> elementType,
       Value<String> profileId,
       Value<int> stepIndex,
+      Value<double> intervalDays,
+      Value<double> aFactor,
+      Value<double> yieldEwma,
+      Value<int> encounters,
+      Value<int> postponeCount,
+      Value<int> encountersSinceLastCard,
+      Value<int?> lastEncounterDay,
       Value<int> rowid,
     });
 
@@ -10061,6 +13117,41 @@ class $$TopicStatesTableFilterComposer
 
   ColumnFilters<int> get stepIndex => $composableBuilder(
     column: $table.stepIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get intervalDays => $composableBuilder(
+    column: $table.intervalDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get aFactor => $composableBuilder(
+    column: $table.aFactor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get yieldEwma => $composableBuilder(
+    column: $table.yieldEwma,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get encounters => $composableBuilder(
+    column: $table.encounters,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get postponeCount => $composableBuilder(
+    column: $table.postponeCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get encountersSinceLastCard => $composableBuilder(
+    column: $table.encountersSinceLastCard,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastEncounterDay => $composableBuilder(
+    column: $table.lastEncounterDay,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -10093,6 +13184,41 @@ class $$TopicStatesTableOrderingComposer
     column: $table.stepIndex,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<double> get intervalDays => $composableBuilder(
+    column: $table.intervalDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get aFactor => $composableBuilder(
+    column: $table.aFactor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get yieldEwma => $composableBuilder(
+    column: $table.yieldEwma,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get encounters => $composableBuilder(
+    column: $table.encounters,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get postponeCount => $composableBuilder(
+    column: $table.postponeCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get encountersSinceLastCard => $composableBuilder(
+    column: $table.encountersSinceLastCard,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastEncounterDay => $composableBuilder(
+    column: $table.lastEncounterDay,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$TopicStatesTableAnnotationComposer
@@ -10117,6 +13243,37 @@ class $$TopicStatesTableAnnotationComposer
 
   GeneratedColumn<int> get stepIndex =>
       $composableBuilder(column: $table.stepIndex, builder: (column) => column);
+
+  GeneratedColumn<double> get intervalDays => $composableBuilder(
+    column: $table.intervalDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get aFactor =>
+      $composableBuilder(column: $table.aFactor, builder: (column) => column);
+
+  GeneratedColumn<double> get yieldEwma =>
+      $composableBuilder(column: $table.yieldEwma, builder: (column) => column);
+
+  GeneratedColumn<int> get encounters => $composableBuilder(
+    column: $table.encounters,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get postponeCount => $composableBuilder(
+    column: $table.postponeCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get encountersSinceLastCard => $composableBuilder(
+    column: $table.encountersSinceLastCard,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lastEncounterDay => $composableBuilder(
+    column: $table.lastEncounterDay,
+    builder: (column) => column,
+  );
 }
 
 class $$TopicStatesTableTableManager
@@ -10154,12 +13311,26 @@ class $$TopicStatesTableTableManager
                 Value<int> elementType = const Value.absent(),
                 Value<String> profileId = const Value.absent(),
                 Value<int> stepIndex = const Value.absent(),
+                Value<double> intervalDays = const Value.absent(),
+                Value<double> aFactor = const Value.absent(),
+                Value<double> yieldEwma = const Value.absent(),
+                Value<int> encounters = const Value.absent(),
+                Value<int> postponeCount = const Value.absent(),
+                Value<int> encountersSinceLastCard = const Value.absent(),
+                Value<int?> lastEncounterDay = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TopicStatesCompanion(
                 elementId: elementId,
                 elementType: elementType,
                 profileId: profileId,
                 stepIndex: stepIndex,
+                intervalDays: intervalDays,
+                aFactor: aFactor,
+                yieldEwma: yieldEwma,
+                encounters: encounters,
+                postponeCount: postponeCount,
+                encountersSinceLastCard: encountersSinceLastCard,
+                lastEncounterDay: lastEncounterDay,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -10168,12 +13339,26 @@ class $$TopicStatesTableTableManager
                 required int elementType,
                 required String profileId,
                 required int stepIndex,
+                Value<double> intervalDays = const Value.absent(),
+                Value<double> aFactor = const Value.absent(),
+                Value<double> yieldEwma = const Value.absent(),
+                Value<int> encounters = const Value.absent(),
+                Value<int> postponeCount = const Value.absent(),
+                Value<int> encountersSinceLastCard = const Value.absent(),
+                Value<int?> lastEncounterDay = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TopicStatesCompanion.insert(
                 elementId: elementId,
                 elementType: elementType,
                 profileId: profileId,
                 stepIndex: stepIndex,
+                intervalDays: intervalDays,
+                aFactor: aFactor,
+                yieldEwma: yieldEwma,
+                encounters: encounters,
+                postponeCount: postponeCount,
+                encountersSinceLastCard: encountersSinceLastCard,
+                lastEncounterDay: lastEncounterDay,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -10214,6 +13399,7 @@ typedef $$CardMemoriesTableCreateCompanionBuilder =
       required int dueAtUtc,
       required int originalDueAtUtc,
       Value<int?> deferredUntilUtc,
+      Value<int> postponeCount,
       required String schedulerVersion,
       required String parametersVersion,
       Value<int> rowid,
@@ -10231,6 +13417,7 @@ typedef $$CardMemoriesTableUpdateCompanionBuilder =
       Value<int> dueAtUtc,
       Value<int> originalDueAtUtc,
       Value<int?> deferredUntilUtc,
+      Value<int> postponeCount,
       Value<String> schedulerVersion,
       Value<String> parametersVersion,
       Value<int> rowid,
@@ -10314,6 +13501,11 @@ class $$CardMemoriesTableFilterComposer
 
   ColumnFilters<int> get deferredUntilUtc => $composableBuilder(
     column: $table.deferredUntilUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get postponeCount => $composableBuilder(
+    column: $table.postponeCount,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10410,6 +13602,11 @@ class $$CardMemoriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get postponeCount => $composableBuilder(
+    column: $table.postponeCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get schedulerVersion => $composableBuilder(
     column: $table.schedulerVersion,
     builder: (column) => ColumnOrderings(column),
@@ -10491,6 +13688,11 @@ class $$CardMemoriesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get postponeCount => $composableBuilder(
+    column: $table.postponeCount,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get schedulerVersion => $composableBuilder(
     column: $table.schedulerVersion,
     builder: (column) => column,
@@ -10564,6 +13766,7 @@ class $$CardMemoriesTableTableManager
                 Value<int> dueAtUtc = const Value.absent(),
                 Value<int> originalDueAtUtc = const Value.absent(),
                 Value<int?> deferredUntilUtc = const Value.absent(),
+                Value<int> postponeCount = const Value.absent(),
                 Value<String> schedulerVersion = const Value.absent(),
                 Value<String> parametersVersion = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -10579,6 +13782,7 @@ class $$CardMemoriesTableTableManager
                 dueAtUtc: dueAtUtc,
                 originalDueAtUtc: originalDueAtUtc,
                 deferredUntilUtc: deferredUntilUtc,
+                postponeCount: postponeCount,
                 schedulerVersion: schedulerVersion,
                 parametersVersion: parametersVersion,
                 rowid: rowid,
@@ -10596,6 +13800,7 @@ class $$CardMemoriesTableTableManager
                 required int dueAtUtc,
                 required int originalDueAtUtc,
                 Value<int?> deferredUntilUtc = const Value.absent(),
+                Value<int> postponeCount = const Value.absent(),
                 required String schedulerVersion,
                 required String parametersVersion,
                 Value<int> rowid = const Value.absent(),
@@ -10611,6 +13816,7 @@ class $$CardMemoriesTableTableManager
                 dueAtUtc: dueAtUtc,
                 originalDueAtUtc: originalDueAtUtc,
                 deferredUntilUtc: deferredUntilUtc,
+                postponeCount: postponeCount,
                 schedulerVersion: schedulerVersion,
                 parametersVersion: parametersVersion,
                 rowid: rowid,
@@ -11126,6 +14332,1086 @@ typedef $$ReviewEventsTableProcessedTableManager =
       (ReviewEventRow, $$ReviewEventsTableReferences),
       ReviewEventRow,
       PrefetchHooks Function({bool cardId})
+    >;
+typedef $$RevlogEntriesTableCreateCompanionBuilder =
+    RevlogEntriesCompanion Function({
+      required String id,
+      required String operationId,
+      required String elementId,
+      required int elementType,
+      required int eventType,
+      required int atUtc,
+      Value<int?> grade,
+      Value<double?> elapsedDays,
+      Value<double?> scheduledDays,
+      Value<int?> durationMs,
+      Value<int?> postponeCount,
+      Value<int?> dueBeforeUtc,
+      Value<int?> dueAfterUtc,
+      Value<double?> intervalBefore,
+      Value<double?> intervalAfter,
+      Value<double?> aFactorBefore,
+      Value<double?> aFactorAfter,
+      Value<double?> stabilityBefore,
+      Value<double?> stabilityAfter,
+      Value<double?> difficultyBefore,
+      Value<double?> difficultyAfter,
+      Value<int?> stateBefore,
+      Value<int?> stateAfter,
+      Value<int?> repsBefore,
+      Value<int?> lapsesBefore,
+      Value<String?> priorityBefore,
+      Value<String?> priorityAfter,
+      Value<double?> pressureBefore,
+      Value<double?> pressureAfter,
+      Value<double?> readFractionBefore,
+      Value<double?> readFractionAfter,
+      Value<int?> lifecycleBefore,
+      Value<int?> lifecycleAfter,
+      Value<String?> schedulerVersion,
+      Value<String?> parametersVersion,
+      Value<String?> metadataJson,
+      Value<int> rowid,
+    });
+typedef $$RevlogEntriesTableUpdateCompanionBuilder =
+    RevlogEntriesCompanion Function({
+      Value<String> id,
+      Value<String> operationId,
+      Value<String> elementId,
+      Value<int> elementType,
+      Value<int> eventType,
+      Value<int> atUtc,
+      Value<int?> grade,
+      Value<double?> elapsedDays,
+      Value<double?> scheduledDays,
+      Value<int?> durationMs,
+      Value<int?> postponeCount,
+      Value<int?> dueBeforeUtc,
+      Value<int?> dueAfterUtc,
+      Value<double?> intervalBefore,
+      Value<double?> intervalAfter,
+      Value<double?> aFactorBefore,
+      Value<double?> aFactorAfter,
+      Value<double?> stabilityBefore,
+      Value<double?> stabilityAfter,
+      Value<double?> difficultyBefore,
+      Value<double?> difficultyAfter,
+      Value<int?> stateBefore,
+      Value<int?> stateAfter,
+      Value<int?> repsBefore,
+      Value<int?> lapsesBefore,
+      Value<String?> priorityBefore,
+      Value<String?> priorityAfter,
+      Value<double?> pressureBefore,
+      Value<double?> pressureAfter,
+      Value<double?> readFractionBefore,
+      Value<double?> readFractionAfter,
+      Value<int?> lifecycleBefore,
+      Value<int?> lifecycleAfter,
+      Value<String?> schedulerVersion,
+      Value<String?> parametersVersion,
+      Value<String?> metadataJson,
+      Value<int> rowid,
+    });
+
+class $$RevlogEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $RevlogEntriesTable> {
+  $$RevlogEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get elementId => $composableBuilder(
+    column: $table.elementId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get eventType => $composableBuilder(
+    column: $table.eventType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get atUtc => $composableBuilder(
+    column: $table.atUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get grade => $composableBuilder(
+    column: $table.grade,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get elapsedDays => $composableBuilder(
+    column: $table.elapsedDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get scheduledDays => $composableBuilder(
+    column: $table.scheduledDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationMs => $composableBuilder(
+    column: $table.durationMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get postponeCount => $composableBuilder(
+    column: $table.postponeCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get dueBeforeUtc => $composableBuilder(
+    column: $table.dueBeforeUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get dueAfterUtc => $composableBuilder(
+    column: $table.dueAfterUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get intervalBefore => $composableBuilder(
+    column: $table.intervalBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get intervalAfter => $composableBuilder(
+    column: $table.intervalAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get aFactorBefore => $composableBuilder(
+    column: $table.aFactorBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get aFactorAfter => $composableBuilder(
+    column: $table.aFactorAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get stabilityBefore => $composableBuilder(
+    column: $table.stabilityBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get stabilityAfter => $composableBuilder(
+    column: $table.stabilityAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get difficultyBefore => $composableBuilder(
+    column: $table.difficultyBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get difficultyAfter => $composableBuilder(
+    column: $table.difficultyAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get stateBefore => $composableBuilder(
+    column: $table.stateBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get stateAfter => $composableBuilder(
+    column: $table.stateAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get repsBefore => $composableBuilder(
+    column: $table.repsBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lapsesBefore => $composableBuilder(
+    column: $table.lapsesBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get priorityBefore => $composableBuilder(
+    column: $table.priorityBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get priorityAfter => $composableBuilder(
+    column: $table.priorityAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get pressureBefore => $composableBuilder(
+    column: $table.pressureBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get pressureAfter => $composableBuilder(
+    column: $table.pressureAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get readFractionBefore => $composableBuilder(
+    column: $table.readFractionBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get readFractionAfter => $composableBuilder(
+    column: $table.readFractionAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lifecycleBefore => $composableBuilder(
+    column: $table.lifecycleBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lifecycleAfter => $composableBuilder(
+    column: $table.lifecycleAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get schedulerVersion => $composableBuilder(
+    column: $table.schedulerVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parametersVersion => $composableBuilder(
+    column: $table.parametersVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get metadataJson => $composableBuilder(
+    column: $table.metadataJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RevlogEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $RevlogEntriesTable> {
+  $$RevlogEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get elementId => $composableBuilder(
+    column: $table.elementId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get eventType => $composableBuilder(
+    column: $table.eventType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get atUtc => $composableBuilder(
+    column: $table.atUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get grade => $composableBuilder(
+    column: $table.grade,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get elapsedDays => $composableBuilder(
+    column: $table.elapsedDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get scheduledDays => $composableBuilder(
+    column: $table.scheduledDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationMs => $composableBuilder(
+    column: $table.durationMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get postponeCount => $composableBuilder(
+    column: $table.postponeCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get dueBeforeUtc => $composableBuilder(
+    column: $table.dueBeforeUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get dueAfterUtc => $composableBuilder(
+    column: $table.dueAfterUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get intervalBefore => $composableBuilder(
+    column: $table.intervalBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get intervalAfter => $composableBuilder(
+    column: $table.intervalAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get aFactorBefore => $composableBuilder(
+    column: $table.aFactorBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get aFactorAfter => $composableBuilder(
+    column: $table.aFactorAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get stabilityBefore => $composableBuilder(
+    column: $table.stabilityBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get stabilityAfter => $composableBuilder(
+    column: $table.stabilityAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get difficultyBefore => $composableBuilder(
+    column: $table.difficultyBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get difficultyAfter => $composableBuilder(
+    column: $table.difficultyAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get stateBefore => $composableBuilder(
+    column: $table.stateBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get stateAfter => $composableBuilder(
+    column: $table.stateAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get repsBefore => $composableBuilder(
+    column: $table.repsBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lapsesBefore => $composableBuilder(
+    column: $table.lapsesBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get priorityBefore => $composableBuilder(
+    column: $table.priorityBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get priorityAfter => $composableBuilder(
+    column: $table.priorityAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get pressureBefore => $composableBuilder(
+    column: $table.pressureBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get pressureAfter => $composableBuilder(
+    column: $table.pressureAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get readFractionBefore => $composableBuilder(
+    column: $table.readFractionBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get readFractionAfter => $composableBuilder(
+    column: $table.readFractionAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lifecycleBefore => $composableBuilder(
+    column: $table.lifecycleBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lifecycleAfter => $composableBuilder(
+    column: $table.lifecycleAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get schedulerVersion => $composableBuilder(
+    column: $table.schedulerVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get parametersVersion => $composableBuilder(
+    column: $table.parametersVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get metadataJson => $composableBuilder(
+    column: $table.metadataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RevlogEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RevlogEntriesTable> {
+  $$RevlogEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get elementId =>
+      $composableBuilder(column: $table.elementId, builder: (column) => column);
+
+  GeneratedColumn<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get eventType =>
+      $composableBuilder(column: $table.eventType, builder: (column) => column);
+
+  GeneratedColumn<int> get atUtc =>
+      $composableBuilder(column: $table.atUtc, builder: (column) => column);
+
+  GeneratedColumn<int> get grade =>
+      $composableBuilder(column: $table.grade, builder: (column) => column);
+
+  GeneratedColumn<double> get elapsedDays => $composableBuilder(
+    column: $table.elapsedDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get scheduledDays => $composableBuilder(
+    column: $table.scheduledDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get durationMs => $composableBuilder(
+    column: $table.durationMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get postponeCount => $composableBuilder(
+    column: $table.postponeCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get dueBeforeUtc => $composableBuilder(
+    column: $table.dueBeforeUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get dueAfterUtc => $composableBuilder(
+    column: $table.dueAfterUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get intervalBefore => $composableBuilder(
+    column: $table.intervalBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get intervalAfter => $composableBuilder(
+    column: $table.intervalAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get aFactorBefore => $composableBuilder(
+    column: $table.aFactorBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get aFactorAfter => $composableBuilder(
+    column: $table.aFactorAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get stabilityBefore => $composableBuilder(
+    column: $table.stabilityBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get stabilityAfter => $composableBuilder(
+    column: $table.stabilityAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get difficultyBefore => $composableBuilder(
+    column: $table.difficultyBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get difficultyAfter => $composableBuilder(
+    column: $table.difficultyAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get stateBefore => $composableBuilder(
+    column: $table.stateBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get stateAfter => $composableBuilder(
+    column: $table.stateAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get repsBefore => $composableBuilder(
+    column: $table.repsBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lapsesBefore => $composableBuilder(
+    column: $table.lapsesBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get priorityBefore => $composableBuilder(
+    column: $table.priorityBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get priorityAfter => $composableBuilder(
+    column: $table.priorityAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get pressureBefore => $composableBuilder(
+    column: $table.pressureBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get pressureAfter => $composableBuilder(
+    column: $table.pressureAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get readFractionBefore => $composableBuilder(
+    column: $table.readFractionBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get readFractionAfter => $composableBuilder(
+    column: $table.readFractionAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lifecycleBefore => $composableBuilder(
+    column: $table.lifecycleBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lifecycleAfter => $composableBuilder(
+    column: $table.lifecycleAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get schedulerVersion => $composableBuilder(
+    column: $table.schedulerVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get parametersVersion => $composableBuilder(
+    column: $table.parametersVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get metadataJson => $composableBuilder(
+    column: $table.metadataJson,
+    builder: (column) => column,
+  );
+}
+
+class $$RevlogEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RevlogEntriesTable,
+          RevlogRow,
+          $$RevlogEntriesTableFilterComposer,
+          $$RevlogEntriesTableOrderingComposer,
+          $$RevlogEntriesTableAnnotationComposer,
+          $$RevlogEntriesTableCreateCompanionBuilder,
+          $$RevlogEntriesTableUpdateCompanionBuilder,
+          (
+            RevlogRow,
+            BaseReferences<_$AppDatabase, $RevlogEntriesTable, RevlogRow>,
+          ),
+          RevlogRow,
+          PrefetchHooks Function()
+        > {
+  $$RevlogEntriesTableTableManager(_$AppDatabase db, $RevlogEntriesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RevlogEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RevlogEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RevlogEntriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> operationId = const Value.absent(),
+                Value<String> elementId = const Value.absent(),
+                Value<int> elementType = const Value.absent(),
+                Value<int> eventType = const Value.absent(),
+                Value<int> atUtc = const Value.absent(),
+                Value<int?> grade = const Value.absent(),
+                Value<double?> elapsedDays = const Value.absent(),
+                Value<double?> scheduledDays = const Value.absent(),
+                Value<int?> durationMs = const Value.absent(),
+                Value<int?> postponeCount = const Value.absent(),
+                Value<int?> dueBeforeUtc = const Value.absent(),
+                Value<int?> dueAfterUtc = const Value.absent(),
+                Value<double?> intervalBefore = const Value.absent(),
+                Value<double?> intervalAfter = const Value.absent(),
+                Value<double?> aFactorBefore = const Value.absent(),
+                Value<double?> aFactorAfter = const Value.absent(),
+                Value<double?> stabilityBefore = const Value.absent(),
+                Value<double?> stabilityAfter = const Value.absent(),
+                Value<double?> difficultyBefore = const Value.absent(),
+                Value<double?> difficultyAfter = const Value.absent(),
+                Value<int?> stateBefore = const Value.absent(),
+                Value<int?> stateAfter = const Value.absent(),
+                Value<int?> repsBefore = const Value.absent(),
+                Value<int?> lapsesBefore = const Value.absent(),
+                Value<String?> priorityBefore = const Value.absent(),
+                Value<String?> priorityAfter = const Value.absent(),
+                Value<double?> pressureBefore = const Value.absent(),
+                Value<double?> pressureAfter = const Value.absent(),
+                Value<double?> readFractionBefore = const Value.absent(),
+                Value<double?> readFractionAfter = const Value.absent(),
+                Value<int?> lifecycleBefore = const Value.absent(),
+                Value<int?> lifecycleAfter = const Value.absent(),
+                Value<String?> schedulerVersion = const Value.absent(),
+                Value<String?> parametersVersion = const Value.absent(),
+                Value<String?> metadataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RevlogEntriesCompanion(
+                id: id,
+                operationId: operationId,
+                elementId: elementId,
+                elementType: elementType,
+                eventType: eventType,
+                atUtc: atUtc,
+                grade: grade,
+                elapsedDays: elapsedDays,
+                scheduledDays: scheduledDays,
+                durationMs: durationMs,
+                postponeCount: postponeCount,
+                dueBeforeUtc: dueBeforeUtc,
+                dueAfterUtc: dueAfterUtc,
+                intervalBefore: intervalBefore,
+                intervalAfter: intervalAfter,
+                aFactorBefore: aFactorBefore,
+                aFactorAfter: aFactorAfter,
+                stabilityBefore: stabilityBefore,
+                stabilityAfter: stabilityAfter,
+                difficultyBefore: difficultyBefore,
+                difficultyAfter: difficultyAfter,
+                stateBefore: stateBefore,
+                stateAfter: stateAfter,
+                repsBefore: repsBefore,
+                lapsesBefore: lapsesBefore,
+                priorityBefore: priorityBefore,
+                priorityAfter: priorityAfter,
+                pressureBefore: pressureBefore,
+                pressureAfter: pressureAfter,
+                readFractionBefore: readFractionBefore,
+                readFractionAfter: readFractionAfter,
+                lifecycleBefore: lifecycleBefore,
+                lifecycleAfter: lifecycleAfter,
+                schedulerVersion: schedulerVersion,
+                parametersVersion: parametersVersion,
+                metadataJson: metadataJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String operationId,
+                required String elementId,
+                required int elementType,
+                required int eventType,
+                required int atUtc,
+                Value<int?> grade = const Value.absent(),
+                Value<double?> elapsedDays = const Value.absent(),
+                Value<double?> scheduledDays = const Value.absent(),
+                Value<int?> durationMs = const Value.absent(),
+                Value<int?> postponeCount = const Value.absent(),
+                Value<int?> dueBeforeUtc = const Value.absent(),
+                Value<int?> dueAfterUtc = const Value.absent(),
+                Value<double?> intervalBefore = const Value.absent(),
+                Value<double?> intervalAfter = const Value.absent(),
+                Value<double?> aFactorBefore = const Value.absent(),
+                Value<double?> aFactorAfter = const Value.absent(),
+                Value<double?> stabilityBefore = const Value.absent(),
+                Value<double?> stabilityAfter = const Value.absent(),
+                Value<double?> difficultyBefore = const Value.absent(),
+                Value<double?> difficultyAfter = const Value.absent(),
+                Value<int?> stateBefore = const Value.absent(),
+                Value<int?> stateAfter = const Value.absent(),
+                Value<int?> repsBefore = const Value.absent(),
+                Value<int?> lapsesBefore = const Value.absent(),
+                Value<String?> priorityBefore = const Value.absent(),
+                Value<String?> priorityAfter = const Value.absent(),
+                Value<double?> pressureBefore = const Value.absent(),
+                Value<double?> pressureAfter = const Value.absent(),
+                Value<double?> readFractionBefore = const Value.absent(),
+                Value<double?> readFractionAfter = const Value.absent(),
+                Value<int?> lifecycleBefore = const Value.absent(),
+                Value<int?> lifecycleAfter = const Value.absent(),
+                Value<String?> schedulerVersion = const Value.absent(),
+                Value<String?> parametersVersion = const Value.absent(),
+                Value<String?> metadataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RevlogEntriesCompanion.insert(
+                id: id,
+                operationId: operationId,
+                elementId: elementId,
+                elementType: elementType,
+                eventType: eventType,
+                atUtc: atUtc,
+                grade: grade,
+                elapsedDays: elapsedDays,
+                scheduledDays: scheduledDays,
+                durationMs: durationMs,
+                postponeCount: postponeCount,
+                dueBeforeUtc: dueBeforeUtc,
+                dueAfterUtc: dueAfterUtc,
+                intervalBefore: intervalBefore,
+                intervalAfter: intervalAfter,
+                aFactorBefore: aFactorBefore,
+                aFactorAfter: aFactorAfter,
+                stabilityBefore: stabilityBefore,
+                stabilityAfter: stabilityAfter,
+                difficultyBefore: difficultyBefore,
+                difficultyAfter: difficultyAfter,
+                stateBefore: stateBefore,
+                stateAfter: stateAfter,
+                repsBefore: repsBefore,
+                lapsesBefore: lapsesBefore,
+                priorityBefore: priorityBefore,
+                priorityAfter: priorityAfter,
+                pressureBefore: pressureBefore,
+                pressureAfter: pressureAfter,
+                readFractionBefore: readFractionBefore,
+                readFractionAfter: readFractionAfter,
+                lifecycleBefore: lifecycleBefore,
+                lifecycleAfter: lifecycleAfter,
+                schedulerVersion: schedulerVersion,
+                parametersVersion: parametersVersion,
+                metadataJson: metadataJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RevlogEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RevlogEntriesTable,
+      RevlogRow,
+      $$RevlogEntriesTableFilterComposer,
+      $$RevlogEntriesTableOrderingComposer,
+      $$RevlogEntriesTableAnnotationComposer,
+      $$RevlogEntriesTableCreateCompanionBuilder,
+      $$RevlogEntriesTableUpdateCompanionBuilder,
+      (
+        RevlogRow,
+        BaseReferences<_$AppDatabase, $RevlogEntriesTable, RevlogRow>,
+      ),
+      RevlogRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SearchDocumentsTableCreateCompanionBuilder =
+    SearchDocumentsCompanion Function({
+      required String elementId,
+      required int elementType,
+      required String title,
+      required String body,
+      Value<String?> sourceId,
+      required int updatedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$SearchDocumentsTableUpdateCompanionBuilder =
+    SearchDocumentsCompanion Function({
+      Value<String> elementId,
+      Value<int> elementType,
+      Value<String> title,
+      Value<String> body,
+      Value<String?> sourceId,
+      Value<int> updatedAtUtc,
+      Value<int> rowid,
+    });
+
+class $$SearchDocumentsTableFilterComposer
+    extends Composer<_$AppDatabase, $SearchDocumentsTable> {
+  $$SearchDocumentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get elementId => $composableBuilder(
+    column: $table.elementId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SearchDocumentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SearchDocumentsTable> {
+  $$SearchDocumentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get elementId => $composableBuilder(
+    column: $table.elementId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SearchDocumentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SearchDocumentsTable> {
+  $$SearchDocumentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get elementId =>
+      $composableBuilder(column: $table.elementId, builder: (column) => column);
+
+  GeneratedColumn<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get body =>
+      $composableBuilder(column: $table.body, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => column,
+  );
+}
+
+class $$SearchDocumentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SearchDocumentsTable,
+          SearchDocumentRow,
+          $$SearchDocumentsTableFilterComposer,
+          $$SearchDocumentsTableOrderingComposer,
+          $$SearchDocumentsTableAnnotationComposer,
+          $$SearchDocumentsTableCreateCompanionBuilder,
+          $$SearchDocumentsTableUpdateCompanionBuilder,
+          (
+            SearchDocumentRow,
+            BaseReferences<
+              _$AppDatabase,
+              $SearchDocumentsTable,
+              SearchDocumentRow
+            >,
+          ),
+          SearchDocumentRow,
+          PrefetchHooks Function()
+        > {
+  $$SearchDocumentsTableTableManager(
+    _$AppDatabase db,
+    $SearchDocumentsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SearchDocumentsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SearchDocumentsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SearchDocumentsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> elementId = const Value.absent(),
+                Value<int> elementType = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> body = const Value.absent(),
+                Value<String?> sourceId = const Value.absent(),
+                Value<int> updatedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SearchDocumentsCompanion(
+                elementId: elementId,
+                elementType: elementType,
+                title: title,
+                body: body,
+                sourceId: sourceId,
+                updatedAtUtc: updatedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String elementId,
+                required int elementType,
+                required String title,
+                required String body,
+                Value<String?> sourceId = const Value.absent(),
+                required int updatedAtUtc,
+                Value<int> rowid = const Value.absent(),
+              }) => SearchDocumentsCompanion.insert(
+                elementId: elementId,
+                elementType: elementType,
+                title: title,
+                body: body,
+                sourceId: sourceId,
+                updatedAtUtc: updatedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SearchDocumentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SearchDocumentsTable,
+      SearchDocumentRow,
+      $$SearchDocumentsTableFilterComposer,
+      $$SearchDocumentsTableOrderingComposer,
+      $$SearchDocumentsTableAnnotationComposer,
+      $$SearchDocumentsTableCreateCompanionBuilder,
+      $$SearchDocumentsTableUpdateCompanionBuilder,
+      (
+        SearchDocumentRow,
+        BaseReferences<_$AppDatabase, $SearchDocumentsTable, SearchDocumentRow>,
+      ),
+      SearchDocumentRow,
+      PrefetchHooks Function()
     >;
 typedef $$ActivityEventsTableCreateCompanionBuilder =
     ActivityEventsCompanion Function({
@@ -11756,6 +16042,10 @@ class $AppDatabaseManager {
       $$CardMemoriesTableTableManager(_db, _db.cardMemories);
   $$ReviewEventsTableTableManager get reviewEvents =>
       $$ReviewEventsTableTableManager(_db, _db.reviewEvents);
+  $$RevlogEntriesTableTableManager get revlogEntries =>
+      $$RevlogEntriesTableTableManager(_db, _db.revlogEntries);
+  $$SearchDocumentsTableTableManager get searchDocuments =>
+      $$SearchDocumentsTableTableManager(_db, _db.searchDocuments);
   $$ActivityEventsTableTableManager get activityEvents =>
       $$ActivityEventsTableTableManager(_db, _db.activityEvents);
   $$SettingsTableTableManager get settings =>

@@ -194,6 +194,58 @@ final class Document {
     return words;
   }
 
+  /// Words of rendered text not covered by any of [ranges].
+  ///
+  /// Answers "is there anything left to mine?". A source whose text has all
+  /// been promoted into extracts has nothing more to give, which — together
+  /// with the reading position having reached the end — is the only condition
+  /// under which a source may close itself. Reaching the end alone never is:
+  /// an article can be read through and still deserve another pass.
+  int wordsOutside(List<(ReaderAnchor, ReaderAnchor)> ranges) {
+    final covered = <int, List<(int, int)>>{};
+    for (final (ReaderAnchor a, ReaderAnchor b) in ranges) {
+      final int? indexA = _indexById[a.blockId];
+      final int? indexB = _indexById[b.blockId];
+      if (indexA == null || indexB == null) continue;
+      final bool forward = indexA < indexB ||
+          (indexA == indexB && a.utf8Offset <= b.utf8Offset);
+      final ReaderAnchor start = forward ? a : b;
+      final ReaderAnchor end = forward ? b : a;
+      final int from = forward ? indexA : indexB;
+      final int to = forward ? indexB : indexA;
+
+      for (var i = from; i <= to; i++) {
+        final Block block = blocks[i];
+        final int lo = i == from
+            ? block.utf8ToRendered(start.utf8Offset)
+            : 0;
+        final int hi = i == to
+            ? block.utf8ToRendered(end.utf8Offset)
+            : block.renderedText.length;
+        if (hi <= lo) continue;
+        (covered[i] ??= <(int, int)>[]).add((lo, hi));
+      }
+    }
+
+    var words = 0;
+    for (var i = 0; i < blocks.length; i++) {
+      final String text = blocks[i].renderedText;
+      final List<(int, int)>? spans = covered[i];
+      if (spans == null) {
+        words += countWords(text);
+        continue;
+      }
+      spans.sort(((int, int) x, (int, int) y) => x.$1.compareTo(y.$1));
+      var cursor = 0;
+      for (final (int lo, int hi) in spans) {
+        if (lo > cursor) words += countWords(text.substring(cursor, lo));
+        if (hi > cursor) cursor = hi;
+      }
+      if (cursor < text.length) words += countWords(text.substring(cursor));
+    }
+    return words;
+  }
+
   /// The anchor roughly [words] of rendered text after [from].
   ///
   /// Resolves to a block boundary, which is close enough for a reminder line

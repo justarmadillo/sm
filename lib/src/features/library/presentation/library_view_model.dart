@@ -78,7 +78,7 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
 
   Future<LibraryUiState> _load() async {
     final entries = await ref.read(libraryQueryProvider).listEntries();
-    final today = ref.read(readerHandlersProvider).today;
+    final today = await ref.read(readerHandlersProvider).today();
     return LibraryUiState(entries: entries, today: today);
   }
 

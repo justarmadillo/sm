@@ -6,6 +6,7 @@ import 'package:incremental_reader/src/app/app.dart';
 import 'package:incremental_reader/src/app/providers.dart';
 import 'package:incremental_reader/src/core/clock.dart';
 import 'package:incremental_reader/src/data/database/connection.dart';
+import 'package:incremental_reader/src/data/repositories/drift_repositories.dart';
 import 'package:integration_test/integration_test.dart';
 
 void main() {
@@ -15,6 +16,13 @@ void main() {
     'native Windows import to extract, formulation, and FSRS review loop',
     (WidgetTester tester) async {
       final database = openInMemoryDatabase();
+      // Sibling burying arrives in M4 and would push two of the three cards
+      // off today. This test is about the M3 loop reaching every card it
+      // formulated; burying has its own coverage.
+      await DriftSettingsRepository(database).write(
+        'card.bury_siblings',
+        'false',
+      );
       final clock = FakeClock(DateTime.utc(2026, 3, 5, 12));
       final container = ProviderContainer(
         overrides: <Override>[

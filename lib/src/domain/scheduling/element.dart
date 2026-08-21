@@ -108,6 +108,7 @@ final class ElementSchedule {
     required this.originalDueDay,
     this.deferredUntil,
     this.deferralKind = DeferralKind.none,
+    this.rootId,
   });
 
   final ElementRef ref;
@@ -126,6 +127,14 @@ final class ElementSchedule {
 
   /// Whether the deferral came from the user or from overload handling.
   final DeferralKind deferralKind;
+
+  /// The source at the root of this element's provenance, denormalized.
+  ///
+  /// The queue needs it on every element to stop one article's subtree from
+  /// taking over a session, and walking the parent chain on every build would
+  /// be a needless join. It is also what lets a card keep its citation if its
+  /// source is ever removed.
+  final String? rootId;
 
   /// The day the element actually becomes eligible.
   StudyDay get effectiveDueDay {
@@ -151,6 +160,7 @@ final class ElementSchedule {
     StudyDay? originalDueDay,
     StudyDay? deferredUntil,
     DeferralKind? deferralKind,
+    String? rootId,
     bool clearDeferral = false,
   }) => ElementSchedule(
     ref: ref,
@@ -162,6 +172,7 @@ final class ElementSchedule {
     deferralKind: clearDeferral
         ? DeferralKind.none
         : (deferralKind ?? this.deferralKind),
+    rootId: rootId ?? this.rootId,
   );
 
   /// The same schedule with any automatic deferral taken back.

@@ -9,9 +9,13 @@ import '../../domain/content/card.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
+import '../../domain/scheduling/revlog.dart';
 import '../../domain/scheduling/study_day.dart';
+import '../../domain/scheduling/topic_scheduler.dart';
 import '../ports/repositories.dart';
 import '../ports/transaction_runner.dart';
+import '../scheduling/scheduling_context.dart';
+import '../scheduling/scheduling_journal.dart';
 import 'formulation_commands.dart';
 
 const String kCardsFormulatedKind = 'formulation.cards_created';
@@ -20,28 +24,33 @@ final class FormulationHandlers {
   FormulationHandlers({
     required ContentRepository content,
     required LearningRepository learning,
+    required SearchRepository search,
     required TransferRepository transfer,
     required TransactionRunner transactions,
+    required SchedulingContext context,
     required Clock clock,
     required IdGenerator ids,
-    required StudyDayCalendar calendar,
     DiagnosticSink diagnostics = const NullDiagnosticSink(),
   }) : _content = content,
        _learning = learning,
+       _search = search,
        _transfer = transfer,
        _transactions = transactions,
+       _context = context,
        _clock = clock,
        _ids = ids,
-       _calendar = calendar,
+       _journal = SchedulingJournal(learning: learning, ids: ids),
        _diagnostics = diagnostics;
 
   final ContentRepository _content;
   final LearningRepository _learning;
+  final SearchRepository _search;
   final TransferRepository _transfer;
   final TransactionRunner _transactions;
+  final SchedulingContext _context;
   final Clock _clock;
   final IdGenerator _ids;
-  final StudyDayCalendar _calendar;
+  final SchedulingJournal _journal;
   final DiagnosticSink _diagnostics;
 
   Future<Result<List<Card>>> formulate(FormulateCards command) async {
@@ -148,25 +157,66 @@ final class FormulationHandlers {
           }
         }
 
-        final today = _calendar.dayOf(now);
+        final StudyDay today = await _context.today();
+        final StudyDayCalendar calendar = await _context.calendar();
+        final String? rootId = parentSchedule?.rootId ?? parent?.id;
         await _content.insertCards(cards);
         for (final card in cards) {
           final ref = ElementRef(id: card.id, type: ElementType.card);
-          await _learning.insertCardState(
-            CardState(
-              schedule: ElementSchedule(
-                ref: ref,
-                // Priority is inherited once, from whatever element the card
-                // was made from. Later changes to that parent do not
-                // silently reorder cards already formulated from it.
-                priority: parentSchedule?.priority ?? PriorityRank.middle,
-                lifecycle: ElementLifecycle.active,
-                dueDay: today,
-                originalDueDay: today,
-              ),
-              memory: CardMemory.newCard(cardId: card.id, dueAtUtc: now),
+          final CardState state = CardState(
+            schedule: ElementSchedule(
+              ref: ref,
+              // Priority is inherited once, from whatever element the card
+              // was made from. Later changes to that parent do not silently
+              // reorder cards already formulated from it.
+              priority: parentSchedule?.priority ?? PriorityRank.middle,
+              lifecycle: ElementLifecycle.active,
+              dueDay: today,
+              originalDueDay: today,
+              // Denormalized so the queue can cap one article's share of a
+              // session, and so the card keeps its citation if the source is
+              // ever removed.
+              rootId: rootId,
+            ),
+            memory: CardMemory.newCard(cardId: card.id, dueAtUtc: now),
+          );
+          await _learning.insertCardState(state);
+          await _search.upsertDocument(
+            SearchDocument(
+              ref: ref,
+              title: 'Card',
+              // The cloze text carries its own answer, so indexing the front
+              // alone would make half the collection unsearchable.
+              body: '${card.front}\n${card.back}',
+              sourceId: rootId,
+              updatedAtUtc: now,
             ),
           );
+          await _journal.append(
+            operationId: command.operationId.value,
+            ref: ref,
+            eventType: RevlogEventType.created,
+            atUtc: command.timestampUtc,
+            after: _journal.cardSnapshot(state),
+            metadata: <String, Object?>{
+              'kind': card.kind.name,
+              if (parent != null) 'parent': parent.id,
+            },
+          );
+        }
+
+        // The parent is not rescheduled, converted, or removed — formulating
+        // is capture, not completion. The one thing it does change is the
+        // nudge counter: an extract that has just produced a card is not the
+        // extract that has sat unconverted for months.
+        if (parentRef != null && parentRef.type.isTopic) {
+          final TopicState? parentTopic = await _learning.findTopic(parentRef);
+          if (parentTopic != null) {
+            final TopicScheduler scheduler = await _context.topicScheduler();
+            await _learning.saveTopic(
+              scheduler.notifyCardCreated(parentTopic),
+            );
+          }
         }
         await _learning.appendActivity(
           ActivityRecord(
@@ -185,7 +235,10 @@ final class FormulationHandlers {
             name: kCardsFormulatedKind,
             timestampUtc: now,
             operationId: command.operationId,
-            fields: <String, Object?>{'cards': cards.length},
+            fields: <String, Object?>{
+              'cards': cards.length,
+              'day': calendar.dayOf(now).toString(),
+            },
           ),
         );
         return Ok<List<Card>>(List<Card>.unmodifiable(cards));

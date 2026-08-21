@@ -3,10 +3,19 @@ import 'package:incremental_reader/src/domain/scheduling/interval_profile.dart';
 import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:test/test.dart';
 
 void main() {
-  final scheduler = TopicScheduler(IntervalProfiles.defaults());
+  // This suite pins the fixed-sequence model. The A-factor model has its own
+  // suite; keeping them apart means a change to one cannot quietly rewrite
+  // the other's expectations.
+  final scheduler = TopicScheduler(
+    IntervalProfiles.defaults(),
+    settings: const TopicSchedulerSettings(
+      pacing: TopicPacingMode.intervalProfile,
+    ),
+  );
   final today = StudyDay.parse('2026-03-05', zoneId: 'UTC');
 
   TopicState topic({

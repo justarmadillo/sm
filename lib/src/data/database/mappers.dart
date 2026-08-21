@@ -19,6 +19,7 @@ import '../../domain/content/source.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
+import '../../domain/scheduling/revlog.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import 'app_database.dart';
@@ -234,6 +235,7 @@ ElementSchedule scheduleFromRow(ScheduleRow row) => ElementSchedule(
       ? null
       : studyDayFromEpochDay(row.deferredUntil!, row.zoneId),
   deferralKind: DeferralKind.values[row.deferralKind],
+  rootId: row.rootId,
 );
 
 /// Row companion for an [ElementSchedule].
@@ -247,7 +249,25 @@ ElementSchedulesCompanion scheduleToCompanion(ElementSchedule schedule) =>
       originalDueDay: schedule.originalDueDay.epochDay,
       deferredUntil: Value<int?>(schedule.deferredUntil?.epochDay),
       deferralKind: Value<int>(schedule.deferralKind.index),
+      rootId: Value<String?>(schedule.rootId),
       zoneId: schedule.dueDay.zoneId,
+    );
+
+/// Domain [TopicState] from its two rows.
+TopicState topicStateFromRows(TopicStateRow row, ElementSchedule schedule) =>
+    TopicState(
+      schedule: schedule,
+      profileId: row.profileId,
+      stepIndex: row.stepIndex,
+      intervalDays: row.intervalDays,
+      aFactor: row.aFactor,
+      yieldEwma: row.yieldEwma,
+      encounters: row.encounters,
+      postponeCount: row.postponeCount,
+      encountersSinceLastCard: row.encountersSinceLastCard,
+      lastEncounterDay: row.lastEncounterDay == null
+          ? null
+          : studyDayFromEpochDay(row.lastEncounterDay!, schedule.dueDay.zoneId),
     );
 
 /// Row companion for a topic's pacing state.
@@ -257,6 +277,105 @@ TopicStatesCompanion topicStateToCompanion(TopicState topic) =>
       elementType: topic.ref.type.index,
       profileId: topic.profileId,
       stepIndex: topic.stepIndex,
+      intervalDays: Value<double>(topic.intervalDays),
+      aFactor: Value<double>(topic.aFactor),
+      yieldEwma: Value<double>(topic.yieldEwma),
+      encounters: Value<int>(topic.encounters),
+      postponeCount: Value<int>(topic.postponeCount),
+      encountersSinceLastCard: Value<int>(topic.encountersSinceLastCard),
+      lastEncounterDay: Value<int?>(topic.lastEncounterDay?.epochDay),
+    );
+
+/// Domain [RevlogEntry] from its append-only row.
+RevlogEntry revlogFromRow(RevlogRow row) => RevlogEntry(
+  id: row.id,
+  operationId: row.operationId,
+  ref: ElementRef(id: row.elementId, type: ElementType.values[row.elementType]),
+  eventType: RevlogEventType.fromValue(row.eventType),
+  atUtc: fromEpochMs(row.atUtc),
+  grade: row.grade,
+  elapsedDays: row.elapsedDays,
+  scheduledDays: row.scheduledDays,
+  durationMs: row.durationMs,
+  postponeCount: row.postponeCount,
+  schedulerVersion: row.schedulerVersion,
+  parametersVersion: row.parametersVersion,
+  before: RevlogSnapshot(
+    dueAtUtc: row.dueBeforeUtc == null ? null : fromEpochMs(row.dueBeforeUtc!),
+    intervalDays: row.intervalBefore,
+    aFactor: row.aFactorBefore,
+    stability: row.stabilityBefore,
+    difficulty: row.difficultyBefore,
+    learningState: row.stateBefore,
+    reps: row.repsBefore,
+    lapses: row.lapsesBefore,
+    priorityKey: row.priorityBefore,
+    pressure: row.pressureBefore,
+    readFraction: row.readFractionBefore,
+    lifecycle: row.lifecycleBefore,
+  ),
+  after: RevlogSnapshot(
+    dueAtUtc: row.dueAfterUtc == null ? null : fromEpochMs(row.dueAfterUtc!),
+    intervalDays: row.intervalAfter,
+    aFactor: row.aFactorAfter,
+    stability: row.stabilityAfter,
+    difficulty: row.difficultyAfter,
+    learningState: row.stateAfter,
+    priorityKey: row.priorityAfter,
+    pressure: row.pressureAfter,
+    readFraction: row.readFractionAfter,
+    lifecycle: row.lifecycleAfter,
+  ),
+  metadata: row.metadataJson == null
+      ? null
+      : jsonDecode(row.metadataJson!) as Map<String, Object?>,
+);
+
+/// Row companion for one repetition-log entry.
+RevlogEntriesCompanion revlogToCompanion(RevlogEntry entry) =>
+    RevlogEntriesCompanion.insert(
+      id: entry.id,
+      operationId: entry.operationId,
+      elementId: entry.ref.id,
+      elementType: entry.ref.type.index,
+      eventType: entry.eventType.value,
+      atUtc: toEpochMs(entry.atUtc),
+      grade: Value<int?>(entry.grade),
+      elapsedDays: Value<double?>(entry.elapsedDays),
+      scheduledDays: Value<double?>(entry.scheduledDays),
+      durationMs: Value<int?>(entry.durationMs),
+      postponeCount: Value<int?>(entry.postponeCount),
+      dueBeforeUtc: Value<int?>(
+        entry.before.dueAtUtc == null ? null : toEpochMs(entry.before.dueAtUtc!),
+      ),
+      dueAfterUtc: Value<int?>(
+        entry.after.dueAtUtc == null ? null : toEpochMs(entry.after.dueAtUtc!),
+      ),
+      intervalBefore: Value<double?>(entry.before.intervalDays),
+      intervalAfter: Value<double?>(entry.after.intervalDays),
+      aFactorBefore: Value<double?>(entry.before.aFactor),
+      aFactorAfter: Value<double?>(entry.after.aFactor),
+      stabilityBefore: Value<double?>(entry.before.stability),
+      stabilityAfter: Value<double?>(entry.after.stability),
+      difficultyBefore: Value<double?>(entry.before.difficulty),
+      difficultyAfter: Value<double?>(entry.after.difficulty),
+      stateBefore: Value<int?>(entry.before.learningState),
+      stateAfter: Value<int?>(entry.after.learningState),
+      repsBefore: Value<int?>(entry.before.reps),
+      lapsesBefore: Value<int?>(entry.before.lapses),
+      priorityBefore: Value<String?>(entry.before.priorityKey),
+      priorityAfter: Value<String?>(entry.after.priorityKey),
+      pressureBefore: Value<double?>(entry.before.pressure),
+      pressureAfter: Value<double?>(entry.after.pressure),
+      readFractionBefore: Value<double?>(entry.before.readFraction),
+      readFractionAfter: Value<double?>(entry.after.readFraction),
+      lifecycleBefore: Value<int?>(entry.before.lifecycle),
+      lifecycleAfter: Value<int?>(entry.after.lifecycle),
+      schedulerVersion: Value<String?>(entry.schedulerVersion),
+      parametersVersion: Value<String?>(entry.parametersVersion),
+      metadataJson: Value<String?>(
+        entry.metadata == null ? null : jsonEncode(entry.metadata),
+      ),
     );
 
 /// Domain FSRS memory from its row.
@@ -278,6 +397,7 @@ CardMemory cardMemoryFromRow(CardMemoryRow row) => CardMemory(
       : fromEpochMs(row.deferredUntilUtc!),
   schedulerVersion: row.schedulerVersion,
   parametersVersion: row.parametersVersion,
+  postponeCount: row.postponeCount,
 );
 
 /// Row companion for inserting or replacing a card's FSRS memory.
@@ -302,6 +422,7 @@ CardMemoriesCompanion cardMemoryToCompanion(CardMemory memory) =>
             ? null
             : toEpochMs(memory.deferredUntilUtc!),
       ),
+      postponeCount: Value<int>(memory.postponeCount),
       schedulerVersion: memory.schedulerVersion,
       parametersVersion: memory.parametersVersion,
     );

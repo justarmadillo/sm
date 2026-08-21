@@ -27,8 +27,14 @@ Future<void> main() async {
     overrides: <Override>[
       appPathsProvider.overrideWithValue(paths),
       databaseProvider.overrideWithValue(database),
+      logDirectoryProvider.overrideWithValue(paths.logDirectory),
     ],
   );
+
+  // Settings first: the synchronous providers read a cached configuration,
+  // so warming the store before the first frame stops the app rendering
+  // against shipped defaults and then jumping to the user's own values.
+  await warmSettings(container);
 
   // A rolling backup before the session writes anything, so the copy on disk
   // always predates the day's changes.

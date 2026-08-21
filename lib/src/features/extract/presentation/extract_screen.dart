@@ -12,6 +12,7 @@ import '../../../app/toast.dart';
 import '../../../domain/content/block.dart';
 import '../../../domain/content/document.dart';
 import '../../../domain/content/reader_anchor.dart';
+import '../../priority/presentation/priority_dialog.dart';
 import '../../queue/presentation/study_route_result.dart';
 import '../../reader/presentation/extract_highlights.dart';
 import '../../reader/presentation/reader_screen.dart';
@@ -156,6 +157,9 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
               model.later(),
           const SingleActivator(LogicalKeyboardKey.keyE, control: true): () =>
               _extractSelection(model),
+          kPriorityShortcut: () => unawaited(
+            showPriorityDialog(context, ref, elementRef: state.topic.ref),
+          ),
         },
         child: Focus(
           autofocus: true,

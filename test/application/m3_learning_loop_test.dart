@@ -1,21 +1,22 @@
+/// The complete incremental-reading loop, over a real database file.
+///
+/// Import → extract → formulate → review → queue, with a genuine restart in
+/// the middle, because the invariants this milestone protects are all about
+/// what survives being closed and reopened.
+library;
+
 import 'dart:io';
 
 import 'package:incremental_reader/src/application/extraction/extraction_commands.dart';
-import 'package:incremental_reader/src/application/extraction/extraction_handlers.dart';
 import 'package:incremental_reader/src/application/formulation/formulation_commands.dart';
-import 'package:incremental_reader/src/application/formulation/formulation_handlers.dart';
+import 'package:incremental_reader/src/application/priority/priority_commands.dart';
 import 'package:incremental_reader/src/application/queue/queue_query.dart';
 import 'package:incremental_reader/src/application/reader/reader_commands.dart';
-import 'package:incremental_reader/src/application/reader/reader_handlers.dart';
 import 'package:incremental_reader/src/application/review/review_commands.dart';
-import 'package:incremental_reader/src/application/review/review_handlers.dart';
 import 'package:incremental_reader/src/core/clock.dart';
-import 'package:incremental_reader/src/core/ids.dart';
 import 'package:incremental_reader/src/core/result.dart';
-import 'package:incremental_reader/src/core/tracing.dart';
 import 'package:incremental_reader/src/data/database/app_database.dart';
 import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/data/repositories/drift_repositories.dart';
 import 'package:incremental_reader/src/domain/content/block.dart';
 import 'package:incremental_reader/src/domain/content/card.dart';
 import 'package:incremental_reader/src/domain/content/document.dart';
@@ -24,10 +25,11 @@ import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
 import 'package:incremental_reader/src/domain/content/source.dart';
 import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/interval_profile.dart';
 import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:test/test.dart';
+
+import '../support/app_harness.dart';
 
 const String _markdown = '''
 # Working memory
@@ -35,71 +37,8 @@ const String _markdown = '''
 Working memory holds about four items while attention remains limited.
 ''';
 
-const StudyDayCalendar _calendar = StudyDayCalendar(zone: FixedOffsetZone.utc);
-
-final class _Harness {
-  _Harness(this.database, this.clock, {this.operationPrefix = 'op'})
-    : content = DriftContentRepository(database),
-      learning = DriftLearningRepository(database),
-      transfer = DriftTransferRepository(
-        database,
-        FakeIdGenerator(prefix: 'dataset'),
-        'test-device',
-      );
-
-  final AppDatabase database;
-  final FakeClock clock;
-  final String operationPrefix;
-  final DriftContentRepository content;
-  final DriftLearningRepository learning;
-  final DriftTransferRepository transfer;
-
-  late final ReaderHandlers reader = ReaderHandlers(
-    content: content,
-    learning: learning,
-    transfer: transfer,
-    transactions: DriftTransactionRunner(database),
-    clock: clock,
-    ids: FakeIdGenerator(prefix: 'reader-$operationPrefix'),
-    calendar: _calendar,
-    profiles: IntervalProfiles.defaults(),
-  );
-
-  late final ExtractionHandlers extraction = ExtractionHandlers(
-    content: content,
-    learning: learning,
-    transfer: transfer,
-    transactions: DriftTransactionRunner(database),
-    clock: clock,
-    ids: FakeIdGenerator(prefix: 'extract-$operationPrefix'),
-    calendar: _calendar,
-    profiles: IntervalProfiles.defaults(),
-  );
-
-  late final FormulationHandlers formulation = FormulationHandlers(
-    content: content,
-    learning: learning,
-    transfer: transfer,
-    transactions: DriftTransactionRunner(database),
-    clock: clock,
-    ids: FakeIdGenerator(prefix: 'card-$operationPrefix'),
-    calendar: _calendar,
-  );
-
-  late final ReviewHandlers review = ReviewHandlers(
-    content: content,
-    learning: learning,
-    transfer: transfer,
-    transactions: DriftTransactionRunner(database),
-    clock: clock,
-    ids: FakeIdGenerator(prefix: 'review-$operationPrefix'),
-    scheduler: const CardScheduler(calendar: _calendar),
-  );
-
-  int _operations = 0;
-
-  OperationId operation() => OperationId('$operationPrefix-${++_operations}');
-
+/// This milestone's fixtures, over the shared stack.
+extension _Fixtures on AppHarness {
   Future<(Source, Extract)> createFixture() async {
     final source = (await reader.importSource(
       ImportSource(
@@ -111,7 +50,7 @@ final class _Harness {
     )).unwrap();
     final document = (await content.findDocument(source.id))!;
     final block = document.blocks.firstWhere(
-      (candidate) => candidate.type == BlockType.paragraph,
+      (Block candidate) => candidate.type == BlockType.paragraph,
     );
     final anchors = _wholeRenderedBlock(document, block);
     final extract = (await extraction.createExtract(
@@ -152,6 +91,30 @@ final class _Harness {
           timestampUtc: clock.nowUtc(),
         ),
       )).unwrap();
+
+  /// Sets an exact rank, as the priority browser's drag ultimately does.
+  Future<void> setRank(ElementRef ref, PriorityRank rank) async {
+    final result = await priority.setRank(
+      SetPriority(
+        operation(),
+        ref: ref,
+        rank: rank,
+        timestampUtc: clock.nowUtc(),
+      ),
+    );
+    expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
+  }
+
+  /// Makes [ref] due today without pretending anything was processed.
+  Future<void> makeDueToday(ElementRef ref) async {
+    final topic = (await learning.findTopic(ref))!;
+    final StudyDay day = await today();
+    await learning.saveTopic(
+      topic.copyWith(
+        schedule: topic.schedule.copyWith(dueDay: day, originalDueDay: day),
+      ),
+    );
+  }
 }
 
 void main() {
@@ -159,7 +122,7 @@ void main() {
   late File databaseFile;
   late AppDatabase database;
   late FakeClock clock;
-  late _Harness harness;
+  late AppHarness harness;
 
   setUp(() async {
     workspace = Directory.systemTemp.createTempSync('ir_m3_loop_');
@@ -167,7 +130,7 @@ void main() {
     database = openDatabaseAt(databaseFile);
     await database.customSelect('SELECT 1').getSingle();
     clock = FakeClock(DateTime.utc(2026, 3, 5, 12));
-    harness = _Harness(database, clock);
+    harness = AppHarness(database: database, clock: clock);
   });
 
   tearDown(() async {
@@ -180,14 +143,7 @@ void main() {
     final (source, _) = await harness.createFixture();
     final sourceRef = ElementRef(id: source.id, type: ElementType.source);
     final inherited = PriorityRank.above(PriorityRank.middle);
-    await harness.reader.setPriority(
-      SetPriority(
-        harness.operation(),
-        ref: sourceRef,
-        rank: inherited,
-        timestampUtc: clock.nowUtc(),
-      ),
-    );
+    await harness.setRank(sourceRef, inherited);
     final before = (await harness.learning.findTopic(sourceRef))!;
 
     final result = await harness.formulation.formulate(
@@ -209,10 +165,16 @@ void main() {
       (await harness.content.listCardsOfSource(source.id)).single.id,
       card.id,
     );
+    final state = (await harness.learning.findCardState(card.id))!;
     expect(
-      (await harness.learning.findCardState(card.id))!.schedule.priority,
+      state.schedule.priority,
       inherited,
       reason: 'a card inherits the priority of whatever element made it',
+    );
+    expect(
+      state.schedule.rootId,
+      source.id,
+      reason: 'the root article is denormalized so the queue can cap its share',
     );
 
     final after = (await harness.learning.findTopic(sourceRef))!;
@@ -221,7 +183,7 @@ void main() {
       before.schedule.dueDay,
       reason: 'formulating never reschedules the article it came from',
     );
-    expect(after.stepIndex, before.stepIndex);
+    expect(after.intervalDays, before.intervalDays);
   });
 
   test('formulating from an article that does not exist fails without '
@@ -245,14 +207,7 @@ void main() {
     final (_, extract) = await harness.createFixture();
     final extractRef = ElementRef(id: extract.id, type: ElementType.extract);
     final inherited = PriorityRank.above(PriorityRank.middle);
-    await harness.reader.setPriority(
-      SetPriority(
-        harness.operation(),
-        ref: extractRef,
-        rank: inherited,
-        timestampUtc: clock.nowUtc(),
-      ),
-    );
+    await harness.setRank(extractRef, inherited);
     final before = (await harness.learning.findTopic(extractRef))!;
 
     final operation = harness.operation();
@@ -264,8 +219,7 @@ void main() {
           QaCardDraft(question: 'Question one?', answer: 'Answer one.'),
           QaCardDraft(question: 'Question two?', answer: 'Answer two.'),
           ClozeCardDraft(
-            '{{c1::Alpha}} connects to {{c2::Beta}} and '
-            '{{c1::Gamma}}.',
+            '{{c1::Alpha}} connects to {{c2::Beta}} and {{c1::Gamma}}.',
           ),
         ],
         timestampUtc: clock.nowUtc(),
@@ -274,7 +228,7 @@ void main() {
 
     final cards = result.unwrap();
     expect(cards, hasLength(4));
-    expect(cards.map((card) => card.kind), <CardKind>[
+    expect(cards.map((Card card) => card.kind), <CardKind>[
       CardKind.qa,
       CardKind.qa,
       CardKind.cloze,
@@ -282,19 +236,26 @@ void main() {
     ]);
     expect(
       cards
-          .where((card) => card.kind == CardKind.cloze)
-          .map((card) => card.clozeOrdinal),
+          .where((Card card) => card.kind == CardKind.cloze)
+          .map((Card card) => card.clozeOrdinal),
       <int?>[1, 2],
     );
 
     final after = (await harness.learning.findTopic(extractRef))!;
-    expect(after.stepIndex, before.stepIndex);
+    expect(after.intervalDays, before.intervalDays);
     expect(after.schedule.dueDay, before.schedule.dueDay);
     expect(after.schedule.originalDueDay, before.schedule.originalDueDay);
     expect(after.schedule.lifecycle, before.schedule.lifecycle);
     expect(after.schedule.deferredUntil, before.schedule.deferredUntil);
+    expect(
+      after.encountersSinceLastCard,
+      0,
+      reason:
+          'the extract has just produced cards, so the nudge counter '
+          'restarts rather than the schedule moving',
+    );
 
-    for (final card in cards) {
+    for (final Card card in cards) {
       final state = (await harness.learning.findCardState(card.id))!;
       expect(state.schedule.priority, inherited);
       expect(state.memory.isNew, isTrue);
@@ -307,15 +268,8 @@ void main() {
       expect(state.memory.parametersVersion, kCardParametersVersion);
     }
 
-    await harness.reader.setPriority(
-      SetPriority(
-        harness.operation(),
-        ref: extractRef,
-        rank: PriorityRank.below(PriorityRank.middle),
-        timestampUtc: clock.nowUtc(),
-      ),
-    );
-    for (final card in cards) {
+    await harness.setRank(extractRef, PriorityRank.below(PriorityRank.middle));
+    for (final Card card in cards) {
       expect(
         (await harness.learning.findCardState(card.id))!.schedule.priority,
         inherited,
@@ -353,7 +307,7 @@ void main() {
         timestampUtc: reviewedAt,
       );
 
-      final first = (await harness.review.review(command)).unwrap();
+      final first = (await harness.review.review(command)).unwrap().state;
       expect(first.memory.reps, 1);
       expect(first.memory.lastReviewAtUtc, reviewedAt);
       expect(first.memory.stability, isNotNull);
@@ -385,7 +339,11 @@ void main() {
       await database.close();
       database = openDatabaseAt(databaseFile);
       await database.customSelect('SELECT 1').getSingle();
-      harness = _Harness(database, clock, operationPrefix: 'after-restart');
+      harness = AppHarness(
+        database: database,
+        clock: clock,
+        operationPrefix: 'after-restart',
+      );
 
       final restored = (await harness.learning.findCardState(card.id))!;
       expect(restored.memory, first.memory);
@@ -396,7 +354,7 @@ void main() {
       expect(
         (await harness.learning.listDueCards(
           clock.nowUtc(),
-        )).map((state) => state.ref.id),
+        )).map((CardState state) => state.ref.id),
         contains(card.id),
       );
       final second = (await harness.review.review(
@@ -407,7 +365,7 @@ void main() {
           elapsedMs: 1800,
           timestampUtc: clock.nowUtc(),
         ),
-      )).unwrap();
+      )).unwrap().state;
       expect(second.memory.reps, 2);
       final afterRestartRecords = await harness.learning.listReviewsForCard(
         card.id,
@@ -423,60 +381,58 @@ void main() {
     () async {
       final (source, extract) = await harness.createFixture();
       final extractRef = ElementRef(id: extract.id, type: ElementType.extract);
-      final high = PriorityRank.above(PriorityRank.middle);
-      await harness.reader.setPriority(
-        SetPriority(
-          harness.operation(),
-          ref: extractRef,
-          rank: high,
-          timestampUtc: clock.nowUtc(),
-        ),
+      await harness.setRank(
+        extractRef,
+        PriorityRank.above(PriorityRank.middle),
       );
       final cards = await harness.formulateFixture(extract.id);
-      final extractTopic = (await harness.learning.findTopic(extractRef))!;
-      final today = _calendar.dayOf(clock.nowUtc());
-      await harness.learning.saveTopic(
-        extractTopic.copyWith(
-          schedule: extractTopic.schedule.copyWith(
-            dueDay: today,
-            originalDueDay: today,
-          ),
+      await harness.makeDueToday(extractRef);
+      // Sibling burying would push two of the three cards off today, which is
+      // right in a session and wrong in a test about the mix itself.
+      await harness.tuneSettings(
+        (settings) => settings.copyWith(
+          cards: settings.cards.copyWith(burySiblings: false),
         ),
       );
 
-      final entries = await QueueQuery(
-        content: harness.content,
-        learning: harness.learning,
-        clock: clock,
-        calendar: _calendar,
-      ).load();
+      final QueueProjection projection = await harness.queueQuery.load();
+      final List<QueueEntry> entries = projection.entries;
 
       expect(
-        entries.take(4).map((entry) => entry.ref.type),
+        entries.take(4).map((QueueEntry entry) => entry.ref.type),
         everyElement(ElementType.card),
-      );
-      expect(entries[4].ref, extractRef);
-      expect(
-        entries.last.ref,
-        ElementRef(id: source.id, type: ElementType.source),
+        reason: 'four cards then a topic is the default proportion',
       );
       expect(
-        entries.where((entry) => entry.ref.type == ElementType.card),
+        entries.map((QueueEntry entry) => entry.ref),
+        containsAll(<ElementRef>[
+          extractRef,
+          ElementRef(id: source.id, type: ElementType.source),
+        ]),
+      );
+      expect(
+        entries.where((QueueEntry e) => e.ref.type == ElementType.card),
         hasLength(cards.length),
       );
-      expect(entries.map((entry) => entry.actionLabel).toSet(), <String>{
-        'Review',
-        'Process',
-        'Read',
-      });
+      expect(
+        entries.map((QueueEntry entry) => entry.actionLabel).toSet(),
+        <String>{'Review', 'Process', 'Read'},
+      );
+      expect(
+        entries.every((QueueEntry entry) => entry.priorityPercent != null),
+        isTrue,
+        reason: 'every row carries its derived percentile',
+      );
 
-      final qa = entries.firstWhere((entry) => entry.ref.id == cards.first.id);
+      final qa = entries.firstWhere(
+        (QueueEntry entry) => entry.ref.id == cards.first.id,
+      );
       expect(qa.preview, 'How many items does working memory hold?');
       expect(qa.preview, isNot(contains('About four items')));
       final cloze = entries.firstWhere(
-        (entry) =>
+        (QueueEntry entry) =>
             entry.ref.id ==
-            cards.firstWhere((card) => card.kind == CardKind.cloze).id,
+            cards.firstWhere((Card card) => card.kind == CardKind.cloze).id,
       );
       expect(cloze.preview, contains('[...]'));
       expect(cloze.preview, isNot(contains('four items')));

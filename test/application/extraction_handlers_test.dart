@@ -1,15 +1,12 @@
 import 'package:incremental_reader/src/application/extraction/extraction_commands.dart';
 import 'package:incremental_reader/src/application/extraction/extraction_handlers.dart';
 import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/application/priority/priority_commands.dart';
 import 'package:incremental_reader/src/application/reader/reader_commands.dart';
-import 'package:incremental_reader/src/application/reader/reader_handlers.dart';
 import 'package:incremental_reader/src/core/clock.dart';
-import 'package:incremental_reader/src/core/ids.dart';
 import 'package:incremental_reader/src/core/result.dart';
 import 'package:incremental_reader/src/core/tracing.dart';
-import 'package:incremental_reader/src/data/database/app_database.dart';
 import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/data/repositories/drift_repositories.dart';
 import 'package:incremental_reader/src/domain/content/block.dart';
 import 'package:incremental_reader/src/domain/content/document.dart';
 import 'package:incremental_reader/src/domain/content/extract.dart';
@@ -18,8 +15,10 @@ import 'package:incremental_reader/src/domain/content/source.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/domain/scheduling/interval_profile.dart';
 import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
-import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:test/test.dart';
+
+import '../support/app_harness.dart';
 
 /// Deliberately awkward: formatting, links, code, math, Unicode, and a list,
 /// so a round trip that only works for plain prose fails here.
@@ -40,47 +39,9 @@ and the transfer is not instant 👍.
 > It is the mechanism learning is measured against.
 ''';
 
-final class _Harness {
-  _Harness(this.database, this.clock)
-    : content = DriftContentRepository(database),
-      learning = DriftLearningRepository(database),
-      transfer = DriftTransferRepository(
-        database,
-        FakeIdGenerator(prefix: 'dataset'),
-        'test-device',
-      );
-
-  final AppDatabase database;
-  final FakeClock clock;
-  final DriftContentRepository content;
-  final DriftLearningRepository learning;
-  final DriftTransferRepository transfer;
-
-  late final ReaderHandlers reader = ReaderHandlers(
-    content: content,
-    learning: learning,
-    transfer: transfer,
-    transactions: DriftTransactionRunner(database),
-    clock: clock,
-    ids: FakeIdGenerator(prefix: 'src'),
-    calendar: const StudyDayCalendar(zone: FixedOffsetZone.utc),
-    profiles: IntervalProfiles.defaults(),
-  );
-
-  late final ExtractionHandlers extraction = ExtractionHandlers(
-    content: content,
-    learning: learning,
-    transfer: transfer,
-    transactions: DriftTransactionRunner(database),
-    clock: clock,
-    ids: FakeIdGenerator(prefix: 'ext'),
-    calendar: const StudyDayCalendar(zone: FixedOffsetZone.utc),
-    profiles: IntervalProfiles.defaults(),
-  );
-
-  int _operations = 0;
-
-  OperationId nextOperation() => OperationId('op-${++_operations}');
+/// This suite's fixtures, over the shared stack.
+extension _Fixtures on AppHarness {
+  OperationId nextOperation() => operation();
 
   Future<Source> importFixture() async {
     final result = await reader.importSource(
@@ -94,15 +55,30 @@ final class _Harness {
   }
 }
 
+/// Pins the fixed-sequence pacing model.
+///
+/// These suites are about handler behaviour — exactly-once terminal commands,
+/// interruption never counting as progress, lifecycle transitions — and the
+/// A-factor's arithmetic is exercised in its own domain tests. Fixing the
+/// model here keeps the dates in these assertions readable.
+Future<void> _useFixedSequences(AppHarness harness) => harness.tuneSettings(
+  (AppSettings settings) => settings.copyWith(
+    topics: settings.topics.copyWith(
+      pacing: TopicPacingMode.intervalProfile,
+    ),
+  ),
+);
+
 void main() {
-  late _Harness harness;
+  late AppHarness harness;
   late FakeClock clock;
   late Source source;
   late Document document;
 
   setUp(() async {
     clock = FakeClock(DateTime.utc(2026, 3, 5, 10));
-    harness = _Harness(openInMemoryDatabase(), clock);
+    harness = AppHarness(database: openInMemoryDatabase(), clock: clock);
+    await _useFixedSequences(harness);
     source = await harness.importFixture();
     document = (await harness.content.findDocument(source.id))!;
   });
@@ -262,7 +238,7 @@ void main() {
       );
 
       expect(topic!.schedule.dueDay.toString(), '2026-03-06');
-      expect(topic.stepIndex, 0);
+      expect(topic.encounters, 0);
       expect(topic.profileId, kExtractProfileId);
     });
 
@@ -271,7 +247,7 @@ void main() {
       () async {
         final sourceRef = ElementRef(id: source.id, type: ElementType.source);
         final raised = PriorityRank.above(PriorityRank.middle);
-        await harness.reader.setPriority(
+        await harness.priority.setRank(
           SetPriority(harness.nextOperation(), ref: sourceRef, rank: raised),
         );
 
@@ -288,7 +264,7 @@ void main() {
         );
 
         // Re-ranking the parent afterwards must not cascade.
-        await harness.reader.setPriority(
+        await harness.priority.setRank(
           SetPriority(
             harness.nextOperation(),
             ref: sourceRef,

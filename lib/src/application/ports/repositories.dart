@@ -19,6 +19,7 @@ import '../../domain/content/source.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
+import '../../domain/scheduling/revlog.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../../domain/transfer/dataset_lineage.dart';
@@ -137,6 +138,15 @@ abstract interface class ContentRepository {
 
   /// Replaces a card's text, including edits made during review.
   Future<void> updateCard(Card card);
+
+  /// Cards formulated from the same parent as [cardId], excluding it.
+  ///
+  /// Sibling burying needs exactly this: three clozes cut from one sentence
+  /// give each other away, so answering one pushes the rest off today.
+  Future<List<Card>> listSiblingCards(String cardId);
+
+  /// How many cards each of [parentIds] has produced, keyed by parent id.
+  Future<Map<String, int>> countCardsByParent(List<String> parentIds);
 }
 
 /// Schedules, priority, topic pacing, and the activity log.
@@ -214,6 +224,155 @@ abstract interface class LearningRepository {
 
   /// Recent activity, newest first. For the diagnostics panel.
   Future<List<ActivityRecord>> recentActivity({int limit = 50});
+
+  /// Appends one repetition-log entry.
+  ///
+  /// Called by every command that changes a schedule, in the same transaction
+  /// as the change. The log is the only record that cannot be rebuilt from
+  /// current state, so a write that skips it loses information permanently.
+  Future<void> appendRevlog(RevlogEntry entry);
+
+  /// Appends many entries at once, for the daily valve and Mercy.
+  Future<void> appendRevlogBatch(List<RevlogEntry> entries);
+
+  /// Everything that happened to [ref], oldest first.
+  Future<List<RevlogEntry>> listRevlogFor(ElementRef ref, {int? limit});
+
+  /// The most recent entries across the whole collection, newest first.
+  Future<List<RevlogEntry>> recentRevlog({int limit = 100});
+
+  /// How many entries of each event type were written on [day].
+  Future<Map<RevlogEventType, int>> countRevlogOn(StudyDay day);
+
+  /// Removes the rows one operation wrote. Only undo may call this.
+  Future<void> deleteRevlogByOperationId(String operationId);
+
+  /// Removes one lossless FSRS review event. Only undo may call this.
+  Future<void> deleteReview(String operationId);
+
+  /// The most recent non-practice review of [cardId], or null.
+  Future<ReviewRecord?> findLastReview(String cardId);
+
+  /// The most recent non-practice review in the collection, or null.
+  ///
+  /// Undo-last-grade is a session affordance, so it works on whatever was
+  /// graded last rather than only on the card currently open.
+  Future<ReviewRecord?> findLastReviewOverall();
+
+  /// Priority keys of every element the queue could ever consider, ascending.
+  ///
+  /// This is the input to [PriorityScale]: percentiles are derived from the
+  /// live order rather than stored, so promoting one element necessarily
+  /// demotes another and the field cannot inflate.
+  Future<List<PriorityRank>> listActivePriorities();
+
+  /// Card state for many ids at once.
+  Future<Map<String, CardState>> findCardStates(List<String> cardIds);
+
+  /// Replaces many schedules in one statement batch.
+  Future<void> saveSchedules(List<ElementSchedule> schedules);
+
+  /// Replaces many card memories and their schedules together.
+  Future<void> saveCardStates(List<CardState> cards);
+
+  /// Replaces many topics and their schedules together.
+  Future<void> saveTopics(List<TopicState> topics);
+
+  /// Active elements the app deferred automatically to a day at or after
+  /// [from], so raising a limit or Study More can recall them.
+  Future<List<ElementSchedule>> listAutomaticDeferrals({required StudyDay from});
+
+  /// Active elements whose original due day is before [day], oldest first.
+  ///
+  /// The backlog Mercy spreads. Ordered by priority so the top of it lands
+  /// within days and the tail lands months out.
+  Future<List<ElementSchedule>> listBacklog({required StudyDay day});
+
+  /// Every schedule of the given [types], whatever its lifecycle.
+  Future<List<ElementSchedule>> listSchedules({
+    required Set<ElementType> types,
+    Set<ElementLifecycle>? lifecycles,
+    int? limit,
+    int? offset,
+  });
+
+  /// How many elements sit in each lifecycle, by type. For diagnostics.
+  Future<Map<ElementType, Map<ElementLifecycle, int>>> countByLifecycle();
+}
+
+/// One row of the materialized search table.
+@immutable
+final class SearchDocument {
+  const SearchDocument({
+    required this.ref,
+    required this.title,
+    required this.body,
+    required this.updatedAtUtc,
+    this.sourceId,
+  });
+
+  final ElementRef ref;
+  final String title;
+
+  /// Indexed text. For a source this is the whole markdown, so a passage can
+  /// be found before it has ever been extracted.
+  final String body;
+
+  final DateTime updatedAtUtc;
+
+  /// Root source, so results group by article without a join.
+  final String? sourceId;
+}
+
+/// One search hit, with the snippet that matched.
+@immutable
+final class SearchHit {
+  const SearchHit({
+    required this.ref,
+    required this.title,
+    required this.snippet,
+    required this.rank,
+    this.sourceId,
+  });
+
+  final ElementRef ref;
+  final String title;
+
+  /// Highlighted excerpt around the match, produced by FTS5.
+  final String snippet;
+
+  /// FTS5 relevance; lower is better.
+  final double rank;
+
+  final String? sourceId;
+}
+
+/// Full-text search over sources, extracts, and cards.
+abstract interface class SearchRepository {
+  /// Inserts or replaces one document, inside the caller's transaction.
+  Future<void> upsertDocument(SearchDocument document);
+
+  /// Inserts or replaces many documents at once.
+  Future<void> upsertDocuments(List<SearchDocument> documents);
+
+  /// Removes one document and its index entry.
+  Future<void> deleteDocument(ElementRef ref);
+
+  /// Matches against the FTS5 index, best first.
+  Future<List<SearchHit>> search(
+    String query, {
+    int limit = 50,
+    Set<ElementType>? types,
+  });
+
+  /// Rebuilds the index from the materialized rows.
+  Future<void> rebuildIndex();
+
+  /// Whether the index reports itself consistent with its content table.
+  Future<bool> indexIsValid();
+
+  /// How many documents are materialized.
+  Future<int> documentCount();
 }
 
 /// User settings and the values the schedulers read.
@@ -226,6 +385,12 @@ abstract interface class SettingsRepository {
 
   /// Every stored setting.
   Future<Map<String, String>> readAll();
+
+  /// Writes many settings in one batch, replacing what was there.
+  Future<void> writeAll(Map<String, String> values);
+
+  /// Removes the setting [key], returning it to its shipped default.
+  Future<void> remove(String key);
 }
 
 /// Dataset lineage, backups, and export snapshots.

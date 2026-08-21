@@ -23,6 +23,7 @@ import '../../../domain/content/extract.dart';
 import '../../../domain/content/reader_anchor.dart';
 import '../../../domain/content/source.dart';
 import '../../../domain/scheduling/element.dart';
+import '../../../domain/scheduling/study_day.dart';
 import '../../../domain/scheduling/topic_scheduler.dart';
 import '../../library/presentation/library_view_model.dart';
 
@@ -103,7 +104,8 @@ final class ReaderUiState {
   /// Rendered words between [openedAt] and the current position.
   final int wordsThisSession;
 
-  /// How far into a session the reminder line appears.
+  /// How far into a session the reminder line appears. Read from Settings
+  /// when the session opens, not compiled in.
   final int reminderTarget;
 
   final bool reminderDismissed;
@@ -217,6 +219,7 @@ final class ReaderUiState {
 final class ReaderViewModel
     extends FamilyAsyncNotifier<ReaderUiState, ReaderRequest> {
   DateTime? _sessionStartedAt;
+  int _extractsThisSession = 0;
   Future<void> _positionWrites = Future<void>.value();
 
   @override
@@ -243,6 +246,9 @@ final class ReaderViewModel
       document: document,
       topic: topic,
       mode: mode,
+      reminderTarget: (await ref.read(schedulingContextProvider).settings())
+          .reader
+          .reminderWords,
       openedAt:
           (arg.initialAnchor != null &&
               document.containsAnchor(arg.initialAnchor!))
@@ -390,6 +396,11 @@ final class ReaderViewModel
               operation,
               ref: current.topic.ref,
               foregroundMs: _foregroundMs(),
+              // The A-factor's yield term needs both halves of the ratio: an
+              // article that keeps producing extracts should keep coming back,
+              // and a barren one should recede.
+              wordsRead: current.wordsThisSession,
+              extractsCreated: _extractsThisSession,
             ),
           ),
       apply: (ReaderUiState s, TopicState topic) =>
@@ -399,19 +410,22 @@ final class ReaderViewModel
     );
   }
 
-  /// Later: moves eligibility without advancing the sequence.
-  Future<void> later({int days = 1}) async {
+  /// Later: moves eligibility without growing the interval.
+  ///
+  /// With no explicit day the handler scales the delay by the source's own
+  /// interval, because a fixed one day just returns it tomorrow into an
+  /// equally full queue.
+  Future<void> later({int? days}) async {
     final current = state.valueOrNull;
     if (current == null || !current.canCommitProgress) return;
+    final StudyDay? until = days == null
+        ? null
+        : (await ref.read(readerHandlersProvider).today()).addDays(days);
     await _command<TopicState>(
       (OperationId operation) => ref
           .read(readerHandlersProvider)
           .postpone(
-            PostponeElement(
-              operation,
-              ref: current.topic.ref,
-              until: ref.read(readerHandlersProvider).today.addDays(days),
-            ),
+            PostponeElement(operation, ref: current.topic.ref, until: until),
           ),
       apply: (ReaderUiState s, TopicState topic) =>
           s.copyWith(topic: topic, isDone: true),
@@ -472,6 +486,7 @@ final class ReaderViewModel
     }
 
     final created = result.unwrap();
+    _extractsThisSession++;
     state = AsyncValue<ReaderUiState>.data(
       latest.copyWith(
         extracts: await _reloadExtracts(latest.source.id),
@@ -491,6 +506,7 @@ final class ReaderViewModel
         current.lastExtractId != extractId) {
       return;
     }
+    if (_extractsThisSession > 0) _extractsThisSession--;
     state = AsyncValue<ReaderUiState>.data(current.copyWith(isBusy: true));
 
     final result = await ref

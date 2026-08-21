@@ -10,8 +10,10 @@ import '../../../app/toast.dart';
 import '../../../domain/content/card.dart';
 import '../../../domain/content/document.dart';
 import '../../../domain/scheduling/card_scheduler.dart';
+import '../../../domain/scheduling/element.dart';
 import '../../extract/presentation/extract_screen.dart';
 import '../../extract/presentation/extract_view_model.dart';
+import '../../priority/presentation/priority_dialog.dart';
 import '../../queue/presentation/study_route_result.dart';
 import '../../reader/presentation/block_span_builder.dart';
 import '../../reader/presentation/reader_screen.dart';
@@ -80,6 +82,27 @@ class _ReviewBody extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Review'),
         actions: <Widget>[
+          IconButton(
+            tooltip: 'Priority (Alt+P)',
+            onPressed: state.isBusy
+                ? null
+                : () => showPriorityDialog(
+                    context,
+                    ref,
+                    elementRef: ElementRef(
+                      id: state.card.id,
+                      type: ElementType.card,
+                    ),
+                  ),
+            icon: const Icon(Icons.tune, size: 18),
+          ),
+          IconButton(
+            tooltip: 'Edit this card (E)',
+            onPressed: state.isBusy || state.isEditing
+                ? null
+                : () => model.setEditing(true),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+          ),
           if (state.card.parent case final CardParent parent)
             TextButton.icon(
               onPressed: state.isBusy
@@ -97,7 +120,13 @@ class _ReviewBody extends ConsumerWidget {
                             sourceId: parent.id,
                             mode: ReaderMode.browse,
                           ),
-              icon: const Icon(Icons.account_tree_outlined, size: 17),
+              icon: Icon(
+                state.isLeech
+                    ? Icons.warning_amber_rounded
+                    : Icons.account_tree_outlined,
+                size: 17,
+                color: state.isLeech ? AppColors.softMarker : null,
+              ),
               label: Text(parent.isExtract ? 'Open extract' : 'Open article'),
             ),
           const SizedBox(width: 8),
@@ -123,6 +152,19 @@ class _ReviewBody extends ConsumerWidget {
               model.grade(CardRating.good),
           const SingleActivator(LogicalKeyboardKey.numpad4): () =>
               model.grade(CardRating.easy),
+          // Undo-last-grade and edit-during-review, both one key away: a
+          // misgraded card and a badly worded one are the two things that go
+          // wrong mid-session, and neither should cost a trip to another
+          // screen.
+          const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
+              model.undoLastGrade,
+          const SingleActivator(LogicalKeyboardKey.keyE): () =>
+              model.setEditing(true),
+          kPriorityShortcut: () => showPriorityDialog(
+            context,
+            ref,
+            elementRef: ElementRef(id: state.card.id, type: ElementType.card),
+          ),
         },
         child: Focus(
           autofocus: true,
@@ -138,17 +180,25 @@ class _ReviewBody extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                          _CardPanel(
-                            label: 'QUESTION',
-                            markdown: state.question,
-                          ),
-                          if (state.answerRevealed) ...<Widget>[
-                            const SizedBox(height: 18),
+                          if (state.isEditing)
+                            _CardEditor(state: state, model: model)
+                          else ...<Widget>[
                             _CardPanel(
-                              label: 'ANSWER',
-                              markdown: state.answer,
-                              emphasized: true,
+                              label: 'QUESTION',
+                              markdown: state.question,
                             ),
+                            if (state.answerRevealed) ...<Widget>[
+                              const SizedBox(height: 18),
+                              _CardPanel(
+                                label: 'ANSWER',
+                                markdown: state.answer,
+                                emphasized: true,
+                              ),
+                            ],
+                          ],
+                          if (state.isLeech && !state.isEditing) ...<Widget>[
+                            const SizedBox(height: 18),
+                            _LeechNotice(lapses: state.lapses),
                           ],
                         ],
                       ),
@@ -188,9 +238,22 @@ class _ReviewStatus extends StatelessWidget {
               : state.cardState.memory.state.name,
           style: const TextStyle(fontSize: 12, color: AppColors.text),
         ),
+        if (state.buriedSiblings > 0) ...<Widget>[
+          const SizedBox(width: 12),
+          Tooltip(
+            message:
+                'Cards cut from the same passage give each other away, so '
+                'they were pushed to tomorrow rather than reviewed now.',
+            child: Text(
+              '${state.buriedSiblings} sibling'
+              '${state.buriedSiblings == 1 ? '' : 's'} buried',
+              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+            ),
+          ),
+        ],
         const Spacer(),
         const Text(
-          'Space: reveal · 1 Again · 2 Hard · 3 Good · 4 Easy',
+          'Space: reveal · 1–4 grade · Ctrl+Z undo · E edit · Alt+P priority',
           style: TextStyle(fontSize: 11, color: AppColors.muted),
         ),
       ],
@@ -271,6 +334,12 @@ class _ReviewActions extends StatelessWidget {
               runSpacing: 8,
               alignment: WrapAlignment.center,
               children: <Widget>[
+                if (state.canUndo)
+                  TextButton.icon(
+                    onPressed: state.isBusy ? null : model.undoLastGrade,
+                    icon: const Icon(Icons.undo, size: 16),
+                    label: const Text('Undo'),
+                  ),
                 _RatingButton(
                   number: 1,
                   label: 'Again',
@@ -303,6 +372,14 @@ class _ReviewActions extends StatelessWidget {
                       ? null
                       : () => model.grade(CardRating.easy),
                 ),
+                TextButton.icon(
+                  // Not a grade. "Wrong task right now" is a different fact
+                  // about the day from "I could not recall this", and the log
+                  // keeps them apart.
+                  onPressed: state.isBusy ? null : model.postpone,
+                  icon: const Icon(Icons.schedule, size: 16),
+                  label: const Text('Later'),
+                ),
               ],
             )
           : FilledButton.icon(
@@ -310,6 +387,155 @@ class _ReviewActions extends StatelessWidget {
               icon: const Icon(Icons.visibility_outlined),
               label: const Text('Show answer  (Space)'),
             ),
+    ),
+  );
+}
+
+/// Inline editing during review.
+///
+/// Never reschedules: a typo found mid-review is not new evidence about
+/// memory, and rescheduling on an edit would punish the user for improving
+/// their own material.
+class _CardEditor extends StatefulWidget {
+  const _CardEditor({required this.state, required this.model});
+
+  final ReviewUiState state;
+  final ReviewViewModel model;
+
+  @override
+  State<_CardEditor> createState() => _CardEditorState();
+}
+
+class _CardEditorState extends State<_CardEditor> {
+  late final TextEditingController _front = TextEditingController(
+    text: widget.state.card.front,
+  );
+  late final TextEditingController _back = TextEditingController(
+    text: widget.state.card.back,
+  );
+
+  bool get _isCloze => widget.state.card.kind == CardKind.cloze;
+
+  @override
+  void dispose() {
+    _front.dispose();
+    _back.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      border: Border.all(color: AppColors.accent),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          _isCloze ? 'CLOZE TEXT' : 'QUESTION',
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: AppColors.muted,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _front,
+          autofocus: true,
+          maxLines: null,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        if (_isCloze)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              'Keep the {{c1::…}} deletions. The canonical text is the single '
+              'source of truth, so editing the sentence can never '
+              'desynchronize what this card tests.',
+              style: TextStyle(fontSize: 11, color: AppColors.muted),
+            ),
+          )
+        else ...<Widget>[
+          const SizedBox(height: 14),
+          const Text(
+            'ANSWER',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.muted,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _back,
+            maxLines: null,
+            decoration: const InputDecoration(border: OutlineInputBorder()),
+          ),
+        ],
+        const SizedBox(height: 14),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: <Widget>[
+            TextButton(
+              onPressed: widget.state.isBusy
+                  ? null
+                  : () => widget.model.setEditing(false),
+              child: const Text('Cancel'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: widget.state.isBusy
+                  ? null
+                  : () => widget.model.edit(
+                      front: _front.text,
+                      back: _isCloze ? null : _back.text,
+                    ),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+/// The escape hatch for a card that keeps failing.
+class _LeechNotice extends StatelessWidget {
+  const _LeechNotice({required this.lapses});
+
+  final int lapses;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppColors.softMarker.withValues(alpha: 0.10),
+      border: Border.all(color: AppColors.softMarker.withValues(alpha: 0.45)),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      children: <Widget>[
+        const Icon(
+          Icons.warning_amber_rounded,
+          size: 18,
+          color: AppColors.softMarker,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'This card has failed $lapses times. Repeated failure is usually '
+            'a badly written card rather than a hard fact — open the source '
+            'passage above and rewrite it, or lower its priority.',
+            style: const TextStyle(fontSize: 12, height: 1.5),
+          ),
+        ),
+      ],
     ),
   );
 }

@@ -48,7 +48,10 @@ void main() {
       final tables = await db
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type = 'table' "
-            "AND name NOT LIKE 'sqlite_%' ORDER BY name",
+            "AND name NOT LIKE 'sqlite_%' "
+            // FTS5 creates its own shadow tables; they are an implementation
+            // detail of the index and are asserted separately below.
+            "AND name NOT LIKE '$kSearchIndexTable%' ORDER BY name",
           )
           .get();
       final names = tables.map((QueryRow r) => r.read<String>('name')).toList();
@@ -63,6 +66,8 @@ void main() {
         'extracts',
         'folders',
         'review_events',
+        'revlog_entries',
+        'search_documents',
         'settings',
         'sources',
         'topic_states',
@@ -70,6 +75,36 @@ void main() {
 
       final version = await db.customSelect('PRAGMA user_version').getSingle();
       expect(version.data.values.first, kSchemaVersion);
+    });
+
+    test('the full-text index is created and consistent', () async {
+      final db = await openFileDatabase();
+      addTearDown(db.close);
+
+      final index = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            'AND name = ?',
+            variables: <Variable<Object>>[Variable<String>(kSearchIndexTable)],
+          )
+          .get();
+      expect(index, hasLength(1));
+      expect(await db.searchIndexValid(), isTrue);
+
+      // The triggers are what keep the index in step inside whatever
+      // transaction wrote the content, so a search can never observe a
+      // half-applied import.
+      final triggers = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'trigger' "
+            "AND name LIKE 'search_documents_%' ORDER BY name",
+          )
+          .get();
+      expect(triggers.map((QueryRow r) => r.read<String>('name')), <String>[
+        'search_documents_ad',
+        'search_documents_ai',
+        'search_documents_au',
+      ]);
     });
 
     test('foreign keys are enforced on the connection', () async {

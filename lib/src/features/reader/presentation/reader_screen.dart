@@ -20,6 +20,7 @@ import '../../../domain/content/reader_anchor.dart';
 import '../../extract/presentation/extract_context_overlay.dart';
 import '../../extract/presentation/formulation_dialog.dart';
 import '../../library/presentation/library_view_model.dart';
+import '../../priority/presentation/priority_dialog.dart';
 import '../../queue/presentation/study_route_result.dart';
 import 'block_span_builder.dart';
 import 'extract_highlights.dart';
@@ -283,6 +284,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           // SuperMemo's own key for "make an item out of this".
           const SingleActivator(LogicalKeyboardKey.keyZ, alt: true): () =>
               unawaited(_formulate(model, state)),
+          // And its key for "how important is this?".
+          kPriorityShortcut: () => unawaited(
+            showPriorityDialog(context, ref, elementRef: state.topic.ref),
+          ),
         },
         child: Focus(
           autofocus: true,

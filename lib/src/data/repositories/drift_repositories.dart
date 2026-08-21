@@ -22,6 +22,7 @@ import '../../domain/content/source.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
+import '../../domain/scheduling/revlog.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../../domain/transfer/dataset_lineage.dart';
@@ -272,6 +273,53 @@ final class DriftContentRepository implements ContentRepository {
       ),
     );
   }
+
+  @override
+  Future<List<Card>> listSiblingCards(String cardId) async {
+    // Siblings share a parent, whichever of the two parent columns holds it.
+    // A card with no parent has no siblings, which is why the query is keyed
+    // on the parent rather than on a shared source.
+    final rows = await _database
+        .customSelect(
+          'SELECT c.* FROM cards c '
+          'JOIN cards origin ON origin.id = ? '
+          'WHERE c.id != origin.id AND ('
+          '(origin.extract_id IS NOT NULL '
+          'AND c.extract_id = origin.extract_id) OR '
+          '(origin.source_id IS NOT NULL AND c.source_id = origin.source_id))'
+          'ORDER BY c.created_at_utc, c.id',
+          variables: <Variable<Object>>[Variable<String>(cardId)],
+          readsFrom: <ResultSetImplementation<Object, Object>>{_database.cards},
+        )
+        .get();
+    return <Card>[
+      for (final row in rows) cardFromRow(_database.cards.map(row.data)),
+    ];
+  }
+
+  @override
+  Future<Map<String, int>> countCardsByParent(List<String> parentIds) async {
+    if (parentIds.isEmpty) return <String, int>{};
+    final placeholders = List<String>.filled(parentIds.length, '?').join(', ');
+    final variables = <Variable<Object>>[
+      for (final id in parentIds) Variable<String>(id),
+      for (final id in parentIds) Variable<String>(id),
+    ];
+    final rows = await _database
+        .customSelect(
+          'SELECT parent_id, COUNT(*) AS n FROM ('
+          'SELECT extract_id AS parent_id FROM cards '
+          'WHERE extract_id IN ($placeholders) '
+          'UNION ALL '
+          'SELECT source_id AS parent_id FROM cards '
+          'WHERE source_id IN ($placeholders)) GROUP BY parent_id',
+          variables: variables,
+        )
+        .get();
+    return <String, int>{
+      for (final row in rows) row.read<String>('parent_id'): row.read<int>('n'),
+    };
+  }
 }
 
 /// Learning aggregate: schedules, pacing, priority, activity.
@@ -393,11 +441,7 @@ final class DriftLearningRepository implements LearningRepository {
             ))
             .getSingleOrNull();
     if (pacing == null) return null;
-    return TopicState(
-      schedule: schedule,
-      profileId: pacing.profileId,
-      stepIndex: pacing.stepIndex,
-    );
+    return topicStateFromRows(pacing, schedule);
   }
 
   @override
@@ -409,7 +453,9 @@ final class DriftLearningRepository implements LearningRepository {
         .customSelect(
           'SELECT s.element_id, s.element_type, s.priority_key, s.lifecycle, '
           's.due_day, s.original_due_day, s.deferred_until, s.deferral_kind, '
-          's.zone_id, t.profile_id, t.step_index '
+          's.root_id, s.zone_id, t.profile_id, t.step_index, t.interval_days, '
+          't.a_factor, t.yield_ewma, t.encounters, t.postpone_count, '
+          't.encounters_since_last_card, t.last_encounter_day '
           'FROM element_schedules s '
           'JOIN topic_states t ON t.element_id = s.element_id '
           'AND t.element_type = s.element_type '
@@ -428,6 +474,7 @@ final class DriftLearningRepository implements LearningRepository {
       );
       final zoneId = row.read<String>('zone_id');
       final deferred = row.read<int?>('deferred_until');
+      final lastEncounter = row.read<int?>('last_encounter_day');
       result[ref] = TopicState(
         schedule: ElementSchedule(
           ref: ref,
@@ -442,9 +489,19 @@ final class DriftLearningRepository implements LearningRepository {
               ? null
               : studyDayFromEpochDay(deferred, zoneId),
           deferralKind: DeferralKind.values[row.read<int>('deferral_kind')],
+          rootId: row.read<String?>('root_id'),
         ),
         profileId: row.read<String>('profile_id'),
         stepIndex: row.read<int>('step_index'),
+        intervalDays: row.read<double>('interval_days'),
+        aFactor: row.read<double>('a_factor'),
+        yieldEwma: row.read<double>('yield_ewma'),
+        encounters: row.read<int>('encounters'),
+        postponeCount: row.read<int>('postpone_count'),
+        encountersSinceLastCard: row.read<int>('encounters_since_last_card'),
+        lastEncounterDay: lastEncounter == null
+            ? null
+            : studyDayFromEpochDay(lastEncounter, zoneId),
       );
     }
     return result;
@@ -573,6 +630,260 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
+  Future<void> appendRevlog(RevlogEntry entry) =>
+      _database.into(_database.revlogEntries).insert(revlogToCompanion(entry));
+
+  @override
+  Future<void> appendRevlogBatch(List<RevlogEntry> entries) async {
+    if (entries.isEmpty) return;
+    await _database.batch((Batch batch) {
+      batch.insertAll(_database.revlogEntries, <RevlogEntriesCompanion>[
+        for (final entry in entries) revlogToCompanion(entry),
+      ]);
+    });
+  }
+
+  @override
+  Future<List<RevlogEntry>> listRevlogFor(ElementRef ref, {int? limit}) async {
+    final query = _database.select(_database.revlogEntries)
+      ..where(
+        ($RevlogEntriesTable t) =>
+            t.elementId.equals(ref.id) & t.elementType.equals(ref.type.index),
+      )
+      ..orderBy(<OrderClauseGenerator<$RevlogEntriesTable>>[
+        ($RevlogEntriesTable t) => OrderingTerm.asc(t.atUtc),
+        ($RevlogEntriesTable t) => OrderingTerm.asc(t.id),
+      ]);
+    if (limit != null) query.limit(limit);
+    final rows = await query.get();
+    return <RevlogEntry>[for (final row in rows) revlogFromRow(row)];
+  }
+
+  @override
+  Future<List<RevlogEntry>> recentRevlog({int limit = 100}) async {
+    final rows =
+        await (_database.select(_database.revlogEntries)
+              ..orderBy(<OrderClauseGenerator<$RevlogEntriesTable>>[
+                ($RevlogEntriesTable t) => OrderingTerm.desc(t.atUtc),
+              ])
+              ..limit(limit))
+            .get();
+    return <RevlogEntry>[for (final row in rows) revlogFromRow(row)];
+  }
+
+  @override
+  Future<Map<RevlogEventType, int>> countRevlogOn(StudyDay day) async {
+    // Day boundaries come from the caller's calendar, so the log is bucketed
+    // by the same study day the scheduler used rather than by UTC midnight.
+    final int from = day.epochDay * Duration.millisecondsPerDay;
+    final int to = from + Duration.millisecondsPerDay;
+    final rows = await _database
+        .customSelect(
+          'SELECT event_type, COUNT(*) AS n FROM revlog_entries '
+          'WHERE at_utc >= ? AND at_utc < ? GROUP BY event_type',
+          variables: <Variable<Object>>[Variable<int>(from), Variable<int>(to)],
+        )
+        .get();
+    return <RevlogEventType, int>{
+      for (final row in rows)
+        RevlogEventType.fromValue(row.read<int>('event_type')): row.read<int>(
+          'n',
+        ),
+    };
+  }
+
+  @override
+  Future<void> deleteRevlogByOperationId(String operationId) async {
+    await (_database.delete(_database.revlogEntries)..where(
+          ($RevlogEntriesTable t) => t.operationId.equals(operationId),
+        ))
+        .go();
+  }
+
+  @override
+  Future<void> deleteReview(String operationId) async {
+    await (_database.delete(_database.reviewEvents)..where(
+          ($ReviewEventsTable t) => t.operationId.equals(operationId),
+        ))
+        .go();
+  }
+
+  @override
+  Future<ReviewRecord?> findLastReview(String cardId) async {
+    final row =
+        await (_database.select(_database.reviewEvents)
+              ..where(
+                ($ReviewEventsTable t) =>
+                    t.cardId.equals(cardId) & t.isPractice.equals(false),
+              )
+              ..orderBy(<OrderClauseGenerator<$ReviewEventsTable>>[
+                ($ReviewEventsTable t) => OrderingTerm.desc(t.reviewedAtUtc),
+                ($ReviewEventsTable t) => OrderingTerm.desc(t.id),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    return row == null ? null : reviewRecordFromRow(row);
+  }
+
+  @override
+  Future<ReviewRecord?> findLastReviewOverall() async {
+    final row =
+        await (_database.select(_database.reviewEvents)
+              ..where(($ReviewEventsTable t) => t.isPractice.equals(false))
+              ..orderBy(<OrderClauseGenerator<$ReviewEventsTable>>[
+                ($ReviewEventsTable t) => OrderingTerm.desc(t.reviewedAtUtc),
+                ($ReviewEventsTable t) => OrderingTerm.desc(t.id),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    return row == null ? null : reviewRecordFromRow(row);
+  }
+
+  @override
+  Future<List<PriorityRank>> listActivePriorities() async {
+    final rows = await _database
+        .customSelect(
+          'SELECT priority_key FROM element_schedules '
+          'WHERE lifecycle = ? ORDER BY priority_key',
+          variables: <Variable<Object>>[
+            Variable<int>(ElementLifecycle.active.index),
+          ],
+        )
+        .get();
+    return <PriorityRank>[
+      for (final row in rows) PriorityRank(row.read<String>('priority_key')),
+    ];
+  }
+
+  @override
+  Future<Map<String, CardState>> findCardStates(List<String> cardIds) async {
+    if (cardIds.isEmpty) return <String, CardState>{};
+    final result = <String, CardState>{};
+    for (final id in cardIds) {
+      final state = await findCardState(id);
+      if (state != null) result[id] = state;
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveSchedules(List<ElementSchedule> schedules) async {
+    if (schedules.isEmpty) return;
+    await _database.batch((Batch batch) {
+      for (final schedule in schedules) {
+        batch.insert(
+          _database.elementSchedules,
+          scheduleToCompanion(schedule),
+          onConflict: DoUpdate(
+            (_) => scheduleToCompanion(schedule),
+            target: <Column<Object>>[
+              _database.elementSchedules.elementId,
+              _database.elementSchedules.elementType,
+            ],
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  Future<void> saveCardStates(List<CardState> cards) async {
+    for (final card in cards) {
+      await saveCardState(card);
+    }
+  }
+
+  @override
+  Future<void> saveTopics(List<TopicState> topics) async {
+    for (final topic in topics) {
+      await saveTopic(topic);
+    }
+  }
+
+  @override
+  Future<List<ElementSchedule>> listAutomaticDeferrals({
+    required StudyDay from,
+  }) async {
+    final rows =
+        await (_database.select(_database.elementSchedules)
+              ..where(
+                ($ElementSchedulesTable t) =>
+                    t.lifecycle.equals(ElementLifecycle.active.index) &
+                    t.deferralKind.equals(DeferralKind.automatic.index) &
+                    t.deferredUntil.isBiggerOrEqualValue(from.epochDay),
+              )
+              ..orderBy(<OrderClauseGenerator<$ElementSchedulesTable>>[
+                ($ElementSchedulesTable t) => OrderingTerm.asc(t.priorityKey),
+              ]))
+            .get();
+    return <ElementSchedule>[for (final row in rows) scheduleFromRow(row)];
+  }
+
+  @override
+  Future<List<ElementSchedule>> listBacklog({required StudyDay day}) async {
+    final rows =
+        await (_database.select(_database.elementSchedules)
+              ..where(
+                ($ElementSchedulesTable t) =>
+                    t.lifecycle.equals(ElementLifecycle.active.index) &
+                    t.originalDueDay.isSmallerThanValue(day.epochDay),
+              )
+              ..orderBy(<OrderClauseGenerator<$ElementSchedulesTable>>[
+                ($ElementSchedulesTable t) => OrderingTerm.asc(t.priorityKey),
+                ($ElementSchedulesTable t) => OrderingTerm.asc(t.elementId),
+              ]))
+            .get();
+    return <ElementSchedule>[for (final row in rows) scheduleFromRow(row)];
+  }
+
+  @override
+  Future<List<ElementSchedule>> listSchedules({
+    required Set<ElementType> types,
+    Set<ElementLifecycle>? lifecycles,
+    int? limit,
+    int? offset,
+  }) async {
+    if (types.isEmpty) return <ElementSchedule>[];
+    final query = _database.select(_database.elementSchedules)
+      ..where(
+        ($ElementSchedulesTable t) =>
+            t.elementType.isIn(types.map((ElementType e) => e.index).toList()) &
+            (lifecycles == null
+                ? const CustomExpression<bool>('1')
+                : t.lifecycle.isIn(
+                    lifecycles.map((ElementLifecycle l) => l.index).toList(),
+                  )),
+      )
+      ..orderBy(<OrderClauseGenerator<$ElementSchedulesTable>>[
+        ($ElementSchedulesTable t) => OrderingTerm.asc(t.priorityKey),
+        ($ElementSchedulesTable t) => OrderingTerm.asc(t.elementId),
+      ]);
+    if (limit != null) query.limit(limit, offset: offset);
+    final rows = await query.get();
+    return <ElementSchedule>[for (final row in rows) scheduleFromRow(row)];
+  }
+
+  @override
+  Future<Map<ElementType, Map<ElementLifecycle, int>>>
+  countByLifecycle() async {
+    final rows = await _database
+        .customSelect(
+          'SELECT element_type, lifecycle, COUNT(*) AS n '
+          'FROM element_schedules GROUP BY element_type, lifecycle',
+        )
+        .get();
+    final result = <ElementType, Map<ElementLifecycle, int>>{};
+    for (final row in rows) {
+      final type = ElementType.values[row.read<int>('element_type')];
+      final lifecycle = ElementLifecycle.values[row.read<int>('lifecycle')];
+      (result[type] ??= <ElementLifecycle, int>{})[lifecycle] = row.read<int>(
+        'n',
+      );
+    }
+    return result;
+  }
+
+  @override
   Future<List<ActivityRecord>> recentActivity({int limit = 50}) async {
     final rows =
         await (_database.select(_database.activityEvents)
@@ -626,6 +937,129 @@ final class DriftSettingsRepository implements SettingsRepository {
   Future<Map<String, String>> readAll() async {
     final rows = await _database.select(_database.settings).get();
     return <String, String>{for (final row in rows) row.key: row.value};
+  }
+
+  @override
+  Future<void> writeAll(Map<String, String> values) async {
+    if (values.isEmpty) return;
+    await _database.batch((Batch batch) {
+      batch.insertAllOnConflictUpdate(_database.settings, <SettingsCompanion>[
+        for (final entry in values.entries)
+          SettingsCompanion.insert(key: entry.key, value: entry.value),
+      ]);
+    });
+  }
+
+  @override
+  Future<void> remove(String key) async {
+    await (_database.delete(
+      _database.settings,
+    )..where(($SettingsTable t) => t.key.equals(key))).go();
+  }
+}
+
+/// Full-text search over the materialized documents and their FTS5 index.
+///
+/// The index is external-content: it stores terms only and reads the columns
+/// back from `search_documents`. Triggers created with the schema keep the two
+/// in step inside whatever transaction wrote the content, so a search can
+/// never observe a half-applied import.
+final class DriftSearchRepository implements SearchRepository {
+  const DriftSearchRepository(this._database);
+
+  final AppDatabase _database;
+
+  @override
+  Future<void> upsertDocument(SearchDocument document) => _database
+      .into(_database.searchDocuments)
+      .insertOnConflictUpdate(
+        SearchDocumentsCompanion.insert(
+          elementId: document.ref.id,
+          elementType: document.ref.type.index,
+          title: document.title,
+          body: document.body,
+          sourceId: Value<String?>(document.sourceId),
+          updatedAtUtc: toEpochMs(document.updatedAtUtc),
+        ),
+      );
+
+  @override
+  Future<void> upsertDocuments(List<SearchDocument> documents) async {
+    for (final document in documents) {
+      await upsertDocument(document);
+    }
+  }
+
+  @override
+  Future<void> deleteDocument(ElementRef ref) async {
+    await (_database.delete(_database.searchDocuments)..where(
+          ($SearchDocumentsTable t) =>
+              t.elementId.equals(ref.id) &
+              t.elementType.equals(ref.type.index),
+        ))
+        .go();
+  }
+
+  @override
+  Future<List<SearchHit>> search(
+    String query, {
+    int limit = 50,
+    Set<ElementType>? types,
+  }) async {
+    if (query.trim().isEmpty) return <SearchHit>[];
+    final typeFilter = types == null || types.isEmpty
+        ? ''
+        : 'AND d.element_type IN '
+              '(${types.map((ElementType t) => t.index).join(', ')}) ';
+    try {
+      final rows = await _database
+          .customSelect(
+            'SELECT d.element_id, d.element_type, d.title, d.source_id, '
+            'bm25($kSearchIndexTable) AS rank, '
+            "snippet($kSearchIndexTable, 1, '[', ']', '…', 24) AS snippet "
+            'FROM $kSearchIndexTable '
+            'JOIN search_documents d ON d.rowid = $kSearchIndexTable.rowid '
+            'WHERE $kSearchIndexTable MATCH ? $typeFilter'
+            'ORDER BY rank LIMIT ?',
+            variables: <Variable<Object>>[
+              Variable<String>(query),
+              Variable<int>(limit),
+            ],
+          )
+          .get();
+      return <SearchHit>[
+        for (final row in rows)
+          SearchHit(
+            ref: ElementRef(
+              id: row.read<String>('element_id'),
+              type: ElementType.values[row.read<int>('element_type')],
+            ),
+            title: row.read<String>('title'),
+            snippet: row.read<String?>('snippet') ?? '',
+            rank: row.read<double?>('rank') ?? 0,
+            sourceId: row.read<String?>('source_id'),
+          ),
+      ];
+    } on Object {
+      // FTS5 raises on malformed MATCH expressions. The query is built from
+      // free text the user is still typing, so an unusable one means "no
+      // results yet", never a crash.
+      return <SearchHit>[];
+    }
+  }
+
+  @override
+  Future<void> rebuildIndex() => _database.rebuildSearchIndex();
+
+  @override
+  Future<bool> indexIsValid() => _database.searchIndexValid();
+
+  @override
+  Future<int> documentCount() async {
+    final row = await _database
+        .customSelect('SELECT COUNT(*) AS n FROM search_documents')
+        .getSingle();
+    return row.read<int>('n');
   }
 }
 

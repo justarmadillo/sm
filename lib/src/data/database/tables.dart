@@ -229,6 +229,14 @@ class ElementSchedules extends Table {
       .check(deferralKind.isBetweenValues(0, 2))
       .withDefault(const Constant(0))();
 
+  /// Source at the root of this element's provenance, denormalized.
+  ///
+  /// Walking up the tree on every queue build would be a needless join, and
+  /// the queue needs it on every element to stop one article's subtree from
+  /// taking over a session. Denormalizing also means a card keeps its
+  /// citation if its source is ever removed.
+  TextColumn get rootId => text().nullable()();
+
   TextColumn get zoneId => text()();
 
   @override
@@ -251,12 +259,50 @@ class TopicStates extends Table {
   IntColumn get elementType =>
       integer().check(elementType.isBetweenValues(0, 1))();
 
-  /// Which configured interval sequence paces this topic.
+  /// Which configured interval sequence paces this topic in profile mode.
   TextColumn get profileId => text()();
 
   /// Position in that sequence. The final value repeats.
   IntColumn get stepIndex =>
       integer().check(stepIndex.isBiggerOrEqualValue(0))();
+
+  /// Current interval in days, carried unrounded so that an A-factor only
+  /// slightly above 1.0 still accumulates instead of being rounded away on
+  /// every encounter.
+  RealColumn get intervalDays => real()
+      .check(intervalDays.isBiggerOrEqualValue(0))
+      .withDefault(const Constant(0))();
+
+  /// The A-factor last applied. Zero until the first encounter computes one.
+  RealColumn get aFactor =>
+      real().check(aFactor.isBiggerOrEqualValue(0)).withDefault(
+        const Constant(0),
+      )();
+
+  /// Smoothed extraction density, in extracts per thousand words read.
+  RealColumn get yieldEwma => real()
+      .check(yieldEwma.isBiggerOrEqualValue(0))
+      .withDefault(const Constant(0))();
+
+  /// Completed encounters so far.
+  IntColumn get encounters => integer()
+      .check(encounters.isBiggerOrEqualValue(0))
+      .withDefault(const Constant(0))();
+
+  /// Deferrals so far, manual and automatic together. Diagnostic only: a high
+  /// count means the element is being avoided and probably wants a lower
+  /// priority rather than another postponement.
+  IntColumn get postponeCount => integer()
+      .check(postponeCount.isBiggerOrEqualValue(0))
+      .withDefault(const Constant(0))();
+
+  /// Encounters since the last card was formulated from this element.
+  IntColumn get encountersSinceLastCard => integer()
+      .check(encountersSinceLastCard.isBiggerOrEqualValue(0))
+      .withDefault(const Constant(0))();
+
+  /// Day of the last completed encounter, in days since the Unix epoch.
+  IntColumn get lastEncounterDay => integer().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => <Column<Object>>{
@@ -299,6 +345,11 @@ class CardMemories extends Table {
   IntColumn get originalDueAtUtc => integer()();
 
   IntColumn get deferredUntilUtc => integer().nullable()();
+
+  /// Deferrals so far. Never a review, so it lives apart from [reps].
+  IntColumn get postponeCount => integer()
+      .check(postponeCount.isBiggerOrEqualValue(0))
+      .withDefault(const Constant(0))();
 
   /// Pinned scheduler build and parameter set, recorded so history stays
   /// interpretable after either changes.
@@ -355,6 +406,147 @@ class ReviewEvents extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+/// The universal repetition log: one row per scheduling event, any element.
+///
+/// The highest-value table in the collection, because it is the only one that
+/// cannot be reconstructed. Every other table holds *current* state, which a
+/// bug can overwrite; this one records the inputs and the outputs of each
+/// decision so the scheduler's constants can be retuned against what really
+/// happened. Append-only: nothing here is ever updated, and only undo deletes.
+///
+/// [ReviewEvents] is not made redundant by this table. That one is the
+/// lossless FSRS record — full pre- and post-state JSON, one row per
+/// operation id — and is what undo and a future optimizer replay from. This
+/// one is the flat, queryable, all-element-types view that makes "what
+/// happened to this element, in order" a single indexed query.
+@DataClassName('RevlogRow')
+class RevlogEntries extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get operationId => text()();
+
+  TextColumn get elementId => text()();
+
+  IntColumn get elementType =>
+      integer().check(elementType.isBetweenValues(0, 2))();
+
+  /// Stable `RevlogEventType` value. Never the enum index.
+  IntColumn get eventType =>
+      integer().check(eventType.isBetweenValues(1, 15))();
+
+  IntColumn get atUtc => integer()();
+
+  /// 1–4 on review and practice rows, null everywhere else. A postpone has no
+  /// grade because it was never a retention test.
+  IntColumn get grade =>
+      integer().nullable().check(grade.isBetweenValues(1, 4))();
+
+  /// Days that actually passed since the previous repetition.
+  RealColumn get elapsedDays => real().nullable()();
+
+  /// Days the interval had been set to. The gap between this and
+  /// [elapsedDays] is the signal an optimizer needs.
+  RealColumn get scheduledDays => real().nullable()();
+
+  IntColumn get durationMs => integer().nullable()();
+
+  IntColumn get postponeCount => integer().nullable()();
+
+  IntColumn get dueBeforeUtc => integer().nullable()();
+
+  IntColumn get dueAfterUtc => integer().nullable()();
+
+  RealColumn get intervalBefore => real().nullable()();
+
+  RealColumn get intervalAfter => real().nullable()();
+
+  RealColumn get aFactorBefore => real().nullable()();
+
+  RealColumn get aFactorAfter => real().nullable()();
+
+  RealColumn get stabilityBefore => real().nullable()();
+
+  RealColumn get stabilityAfter => real().nullable()();
+
+  RealColumn get difficultyBefore => real().nullable()();
+
+  RealColumn get difficultyAfter => real().nullable()();
+
+  IntColumn get stateBefore => integer().nullable()();
+
+  IntColumn get stateAfter => integer().nullable()();
+
+  IntColumn get repsBefore => integer().nullable()();
+
+  IntColumn get lapsesBefore => integer().nullable()();
+
+  TextColumn get priorityBefore => text().nullable()();
+
+  TextColumn get priorityAfter => text().nullable()();
+
+  /// Priority pressure at the moment of the event, stored rather than
+  /// recomputed: the collection's order moves, and what mattered to the
+  /// decision is where the element stood then.
+  RealColumn get pressureBefore => real().nullable()();
+
+  RealColumn get pressureAfter => real().nullable()();
+
+  RealColumn get readFractionBefore => real().nullable()();
+
+  RealColumn get readFractionAfter => real().nullable()();
+
+  IntColumn get lifecycleBefore => integer().nullable()();
+
+  IntColumn get lifecycleAfter => integer().nullable()();
+
+  TextColumn get schedulerVersion => text().nullable()();
+
+  TextColumn get parametersVersion => text().nullable()();
+
+  /// Free-form detail: the A-factor's terms, a delay formula's inputs, the
+  /// cap that triggered a deferral. Never element content.
+  TextColumn get metadataJson => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+
+  @override
+  List<String> get customConstraints => <String>[
+    // Only a graded event may carry a grade. Enforced in SQL as well as in
+    // Dart because a stray grade on a postpone row would poison any future
+    // optimizer's training set.
+    'CHECK (grade IS NULL OR event_type IN (1, 14))',
+  ];
+}
+
+/// Materialized search rows, kept in step with content inside the same
+/// transaction that writes the content.
+///
+/// The FTS5 index is external-content over this table and is rebuildable from
+/// it, so a corrupted index is a one-statement repair rather than data loss.
+@DataClassName('SearchDocumentRow')
+class SearchDocuments extends Table {
+  TextColumn get elementId => text()();
+
+  IntColumn get elementType =>
+      integer().check(elementType.isBetweenValues(0, 2))();
+
+  TextColumn get title => text()();
+
+  TextColumn get body => text()();
+
+  /// Root source, so results can be grouped by article without a join.
+  TextColumn get sourceId => text().nullable()();
+
+  IntColumn get updatedAtUtc => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{
+    elementId,
+    elementType,
+  };
 }
 
 /// Append-only activity log for diagnosis and audit.

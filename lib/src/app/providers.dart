@@ -3,31 +3,42 @@
 /// Riverpod is used as the wiring mechanism, not as a service locator: every
 /// dependency below this file is constructor-injected and private, so a
 /// handler or repository can be built in a test with no Riverpod at all. The
-/// container is where the concrete database and clock are chosen, and the only
-/// place that decision is made.
+/// container is where the concrete database, clock, and timezone rules are
+/// chosen, and the only place those decisions are made.
 library;
 
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../application/diagnostics/diagnostics_query.dart';
 import '../application/extraction/extraction_handlers.dart';
 import '../application/formulation/formulation_handlers.dart';
 import '../application/ports/repositories.dart';
 import '../application/ports/transaction_runner.dart';
+import '../application/priority/priority_handlers.dart';
+import '../application/priority/priority_query.dart';
+import '../application/queue/queue_handlers.dart';
 import '../application/queue/queue_query.dart';
 import '../application/reader/reader_handlers.dart';
 import '../application/review/review_handlers.dart';
+import '../application/scheduling/scheduling_context.dart';
+import '../application/search/search_query.dart';
+import '../application/settings/settings_store.dart';
 import '../core/clock.dart';
 import '../core/ids.dart';
 import '../core/tracing.dart';
 import '../data/database/app_database.dart';
 import '../data/files/backup_service.dart';
+import '../data/files/rotating_log_sink.dart';
 import '../data/platform/app_paths.dart';
+import '../data/platform/time_zones.dart';
 import '../data/repositories/drift_repositories.dart';
-import '../domain/scheduling/card_scheduler.dart';
-import '../domain/scheduling/interval_profile.dart';
 import '../domain/scheduling/study_day.dart';
+import '../domain/settings/app_settings.dart';
+
+/// Version reported in the diagnostic log alongside the schema version.
+const String kAppVersion = '1.0.0-m4';
 
 /// The open database. Overridden at bootstrap with the real connection.
 final Provider<AppDatabase> databaseProvider = Provider<AppDatabase>(
@@ -54,29 +65,78 @@ final Provider<IdGenerator> idGeneratorProvider = Provider<IdGenerator>(
   (Ref ref) => UuidGenerator.create(),
 );
 
-/// Structured diagnostics.
-final Provider<DiagnosticSink> diagnosticsProvider = Provider<DiagnosticSink>(
-  (Ref ref) => const NullDiagnosticSink(),
+/// The most recent diagnostic events, for the panel.
+final Provider<InMemoryDiagnosticSink> diagnosticBufferProvider =
+    Provider<InMemoryDiagnosticSink>((Ref ref) => InMemoryDiagnosticSink());
+
+/// Where the rotating diagnostic log is written.
+///
+/// Null by default so nothing in the provider graph depends on a resolved
+/// filesystem: `main` overrides it, and a test gets in-memory diagnostics
+/// without having to supply application paths it does not care about.
+final Provider<Directory?> logDirectoryProvider = Provider<Directory?>(
+  (Ref ref) => null,
 );
 
-/// The user's study-day rules.
+/// Structured diagnostics: an in-memory ring for the panel plus, once a log
+/// directory is supplied, the rotating file that survives a restart.
+final Provider<DiagnosticSink> diagnosticsProvider = Provider<DiagnosticSink>((
+  Ref ref,
+) {
+  final InMemoryDiagnosticSink buffer = ref.watch(diagnosticBufferProvider);
+  final Directory? directory = ref.watch(logDirectoryProvider);
+  final AppSettings settings = ref
+      .watch(settingsStoreProvider)
+      .currentOrDefaults;
+  if (directory == null || !settings.diagnostics.logEnabled) return buffer;
+  return FanOutDiagnosticSink(<DiagnosticSink>[
+    buffer,
+    RotatingLogSink(
+      directory: directory,
+      appVersion: kAppVersion,
+      maxBytes: settings.diagnostics.logMaxBytes,
+      retainedFiles: settings.diagnostics.logRetainedFiles,
+    ),
+  ]);
+});
+
+/// Turns a stored zone identifier into offset rules.
 ///
-/// Fixed to UTC in v1: a configurable home zone arrives with Settings, and the
-/// calendar takes its rules as an argument precisely so that change is local.
-final Provider<StudyDayCalendar> studyCalendarProvider =
-    Provider<StudyDayCalendar>(
-      (Ref ref) => const StudyDayCalendar(zone: FixedOffsetZone.utc),
+/// Injected as a function so the domain and application layers never import
+/// platform timezone code, and so a test can supply a fake DST transition.
+final Provider<TimeZoneResolver> timeZoneResolverProvider =
+    Provider<TimeZoneResolver>((Ref ref) => resolveTimeZone);
+
+/// Reads and caches the collection's configuration.
+final Provider<SettingsStore> settingsStoreProvider = Provider<SettingsStore>(
+  (Ref ref) => SettingsStore(ref.watch(settingsRepositoryProvider)),
+);
+
+/// Builds schedulers, the calendar, and the priority scale from live settings.
+final Provider<SchedulingContext> schedulingContextProvider =
+    Provider<SchedulingContext>(
+      (Ref ref) => SchedulingContext(
+        settings: ref.watch(settingsStoreProvider),
+        learning: ref.watch(learningRepositoryProvider),
+        clock: ref.watch(clockProvider),
+        resolveZone: ref.watch(timeZoneResolverProvider),
+      ),
     );
 
-/// The interval sequences that pace topics.
-final Provider<IntervalProfiles> intervalProfilesProvider =
-    Provider<IntervalProfiles>((Ref ref) => IntervalProfiles.defaults());
-
-/// Pinned FSRS-6 adapter. Settings and parameter identity live in the domain
-/// wrapper so a dependency upgrade cannot silently reinterpret review data.
-final Provider<CardScheduler> cardSchedulerProvider = Provider<CardScheduler>(
-  (Ref ref) => CardScheduler(calendar: ref.watch(studyCalendarProvider)),
-);
+/// The study-day rules currently in force.
+///
+/// A synchronous convenience for widgets. Anything that decides a schedule
+/// must go through [SchedulingContext] instead, which re-reads settings.
+final Provider<StudyDayCalendar> studyCalendarProvider =
+    Provider<StudyDayCalendar>((Ref ref) {
+      final AppSettings settings = ref
+          .watch(settingsStoreProvider)
+          .currentOrDefaults;
+      return StudyDayCalendar(
+        zone: ref.watch(timeZoneResolverProvider)(settings.studyDay.zoneId),
+        rollover: Duration(minutes: settings.studyDay.rolloverMinutes),
+      );
+    });
 
 /// Shared transaction scope.
 final Provider<TransactionRunner> transactionRunnerProvider =
@@ -90,7 +150,7 @@ final Provider<ContentRepository> contentRepositoryProvider =
       (Ref ref) => DriftContentRepository(ref.watch(databaseProvider)),
     );
 
-/// Learning aggregate.
+/// Learning aggregate: schedules, pacing, priority, activity, repetition log.
 final Provider<LearningRepository> learningRepositoryProvider =
     Provider<LearningRepository>(
       (Ref ref) => DriftLearningRepository(ref.watch(databaseProvider)),
@@ -100,6 +160,12 @@ final Provider<LearningRepository> learningRepositoryProvider =
 final Provider<SettingsRepository> settingsRepositoryProvider =
     Provider<SettingsRepository>(
       (Ref ref) => DriftSettingsRepository(ref.watch(databaseProvider)),
+    );
+
+/// Full-text search aggregate.
+final Provider<SearchRepository> searchRepositoryProvider =
+    Provider<SearchRepository>(
+      (Ref ref) => DriftSearchRepository(ref.watch(databaseProvider)),
     );
 
 /// Transfer aggregate.
@@ -138,12 +204,12 @@ final Provider<ReaderHandlers> readerHandlersProvider =
       (Ref ref) => ReaderHandlers(
         content: ref.watch(contentRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
+        search: ref.watch(searchRepositoryProvider),
         transfer: ref.watch(transferRepositoryProvider),
         transactions: ref.watch(transactionRunnerProvider),
+        context: ref.watch(schedulingContextProvider),
         clock: ref.watch(clockProvider),
         ids: ref.watch(idGeneratorProvider),
-        calendar: ref.watch(studyCalendarProvider),
-        profiles: ref.watch(intervalProfilesProvider),
         diagnostics: ref.watch(diagnosticsProvider),
       ),
     );
@@ -154,12 +220,12 @@ final Provider<ExtractionHandlers> extractionHandlersProvider =
       (Ref ref) => ExtractionHandlers(
         content: ref.watch(contentRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
+        search: ref.watch(searchRepositoryProvider),
         transfer: ref.watch(transferRepositoryProvider),
         transactions: ref.watch(transactionRunnerProvider),
+        context: ref.watch(schedulingContextProvider),
         clock: ref.watch(clockProvider),
         ids: ref.watch(idGeneratorProvider),
-        calendar: ref.watch(studyCalendarProvider),
-        profiles: ref.watch(intervalProfilesProvider),
         diagnostics: ref.watch(diagnosticsProvider),
       ),
     );
@@ -170,16 +236,17 @@ final Provider<FormulationHandlers> formulationHandlersProvider =
       (Ref ref) => FormulationHandlers(
         content: ref.watch(contentRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
+        search: ref.watch(searchRepositoryProvider),
         transfer: ref.watch(transferRepositoryProvider),
         transactions: ref.watch(transactionRunnerProvider),
+        context: ref.watch(schedulingContextProvider),
         clock: ref.watch(clockProvider),
         ids: ref.watch(idGeneratorProvider),
-        calendar: ref.watch(studyCalendarProvider),
         diagnostics: ref.watch(diagnosticsProvider),
       ),
     );
 
-/// Exactly-once FSRS review handler.
+/// Exactly-once FSRS review handler, plus undo, edit, and burying.
 final Provider<ReviewHandlers> reviewHandlersProvider =
     Provider<ReviewHandlers>(
       (Ref ref) => ReviewHandlers(
@@ -187,22 +254,79 @@ final Provider<ReviewHandlers> reviewHandlersProvider =
         learning: ref.watch(learningRepositoryProvider),
         transfer: ref.watch(transferRepositoryProvider),
         transactions: ref.watch(transactionRunnerProvider),
+        context: ref.watch(schedulingContextProvider),
         clock: ref.watch(clockProvider),
         ids: ref.watch(idGeneratorProvider),
-        scheduler: ref.watch(cardSchedulerProvider),
         diagnostics: ref.watch(diagnosticsProvider),
       ),
     );
 
-/// Today's deterministic 4-card/1-topic projection.
+/// Relative priority: slider, browser, and bulk spread.
+final Provider<PriorityHandlers> priorityHandlersProvider =
+    Provider<PriorityHandlers>(
+      (Ref ref) => PriorityHandlers(
+        learning: ref.watch(learningRepositoryProvider),
+        transfer: ref.watch(transferRepositoryProvider),
+        transactions: ref.watch(transactionRunnerProvider),
+        context: ref.watch(schedulingContextProvider),
+        clock: ref.watch(clockProvider),
+        ids: ref.watch(idGeneratorProvider),
+        diagnostics: ref.watch(diagnosticsProvider),
+      ),
+    );
+
+/// The overload valve, Study More, and Mercy.
+final Provider<QueueHandlers> queueHandlersProvider = Provider<QueueHandlers>(
+  (Ref ref) => QueueHandlers(
+    content: ref.watch(contentRepositoryProvider),
+    learning: ref.watch(learningRepositoryProvider),
+    transfer: ref.watch(transferRepositoryProvider),
+    transactions: ref.watch(transactionRunnerProvider),
+    context: ref.watch(schedulingContextProvider),
+    clock: ref.watch(clockProvider),
+    ids: ref.watch(idGeneratorProvider),
+    diagnostics: ref.watch(diagnosticsProvider),
+  ),
+);
+
+/// Today's admitted, mixed, and randomized queue.
 final Provider<QueueQuery> queueQueryProvider = Provider<QueueQuery>(
   (Ref ref) => QueueQuery(
     content: ref.watch(contentRepositoryProvider),
     learning: ref.watch(learningRepositoryProvider),
+    handlers: ref.watch(queueHandlersProvider),
+    context: ref.watch(schedulingContextProvider),
     clock: ref.watch(clockProvider),
-    calendar: ref.watch(studyCalendarProvider),
   ),
 );
+
+/// Priority projections for the slider and the browser.
+final Provider<PriorityQuery> priorityQueryProvider = Provider<PriorityQuery>(
+  (Ref ref) => PriorityQuery(
+    content: ref.watch(contentRepositoryProvider),
+    learning: ref.watch(learningRepositoryProvider),
+    context: ref.watch(schedulingContextProvider),
+  ),
+);
+
+/// Full-text search across the collection.
+final Provider<SearchQuery> searchQueryProvider = Provider<SearchQuery>(
+  (Ref ref) => SearchQuery(
+    search: ref.watch(searchRepositoryProvider),
+    learning: ref.watch(learningRepositoryProvider),
+  ),
+);
+
+/// The development diagnostics panel's read model.
+final Provider<DiagnosticsQuery> diagnosticsQueryProvider =
+    Provider<DiagnosticsQuery>(
+      (Ref ref) => DiagnosticsQuery(
+        learning: ref.watch(learningRepositoryProvider),
+        content: ref.watch(contentRepositoryProvider),
+        search: ref.watch(searchRepositoryProvider),
+        context: ref.watch(schedulingContextProvider),
+      ),
+    );
 
 /// Setting key holding the day of the last successful backup.
 const String kLastBackupDayKey = 'backup.last_day';
@@ -214,11 +338,11 @@ const String kLastBackupDayKey = 'backup.last_day';
 /// session is about to do. A failure is never fatal — the user came here to
 /// read, and a missing backup is reported rather than blocking the app.
 Future<File?> runDailyBackupIfDue(ProviderContainer container) async {
-  final settings = container.read(settingsRepositoryProvider);
-  final calendar = container.read(studyCalendarProvider);
-  final today = calendar
-      .dayOf(container.read(clockProvider).nowUtc())
-      .toString();
+  final SettingsRepository settings = container.read(
+    settingsRepositoryProvider,
+  );
+  final String today =
+      (await container.read(schedulingContextProvider).today()).toString();
 
   if (await settings.read(kLastBackupDayKey) == today) return null;
 
@@ -227,3 +351,11 @@ Future<File?> runDailyBackupIfDue(ProviderContainer container) async {
   await settings.write(kLastBackupDayKey, today);
   return result.valueOrNull;
 }
+
+/// Loads settings once before the first frame.
+///
+/// The synchronous providers above read [SettingsStore.currentOrDefaults], so
+/// the store has to be warm before any of them is watched, or the first frame
+/// would render against shipped defaults and then jump.
+Future<AppSettings> warmSettings(ProviderContainer container) =>
+    container.read(settingsStoreProvider).load();

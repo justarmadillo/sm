@@ -53,6 +53,22 @@ final class IntervalProfile {
 final class IntervalProfiles {
   const IntervalProfiles(this._byId);
 
+  /// Profiles as the user has edited them in Settings.
+  ///
+  /// A profile whose sequence was emptied falls back to the shipped default,
+  /// because a sequence with no intervals cannot schedule anything.
+  factory IntervalProfiles.fromDays(Map<String, List<int>> days) {
+    final Map<String, IntervalProfile> byId = <String, IntervalProfile>{};
+    for (final MapEntry<String, List<int>> entry in days.entries) {
+      if (entry.value.isEmpty) continue;
+      byId[entry.key] = IntervalProfile(
+        id: entry.key,
+        days: List<int>.unmodifiable(entry.value),
+      );
+    }
+    return byId.isEmpty ? IntervalProfiles.defaults() : IntervalProfiles(byId);
+  }
+
   /// The shipped defaults. All of them are editable in Settings.
   factory IntervalProfiles.defaults() =>
       IntervalProfiles(<String, IntervalProfile>{

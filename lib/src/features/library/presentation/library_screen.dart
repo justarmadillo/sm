@@ -10,13 +10,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme.dart';
 import '../../../app/toast.dart';
 import '../../../application/ports/repositories.dart';
+import '../../../application/priority/priority_query.dart';
 import '../../../domain/content/source.dart';
 import '../../../domain/scheduling/element.dart';
 import '../../../domain/scheduling/study_day.dart';
+import '../../diagnostics/presentation/diagnostics_screen.dart';
+import '../../priority/presentation/priority_browser_screen.dart';
+import '../../priority/presentation/priority_dialog.dart';
+import '../../priority/presentation/priority_view_model.dart';
 import '../../queue/presentation/queue_screen.dart';
 import '../../queue/presentation/queue_view_model.dart';
 import '../../reader/presentation/reader_screen.dart';
 import '../../reader/presentation/reader_view_model.dart';
+import '../../search/presentation/search_screen.dart';
+import '../../settings/presentation/settings_screen.dart';
 import 'import_sheet.dart';
 import 'library_view_model.dart';
 
@@ -40,34 +47,69 @@ class LibraryScreen extends ConsumerWidget {
       ref.read(libraryViewModelProvider.notifier).clearMessage();
     });
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Library'),
-        actions: <Widget>[
-          FilledButton.icon(
-            onPressed: () async {
-              ref.invalidate(queueViewModelProvider);
-              await openStudyQueue(context, ref);
-              await ref.read(libraryViewModelProvider.notifier).refresh();
-            },
-            icon: const Icon(Icons.play_arrow, size: 18),
-            label: Text(queueCount == 0 ? 'Study' : 'Study $queueCount'),
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        kSearchShortcut: () => openSearch(context, ref),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Library'),
+            actions: <Widget>[
+              FilledButton.icon(
+                onPressed: () async {
+                  ref.invalidate(queueViewModelProvider);
+                  await openStudyQueue(context, ref);
+                  await ref.read(libraryViewModelProvider.notifier).refresh();
+                },
+                icon: const Icon(Icons.play_arrow, size: 18),
+                label: Text(queueCount == 0 ? 'Study' : 'Study $queueCount'),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () => _openImport(context, ref),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Import markdown'),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: 'Search (Ctrl+F)',
+                onPressed: () => openSearch(context, ref),
+                icon: const Icon(Icons.search, size: 19),
+              ),
+              IconButton(
+                tooltip: 'Priority queue',
+                onPressed: () async {
+                  await openPriorityBrowser(context, ref);
+                  await ref.read(libraryViewModelProvider.notifier).refresh();
+                },
+                icon: const Icon(Icons.low_priority, size: 19),
+              ),
+              IconButton(
+                tooltip: 'Diagnostics',
+                onPressed: () => openDiagnostics(context, ref),
+                icon: const Icon(Icons.insights_outlined, size: 19),
+              ),
+              IconButton(
+                tooltip: 'Settings',
+                onPressed: () async {
+                  await openSettings(context, ref);
+                  await ref.read(libraryViewModelProvider.notifier).refresh();
+                },
+                icon: const Icon(Icons.settings_outlined, size: 19),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
-          const SizedBox(width: 8),
-          TextButton.icon(
-            onPressed: () => _openImport(context, ref),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Import markdown'),
+          body: state.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (Object error, StackTrace stack) => _ErrorBody(error: error),
+            data: (LibraryUiState data) => data.entries.isEmpty
+                ? _EmptyBody(onImport: () => _openImport(context, ref))
+                : _LibraryBody(state: data),
           ),
-          const SizedBox(width: 12),
-        ],
-      ),
-      body: state.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stack) => _ErrorBody(error: error),
-        data: (LibraryUiState data) => data.entries.isEmpty
-            ? _EmptyBody(onImport: () => _openImport(context, ref))
-            : _LibraryBody(state: data),
+        ),
       ),
     );
   }
@@ -234,6 +276,8 @@ class _SourceTile extends ConsumerWidget {
                 ),
               ),
               _LifecycleChip(lifecycle: schedule.lifecycle, isDue: isDue),
+              const SizedBox(width: 8),
+              _PriorityCell(entry: entry),
               _SourceMenu(entry: entry),
             ],
           ),
@@ -263,6 +307,45 @@ class _SourceTile extends ConsumerWidget {
       });
     }
     return parts.join(' · ');
+  }
+}
+
+/// The element's relative priority, and a way to change it.
+class _PriorityCell extends ConsumerWidget {
+  const _PriorityCell({required this.entry});
+
+  final LibraryEntry entry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<PriorityBrowserState> browser = ref.watch(
+      priorityBrowserProvider,
+    );
+    final ElementRef elementRef = ElementRef(
+      id: entry.source.id,
+      type: ElementType.source,
+    );
+    // Percentiles are derived from the live order, so they come from the same
+    // projection the browser uses rather than being stored on the row.
+    final double? percent = browser.valueOrNull?.entries
+        .where((PriorityEntry e) => e.ref == elementRef)
+        .map((PriorityEntry e) => e.percent)
+        .firstOrNull;
+
+    return PriorityBadge(
+      percent: percent ?? 50,
+      onTap: () async {
+        final bool changed = await showPriorityDialog(
+          context,
+          ref,
+          elementRef: elementRef,
+        );
+        if (changed) {
+          ref.invalidate(priorityBrowserProvider);
+          await ref.read(libraryViewModelProvider.notifier).refresh();
+        }
+      },
+    );
   }
 }
 

@@ -13,7 +13,10 @@ import 'tables.dart';
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 4;
+const int kSchemaVersion = 5;
+
+/// Name of the external-content FTS5 index over [SearchDocuments].
+const String kSearchIndexTable = 'search_index';
 
 @DriftDatabase(
   tables: <Type>[
@@ -25,6 +28,8 @@ const int kSchemaVersion = 4;
     TopicStates,
     CardMemories,
     ReviewEvents,
+    RevlogEntries,
+    SearchDocuments,
     ActivityEvents,
     Folders,
     Settings,
@@ -42,6 +47,7 @@ class AppDatabase extends _$AppDatabase {
     onCreate: (Migrator m) async {
       await m.createAll();
       await _createIndexes(m);
+      await _createSearchIndex();
     },
     onUpgrade: (Migrator m, int from, int to) async {
       // Every historical path must be exercised by a migration test
@@ -67,7 +73,10 @@ class AppDatabase extends _$AppDatabase {
         await m.alterTable(
           TableMigration(
             cardMemories,
-            newColumns: [cardMemories.step],
+            // postpone_count arrives with M4 but has to be named here too:
+            // rebuilding the table copies every column of the *current*
+            // definition, and a v2 row has no value to copy for it.
+            newColumns: [cardMemories.step, cardMemories.postponeCount],
             columnTransformer: {
               cardMemories.state: const CustomExpression<int>(
                 'CASE WHEN state = 0 THEN 1 ELSE state END',
@@ -99,6 +108,74 @@ class AppDatabase extends _$AppDatabase {
         );
         await _createIndexes(m);
       }
+      if (from < 5) {
+        // M4: the A-factor topic model, the universal repetition log, and
+        // full-text search.
+        await m.createTable(revlogEntries);
+        await m.createTable(searchDocuments);
+        await _addColumnIfMissing(m, elementSchedules, elementSchedules.rootId);
+        for (final GeneratedColumn<Object> column
+            in <GeneratedColumn<Object>>[
+              topicStates.intervalDays,
+              topicStates.aFactor,
+              topicStates.yieldEwma,
+              topicStates.encounters,
+              topicStates.postponeCount,
+              topicStates.encountersSinceLastCard,
+              topicStates.lastEncounterDay,
+            ]) {
+          await _addColumnIfMissing(m, topicStates, column);
+        }
+        await _addColumnIfMissing(m, cardMemories, cardMemories.postponeCount);
+
+        // Existing topics were paced by an interval sequence and carry only a
+        // step index. Seed the A-factor model from where each one actually
+        // stands, so switching pacing mode continues a half-read article
+        // instead of restarting it. The sequences below are the shipped
+        // defaults; a topic on an edited profile lands on the closest of them,
+        // which is a one-time approximation of an interval, not of progress.
+        await customStatement(
+          'UPDATE topic_states SET interval_days = CASE profile_id '
+          "WHEN 'focused' THEN "
+          'CASE MIN(step_index, 8) WHEN 0 THEN 1 WHEN 1 THEN 2 WHEN 2 THEN 3 '
+          'WHEN 3 THEN 5 WHEN 4 THEN 7 WHEN 5 THEN 10 WHEN 6 THEN 14 '
+          'WHEN 7 THEN 21 ELSE 30 END '
+          "WHEN 'slow' THEN "
+          'CASE MIN(step_index, 7) WHEN 0 THEN 7 WHEN 1 THEN 14 WHEN 2 THEN 30 '
+          'WHEN 3 THEN 60 WHEN 4 THEN 120 WHEN 5 THEN 240 WHEN 6 THEN 365 '
+          'ELSE 730 END '
+          "WHEN 'extract' THEN "
+          'CASE MIN(step_index, 6) WHEN 0 THEN 1 WHEN 1 THEN 3 WHEN 2 THEN 7 '
+          'WHEN 3 THEN 14 WHEN 4 THEN 30 WHEN 5 THEN 60 ELSE 120 END '
+          'ELSE '
+          'CASE MIN(step_index, 8) WHEN 0 THEN 1 WHEN 1 THEN 3 WHEN 2 THEN 7 '
+          'WHEN 3 THEN 14 WHEN 4 THEN 30 WHEN 5 THEN 60 WHEN 6 THEN 120 '
+          'WHEN 7 THEN 240 ELSE 365 END END, '
+          'a_factor = 2.0, encounters = step_index',
+        );
+
+        // Every schedule learns its root source. An extract already stores it
+        // denormalized; a card reaches it through whichever parent it has.
+        await customStatement(
+          'UPDATE element_schedules SET root_id = element_id '
+          'WHERE element_type = 0',
+        );
+        await customStatement(
+          'UPDATE element_schedules SET root_id = ('
+          'SELECT e.source_id FROM extracts e WHERE e.id = element_id) '
+          'WHERE element_type = 1',
+        );
+        await customStatement(
+          'UPDATE element_schedules SET root_id = ('
+          'SELECT COALESCE(c.source_id, ('
+          'SELECT e.source_id FROM extracts e WHERE e.id = c.extract_id)) '
+          'FROM cards c WHERE c.id = element_id) '
+          'WHERE element_type = 2',
+        );
+
+        await _createIndexes(m);
+        await _createSearchIndex();
+      }
     },
     beforeOpen: (OpeningDetails details) async {
       // SQLite disables foreign keys per connection by default, so this
@@ -109,6 +186,25 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('PRAGMA busy_timeout = 5000');
     },
   );
+
+  /// Adds [column] only when the table does not already have it.
+  ///
+  /// SQLite has no `ADD COLUMN IF NOT EXISTS`, and a migration that cannot be
+  /// re-run is a migration that leaves the collection unopenable if it is
+  /// interrupted part-way. Checking first makes each step idempotent.
+  Future<void> _addColumnIfMissing(
+    Migrator m,
+    TableInfo<Table, Object?> table,
+    GeneratedColumn<Object> column,
+  ) async {
+    final rows = await customSelect(
+      'PRAGMA table_info(${table.actualTableName})',
+    ).get();
+    final bool present = rows.any(
+      (QueryRow row) => row.read<String>('name') == column.name,
+    );
+    if (!present) await m.addColumn(table, column);
+  }
 
   Future<void> _createIndexes(Migrator m) async {
     await customStatement(
@@ -157,6 +253,92 @@ class AppDatabase extends _$AppDatabase {
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_activity_at ON activity_events (at_utc)',
     );
+    // "What happened to this element, in order" — the log's main query.
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_revlog_element '
+      'ON revlog_entries (element_id, element_type, at_utc)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_revlog_at ON revlog_entries (at_utc)',
+    );
+    // The optimizer's future training query: graded events only.
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_revlog_type '
+      'ON revlog_entries (event_type, at_utc)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_revlog_operation '
+      'ON revlog_entries (operation_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_schedules_root '
+      'ON element_schedules (root_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_search_documents_source '
+      'ON search_documents (source_id)',
+    );
+  }
+
+  /// Creates the FTS5 index and the triggers that keep it in step.
+  ///
+  /// External-content FTS5: the index stores no copy of the text, only the
+  /// terms, and reads the columns back from `search_documents` by rowid. That
+  /// makes the index disposable — [rebuildSearchIndex] restores it from the
+  /// materialized rows — while the triggers keep it correct inside whatever
+  /// transaction wrote the content, so a search can never see a half-applied
+  /// import.
+  Future<void> _createSearchIndex() async {
+    await customStatement(
+      'CREATE VIRTUAL TABLE IF NOT EXISTS $kSearchIndexTable USING fts5('
+      'title, body, '
+      "content='search_documents', content_rowid='rowid', "
+      "tokenize='unicode61 remove_diacritics 2')",
+    );
+    await customStatement(
+      'CREATE TRIGGER IF NOT EXISTS search_documents_ai '
+      'AFTER INSERT ON search_documents BEGIN '
+      'INSERT INTO $kSearchIndexTable(rowid, title, body) '
+      'VALUES (new.rowid, new.title, new.body); END',
+    );
+    await customStatement(
+      'CREATE TRIGGER IF NOT EXISTS search_documents_ad '
+      'AFTER DELETE ON search_documents BEGIN '
+      'INSERT INTO $kSearchIndexTable($kSearchIndexTable, rowid, title, body) '
+      "VALUES ('delete', old.rowid, old.title, old.body); END",
+    );
+    await customStatement(
+      'CREATE TRIGGER IF NOT EXISTS search_documents_au '
+      'AFTER UPDATE ON search_documents BEGIN '
+      'INSERT INTO $kSearchIndexTable($kSearchIndexTable, rowid, title, body) '
+      "VALUES ('delete', old.rowid, old.title, old.body); "
+      'INSERT INTO $kSearchIndexTable(rowid, title, body) '
+      'VALUES (new.rowid, new.title, new.body); END',
+    );
+  }
+
+  /// Rebuilds the full-text index from the materialized documents.
+  ///
+  /// Safe to run at any time: the index is derived, so this is a repair
+  /// rather than a migration.
+  Future<void> rebuildSearchIndex() async {
+    await customStatement(
+      "INSERT INTO $kSearchIndexTable($kSearchIndexTable) VALUES ('rebuild')",
+    );
+  }
+
+  /// Whether the full-text index reports itself consistent with its content
+  /// table. Checked by the diagnostics panel alongside the integrity check.
+  Future<bool> searchIndexValid() async {
+    try {
+      await customStatement(
+        'INSERT INTO $kSearchIndexTable($kSearchIndexTable) '
+        "VALUES ('integrity-check')",
+      );
+      return true;
+    } on Object {
+      return false;
+    }
   }
 
   /// Runs `PRAGMA integrity_check` and returns its result rows.

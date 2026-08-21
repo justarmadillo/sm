@@ -22,11 +22,15 @@ import '../../domain/content/document.dart';
 import '../../domain/content/extract.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/interval_profile.dart';
+import '../../domain/scheduling/priority_rank.dart';
+import '../../domain/scheduling/revlog.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../app_command.dart';
 import '../ports/repositories.dart';
 import '../ports/transaction_runner.dart';
+import '../scheduling/scheduling_context.dart';
+import '../scheduling/scheduling_journal.dart';
 import 'extraction_commands.dart';
 
 /// Activity kind recorded when an extract is created.
@@ -40,35 +44,37 @@ final class ExtractionHandlers {
   ExtractionHandlers({
     required ContentRepository content,
     required LearningRepository learning,
+    required SearchRepository search,
     required TransferRepository transfer,
     required TransactionRunner transactions,
+    required SchedulingContext context,
     required Clock clock,
     required IdGenerator ids,
-    required StudyDayCalendar calendar,
-    required IntervalProfiles profiles,
     DiagnosticSink diagnostics = const NullDiagnosticSink(),
   }) : _content = content,
        _learning = learning,
+       _search = search,
        _transfer = transfer,
        _transactions = transactions,
+       _context = context,
        _clock = clock,
        _ids = ids,
-       _calendar = calendar,
-       _scheduler = TopicScheduler(profiles),
+       _journal = SchedulingJournal(learning: learning, ids: ids),
        _diagnostics = diagnostics;
 
   final ContentRepository _content;
   final LearningRepository _learning;
+  final SearchRepository _search;
   final TransferRepository _transfer;
   final TransactionRunner _transactions;
+  final SchedulingContext _context;
   final Clock _clock;
   final IdGenerator _ids;
-  final StudyDayCalendar _calendar;
-  final TopicScheduler _scheduler;
+  final SchedulingJournal _journal;
   final DiagnosticSink _diagnostics;
 
   /// The study day the clock currently falls in.
-  StudyDay get today => _calendar.dayOf(_clock.nowUtc());
+  Future<StudyDay> today() => _context.today();
 
   /// Creates an extract from a verified selection, in one transaction.
   Future<Result<Extract>> createExtract(CreateExtract command) => _run<Extract>(
@@ -146,24 +152,62 @@ final class ExtractionHandlers {
       );
 
       final ref = ElementRef(id: extract.id, type: ElementType.extract);
-      final topic = _scheduler.createFor(
+      final StudyDay day = await today();
+      final TopicScheduler scheduler = await _context.topicScheduler();
+      final PriorityScale scale = await _context.priorityScale();
+      // Exact inheritance, once, at creation. A slight decay would be a blunt
+      // instrument that quietly demotes material the user deliberately marked
+      // critical; the queue caps one subtree's share of a session instead.
+      final double pressure = scale
+          .including(parentSchedule.priority)
+          .pressureOf(parentSchedule.priority);
+      final topic = scheduler.createFor(
         ref: ref,
         profileId: kExtractProfileId,
-        today: today,
+        today: day,
+        pressure: pressure,
         buildSchedule: (StudyDay due) => ElementSchedule(
           ref: ref,
-          // Inherited once, at creation. Later changes to the parent's
-          // priority deliberately do not cascade: the user ranked the
-          // parent, not everything ever taken from it.
+          // Later changes to the parent's priority deliberately do not
+          // cascade: the user ranked the parent, not everything ever taken
+          // from it. Spread is the explicit way to push a change down.
           priority: parentSchedule.priority,
           lifecycle: ElementLifecycle.active,
           dueDay: due,
           originalDueDay: due,
+          rootId: parentSchedule.rootId ?? parent.rootSourceId,
         ),
       );
 
       await _content.insertExtract(extract);
       await _learning.insertTopic(topic);
+      await _search.upsertDocument(
+        SearchDocument(
+          ref: ref,
+          title: (await _content.findSource(parent.rootSourceId))?.title ??
+              'Extract',
+          body: markdown,
+          sourceId: parent.rootSourceId,
+          updatedAtUtc: extract.createdAtUtc,
+        ),
+      );
+      await _journal.append(
+        operationId: command.operationId.value,
+        ref: ref,
+        eventType: RevlogEventType.created,
+        atUtc: command.timestampUtc,
+        after: _journal.topicSnapshot(
+          topic,
+          calendar: await _context.calendar(),
+          pressure: pressure,
+        ),
+        scheduledDays: topic.intervalDays,
+        metadata: <String, Object?>{
+          'parent': command.parentId,
+          'first_interval_days': topic.intervalDays,
+          'pressure': pressure,
+        },
+      );
       await _log(
         command,
         kExtractCreatedKind,
@@ -217,7 +261,11 @@ final class ExtractionHandlers {
     }
 
     await _learning.deleteSchedule(ref);
+    await _search.deleteDocument(ref);
     await _content.deleteExtract(extract.id);
+    // Undo means "as though it had never been made", so the creation row goes
+    // too. This and undo-grade are the only writers allowed to shrink the log.
+    await _learning.deleteRevlogByOperationId(recent.single.operationId);
     await _log(command, kExtractUndoneKind, ref: ref);
     return okUnit;
   });
@@ -254,6 +302,23 @@ final class ExtractionHandlers {
 
     final updated = extract.withMarkdown(markdown, _clock.nowUtc());
     await _content.updateExtract(updated);
+    final ElementRef extractRef = ElementRef(
+      id: extract.id,
+      type: ElementType.extract,
+    );
+    final ElementSchedule? schedule = await _learning.findSchedule(extractRef);
+    final String rootTitle =
+        (await _content.findSource(extract.provenance.sourceId))?.title ??
+        'Extract';
+    await _search.upsertDocument(
+      SearchDocument(
+        ref: extractRef,
+        title: rootTitle,
+        body: markdown,
+        sourceId: schedule?.rootId ?? extract.provenance.sourceId,
+        updatedAtUtc: command.timestampUtc,
+      ),
+    );
     await _log(
       command,
       'extract.edited',

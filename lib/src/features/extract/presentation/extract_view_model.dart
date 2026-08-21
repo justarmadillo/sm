@@ -15,6 +15,7 @@ import '../../../domain/content/document.dart';
 import '../../../domain/content/extract.dart';
 import '../../../domain/content/reader_anchor.dart';
 import '../../../domain/scheduling/element.dart';
+import '../../../domain/scheduling/study_day.dart';
 import '../../../domain/scheduling/topic_scheduler.dart';
 import '../../library/presentation/library_view_model.dart';
 
@@ -275,18 +276,22 @@ final class ExtractViewModel
     );
   }
 
-  Future<void> later({int days = 1}) async {
+  /// Later: moves eligibility without advancing anything.
+  ///
+  /// With no explicit day the handler scales the delay by the extract's own
+  /// interval, because a fixed one day just returns it tomorrow into an
+  /// equally full queue.
+  Future<void> later({int? days}) async {
     final current = state.valueOrNull;
     if (current == null || !current.canMutate) return;
+    final StudyDay? until = days == null
+        ? null
+        : (await ref.read(readerHandlersProvider).today()).addDays(days);
     await _command<TopicState>(
       (OperationId operation) => ref
           .read(readerHandlersProvider)
           .postpone(
-            PostponeElement(
-              operation,
-              ref: current.topic.ref,
-              until: ref.read(readerHandlersProvider).today.addDays(days),
-            ),
+            PostponeElement(operation, ref: current.topic.ref, until: until),
           ),
       apply: (ExtractUiState latest, TopicState topic) =>
           latest.copyWith(topic: topic, isDone: true),

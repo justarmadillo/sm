@@ -11,6 +11,7 @@ import 'dart:math' as math;
 import 'package:fsrs/fsrs.dart' as fsrs;
 import 'package:meta/meta.dart';
 
+import '../settings/app_settings.dart';
 import 'element.dart';
 import 'study_day.dart';
 
@@ -79,9 +80,32 @@ final class CardSchedulerSettings {
     this.relearningSteps = const <Duration>[Duration(minutes: 10)],
     this.maximumIntervalDays = 36500,
     this.enableFuzzing = true,
+    this.leechLapses = 8,
     this.schedulerVersion = kCardSchedulerVersion,
     this.parametersVersion = kCardParametersVersion,
   });
+
+  /// Builds the FSRS settings the user configured.
+  ///
+  /// The parameter vector itself is not user-editable in v1 — it stays pinned
+  /// and versioned, because a hand-edited weight would silently reinterpret
+  /// every review already in the log. Retention, steps, and the interval cap
+  /// are safe to change at any time and are therefore exposed.
+  factory CardSchedulerSettings.fromUserSettings(CardSettings settings) =>
+      CardSchedulerSettings(
+        desiredRetention: settings.desiredRetention,
+        learningSteps: <Duration>[
+          for (final int minutes in settings.learningStepMinutes)
+            Duration(minutes: minutes),
+        ],
+        relearningSteps: <Duration>[
+          for (final int minutes in settings.relearningStepMinutes)
+            Duration(minutes: minutes),
+        ],
+        maximumIntervalDays: settings.maximumIntervalDays,
+        enableFuzzing: settings.enableFuzzing,
+        leechLapses: settings.leechLapses,
+      );
 
   final List<double> parameters;
   final double desiredRetention;
@@ -89,6 +113,10 @@ final class CardSchedulerSettings {
   final List<Duration> relearningSteps;
   final int maximumIntervalDays;
   final bool enableFuzzing;
+
+  /// Lapses after which a card is flagged for reformulation.
+  final int leechLapses;
+
   final String schedulerVersion;
   final String parametersVersion;
 }
@@ -114,6 +142,7 @@ final class CardMemory {
     required DateTime? deferredUntilUtc,
     required String schedulerVersion,
     required String parametersVersion,
+    int postponeCount = 0,
   }) {
     if (cardId.isEmpty) {
       throw ArgumentError.value(cardId, 'cardId', 'must not be empty');
@@ -163,6 +192,7 @@ final class CardMemory {
       deferredUntilUtc: deferredUntilUtc,
       schedulerVersion: schedulerVersion,
       parametersVersion: parametersVersion,
+      postponeCount: postponeCount,
     );
   }
 
@@ -180,6 +210,7 @@ final class CardMemory {
     required this.deferredUntilUtc,
     required this.schedulerVersion,
     required this.parametersVersion,
+    required this.postponeCount,
   });
 
   /// Memory for a newly formulated card, eligible immediately.
@@ -219,6 +250,7 @@ final class CardMemory {
     deferredUntilUtc: _instantOrNull(map['deferred_until_utc_ms']),
     schedulerVersion: _required<String>(map, 'scheduler_version'),
     parametersVersion: _required<String>(map, 'parameters_version'),
+    postponeCount: (map['postpone_count'] as int?) ?? 0,
   );
 
   /// Restores the exact state emitted by [toJson].
@@ -247,11 +279,19 @@ final class CardMemory {
   final String schedulerVersion;
   final String parametersVersion;
 
+  /// Deferrals so far. Never a review, so it is counted apart from [reps].
+  final int postponeCount;
+
   /// A card with no recorded reviews yet.
   bool get isNew => reps == 0;
 
-  /// Learning and relearning steps bypass future admission limits.
-  bool get isIntradayStep => state != CardLearningState.review;
+  /// Whether the card is part-way through a learning or relearning run.
+  ///
+  /// Requires a review to have happened: FSRS represents a brand-new card as
+  /// Learning too, but nothing has been started on it, so it is an ordinary
+  /// new card that the daily new-card limit applies to. Only a run the user
+  /// has actually begun bypasses admission limits and sibling burying.
+  bool get isIntradayStep => !isNew && state != CardLearningState.review;
 
   /// The instant at which the card is actually eligible.
   DateTime get effectiveDueAtUtc {
@@ -264,6 +304,33 @@ final class CardMemory {
   bool isDueAt(DateTime instantUtc) {
     _requireUtc(instantUtc, 'instantUtc');
     return !effectiveDueAtUtc.isAfter(instantUtc);
+  }
+
+  /// The same memory pushed to [untilUtc], or with the push taken back.
+  ///
+  /// Deliberately the *only* mutation a postponement is allowed to make.
+  /// Stability, difficulty, reps, and above all [lastReviewAtUtc] are
+  /// untouched: the next real review computes its elapsed time from the true
+  /// last review, and overwriting that would destroy the retention signal the
+  /// whole schedule rests on.
+  CardMemory deferredTo(DateTime? untilUtc) {
+    if (untilUtc != null) _requireUtc(untilUtc, 'untilUtc');
+    return CardMemory(
+      cardId: cardId,
+      state: state,
+      step: step,
+      stability: stability,
+      difficulty: difficulty,
+      reps: reps,
+      lapses: lapses,
+      lastReviewAtUtc: lastReviewAtUtc,
+      dueAtUtc: dueAtUtc,
+      originalDueAtUtc: originalDueAtUtc,
+      deferredUntilUtc: untilUtc,
+      schedulerVersion: schedulerVersion,
+      parametersVersion: parametersVersion,
+      postponeCount: untilUtc == null ? postponeCount : postponeCount + 1,
+    );
   }
 
   /// Lossless, JSON-compatible state used in review snapshots.
@@ -281,6 +348,7 @@ final class CardMemory {
     'deferred_until_utc_ms': deferredUntilUtc?.millisecondsSinceEpoch,
     'scheduler_version': schedulerVersion,
     'parameters_version': parametersVersion,
+    'postpone_count': postponeCount,
   };
 
   /// Canonical snapshot persisted with every review event.
@@ -301,7 +369,8 @@ final class CardMemory {
       other.originalDueAtUtc == originalDueAtUtc &&
       other.deferredUntilUtc == deferredUntilUtc &&
       other.schedulerVersion == schedulerVersion &&
-      other.parametersVersion == parametersVersion;
+      other.parametersVersion == parametersVersion &&
+      other.postponeCount == postponeCount;
 
   @override
   int get hashCode => Object.hash(
@@ -318,6 +387,7 @@ final class CardMemory {
     deferredUntilUtc,
     schedulerVersion,
     parametersVersion,
+    postponeCount,
   );
 }
 
@@ -343,6 +413,37 @@ final class CardState {
   final CardMemory memory;
 
   ElementRef get ref => schedule.ref;
+
+  CardState copyWith({ElementSchedule? schedule, CardMemory? memory}) =>
+      CardState(
+        schedule: schedule ?? this.schedule,
+        memory: memory ?? this.memory,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is CardState &&
+      other.schedule.ref == schedule.ref &&
+      other.schedule.lifecycle == schedule.lifecycle &&
+      other.schedule.dueDay == schedule.dueDay &&
+      other.schedule.deferredUntil == schedule.deferredUntil &&
+      other.schedule.priority == schedule.priority &&
+      other.memory == memory;
+
+  @override
+  int get hashCode => Object.hash(
+    schedule.ref,
+    schedule.lifecycle,
+    schedule.dueDay,
+    schedule.deferredUntil,
+    schedule.priority,
+    memory,
+  );
+
+  @override
+  String toString() =>
+      'CardState(${schedule.ref} ${memory.state.name} '
+      'due=${memory.effectiveDueAtUtc})';
 }
 
 /// Lossless append-only description of one review.
@@ -489,6 +590,7 @@ final class CardScheduler {
       deferredUntilUtc: null,
       schedulerVersion: settings.schedulerVersion,
       parametersVersion: settings.parametersVersion,
+      postponeCount: state.memory.postponeCount,
     );
     final StudyDay dueDay = calendar.dayOf(memory.dueAtUtc);
     final ElementSchedule schedule = state.schedule.copyWith(
@@ -509,6 +611,73 @@ final class CardScheduler {
       parametersVersion: settings.parametersVersion,
     );
     return CardReviewTransition(state: next, record: record);
+  }
+
+  /// Pushes a card's eligibility to [untilUtc] without reviewing it.
+  ///
+  /// Used by a manual Later, by the daily overload valve, and by sibling
+  /// burying. All three write only [CardMemory.deferredUntilUtc] and the
+  /// common schedule's deferral fields; the algorithmic due instant and every
+  /// memory value survive intact, so overdue ranking and audit stay honest
+  /// and no fake review is ever created.
+  CardState postpone(
+    CardState state, {
+    required DateTime untilUtc,
+    DeferralKind kind = DeferralKind.manual,
+  }) {
+    _requireUtc(untilUtc, 'untilUtc');
+    final StudyDay untilDay = calendar.dayOf(untilUtc);
+    return CardState(
+      schedule: state.schedule.copyWith(
+        deferredUntil: untilDay,
+        deferralKind: kind,
+      ),
+      memory: state.memory.deferredTo(untilUtc),
+    );
+  }
+
+  /// The same card with an automatic deferral taken back.
+  ///
+  /// Raising a daily limit or choosing Study More recalls what the app
+  /// deferred; what the user deferred stays deferred, because that was a
+  /// decision rather than a capacity problem.
+  CardState recallAutomaticDeferral(CardState state) {
+    if (state.schedule.deferralKind != DeferralKind.automatic) return state;
+    return CardState(
+      schedule: state.schedule.withAutomaticDeferralRecalled(),
+      memory: state.memory.deferredTo(null),
+    );
+  }
+
+  /// Whether [memory] has failed often enough to be worth reformulating.
+  ///
+  /// Flagged, never auto-suspended. Most repeated failures are not hard
+  /// facts, they are badly written cards, and suspending one hides the
+  /// evidence instead of fixing the cause. The provenance tree already knows
+  /// where the passage came from — that is the affordance worth offering.
+  bool isLeech(CardMemory memory) =>
+      settings.leechLapses > 0 && memory.lapses >= settings.leechLapses;
+
+  /// Restores the exact state a review was applied on top of.
+  ///
+  /// Undo is a state restore, not an inverse calculation: FSRS is not
+  /// invertible, so the only trustworthy way back is the pre-review snapshot
+  /// the review event carries. The caller removes the event in the same
+  /// transaction.
+  CardState undo(CardState current, ReviewRecord record) {
+    if (record.cardId != current.ref.id) {
+      throw ArgumentError('that review belongs to a different card');
+    }
+    final CardMemory restored = record.preState;
+    final StudyDay dueDay = calendar.dayOf(restored.dueAtUtc);
+    return CardState(
+      schedule: current.schedule.copyWith(
+        dueDay: dueDay,
+        originalDueDay: calendar.dayOf(restored.originalDueAtUtc),
+        clearDeferral: true,
+      ),
+      memory: restored,
+    );
   }
 
   /// Predicted probability that [memory] is currently recallable.

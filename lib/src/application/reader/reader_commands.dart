@@ -10,7 +10,6 @@ library;
 import '../../domain/content/reader_anchor.dart';
 import '../../domain/content/source.dart';
 import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../app_command.dart';
 
@@ -22,6 +21,7 @@ final class ImportSource extends AppCommand {
     required this.markdown,
     this.pace = ReadingPace.normal,
     this.folderId,
+    this.priorityPercent,
     super.timestampUtc,
   });
 
@@ -29,6 +29,12 @@ final class ImportSource extends AppCommand {
   final String markdown;
   final ReadingPace pace;
   final String? folderId;
+
+  /// Where to place the article in the collection, `0` being most important.
+  ///
+  /// Null starts it in the middle. Set at import because an article's
+  /// priority is also what decides how soon it first comes back.
+  final double? priorityPercent;
 }
 
 /// Place the authoritative resume marker.
@@ -80,6 +86,8 @@ final class CompleteTopicEncounter extends AppCommand {
     super.operationId, {
     required this.ref,
     this.foregroundMs,
+    this.wordsRead = 0,
+    this.extractsCreated = 0,
     super.timestampUtc,
   });
 
@@ -88,6 +96,15 @@ final class CompleteTopicEncounter extends AppCommand {
   /// Foreground time spent this encounter, logged from day one so time-based
   /// features remain possible even though v1 schedules by count.
   final int? foregroundMs;
+
+  /// Words rendered between the session's opening position and its end.
+  ///
+  /// An input to the optional yield rule, which lets a productive source keep
+  /// coming back and a barren one recede.
+  final int wordsRead;
+
+  /// Extracts taken during this session, the other half of that ratio.
+  final int extractsCreated;
 }
 
 /// Later: move eligibility without advancing the interval sequence.
@@ -95,13 +112,17 @@ final class PostponeElement extends AppCommand {
   PostponeElement(
     super.operationId, {
     required this.ref,
-    required this.until,
+    this.until,
     this.kind = DeferralKind.manual,
     super.timestampUtc,
   });
 
   final ElementRef ref;
-  final StudyDay until;
+
+  /// Explicit target day, or null to scale the delay by the element's own
+  /// interval — a fixed one day just returns it tomorrow into the same queue.
+  final StudyDay? until;
+
   final DeferralKind kind;
 }
 
@@ -133,17 +154,23 @@ final class ReactivateElement extends AppCommand {
   final ElementRef ref;
 }
 
-/// Change an element's relative priority.
-final class SetPriority extends AppCommand {
-  SetPriority(
+/// Set a topic's next interval by hand.
+///
+/// SuperMemo reads this as a priority signal — asking to see something in
+/// eleven days rather than thirty says it matters more — but the priority
+/// change stays a separate, visible command rather than a hidden side effect.
+final class RescheduleTopic extends AppCommand {
+  RescheduleTopic(
     super.operationId, {
     required this.ref,
-    required this.rank,
+    required this.intervalDays,
     super.timestampUtc,
   });
 
   final ElementRef ref;
-  final PriorityRank rank;
+
+  /// Days from today. Zero makes the element due again immediately.
+  final int intervalDays;
 }
 
 /// Change how a source is paced, without touching its position or step.
