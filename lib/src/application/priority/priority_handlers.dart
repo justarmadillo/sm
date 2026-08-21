@@ -12,13 +12,18 @@
 /// and the derived percentile at the time of the change.
 library;
 
+import 'dart:convert';
+
 import '../../core/clock.dart';
 import '../../core/ids.dart';
 import '../../core/result.dart';
 import '../../core/tracing.dart';
+import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/revlog.dart';
+import '../../domain/scheduling/schedule_adjustment.dart';
+import '../../domain/scheduling/scheduler_event.dart';
 import '../app_command.dart';
 import '../ports/repositories.dart';
 import '../ports/transaction_runner.dart';
@@ -77,24 +82,21 @@ final class PriorityHandlers {
       });
 
   /// Places an element at [SetPriorityPercent.percent] of the collection.
-  Future<Result<ElementSchedule>> setPercent(SetPriorityPercent command) =>
-      _run<ElementSchedule>(command, kPrioritySetKind, () async {
-        if (command.percent.isNaN ||
-            command.percent < 0 ||
-            command.percent > 100) {
-          return const Err<ElementSchedule>(
-            ValidationFailure('priority is a percent from 0 to 100'),
-          );
-        }
-        final ElementSchedule? schedule = await _learning.findSchedule(
-          command.ref,
-        );
-        if (schedule == null) return _missing<ElementSchedule>(command.ref);
+  Future<Result<ElementSchedule>> setPercent(
+    SetPriorityPercent command,
+  ) => _run<ElementSchedule>(command, kPrioritySetKind, () async {
+    if (command.percent.isNaN || command.percent < 0 || command.percent > 100) {
+      return const Err<ElementSchedule>(
+        ValidationFailure('priority is a percent from 0 to 100'),
+      );
+    }
+    final ElementSchedule? schedule = await _learning.findSchedule(command.ref);
+    if (schedule == null) return _missing<ElementSchedule>(command.ref);
 
-        final PriorityScale scale = await _context.priorityScale();
-        final PriorityRank rank = scale.rankAtPercent(command.percent);
-        return _apply(command, schedule, rank, scale, kPrioritySetKind);
-      });
+    final PriorityScale scale = await _context.priorityScale();
+    final PriorityRank rank = scale.rankAtPercent(command.percent);
+    return _apply(command, schedule, rank, scale, kPrioritySetKind);
+  });
 
   /// Moves an element between two neighbours, as a drag does.
   Future<Result<ElementSchedule>> reorder(ReorderPriority command) =>
@@ -173,7 +175,13 @@ final class PriorityHandlers {
           final ElementSchedule? schedule = await _learning.findSchedule(ref);
           if (schedule == null) continue;
           final PriorityRank rank = ranks[index];
-          schedules.add(schedule.copyWith(priority: rank));
+          schedules.add(
+            schedule.copyWith(
+              priority: rank,
+              revision: schedule.revision + 1,
+              updatedAtUtc: now,
+            ),
+          );
           entries.add(
             _journal.build(
               operationId: command.operationId.value,
@@ -206,6 +214,28 @@ final class PriorityHandlers {
 
         await _learning.saveSchedules(schedules);
         await _journal.appendAll(entries);
+        for (var index = 0; index < schedules.length; index++) {
+          final ElementSchedule after = schedules[index];
+          // `before` has already been replaced; reconstruct the only changed
+          // coordinates for the immutable audit snapshot.
+          final ElementSchedule auditBefore = after.copyWith(
+            priority: entries[index].before.priorityKey == null
+                ? after.priority
+                : PriorityRank(entries[index].before.priorityKey!),
+            revision: after.revision - 1,
+          );
+          await _appendSchedulerPriority(
+            command,
+            auditBefore,
+            after,
+            metadata: <String, Object?>{
+              'spread_from': from,
+              'spread_to': to,
+              'position': index,
+              'of': schedules.length,
+            },
+          );
+        }
         await _learning.appendActivity(
           ActivityRecord(
             id: _ids.newId(),
@@ -232,7 +262,11 @@ final class PriorityHandlers {
     if (rank == schedule.priority) {
       return Ok<ElementSchedule>(schedule);
     }
-    final ElementSchedule updated = schedule.copyWith(priority: rank);
+    final ElementSchedule updated = schedule.copyWith(
+      priority: rank,
+      revision: schedule.revision + 1,
+      updatedAtUtc: command.timestampUtc,
+    );
     await _learning.saveSchedule(updated);
     await _journal.append(
       operationId: command.operationId.value,
@@ -250,6 +284,7 @@ final class PriorityHandlers {
         lifecycle: schedule.lifecycle.index,
       ),
     );
+    await _appendSchedulerPriority(command, schedule, updated);
     await _learning.appendActivity(
       ActivityRecord(
         id: _ids.newId(),
@@ -274,6 +309,17 @@ final class PriorityHandlers {
     try {
       return await _transactions.run<Result<T>>(() async {
         if (await _learning.hasActivity(command.operationId.value, kind)) {
+          final ElementRef? ref = switch (command) {
+            SetPriority(:final ref) ||
+            SetPriorityPercent(:final ref) ||
+            ReorderPriority(:final ref) ||
+            StepPriority(:final ref) => ref,
+            _ => null,
+          };
+          if (ref != null) {
+            final ElementSchedule? replayed = await _learning.findSchedule(ref);
+            if (replayed is T) return Ok<T>(replayed as T);
+          }
           return Err<T>(
             ConflictFailure('operation ${command.operationId} already applied'),
           );
@@ -310,6 +356,51 @@ final class PriorityHandlers {
       return Err<T>(failure);
     }
   }
+
+  Future<void> _appendSchedulerPriority(
+    AppCommand command,
+    ElementSchedule before,
+    ElementSchedule after, {
+    Map<String, Object?>? metadata,
+  }) async {
+    final ScheduleAdjustmentSet adjustments = ScheduleAdjustmentSet(
+      await _learning.listAdjustmentsFor(before.ref),
+    );
+    final ScheduleAdjustmentSnapshot snapshot = adjustments.snapshotFor(
+      <ElementRef>{before.ref},
+    );
+    final calendar = await _context.calendar();
+    final CardState? card = before.ref.type == ElementType.card
+        ? await _learning.findCardState(before.ref.id)
+        : null;
+    final String algorithmicDue = card == null
+        ? SchedulerEvent.encodeStudyDayDue(before.algorithmicDueDay)
+        : SchedulerEvent.encodeUtcDue(card.memory.dueAtUtc);
+    await _journal.appendScheduler(
+      operationId: command.operationId.value,
+      ref: before.ref,
+      eventType: SchedulerEventType.priorityChanged,
+      atUtc: command.timestampUtc,
+      studyDay: calendar.dayOf(command.timestampUtc),
+      policyVersion: 'priority_order_v1',
+      stateBefore: _scheduleJson(before),
+      stateAfter: _scheduleJson(after),
+      algorithmicDueBefore: algorithmicDue,
+      algorithmicDueAfter: algorithmicDue,
+      adjustmentsBefore: snapshot,
+      adjustmentsAfter: snapshot,
+      metadata: metadata,
+    );
+  }
+
+  String _scheduleJson(ElementSchedule schedule) =>
+      jsonEncode(<String, Object?>{
+        'id': schedule.ref.id,
+        'type': schedule.ref.type.index,
+        'priority_key': schedule.priority.orderKey,
+        'lifecycle': schedule.lifecycle.index,
+        'revision': schedule.revision,
+      });
 
   Err<T> _missing<T>(ElementRef ref) => Err<T>(
     NotFoundFailure(

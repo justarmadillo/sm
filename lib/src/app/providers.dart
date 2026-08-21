@@ -341,8 +341,8 @@ Future<File?> runDailyBackupIfDue(ProviderContainer container) async {
   final SettingsRepository settings = container.read(
     settingsRepositoryProvider,
   );
-  final String today =
-      (await container.read(schedulingContextProvider).today()).toString();
+  final String today = (await container.read(schedulingContextProvider).today())
+      .toString();
 
   if (await settings.read(kLastBackupDayKey) == today) return null;
 

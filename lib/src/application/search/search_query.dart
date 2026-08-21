@@ -100,7 +100,9 @@ final class SearchQuery {
 /// added to the last token so results appear while the user is still typing.
 String prepareQuery(String raw) {
   final List<String> tokens = <String>[
-    for (final String token in raw.split(RegExp(r'[^\p{L}\p{N}_]+', unicode: true)))
+    for (final String token in raw.split(
+      RegExp(r'[^\p{L}\p{N}_]+', unicode: true),
+    ))
       if (token.isNotEmpty) token.toLowerCase(),
   ];
   if (tokens.isEmpty) return '';

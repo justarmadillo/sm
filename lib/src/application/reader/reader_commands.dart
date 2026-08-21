@@ -133,6 +133,25 @@ final class FinishSource extends AppCommand {
   final String sourceId;
 }
 
+/// Restore the exact canonical snapshot before the latest topic encounter.
+/// The original event remains in history and an inverse event references it.
+final class UndoLastTopicEncounter extends AppCommand {
+  UndoLastTopicEncounter(
+    super.operationId, {
+    required this.ref,
+    super.timestampUtc,
+  });
+
+  final ElementRef ref;
+}
+
+/// Explicitly finish either a source or an extract. Descendants are untouched.
+final class FinishTopic extends AppCommand {
+  FinishTopic(super.operationId, {required this.ref, super.timestampUtc});
+
+  final ElementRef ref;
+}
+
 /// Keep the content, stop scheduling it.
 final class DismissElement extends AppCommand {
   DismissElement(super.operationId, {required this.ref, super.timestampUtc});

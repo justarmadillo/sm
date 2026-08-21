@@ -46,6 +46,9 @@ dependencies:
   collection: ^1.19.1
   meta: ^1.18.0
   crypto: ^3.0.7
+  # Pinned because scheduler day boundaries must use reproducible named-zone
+  # rules rather than the machine's current offset.
+  timezone: 0.11.1
   scrollable_positioned_list: ^0.3.8
   file_selector: ^1.1.0
   # Pinned for review-log reproducibility; upgrade only with new reference vectors.

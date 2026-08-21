@@ -64,10 +64,7 @@ final class PrioritySliderViewModel
     if (context == null) {
       throw StateError('$arg has no schedule, so it has no priority');
     }
-    return PrioritySliderState(
-      context: context,
-      draftPercent: context.percent,
-    );
+    return PrioritySliderState(context: context, draftPercent: context.percent);
   }
 
   /// Moves the slider without committing.
@@ -262,8 +259,7 @@ final class PriorityBrowserViewModel
         );
     await refresh();
     if (result.isErr) {
-      final PriorityBrowserState latest =
-          state.valueOrNull ?? current;
+      final PriorityBrowserState latest = state.valueOrNull ?? current;
       state = AsyncValue<PriorityBrowserState>.data(
         latest.copyWith(
           message: UiMessage(result.failureOrNull!.message, isError: true),

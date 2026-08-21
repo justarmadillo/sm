@@ -54,9 +54,7 @@ final class SettingsUiState {
 final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
   @override
   Future<SettingsUiState> build() async {
-    final AppSettings settings = await ref
-        .read(settingsStoreProvider)
-        .reload();
+    final AppSettings settings = await ref.read(settingsStoreProvider).reload();
     return SettingsUiState(saved: settings, draft: settings);
   }
 

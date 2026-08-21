@@ -122,22 +122,21 @@ class _Body extends StatelessWidget {
       SettingsRow(
         label: 'Home timezone',
         hint:
-            'Fixed offsets are listed rather than city names: without a '
-            'bundled timezone database a city name would be a promise about '
-            'daylight saving that cannot be kept. "System" follows this '
-            'machine, daylight saving included.',
+            'A named home timezone keeps the StudyDay stable while travelling '
+            'and applies its daylight-saving rules automatically.',
         control: ChoiceField<String>(
-          value: selectableZoneIds.contains(draft.studyDay.zoneId)
-              ? draft.studyDay.zoneId
-              : kSystemZoneId,
+          value: _displayZoneId(draft.studyDay.zoneId),
           options: <String, String>{
-            for (final String id in selectableZoneIds)
-              id: id == kSystemZoneId ? 'System (with DST)' : id,
+            if (!selectableZoneIds.contains(
+              _displayZoneId(draft.studyDay.zoneId),
+            ))
+              _displayZoneId(draft.studyDay.zoneId):
+                  'Unsupported: ${draft.studyDay.zoneId}',
+            for (final String id in selectableZoneIds) id: id,
           },
           onChanged: (String value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              studyDay: s.studyDay.copyWith(zoneId: value),
-            ),
+            (AppSettings s) =>
+                s.copyWith(studyDay: s.studyDay.copyWith(zoneId: value)),
           ),
         ),
       ),
@@ -156,6 +155,16 @@ class _Body extends StatelessWidget {
       ),
     ],
   );
+
+  String _displayZoneId(String storedId) {
+    try {
+      return canonicalTimeZoneId(storedId);
+    } on UnknownTimeZoneException {
+      // Keep malformed legacy data visible. Scheduling fails closed until the
+      // user explicitly replaces it with a supported named zone.
+      return storedId;
+    }
+  }
 
   // -------------------------------------------------------------------- queue
 
@@ -294,9 +303,8 @@ class _Body extends StatelessWidget {
           divisions: 25,
           format: (double v) => '${(v * 100).toStringAsFixed(0)}%',
           onChanged: (double value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              queue: s.queue.copyWith(protectedPercentile: value),
-            ),
+            (AppSettings s) =>
+                s.copyWith(queue: s.queue.copyWith(protectedPercentile: value)),
           ),
         ),
       ),
@@ -610,9 +618,8 @@ class _Body extends StatelessWidget {
         control: SwitchField(
           value: draft.topics.autoFinishSources,
           onChanged: (bool value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              topics: s.topics.copyWith(autoFinishSources: value),
-            ),
+            (AppSettings s) =>
+                s.copyWith(topics: s.topics.copyWith(autoFinishSources: value)),
           ),
         ),
       ),
@@ -724,9 +731,8 @@ class _Body extends StatelessWidget {
           value: draft.cards.maximumIntervalDays,
           suffix: 'd',
           onChanged: (int value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              cards: s.cards.copyWith(maximumIntervalDays: value),
-            ),
+            (AppSettings s) =>
+                s.copyWith(cards: s.cards.copyWith(maximumIntervalDays: value)),
           ),
         ),
       ),
@@ -869,9 +875,8 @@ class _Body extends StatelessWidget {
           divisions: 24,
           format: (double v) => '±${(v * 100).toStringAsFixed(0)}%',
           onChanged: (double value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              postpone: s.postpone.copyWith(autoDispersal: value),
-            ),
+            (AppSettings s) =>
+                s.copyWith(postpone: s.postpone.copyWith(autoDispersal: value)),
           ),
         ),
       ),
@@ -897,9 +902,8 @@ class _Body extends StatelessWidget {
         control: IntField(
           value: draft.postpone.mercyDailyCap,
           onChanged: (int value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              postpone: s.postpone.copyWith(mercyDailyCap: value),
-            ),
+            (AppSettings s) =>
+                s.copyWith(postpone: s.postpone.copyWith(mercyDailyCap: value)),
           ),
         ),
       ),

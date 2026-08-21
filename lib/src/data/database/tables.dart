@@ -153,23 +153,14 @@ class Extracts extends Table {
 class Cards extends Table {
   TextColumn get id => text()();
 
-  /// Parent extract, when the card was formulated from one.
-  ///
-  /// Two nullable foreign keys rather than one polymorphic column: a card can
-  /// hang off an extract, off an article directly, or off nothing at all, and
-  /// each of the two real parents still gets database-level integrity.
-  TextColumn get extractId => text().nullable().references(
-    Extracts,
-    #id,
-    onDelete: KeyAction.restrict,
-  )();
+  /// Sole canonical learning-element parent. [parentElementType] is null iff
+  /// this is a standalone card. Referential validation is performed against
+  /// the common schedule table inside the insertion transaction because
+  /// SQLite cannot express a polymorphic foreign key.
+  TextColumn get parentElementId => text().nullable()();
 
-  /// Parent source, when the card was formulated straight from an article.
-  TextColumn get sourceId => text().nullable().references(
-    Sources,
-    #id,
-    onDelete: KeyAction.restrict,
-  )();
+  IntColumn get parentElementType =>
+      integer().nullable().check(parentElementType.isBetweenValues(0, 1))();
 
   /// Index into the card-kind enum.
   IntColumn get kind => integer().check(kind.isBetweenValues(0, 1))();
@@ -191,9 +182,7 @@ class Cards extends Table {
   List<String> get customConstraints => <String>[
     // A cloze card names the deletion it tests; a Q&A card never does.
     'CHECK ((kind = 1) = (cloze_ordinal IS NOT NULL))',
-    // One parent at most: an extract already knows its own source, so a card
-    // holding both would give two answers to "where did this come from".
-    'CHECK (extract_id IS NULL OR source_id IS NULL)',
+    'CHECK ((parent_element_id IS NULL) = (parent_element_type IS NULL))',
   ];
 }
 
@@ -237,6 +226,25 @@ class ElementSchedules extends Table {
   /// citation if its source is ever removed.
   TextColumn get rootId => text().nullable()();
 
+  /// Immediate learning-element parent; one coordinate for every kind.
+  TextColumn get parentElementId => text().nullable()();
+
+  /// Pending/user-visible order metadata, independent of priority and due.
+  IntColumn get ordinal => integer().nullable()();
+
+  IntColumn get createdAtUtc => integer().nullable()();
+
+  IntColumn get updatedAtUtc => integer().nullable()();
+
+  IntColumn get revision => integer()
+      .check(revision.isBiggerOrEqualValue(1))
+      .withDefault(const Constant(1))();
+
+  /// canonical (0) or legacy_due_unknown (1).
+  IntColumn get legacyDueProvenance => integer()
+      .check(legacyDueProvenance.isBetweenValues(0, 1))
+      .withDefault(const Constant(0))();
+
   TextColumn get zoneId => text()();
 
   @override
@@ -274,10 +282,9 @@ class TopicStates extends Table {
       .withDefault(const Constant(0))();
 
   /// The A-factor last applied. Zero until the first encounter computes one.
-  RealColumn get aFactor =>
-      real().check(aFactor.isBiggerOrEqualValue(0)).withDefault(
-        const Constant(0),
-      )();
+  RealColumn get aFactor => real()
+      .check(aFactor.isBiggerOrEqualValue(0))
+      .withDefault(const Constant(0))();
 
   /// Smoothed extraction density, in extracts per thousand words read.
   RealColumn get yieldEwma => real()
@@ -304,6 +311,22 @@ class TopicStates extends Table {
   /// Day of the last completed encounter, in days since the Unix epoch.
   IntColumn get lastEncounterDay => integer().nullable()();
 
+  /// Canonical topic due in its local StudyDay domain. The common due column
+  /// remains only as a compatibility projection for older read models.
+  IntColumn get algorithmDueDay => integer().nullable()();
+
+  TextColumn get schedulerKind =>
+      text().withDefault(const Constant('topic_afactor_v1'))();
+
+  TextColumn get schedulerVersion =>
+      text().withDefault(const Constant('topic_afactor_v1/1'))();
+
+  TextColumn get policyInputSnapshot => text().nullable()();
+
+  IntColumn get revision => integer()
+      .check(revision.isBiggerOrEqualValue(1))
+      .withDefault(const Constant(1))();
+
   @override
   Set<Column<Object>> get primaryKey => <Column<Object>>{
     elementId,
@@ -315,7 +338,7 @@ class TopicStates extends Table {
 @DataClassName('CardMemoryRow')
 class CardMemories extends Table {
   TextColumn get cardId =>
-      text().references(Cards, #id, onDelete: KeyAction.cascade)();
+      text().references(Cards, #id, onDelete: KeyAction.restrict)();
 
   /// Null until the first review, matching dart-fsrs' new-card shape.
   RealColumn get stability => real().nullable()();
@@ -357,6 +380,19 @@ class CardMemories extends Table {
 
   TextColumn get parametersVersion => text()();
 
+  TextColumn get schedulerName =>
+      text().withDefault(const Constant('dart-fsrs'))();
+
+  RealColumn get scheduledDays => real().nullable()();
+
+  /// Exact serialized state consumed by the pinned adapter. Nullable only for
+  /// legacy rows while a migration is validating/backfilling them.
+  TextColumn get fsrsStateJson => text().nullable()();
+
+  IntColumn get revision => integer()
+      .check(revision.isBiggerOrEqualValue(1))
+      .withDefault(const Constant(1))();
+
   @override
   Set<Column<Object>> get primaryKey => <Column<Object>>{cardId};
 
@@ -373,13 +409,118 @@ class CardMemories extends Table {
   ];
 }
 
-/// Append-only review log. Never updated, never deleted outside of undo.
+/// Presentation-only calendar constraints and overrides.
+@DataClassName('ScheduleAdjustmentRow')
+class ScheduleAdjustments extends Table {
+  TextColumn get id => text()();
+  TextColumn get elementId => text()();
+  IntColumn get elementType =>
+      integer().check(elementType.isBetweenValues(0, 2))();
+  IntColumn get mode => integer().check(mode.isBetweenValues(0, 1))();
+  IntColumn get reason => integer().check(reason.isBetweenValues(0, 4))();
+  IntColumn get notBeforeAtUtc => integer().nullable()();
+  IntColumn get notBeforeStudyDay => integer().nullable()();
+  IntColumn get scheduledForAtUtc => integer().nullable()();
+  IntColumn get scheduledForStudyDay => integer().nullable()();
+  TextColumn get zoneId => text().nullable()();
+  TextColumn get operationId => text()();
+  TextColumn get batchId => text().nullable()();
+  TextColumn get policyVersion => text()();
+  IntColumn get createdAtUtc => integer()();
+  IntColumn get createdStudyDay => integer()();
+  TextColumn get createdZoneId => text()();
+  IntColumn get clearedAtUtc => integer().nullable()();
+  TextColumn get clearedByOperationId => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+
+  @override
+  List<String> get customConstraints => <String>[
+    'CHECK ((cleared_at_utc IS NULL) = (cleared_by_operation_id IS NULL))',
+    'CHECK ((mode = 0 AND '
+        '((not_before_at_utc IS NOT NULL) + '
+        '(not_before_study_day IS NOT NULL)) = 1 AND '
+        'scheduled_for_at_utc IS NULL AND scheduled_for_study_day IS NULL) '
+        'OR (mode = 1 AND '
+        '((scheduled_for_at_utc IS NOT NULL) + '
+        '(scheduled_for_study_day IS NOT NULL)) = 1 AND '
+        'not_before_at_utc IS NULL AND not_before_study_day IS NULL))',
+    'CHECK ((element_type = 2 AND not_before_study_day IS NULL AND '
+        'scheduled_for_study_day IS NULL) OR '
+        '(element_type IN (0, 1) AND not_before_at_utc IS NULL AND '
+        'scheduled_for_at_utc IS NULL))',
+  ];
+}
+
+/// Complete append-only scheduler audit envelope.
+@DataClassName('SchedulerEventRow')
+class SchedulerEvents extends Table {
+  TextColumn get id => text()();
+  TextColumn get operationId => text()();
+  TextColumn get elementId => text().nullable()();
+  IntColumn get elementType => integer().nullable()();
+  TextColumn get eventType => text()();
+  IntColumn get occurredAtUtc => integer()();
+  IntColumn get studyDay => integer()();
+  TextColumn get studyDayZoneId => text()();
+  TextColumn get schedulerName => text().nullable()();
+  TextColumn get schedulerVersion => text().nullable()();
+  TextColumn get policyVersion => text()();
+  TextColumn get stateBefore => text().nullable()();
+  TextColumn get stateAfter => text().nullable()();
+  TextColumn get algorithmicDueBefore => text().nullable()();
+  TextColumn get algorithmicDueAfter => text().nullable()();
+  TextColumn get adjustmentsBefore => text().nullable()();
+  TextColumn get adjustmentsAfter => text().nullable()();
+  TextColumn get undoesEventId => text().nullable()();
+  TextColumn get batchId => text().nullable()();
+  TextColumn get metadataJson => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+/// Cached deterministic remaining presentation plan for one StudyDay.
+@DataClassName('DailyPresentationPlanRow')
+class DailyPresentationPlans extends Table {
+  IntColumn get studyDay => integer()();
+  TextColumn get zoneId => text()();
+  TextColumn get identityJson => text()();
+  TextColumn get remainingEntriesJson => text()();
+  IntColumn get mergeCursor => integer().withDefault(const Constant(0))();
+  IntColumn get createdAtUtc => integer()();
+  IntColumn get updatedAtUtc => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{studyDay, zoneId};
+}
+
+/// Durable Mercy preview/apply data needed for stale detection and exact undo.
+@DataClassName('MercyBatchRow')
+class MercyBatches extends Table {
+  TextColumn get batchId => text()();
+  TextColumn get previewOperationId => text()();
+  TextColumn get applyOperationId => text().nullable()();
+  TextColumn get undoOperationId => text().nullable()();
+  TextColumn get policyVersion => text()();
+  TextColumn get previewJson => text()();
+  TextColumn get priorAdjustmentsJson => text().nullable()();
+  IntColumn get createdAtUtc => integer()();
+  IntColumn get appliedAtUtc => integer().nullable()();
+  IntColumn get undoneAtUtc => integer().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{batchId};
+}
+
+/// Append-only review log. Never updated or deleted; undo appends an inverse.
 @DataClassName('ReviewEventRow')
 class ReviewEvents extends Table {
   TextColumn get id => text()();
 
   TextColumn get cardId =>
-      text().references(Cards, #id, onDelete: KeyAction.cascade)();
+      text().references(Cards, #id, onDelete: KeyAction.restrict)();
 
   IntColumn get reviewedAtUtc => integer()();
 

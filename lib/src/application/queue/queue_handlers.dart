@@ -20,6 +20,8 @@
 ///   rebuilding the queue during a session never defers anything twice.
 library;
 
+import 'dart:convert';
+
 import '../../core/clock.dart';
 import '../../core/ids.dart';
 import '../../core/result.dart';
@@ -28,15 +30,19 @@ import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/overload.dart';
 import '../../domain/scheduling/priority_rank.dart';
+import '../../domain/scheduling/presentation_plan.dart';
 import '../../domain/scheduling/queue_policy.dart';
 import '../../domain/scheduling/revlog.dart';
+import '../../domain/scheduling/schedule_adjustment.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../../domain/settings/app_settings.dart';
+import '../../domain/transfer/dataset_lineage.dart';
 import '../app_command.dart';
 import '../ports/repositories.dart';
 import '../ports/transaction_runner.dart';
 import '../scheduling/scheduling_context.dart';
+import '../scheduling/schedule_adjustment_service.dart';
 import '../scheduling/scheduling_journal.dart';
 import 'queue_commands.dart';
 
@@ -48,6 +54,11 @@ const String kStudyMoreKind = 'queue.study_more';
 
 /// Activity kind recorded when a backlog is spread.
 const String kMercyKind = 'queue.mercy';
+
+/// [Derived] Versioned capacity planner. The headroom value is exposed here
+/// pending calibration rather than being presented as a SuperMemo constant.
+const String kOverflowPolicyVersion = 'supermemo_like_v1';
+const double kOverflowHeadroomFraction = 0.10;
 
 /// A deterministic operation id for [day]'s admission.
 ///
@@ -91,6 +102,7 @@ final class QueueHandlers {
        _context = context,
        _clock = clock,
        _ids = ids,
+       _adjustments = ScheduleAdjustmentService(learning: learning, ids: ids),
        _journal = SchedulingJournal(learning: learning, ids: ids),
        _diagnostics = diagnostics;
 
@@ -101,83 +113,95 @@ final class QueueHandlers {
   final SchedulingContext _context;
   final Clock _clock;
   final IdGenerator _ids;
+  final ScheduleAdjustmentService _adjustments;
   final SchedulingJournal _journal;
   final DiagnosticSink _diagnostics;
 
-  /// Builds the day's plan and defers whatever does not fit.
-  ///
-  /// Returns the plan either way: if the day has already been admitted the
-  /// plan is rebuilt from the schedules as they now stand, which is exactly
-  /// what a mid-session refresh should show.
+  /// Runs the rollover-only overflow policy, then returns a durable plan.
   Future<Result<AdmissionOutcome>> runDailyAdmission(
     RunDailyAdmission command,
   ) async {
     try {
       return await _transactions.run<Result<AdmissionOutcome>>(() async {
         final AppSettings settings = await _context.settings();
-        final QueuePolicy policy = await _context.queuePolicy();
-        final List<QueueCandidate> candidates = await loadCandidates(
-          command.day,
-        );
-        final QueuePlan plan = policy.build(
-          candidates: candidates,
-          nowUtc: _clock.nowUtc(),
-          today: command.day,
-          extraAdmissions: command.extraAdmissions,
-        );
-
         final bool applied = await _learning.hasActivity(
           command.operationId.value,
           kDailyAdmissionKind,
         );
-        if (applied || !settings.queue.autoPostpone || plan.overflow.isEmpty) {
-          return Ok<AdmissionOutcome>(
-            AdmissionOutcome(
-              plan: plan,
-              deferred: 0,
-              alreadyApplied: applied,
+        var deferred = 0;
+        if (!applied) {
+          if (settings.queue.autoPostpone) {
+            deferred = await _applyRolloverOverflow(command, settings);
+          }
+          await _learning.appendActivity(
+            ActivityRecord(
+              id: _ids.newId(),
+              operationId: command.operationId.value,
+              kind: kDailyAdmissionKind,
+              atUtc: command.timestampUtc,
+              metadata: <String, Object?>{
+                'day': command.day.toString(),
+                'deferred': deferred,
+                'overflow_profile': 'supermemo_like_v1',
+              },
             ),
           );
+          await _transfer.advanceGeneration();
         }
 
-        final int deferred = await _deferOverflow(
-          command: command,
-          overflow: plan.overflow,
-          settings: settings,
-          scale: policy.scale,
+        final List<QueueCandidate> candidates = await loadCandidates(
+          command.day,
         );
-        await _learning.appendActivity(
-          ActivityRecord(
-            id: _ids.newId(),
-            operationId: command.operationId.value,
-            kind: kDailyAdmissionKind,
-            atUtc: command.timestampUtc,
-            metadata: <String, Object?>{
-              ...plan.counters.toMetadata(),
-              'day': command.day.toString(),
-              'deferred': deferred,
-            },
-          ),
+        final DatasetIdentity dataset = await _transfer.currentIdentity();
+        final QueuePolicy configured = await _context.queuePolicy();
+        final QueuePolicy policy = QueuePolicy(
+          settings: configured.settings,
+          scale: configured.scale,
+          datasetId: dataset.datasetId,
+          policyVersion: configured.policyVersion,
         );
-        await _transfer.advanceGeneration();
+        final StoredPresentationPlan? stored = await _learning
+            .findPresentationPlan(command.day);
+        final QueuePlan fresh = policy.build(
+          candidates: candidates,
+          nowUtc: _clock.nowUtc(),
+          today: command.day,
+          extraAdmissions: command.extraAdmissions,
+          mergeCursor: stored?.mergeCursor ?? QueueMergeCursor.zero,
+        );
+        final PresentationPlanIdentity planIdentity = _presentationPlanIdentity(
+          command.day,
+          settings,
+          dataset,
+          candidates,
+          policy,
+        );
+        final QueuePlan plan = await _persistOrResumePlan(
+          identity: planIdentity,
+          fresh: fresh,
+          candidates: candidates,
+          stored: stored,
+          forceRebuild: command.extraAdmissions > 0,
+          atUtc: command.timestampUtc,
+        );
         _diagnostics.record(
           DiagnosticEvent(
             level: DiagnosticLevel.info,
             name: kDailyAdmissionKind,
             timestampUtc: _clock.nowUtc(),
             operationId: command.operationId,
-            fields: plan.counters.toMetadata(),
+            fields: <String, Object?>{
+              ...plan.counters.toMetadata(),
+              'rollover_deferred': deferred,
+            },
           ),
         );
 
-        // The plan was computed before the deferrals were written, so rebuild
-        // it from the admitted half rather than re-querying: the overflow is
-        // no longer eligible and would otherwise reappear in this same call.
         return Ok<AdmissionOutcome>(
           AdmissionOutcome(
             plan: plan,
             deferred: deferred,
-            alreadyApplied: false,
+            alreadyApplied: applied,
           ),
         );
       });
@@ -192,74 +216,77 @@ final class QueueHandlers {
   Future<Result<int>> studyMore(StudyMore command) async {
     try {
       return await _transactions.run<Result<int>>(() async {
+        if (await _learning.hasActivity(
+          command.operationId.value,
+          kStudyMoreKind,
+        )) {
+          final List<ActivityRecord> recent = await _learning.recentActivity(
+            limit: 500,
+          );
+          ActivityRecord? prior;
+          for (final ActivityRecord record in recent) {
+            if (record.operationId == command.operationId.value &&
+                record.kind == kStudyMoreKind) {
+              prior = record;
+              break;
+            }
+          }
+          return Ok<int>((prior?.metadata?['recalled'] as num?)?.toInt() ?? 0);
+        }
         final AppSettings settings = await _context.settings();
-        final CardScheduler cards = await _context.cardScheduler();
         final int limit = command.count ?? settings.queue.studyMoreStep;
         if (limit <= 0) return const Ok<int>(0);
 
-        // Best priority first: the elements the valve shed most reluctantly
-        // are the ones worth taking back first.
-        final List<ElementSchedule> deferred = await _learning
-            .listAutomaticDeferrals(from: command.day);
-        deferred.sort(
-          (ElementSchedule a, ElementSchedule b) =>
-              a.priority.compareTo(b.priority),
+        final List<ScheduleAdjustment> automatic = await _learning
+            .listActiveAdjustments(
+              reasons: const <ScheduleAdjustmentReason>{
+                ScheduleAdjustmentReason.autoOverflow,
+              },
+            );
+        final Map<ElementRef, ElementSchedule> schedules =
+            <ElementRef, ElementSchedule>{};
+        for (final ScheduleAdjustment adjustment in automatic) {
+          final ElementSchedule? schedule = await _learning.findSchedule(
+            adjustment.element,
+          );
+          if (schedule != null) schedules[adjustment.element] = schedule;
+        }
+        final List<ElementRef> selected = schedules.keys.toList()
+          ..sort((ElementRef left, ElementRef right) {
+            final int byPriority = schedules[left]!.priority.compareTo(
+              schedules[right]!.priority,
+            );
+            return byPriority != 0 ? byPriority : left.compareTo(right);
+          });
+        if (selected.length > limit)
+          selected.removeRange(limit, selected.length);
+        final ScheduleAdjustmentMutation mutation = await _adjustments
+            .clearAutoOverflow(
+              elements: selected,
+              atUtc: command.timestampUtc,
+              studyDay: command.day,
+              operationId: command.operationId.value,
+            );
+        final int recalled = mutation.beforeSnapshot.activeAdjustments
+            .where(
+              (ScheduleAdjustment adjustment) =>
+                  adjustment.reason == ScheduleAdjustmentReason.autoOverflow,
+            )
+            .length;
+
+        await _learning.appendActivity(
+          ActivityRecord(
+            id: _ids.newId(),
+            operationId: command.operationId.value,
+            kind: kStudyMoreKind,
+            atUtc: command.timestampUtc,
+            metadata: <String, Object?>{
+              'recalled': recalled,
+              'day': command.day.toString(),
+            },
+          ),
         );
-
-        var recalled = 0;
-        final entries = <RevlogEntry>[];
-        for (final ElementSchedule schedule in deferred) {
-          if (recalled >= limit) break;
-          if (schedule.ref.type == ElementType.card) {
-            final CardState? state = await _learning.findCardState(
-              schedule.ref.id,
-            );
-            if (state == null) continue;
-            await _learning.saveCardState(cards.recallAutomaticDeferral(state));
-          } else {
-            final TopicState? topic = await _learning.findTopic(schedule.ref);
-            if (topic == null) continue;
-            await _learning.saveTopic(
-              topic.copyWith(
-                schedule: schedule.withAutomaticDeferralRecalled(),
-              ),
-            );
-          }
-          entries.add(
-            _journal.build(
-              operationId: command.operationId.value,
-              ref: schedule.ref,
-              eventType: RevlogEventType.manualReschedule,
-              atUtc: command.timestampUtc,
-              before: RevlogSnapshot(
-                priorityKey: schedule.priority.orderKey,
-                lifecycle: schedule.lifecycle.index,
-              ),
-              metadata: <String, Object?>{
-                'reason': 'study_more',
-                'recalled_from': schedule.deferredUntil?.toString(),
-              },
-            ),
-          );
-          recalled++;
-        }
-
-        if (recalled > 0) {
-          await _journal.appendAll(entries);
-          await _learning.appendActivity(
-            ActivityRecord(
-              id: _ids.newId(),
-              operationId: command.operationId.value,
-              kind: kStudyMoreKind,
-              atUtc: command.timestampUtc,
-              metadata: <String, Object?>{
-                'recalled': recalled,
-                'day': command.day.toString(),
-              },
-            ),
-          );
-          await _transfer.advanceGeneration();
-        }
+        await _transfer.advanceGeneration();
         return Ok<int>(recalled);
       });
     } on Object catch (error, stackTrace) {
@@ -267,84 +294,17 @@ final class QueueHandlers {
     }
   }
 
-  /// Spreads everything overdue across a horizon.
+  /// Legacy one-step Mercy is intentionally rejected.
+  ///
+  /// Mercy may move work earlier, requires a dry-run confirmation token and
+  /// stale-revision validation, and must support exact batch undo. Applying a
+  /// lower-bound spread here would violate all four guarantees.
   Future<Result<int>> runMercy(RunMercy command) async {
-    try {
-      return await _transactions.run<Result<int>>(() async {
-        final AppSettings settings = await _context.settings();
-        final PostponeSettings tuned = settings.postpone.copyWith(
-          mercyHorizonDays: command.horizonDays,
-          mercyDailyCap: command.dailyCap,
-        );
-        final OverloadValve valve = OverloadValve(settings: tuned);
-        final CardScheduler cards = await _context.cardScheduler();
-        final StudyDayCalendar calendar = await _context.calendar();
-        final PriorityScale scale = await _context.priorityScale();
-
-        final List<ElementSchedule> backlog = await _learning.listBacklog(
-          day: command.day,
-        );
-        if (backlog.isEmpty) return const Ok<int>(0);
-        backlog.sort(
-          (ElementSchedule a, ElementSchedule b) =>
-              a.priority.compareTo(b.priority),
-        );
-
-        final entries = <RevlogEntry>[];
-        for (var index = 0; index < backlog.length; index++) {
-          final ElementSchedule schedule = backlog[index];
-          final int delay = valve.mercyDelayDays(index);
-          final StudyDay until = command.day.addDays(delay);
-          final RevlogSnapshot before = RevlogSnapshot(
-            dueAtUtc: calendar.startOfDayUtc(schedule.effectiveDueDay),
-            priorityKey: schedule.priority.orderKey,
-            pressure: scale.pressureOf(schedule.priority),
-            lifecycle: schedule.lifecycle.index,
-          );
-          await _defer(schedule, until, calendar, cards);
-          entries.add(
-            _journal.build(
-              operationId: command.operationId.value,
-              ref: schedule.ref,
-              eventType: RevlogEventType.mercy,
-              atUtc: command.timestampUtc,
-              before: before,
-              after: RevlogSnapshot(
-                dueAtUtc: calendar.startOfDayUtc(until),
-                priorityKey: schedule.priority.orderKey,
-                lifecycle: schedule.lifecycle.index,
-              ),
-              metadata: <String, Object?>{
-                'delay_days': delay,
-                'backlog_index': index,
-                'backlog_size': backlog.length,
-                'horizon_days': tuned.mercyHorizonDays,
-                'daily_cap': tuned.mercyDailyCap,
-              },
-            ),
-          );
-        }
-
-        await _journal.appendAll(entries);
-        await _learning.appendActivity(
-          ActivityRecord(
-            id: _ids.newId(),
-            operationId: command.operationId.value,
-            kind: kMercyKind,
-            atUtc: command.timestampUtc,
-            metadata: <String, Object?>{
-              'spread': backlog.length,
-              'horizon_days': tuned.mercyHorizonDays,
-              'daily_cap': tuned.mercyDailyCap,
-            },
-          ),
-        );
-        await _transfer.advanceGeneration();
-        return Ok<int>(backlog.length);
-      });
-    } on Object catch (error, stackTrace) {
-      return Err<int>(_fail(command, kMercyKind, error, stackTrace));
-    }
+    return const Err<int>(
+      ValidationFailure(
+        'Mercy requires PreviewMercy followed by confirmed ApplyMercy',
+      ),
+    );
   }
 
   /// The counters this day's admission recorded, or null if it has not run.
@@ -384,114 +344,275 @@ final class QueueHandlers {
   /// Shared with the read model so the queue the user sees is built from
   /// exactly the set the valve judged.
   Future<List<QueueCandidate>> loadCandidates(StudyDay day) async {
-    final List<ElementSchedule> topicSchedules = await _learning.listEligible(
-      day: day,
+    final List<ElementSchedule> topicSchedules = await _learning.listSchedules(
       types: const <ElementType>{ElementType.source, ElementType.extract},
+      lifecycles: const <ElementLifecycle>{ElementLifecycle.active},
     );
     final Map<ElementRef, TopicState> topics = await _learning.findTopics(
       <ElementRef>[
         for (final ElementSchedule schedule in topicSchedules) schedule.ref,
       ],
     );
-    final List<CardState> cards = await _learning.listDueCards(
-      _clock.nowUtc(),
+    final List<CardState> cards = await _learning.listCardStates(
+      lifecycles: const <ElementLifecycle>{ElementLifecycle.active},
     );
+    final Set<ElementRef> refs = <ElementRef>{
+      ...topicSchedules.map((ElementSchedule schedule) => schedule.ref),
+      ...cards.map((CardState card) => card.ref),
+    };
+    final ScheduleAdjustmentSet adjustments = ScheduleAdjustmentSet(
+      await _learning.listActiveAdjustments(elements: refs),
+    );
+    const EffectiveDueService effectiveDue = EffectiveDueService();
     return <QueueCandidate>[
       for (final ElementSchedule schedule in topicSchedules)
         if (topics[schedule.ref] case final TopicState topic)
-          QueueCandidate.topic(topic, rootId: schedule.rootId),
+          QueueCandidate.topic(
+            topic,
+            rootId: schedule.rootId,
+            effectiveDueDay: effectiveDue.topicDueStudyDay(
+              topic: topic.ref,
+              algorithmicDueStudyDay: topic.schedule.algorithmicDueDay,
+              adjustments: adjustments,
+            ),
+          ),
       for (final CardState card in cards)
-        QueueCandidate.card(card, rootId: card.schedule.rootId),
+        QueueCandidate.card(
+          card,
+          rootId: card.schedule.rootId,
+          effectiveDueAtUtc: effectiveDue.cardDueAtUtc(
+            card: card.ref,
+            algorithmicDueAtUtc: card.memory.dueAtUtc,
+            adjustments: adjustments,
+          ),
+        ),
     ];
   }
 
-  Future<int> _deferOverflow({
-    required RunDailyAdmission command,
-    required List<ScoredCandidate> overflow,
-    required AppSettings settings,
-    required PriorityScale scale,
-  }) async {
-    final OverloadValve valve = OverloadValve(settings: settings.postpone);
-    final CardScheduler cards = await _context.cardScheduler();
+  Future<int> _applyRolloverOverflow(
+    RunDailyAdmission command,
+    AppSettings settings,
+  ) async {
+    final List<QueueCandidate> candidates = await loadCandidates(command.day);
+    final DatasetIdentity dataset = await _transfer.currentIdentity();
+    final QueuePolicy configured = await _context.queuePolicy();
+    final QueuePolicy policy = QueuePolicy(
+      settings: configured.settings,
+      scale: configured.scale,
+      datasetId: dataset.datasetId,
+      policyVersion: configured.policyVersion,
+    );
+    final QueuePlan admission = policy.build(
+      candidates: candidates,
+      nowUtc: command.timestampUtc,
+      today: command.day,
+    );
     final StudyDayCalendar calendar = await _context.calendar();
-    final entries = <RevlogEntry>[];
+    final List<ScoredCandidate> backlog =
+        admission.overflow.where((ScoredCandidate scored) {
+          final QueueCandidate candidate = scored.candidate;
+          if (scored.isProtected || candidate.isIntradayStep) return false;
+          if (scored.lane == QueueLane.availableNewCard) return false;
+          final StudyDay canonicalDay = candidate.isCard
+              ? calendar.dayOf(candidate.card!.memory.dueAtUtc)
+              : candidate.topic!.schedule.algorithmicDueDay;
+          // The default profile touches only work already outstanding before
+          // rollover. Material becoming due today remains canonical and due.
+          return canonicalDay < command.day;
+        }).toList()..sort((ScoredCandidate left, ScoredCandidate right) {
+          final int byPriority = left.candidate.schedule.priority.compareTo(
+            right.candidate.schedule.priority,
+          );
+          return byPriority != 0 ? byPriority : left.ref.compareTo(right.ref);
+        });
+    if (backlog.isEmpty) return 0;
 
-    for (final ScoredCandidate scored in overflow) {
+    final _FutureCapacityLedger ledger = _FutureCapacityLedger(
+      today: command.day,
+      cardCapacity: _capacityAfterHeadroom(settings.queue.maxCards),
+      topicCapacity: _capacityAfterHeadroom(settings.queue.maxTopics),
+    );
+    for (final QueueCandidate candidate in candidates) {
+      final StudyDay effectiveDay = candidate.isCard
+          ? calendar.dayOf(
+              candidate.effectiveCardDueAtUtc ??
+                  candidate.card!.memory.dueAtUtc,
+            )
+          : candidate.effectiveTopicDueDay ??
+                candidate.topic!.schedule.algorithmicDueDay;
+      if (effectiveDay > command.day) {
+        ledger.addExisting(effectiveDay, isCard: candidate.isCard);
+      }
+    }
+
+    final List<RevlogEntry> compatibilityEntries = <RevlogEntry>[];
+    var deferred = 0;
+    for (final ScoredCandidate scored in backlog) {
       final QueueCandidate candidate = scored.candidate;
-      // Belt and braces: the policy already excludes both, and deferring
-      // either would be the bug that empties the queue permanently.
-      if (scored.isProtected || candidate.isIntradayStep) continue;
-
-      final ElementSchedule schedule = candidate.schedule;
-      final PostponeDecision decision = valve.autoPostpone(
-        intervalDays: candidate.scheduledDays,
-        pressure: scale.pressureOf(schedule.priority),
-        seed: '${command.operationId.value}:${schedule.ref}',
+      final StudyDay? destination = ledger.reserveNext(
+        isCard: candidate.isCard,
       );
-      final StudyDay until = command.day.addDays(decision.delayDays);
-      final RevlogSnapshot before = RevlogSnapshot(
-        dueAtUtc: calendar.startOfDayUtc(schedule.effectiveDueDay),
-        priorityKey: schedule.priority.orderKey,
-        pressure: decision.pressure,
-        lifecycle: schedule.lifecycle.index,
+      if (destination == null) continue;
+      final AdjustmentApplication applied = await _adjustments.setLowerBound(
+        element: candidate.ref,
+        reason: ScheduleAdjustmentReason.autoOverflow,
+        operationId: command.operationId.value,
+        atUtc: command.timestampUtc,
+        studyDay: command.day,
+        notBeforeAtUtc: candidate.isCard
+            ? calendar.startOfDayUtc(destination)
+            : null,
+        notBeforeStudyDay: candidate.isCard ? null : destination,
+        replaceSameReason: true,
+        policyVersion: kOverflowPolicyVersion,
       );
-      await _defer(schedule, until, calendar, cards);
-      entries.add(
+      if (applied.alreadyApplied) continue;
+      compatibilityEntries.add(
         _journal.build(
           operationId: command.operationId.value,
-          ref: schedule.ref,
+          ref: candidate.ref,
           eventType: RevlogEventType.autoPostpone,
           atUtc: command.timestampUtc,
-          before: before,
+          before: RevlogSnapshot(
+            priorityKey: candidate.schedule.priority.orderKey,
+            lifecycle: candidate.schedule.lifecycle.index,
+          ),
           after: RevlogSnapshot(
-            dueAtUtc: calendar.startOfDayUtc(until),
-            priorityKey: schedule.priority.orderKey,
-            pressure: decision.pressure,
-            lifecycle: schedule.lifecycle.index,
+            dueAtUtc: calendar.startOfDayUtc(destination),
+            priorityKey: candidate.schedule.priority.orderKey,
+            lifecycle: candidate.schedule.lifecycle.index,
           ),
           scheduledDays: candidate.scheduledDays,
           metadata: <String, Object?>{
-            ...decision.toMetadata(),
-            'day': command.day.toString(),
+            'destination': destination.toString(),
             'stream': candidate.isCard ? 'card' : 'topic',
+            'policy_version': kOverflowPolicyVersion,
+            'headroom_fraction': kOverflowHeadroomFraction,
           },
         ),
       );
+      deferred++;
     }
-    if (entries.isNotEmpty) await _journal.appendAll(entries);
-    return entries.length;
+    await _journal.appendAll(compatibilityEntries);
+    return deferred;
   }
 
-  /// Writes one deferral, and only the deferral.
-  Future<void> _defer(
-    ElementSchedule schedule,
-    StudyDay until,
-    StudyDayCalendar calendar,
-    CardScheduler cards,
-  ) async {
-    if (schedule.ref.type == ElementType.card) {
-      final CardState? state = await _learning.findCardState(schedule.ref.id);
-      if (state == null) return;
-      await _learning.saveCardState(
-        cards.postpone(
-          state,
-          untilUtc: calendar.startOfDayUtc(until),
-          kind: DeferralKind.automatic,
-        ),
+  int _capacityAfterHeadroom(int cap) =>
+      (cap * (1 - kOverflowHeadroomFraction)).floor().clamp(0, cap).toInt();
+
+  PresentationPlanIdentity _presentationPlanIdentity(
+    StudyDay day,
+    AppSettings settings,
+    DatasetIdentity dataset,
+    List<QueueCandidate> candidates,
+    QueuePolicy policy,
+  ) {
+    final List<QueueCandidate> ordered = candidates.toList()
+      ..sort(
+        (QueueCandidate left, QueueCandidate right) =>
+            left.ref.compareTo(right.ref),
       );
-      return;
-    }
-    final TopicState? topic = await _learning.findTopic(schedule.ref);
-    if (topic == null) return;
-    await _learning.saveTopic(
-      topic.copyWith(
-        postponeCount: topic.postponeCount + 1,
-        schedule: schedule.copyWith(
-          deferredUntil: until,
-          deferralKind: DeferralKind.automatic,
-        ),
+    final String candidateState = <String>[
+      for (final QueueCandidate candidate in ordered)
+        '${candidate.ref}|${candidate.schedule.revision}|'
+            '${candidate.card?.memory.revision ?? candidate.topic?.revision}|'
+            '${candidate.effectiveCardDueAtUtc?.millisecondsSinceEpoch ?? candidate.effectiveTopicDueDay?.epochDay}',
+    ].join(';');
+    final List<MapEntry<String, String>> settingEntries =
+        settings.toMap().entries.toList()..sort(
+          (MapEntry<String, String> left, MapEntry<String, String> right) =>
+              left.key.compareTo(right.key),
+        );
+    return PresentationPlanIdentity(
+      studyDay: day,
+      policyVersion: policy.policyVersion,
+      settingsRevision: _stableDigest(
+        jsonEncode(<String, String>{
+          for (final entry in settingEntries) entry.key: entry.value,
+        }),
       ),
+      datasetGeneration: dataset.generation,
+      candidateRevision: _stableDigest(candidateState),
+      deterministicSeedVersion: policy.policyVersion,
     );
+  }
+
+  Future<QueuePlan> _persistOrResumePlan({
+    required PresentationPlanIdentity identity,
+    required QueuePlan fresh,
+    required List<QueueCandidate> candidates,
+    required StoredPresentationPlan? stored,
+    required bool forceRebuild,
+    required DateTime atUtc,
+  }) async {
+    final Map<ElementRef, QueueCandidate> byRef = <ElementRef, QueueCandidate>{
+      for (final candidate in candidates) candidate.ref: candidate,
+    };
+    final Map<ElementRef, QueueLane> freshLanes = <ElementRef, QueueLane>{
+      for (final scored in fresh.scored) scored.ref: scored.lane,
+    };
+
+    if (stored != null && !forceRebuild) {
+      final List<PresentationPlanEntry> remaining = <PresentationPlanEntry>[
+        for (final entry in stored.remainingEntries)
+          if (byRef[entry.ref] case final QueueCandidate candidate)
+            if (candidate.isEligible(
+              nowUtc: _clock.nowUtc(),
+              today: identity.studyDay,
+            ))
+              entry,
+      ];
+      final Set<ElementRef> present = remaining
+          .map((PresentationPlanEntry entry) => entry.ref)
+          .toSet();
+      final List<PresentationPlanEntry> mandatory = <PresentationPlanEntry>[
+        for (final scored in fresh.scored)
+          if (scored.lane == QueueLane.mandatoryIntradayStep &&
+              !present.contains(scored.ref))
+            PresentationPlanEntry(ref: scored.ref, lane: scored.lane),
+      ];
+      if (mandatory.isNotEmpty) {
+        final int nextCard = remaining.indexWhere(
+          (PresentationPlanEntry entry) => entry.ref.type == ElementType.card,
+        );
+        remaining.insertAll(nextCard < 0 ? 0 : nextCard, mandatory);
+      }
+      final StoredPresentationPlan resumed = StoredPresentationPlan(
+        identity: identity,
+        remainingEntries: List<PresentationPlanEntry>.unmodifiable(remaining),
+        mergeCursor: stored.mergeCursor,
+        createdAtUtc: stored.createdAtUtc,
+        updatedAtUtc: atUtc,
+      );
+      await _learning.savePresentationPlan(resumed);
+      return QueuePlan(
+        entries: <QueueCandidate>[
+          for (final entry in remaining)
+            if (byRef[entry.ref] case final QueueCandidate candidate) candidate,
+        ],
+        overflow: fresh.overflow,
+        counters: fresh.counters,
+        scored: fresh.scored,
+        nextMergeCursor: stored.mergeCursor,
+      );
+    }
+
+    final List<PresentationPlanEntry> entries = <PresentationPlanEntry>[
+      for (final candidate in fresh.entries)
+        PresentationPlanEntry(
+          ref: candidate.ref,
+          lane: freshLanes[candidate.ref] ?? QueueLane.regularDueTopic,
+        ),
+    ];
+    final StoredPresentationPlan created = StoredPresentationPlan(
+      identity: identity,
+      remainingEntries: List<PresentationPlanEntry>.unmodifiable(entries),
+      mergeCursor: stored?.mergeCursor ?? QueueMergeCursor.zero,
+      createdAtUtc: stored?.createdAtUtc ?? atUtc,
+      updatedAtUtc: atUtc,
+    );
+    await _learning.savePresentationPlan(created);
+    return fresh;
   }
 
   /// The content repository, held so the read model can share this handler's
@@ -520,4 +641,46 @@ final class QueueHandlers {
     );
     return failure;
   }
+}
+
+final class _FutureCapacityLedger {
+  _FutureCapacityLedger({
+    required this.today,
+    required this.cardCapacity,
+    required this.topicCapacity,
+  });
+
+  final StudyDay today;
+  final int cardCapacity;
+  final int topicCapacity;
+  final Map<int, int> _cardLoad = <int, int>{};
+  final Map<int, int> _topicLoad = <int, int>{};
+
+  void addExisting(StudyDay day, {required bool isCard}) {
+    final Map<int, int> load = isCard ? _cardLoad : _topicLoad;
+    load.update(day.epochDay, (int value) => value + 1, ifAbsent: () => 1);
+  }
+
+  StudyDay? reserveNext({required bool isCard}) {
+    final int capacity = isCard ? cardCapacity : topicCapacity;
+    if (capacity <= 0) return null;
+    final Map<int, int> load = isCard ? _cardLoad : _topicLoad;
+    for (var offset = 1; offset <= 36500; offset++) {
+      final StudyDay day = today.addDays(offset);
+      final int current = load[day.epochDay] ?? 0;
+      if (current >= capacity) continue;
+      load[day.epochDay] = current + 1;
+      return day;
+    }
+    return null;
+  }
+}
+
+String _stableDigest(String value) {
+  var hash = 0x811c9dc5;
+  for (final int unit in value.codeUnits) {
+    hash ^= unit;
+    hash = (hash * 0x01000193) & 0x7fffffff;
+  }
+  return hash.toRadixString(16).padLeft(8, '0');
 }

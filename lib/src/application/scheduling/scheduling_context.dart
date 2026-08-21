@@ -102,10 +102,7 @@ final class SchedulingContext {
   /// The queue builder, configured and bound to the current order.
   Future<QueuePolicy> queuePolicy() async {
     final AppSettings current = await settings();
-    return QueuePolicy(
-      settings: current.queue,
-      scale: await priorityScale(),
-    );
+    return QueuePolicy(settings: current.queue, scale: await priorityScale());
   }
 
   /// Where [ref] currently sits in the collection, or null when it has no

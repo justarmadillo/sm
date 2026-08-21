@@ -70,6 +70,10 @@ enum ElementLifecycle {
   bool get isSchedulable => this == ElementLifecycle.active;
 }
 
+/// Provenance of a legacy visible due value when the original canonical due
+/// could not be reconstructed safely during migration.
+enum LegacyDueProvenance { canonical, legacyDueUnknown }
+
 /// Identity of one element, independent of which table stores it.
 @immutable
 final class ElementRef implements Comparable<ElementRef> {
@@ -79,7 +83,10 @@ final class ElementRef implements Comparable<ElementRef> {
   final ElementType type;
 
   @override
-  int compareTo(ElementRef other) => id.compareTo(other.id);
+  int compareTo(ElementRef other) {
+    final int byId = id.compareTo(other.id);
+    return byId != 0 ? byId : type.index.compareTo(other.type.index);
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -109,6 +116,12 @@ final class ElementSchedule {
     this.deferredUntil,
     this.deferralKind = DeferralKind.none,
     this.rootId,
+    this.parentElementId,
+    this.ordinal,
+    this.createdAtUtc,
+    this.updatedAtUtc,
+    this.revision = 1,
+    this.legacyDueProvenance = LegacyDueProvenance.canonical,
   });
 
   final ElementRef ref;
@@ -136,6 +149,29 @@ final class ElementSchedule {
   /// source is ever removed.
   final String? rootId;
 
+  /// Immediate learning-element parent. This is the sole canonical parent
+  /// coordinate; [rootId] is denormalized provenance, not another parent.
+  final String? parentElementId;
+
+  /// User-visible pending-order metadata. It is never identity, priority, or
+  /// a due-date tie breaker.
+  final int? ordinal;
+
+  /// Audit instants. They may be absent only on rows migrated from schemas
+  /// that never recorded them.
+  final DateTime? createdAtUtc;
+  final DateTime? updatedAtUtc;
+
+  /// Optimistic-concurrency revision of the common element row.
+  final int revision;
+
+  final LegacyDueProvenance legacyDueProvenance;
+
+  /// Canonical topic date. For cards, the exact canonical due lives only in
+  /// CardMemory; this day is a legacy projection retained for migration/UI
+  /// compatibility.
+  StudyDay get algorithmicDueDay => dueDay;
+
   /// The day the element actually becomes eligible.
   StudyDay get effectiveDueDay {
     final deferred = deferredUntil;
@@ -161,6 +197,12 @@ final class ElementSchedule {
     StudyDay? deferredUntil,
     DeferralKind? deferralKind,
     String? rootId,
+    String? parentElementId,
+    int? ordinal,
+    DateTime? createdAtUtc,
+    DateTime? updatedAtUtc,
+    int? revision,
+    LegacyDueProvenance? legacyDueProvenance,
     bool clearDeferral = false,
   }) => ElementSchedule(
     ref: ref,
@@ -173,6 +215,12 @@ final class ElementSchedule {
         ? DeferralKind.none
         : (deferralKind ?? this.deferralKind),
     rootId: rootId ?? this.rootId,
+    parentElementId: parentElementId ?? this.parentElementId,
+    ordinal: ordinal ?? this.ordinal,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+    updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+    revision: revision ?? this.revision,
+    legacyDueProvenance: legacyDueProvenance ?? this.legacyDueProvenance,
   );
 
   /// The same schedule with any automatic deferral taken back.

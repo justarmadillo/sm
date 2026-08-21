@@ -36,6 +36,74 @@ import 'element.dart';
 import 'interval_profile.dart';
 import 'study_day.dart';
 
+/// Persisted topic scheduler family.
+///
+/// Existing collections keep [legacySequence] until the user explicitly
+/// previews and applies a policy migration.  New topics use
+/// [topicAFactorV1].  This value belongs to the topic row, never to a global
+/// switch: changing settings must not reinterpret an existing schedule.
+enum TopicSchedulerKind {
+  legacySequence('legacy_sequence'),
+  topicAFactorV1('topic_afactor_v1');
+
+  const TopicSchedulerKind(this.storageName);
+
+  final String storageName;
+
+  static TopicSchedulerKind parse(String? value) => switch (value) {
+    'topic_afactor_v1' => TopicSchedulerKind.topicAFactorV1,
+    _ => TopicSchedulerKind.legacySequence,
+  };
+}
+
+/// Version of the transparent product policy specified by the scheduling
+/// implementation contract.
+const String kTopicAFactorV1PolicyVersion = 'topic_afactor_v1/1';
+
+/// Versioned boundary around the deliberately non-proprietary topic formula.
+abstract interface class TopicAFactorPolicy {
+  String get version;
+
+  AFactorComputation compute({required double priorityFraction});
+}
+
+/// [Product decision] The provisional priority-only A-factor policy.
+@immutable
+final class TopicAFactorV1Policy implements TopicAFactorPolicy {
+  const TopicAFactorV1Policy({this.settings = const TopicSchedulerSettings()});
+
+  final TopicSchedulerSettings settings;
+
+  @override
+  String get version => kTopicAFactorV1PolicyVersion;
+
+  @override
+  AFactorComputation compute({required double priorityFraction}) {
+    final double p = priorityFraction.isFinite
+        ? priorityFraction.clamp(0, 1)
+        : 0.5;
+    final double base = settings.baseAFactor;
+    final double priorityTerm =
+        settings.priorityFloor + settings.prioritySpan * p;
+    final double raw = base * priorityTerm;
+    final double minimum = math.max(1.01, settings.minAFactor);
+    final double maximum = math.max(minimum, settings.maxAFactor);
+    final double value = raw.clamp(minimum, maximum);
+    return AFactorComputation(
+      base: base,
+      priorityTerm: priorityTerm,
+      // These legacy experimental inputs are intentionally neutral in v1.
+      completionTerm: 1,
+      conversionTerm: 1,
+      yieldTerm: 1,
+      pressure: p,
+      yieldEwma: 0,
+      value: value,
+      policyVersion: version,
+    );
+  }
+}
+
 /// Full scheduling state of one topic.
 @immutable
 final class TopicState {
@@ -43,6 +111,8 @@ final class TopicState {
     required this.schedule,
     required this.profileId,
     required this.stepIndex,
+    this.schedulerKind = TopicSchedulerKind.topicAFactorV1,
+    this.schedulerVersion = kTopicAFactorV1PolicyVersion,
     this.intervalDays = 0,
     this.aFactor = 0,
     this.yieldEwma = 0,
@@ -50,6 +120,8 @@ final class TopicState {
     this.postponeCount = 0,
     this.encountersSinceLastCard = 0,
     this.lastEncounterDay,
+    this.policyInputSnapshot,
+    this.revision = 1,
   });
 
   final ElementSchedule schedule;
@@ -60,6 +132,12 @@ final class TopicState {
 
   /// Position in that sequence.
   final int stepIndex;
+
+  /// Scheduler family that produced the stored due and interval.
+  final TopicSchedulerKind schedulerKind;
+
+  /// Exact policy version that produced the latest canonical transition.
+  final String schedulerVersion;
 
   /// Current interval in days. `0` means none has been computed yet, in which
   /// case the priority-derived first interval applies.
@@ -86,6 +164,12 @@ final class TopicState {
   /// Day of the last completed encounter, for elapsed-time reporting.
   final StudyDay? lastEncounterDay;
 
+  /// Replayable inputs and output of the latest policy computation.
+  final Map<String, Object?>? policyInputSnapshot;
+
+  /// Optimistic-concurrency revision of the canonical topic schedule.
+  final int revision;
+
   ElementRef get ref => schedule.ref;
 
   /// Whether this topic is an extract rather than a source.
@@ -95,6 +179,8 @@ final class TopicState {
     ElementSchedule? schedule,
     String? profileId,
     int? stepIndex,
+    TopicSchedulerKind? schedulerKind,
+    String? schedulerVersion,
     double? intervalDays,
     double? aFactor,
     double? yieldEwma,
@@ -102,10 +188,14 @@ final class TopicState {
     int? postponeCount,
     int? encountersSinceLastCard,
     StudyDay? lastEncounterDay,
+    Map<String, Object?>? policyInputSnapshot,
+    int? revision,
   }) => TopicState(
     schedule: schedule ?? this.schedule,
     profileId: profileId ?? this.profileId,
     stepIndex: stepIndex ?? this.stepIndex,
+    schedulerKind: schedulerKind ?? this.schedulerKind,
+    schedulerVersion: schedulerVersion ?? this.schedulerVersion,
     intervalDays: intervalDays ?? this.intervalDays,
     aFactor: aFactor ?? this.aFactor,
     yieldEwma: yieldEwma ?? this.yieldEwma,
@@ -114,6 +204,8 @@ final class TopicState {
     encountersSinceLastCard:
         encountersSinceLastCard ?? this.encountersSinceLastCard,
     lastEncounterDay: lastEncounterDay ?? this.lastEncounterDay,
+    policyInputSnapshot: policyInputSnapshot ?? this.policyInputSnapshot,
+    revision: revision ?? this.revision,
   );
 
   @override
@@ -125,6 +217,8 @@ final class TopicState {
       other.schedule.lifecycle == schedule.lifecycle &&
       other.profileId == profileId &&
       other.stepIndex == stepIndex &&
+      other.schedulerKind == schedulerKind &&
+      other.schedulerVersion == schedulerVersion &&
       other.intervalDays == intervalDays &&
       other.aFactor == aFactor &&
       other.encounters == encounters &&
@@ -139,11 +233,14 @@ final class TopicState {
     schedule.lifecycle,
     profileId,
     stepIndex,
+    schedulerKind,
+    schedulerVersion,
     intervalDays,
     aFactor,
     encounters,
     postponeCount,
     encountersSinceLastCard,
+    revision,
   ]);
 
   @override
@@ -197,8 +294,7 @@ final class TopicEncounter {
   final bool unprocessedTextRemains;
 
   /// Extraction density for this session, in extracts per thousand words.
-  double get density =>
-      wordsRead <= 0 ? 0 : extractsCreated / wordsRead * 1000;
+  double get density => wordsRead <= 0 ? 0 : extractsCreated / wordsRead * 1000;
 
   /// Whether the source can be closed without the user saying so.
   bool get isExhausted => reachedEnd && !unprocessedTextRemains;
@@ -220,6 +316,7 @@ final class AFactorComputation {
     required this.pressure,
     required this.yieldEwma,
     required this.value,
+    this.policyVersion = kTopicAFactorV1PolicyVersion,
   });
 
   /// A before modulation.
@@ -246,6 +343,9 @@ final class AFactorComputation {
   /// The clamped result.
   final double value;
 
+  /// Versioned policy responsible for [value].
+  final String policyVersion;
+
   /// Log-friendly form. Contains no element content.
   Map<String, Object?> toMetadata() => <String, Object?>{
     'a_base': base,
@@ -256,6 +356,7 @@ final class AFactorComputation {
     'pressure': pressure,
     'yield_ewma': yieldEwma,
     'a_factor': value,
+    'policy_version': policyVersion,
   };
 }
 
@@ -360,13 +461,19 @@ final class TopicScheduler {
   const TopicScheduler(
     this.profiles, {
     this.settings = const TopicSchedulerSettings(),
-  });
+    TopicAFactorPolicy? policy,
+  }) : _policy = policy;
 
   /// Editable interval sequences, used in [TopicPacingMode.intervalProfile].
   final IntervalProfiles profiles;
 
   /// The tunables both models read.
   final TopicSchedulerSettings settings;
+
+  final TopicAFactorPolicy? _policy;
+
+  TopicAFactorPolicy get policy =>
+      _policy ?? TopicAFactorV1Policy(settings: settings);
 
   /// The first interval for a new topic of [type] at [pressure], in days.
   ///
@@ -404,21 +511,23 @@ final class TopicScheduler {
     required StudyDay today,
     required ElementSchedule Function(StudyDay due) buildSchedule,
     double pressure = 0.5,
+    TopicSchedulerKind schedulerKind = TopicSchedulerKind.topicAFactorV1,
   }) {
-    final int first = settings.pacing == TopicPacingMode.aFactor
-        ? firstIntervalDays(ref.type, pressure)
-        : profiles.byId(profileId).intervalAt(0);
+    // Creation controls introduction eligibility only.  It is not a
+    // repetition, so no interval or A-factor is written yet.
     final StudyDay due = ref.type == ElementType.extract
-        ? today.addDays(
-            settings.pacing == TopicPacingMode.aFactor ? first : 1,
-          )
+        ? today.addDays(1)
         : today;
     return TopicState(
       schedule: buildSchedule(due),
       profileId: profileId,
       stepIndex: 0,
-      intervalDays: first.toDouble(),
-      aFactor: settings.baseAFactor,
+      schedulerKind: schedulerKind,
+      schedulerVersion: schedulerKind == TopicSchedulerKind.topicAFactorV1
+          ? policy.version
+          : 'legacy_sequence/1',
+      intervalDays: 0,
+      aFactor: 0,
     );
   }
 
@@ -431,47 +540,9 @@ final class TopicScheduler {
     TopicEncounter encounter, {
     required double pressure,
   }) {
-    final double p = pressure.isNaN ? 0.5 : pressure.clamp(0, 1);
-    final double base = settings.baseAFactor;
-    final double priorityTerm =
-        settings.priorityFloor + settings.prioritySpan * p;
-
-    double completionTerm = 1;
-    double conversionTerm = 1;
-    if (state.isExtract) {
-      conversionTerm = encounter.hasChildItems
-          ? settings.convertedExtractFactor
-          : settings.unconvertedExtractFactor;
-    } else {
-      final double read = (encounter.readFraction ?? 0).clamp(0, 1);
-      completionTerm =
-          settings.completionFloor + settings.completionSpan * read;
-    }
-
-    var yieldTerm = 1.0;
-    var yieldEwma = state.yieldEwma;
-    if (settings.yieldEnabled && encounter.wordsRead > 0) {
-      yieldEwma =
-          (1 - settings.yieldSmoothing) * state.yieldEwma +
-          settings.yieldSmoothing * encounter.density;
-      final double normalized = (yieldEwma / settings.yieldReferenceDensity)
-          .clamp(0, 1);
-      yieldTerm = 1 - settings.yieldWeight * normalized;
-    }
-
-    final double raw =
-        base * priorityTerm * completionTerm * conversionTerm * yieldTerm;
-    final double clamped = raw.clamp(settings.minAFactor, settings.maxAFactor);
-    return AFactorComputation(
-      base: base,
-      priorityTerm: priorityTerm,
-      completionTerm: completionTerm,
-      conversionTerm: conversionTerm,
-      yieldTerm: yieldTerm,
-      pressure: p,
-      yieldEwma: yieldEwma,
-      value: clamped,
-    );
+    // Completion, conversion, and yield terms from the legacy exploration are
+    // not executable policy.  v1 is deliberately priority-only.
+    return policy.compute(priorityFraction: pressure);
   }
 
   /// Done: the user processed a portion and wants the next thing.
@@ -480,10 +551,8 @@ final class TopicScheduler {
   /// element has now been dealt with. Zero-progress Done is legal: deciding
   /// there is nothing more to do right now is itself a decision.
   ///
-  /// When [TopicSchedulerSettings.autoFinishSources] is on and the encounter
-  /// reports the text exhausted, the source finishes instead of being
-  /// rescheduled — a dead article that lingers in the queue forever is a real
-  /// SuperMemo annoyance and the fix belongs here, not in the user's memory.
+  /// Reaching the end never finishes a topic. Finish is a separate explicit
+  /// user action.
   TopicTransition complete(
     TopicState state,
     StudyDay today, {
@@ -496,34 +565,16 @@ final class TopicScheduler {
       return TopicTransition.unchanged(state);
     }
 
-    if (!state.isExtract &&
-        settings.autoFinishSources &&
-        encounter.isExhausted) {
-      return TopicTransition(
-        state.copyWith(
-          schedule: state.schedule.copyWith(
-            lifecycle: ElementLifecycle.finished,
-          ),
-          encounters: state.encounters + 1,
-          lastEncounterDay: today,
-        ),
-        <TopicEvent>[
-          TopicLifecycleChanged(
-            state.ref,
-            from: state.schedule.lifecycle,
-            to: ElementLifecycle.finished,
-            automatic: true,
-          ),
-        ],
-      );
-    }
-
     final (
       int wholeDays,
       double exactDays,
       AFactorComputation? computation,
       int nextStep,
-    ) = _nextInterval(state, encounter, pressure);
+    ) = _nextInterval(
+      state,
+      encounter,
+      pressure,
+    );
 
     final StudyDay nextDue = today.addDays(wholeDays);
     return TopicTransition(
@@ -535,10 +586,20 @@ final class TopicScheduler {
         encounters: state.encounters + 1,
         encountersSinceLastCard: state.encountersSinceLastCard + 1,
         lastEncounterDay: today,
+        schedulerVersion: computation?.policyVersion ?? state.schedulerVersion,
+        policyInputSnapshot: computation == null
+            ? state.policyInputSnapshot
+            : <String, Object?>{
+                'priority_fraction': computation.pressure,
+                'a_factor': computation.value,
+                'policy_version': computation.policyVersion,
+              },
+        revision: state.revision + 1,
         schedule: state.schedule.copyWith(
           dueDay: nextDue,
           originalDueDay: nextDue,
           clearDeferral: true,
+          revision: state.schedule.revision + 1,
         ),
       ),
       <TopicEvent>[
@@ -601,8 +662,7 @@ final class TopicScheduler {
     }
     final int days = intervalDays < 0 ? 0 : intervalDays;
     final StudyDay next = today.addDays(days);
-    if (state.schedule.dueDay == next &&
-        state.schedule.deferredUntil == null) {
+    if (state.schedule.dueDay == next && state.schedule.deferredUntil == null) {
       return TopicTransition.unchanged(state);
     }
     return TopicTransition(
@@ -674,12 +734,14 @@ final class TopicScheduler {
     }
     return TopicTransition(
       state.copyWith(
+        // Resume is a lifecycle transition, not an encounter or reschedule.
+        // Preserve the canonical due and interval until an explicit resume
+        // policy is approved.
         schedule: state.schedule.copyWith(
           lifecycle: ElementLifecycle.active,
-          dueDay: today,
-          originalDueDay: today,
-          clearDeferral: true,
+          revision: state.schedule.revision + 1,
         ),
+        revision: state.revision + 1,
       ),
       <TopicEvent>[
         TopicLifecycleChanged(
@@ -691,7 +753,7 @@ final class TopicScheduler {
     );
   }
 
-  /// Reopen a finished or dismissed topic, due today.
+  /// Reopen a finished or dismissed topic without forging a reschedule.
   TopicTransition reactivate(TopicState state, StudyDay today) {
     if (state.schedule.lifecycle == ElementLifecycle.active) {
       return TopicTransition.unchanged(state);
@@ -700,10 +762,9 @@ final class TopicScheduler {
       state.copyWith(
         schedule: state.schedule.copyWith(
           lifecycle: ElementLifecycle.active,
-          dueDay: today,
-          originalDueDay: today,
-          clearDeferral: true,
+          revision: state.schedule.revision + 1,
         ),
+        revision: state.revision + 1,
       ),
       <TopicEvent>[
         TopicLifecycleChanged(
@@ -720,8 +781,8 @@ final class TopicScheduler {
     TopicEncounter encounter,
     double pressure,
   ) {
-    switch (settings.pacing) {
-      case TopicPacingMode.intervalProfile:
+    switch (state.schedulerKind) {
+      case TopicSchedulerKind.legacySequence:
         final IntervalProfile profile = profiles.byId(state.profileId);
         final int interval = profile.intervalAt(state.stepIndex);
         return (
@@ -730,23 +791,29 @@ final class TopicScheduler {
           null,
           profile.nextStep(state.stepIndex),
         );
-      case TopicPacingMode.aFactor:
+      case TopicSchedulerKind.topicAFactorV1:
         final AFactorComputation computation = computeAFactor(
           state,
           encounter,
           pressure: pressure,
         );
-        final double current = state.intervalDays > 0
-            ? state.intervalDays
-            : firstIntervalDays(state.ref.type, pressure).toDouble();
-        // The unrounded product is carried forward so that an A only slightly
-        // above 1.0 still accumulates instead of being rounded away each time.
-        final double exact = math.max(1, current * computation.value);
+        final bool firstEncounter =
+            state.encounters == 0 || state.intervalDays <= 0;
+        final int wholeDays;
+        if (firstEncounter) {
+          wholeDays = firstIntervalDays(state.ref.type, pressure);
+        } else {
+          final int current = math.max(1, state.intervalDays.round());
+          wholeDays = math.max(
+            current + 1,
+            (current * computation.value).round(),
+          );
+        }
         return (
-          exact.round(),
-          exact,
+          wholeDays,
+          wholeDays.toDouble(),
           computation,
-          profiles.byId(state.profileId).nextStep(state.stepIndex),
+          state.stepIndex + 1,
         );
     }
   }
@@ -756,9 +823,19 @@ final class TopicScheduler {
       return TopicTransition.unchanged(state);
     }
     return TopicTransition(
-      state.copyWith(schedule: state.schedule.copyWith(lifecycle: to)),
+      state.copyWith(
+        schedule: state.schedule.copyWith(
+          lifecycle: to,
+          revision: state.schedule.revision + 1,
+        ),
+        revision: state.revision + 1,
+      ),
       <TopicEvent>[
-        TopicLifecycleChanged(state.ref, from: state.schedule.lifecycle, to: to),
+        TopicLifecycleChanged(
+          state.ref,
+          from: state.schedule.lifecycle,
+          to: to,
+        ),
       ],
     );
   }

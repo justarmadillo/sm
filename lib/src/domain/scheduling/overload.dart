@@ -76,10 +76,7 @@ final class OverloadValve {
   ///
   /// Scaling by the element's own interval is the point: "later" on a two-day
   /// topic and on a one-year card should not mean the same thing.
-  PostponeDecision later({
-    required double intervalDays,
-    required String seed,
-  }) {
+  PostponeDecision later({required double intervalDays, required String seed}) {
     final DeterministicRandom random = DeterministicRandom(seed);
     final double fraction = random.between(
       'later',

@@ -155,12 +155,13 @@ final class ExtractionHandlers {
       final StudyDay day = await today();
       final TopicScheduler scheduler = await _context.topicScheduler();
       final PriorityScale scale = await _context.priorityScale();
-      // Exact inheritance, once, at creation. A slight decay would be a blunt
-      // instrument that quietly demotes material the user deliberately marked
-      // critical; the queue caps one subtree's share of a session instead.
-      final double pressure = scale
-          .including(parentSchedule.priority)
-          .pressureOf(parentSchedule.priority);
+      // New children start adjacent to their parent in the one global order;
+      // they do not share the parent's key and do not invent a decay score.
+      final PriorityRank rank = PriorityRank.between(
+        parentSchedule.priority,
+        scale.neighbourBelow(parentSchedule.priority),
+      );
+      final double pressure = scale.including(rank).pressureOf(rank);
       final topic = scheduler.createFor(
         ref: ref,
         profileId: kExtractProfileId,
@@ -168,14 +169,14 @@ final class ExtractionHandlers {
         pressure: pressure,
         buildSchedule: (StudyDay due) => ElementSchedule(
           ref: ref,
-          // Later changes to the parent's priority deliberately do not
-          // cascade: the user ranked the parent, not everything ever taken
-          // from it. Spread is the explicit way to push a change down.
-          priority: parentSchedule.priority,
+          priority: rank,
           lifecycle: ElementLifecycle.active,
           dueDay: due,
           originalDueDay: due,
           rootId: parentSchedule.rootId ?? parent.rootSourceId,
+          parentElementId: parent.ref.id,
+          createdAtUtc: extract.createdAtUtc,
+          updatedAtUtc: extract.createdAtUtc,
         ),
       );
 
@@ -184,7 +185,8 @@ final class ExtractionHandlers {
       await _search.upsertDocument(
         SearchDocument(
           ref: ref,
-          title: (await _content.findSource(parent.rootSourceId))?.title ??
+          title:
+              (await _content.findSource(parent.rootSourceId))?.title ??
               'Extract',
           body: markdown,
           sourceId: parent.rootSourceId,
@@ -263,9 +265,9 @@ final class ExtractionHandlers {
     await _learning.deleteSchedule(ref);
     await _search.deleteDocument(ref);
     await _content.deleteExtract(extract.id);
-    // Undo means "as though it had never been made", so the creation row goes
-    // too. This and undo-grade are the only writers allowed to shrink the log.
-    await _learning.deleteRevlogByOperationId(recent.single.operationId);
+    // Scheduling history is append-only. Retain the creation record even when
+    // the just-created content is removed so transfer and audit consumers can
+    // still explain why the former element briefly had a schedule.
     await _log(command, kExtractUndoneKind, ref: ref);
     return okUnit;
   });

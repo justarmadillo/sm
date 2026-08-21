@@ -78,7 +78,7 @@ final class QueueSettings {
     this.randomization = 0.05,
     this.priorityWeight = 0.75,
     this.overdueWeight = 0.20,
-    this.protectedPercentile = 0.05,
+    this.protectedPercentile = 0.01,
     this.overloadTolerance = 1.2,
     this.maxSharePerRoot = 0.5,
     this.autoPostpone = true,
@@ -218,13 +218,13 @@ final class TopicSchedulerSettings {
     this.yieldWeight = 0.6,
     this.yieldSmoothing = 0.3,
     this.yieldReferenceDensity = 4.0,
-    this.minAFactor = 1.0,
+    this.minAFactor = 1.01,
     this.maxAFactor = 6.0,
     this.sourceFirstIntervalSpan = 20,
     this.sourceFirstIntervalMax = 30,
     this.extractFirstIntervalSpan = 10,
     this.extractFirstIntervalMax = 14,
-    this.autoFinishSources = true,
+    this.autoFinishSources = false,
     this.extractFinishPromptAfter = 3,
   });
 
@@ -400,7 +400,7 @@ final class CardSettings {
     this.maximumIntervalDays = 36500,
     this.enableFuzzing = true,
     this.leechLapses = 8,
-    this.burySiblings = true,
+    this.burySiblings = false,
   });
 
   /// Probability of recall FSRS aims for at the scheduled instant.
@@ -472,8 +472,8 @@ final class CardSettings {
 @immutable
 final class PostponeSettings {
   const PostponeSettings({
-    this.laterMinFraction = 0.10,
-    this.laterMaxFraction = 0.30,
+    this.laterMinFraction = 0.20,
+    this.laterMaxFraction = 0.20,
     this.laterMaxDays = 365,
     this.autoBaseFraction = 0.10,
     this.autoPriorityMultiplier = 4.0,

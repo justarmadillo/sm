@@ -2752,33 +2752,28 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _extractIdMeta = const VerificationMeta(
-    'extractId',
+  static const VerificationMeta _parentElementIdMeta = const VerificationMeta(
+    'parentElementId',
   );
   @override
-  late final GeneratedColumn<String> extractId = GeneratedColumn<String>(
-    'extract_id',
+  late final GeneratedColumn<String> parentElementId = GeneratedColumn<String>(
+    'parent_element_id',
     aliasedName,
     true,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES extracts (id) ON DELETE RESTRICT',
-    ),
   );
-  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
-    'sourceId',
+  static const VerificationMeta _parentElementTypeMeta = const VerificationMeta(
+    'parentElementType',
   );
   @override
-  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
-    'source_id',
+  late final GeneratedColumn<int> parentElementType = GeneratedColumn<int>(
+    'parent_element_type',
     aliasedName,
     true,
-    type: DriftSqlType.string,
+    check: () => ComparableExpr(parentElementType).isBetweenValues(0, 1),
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES sources (id) ON DELETE RESTRICT',
-    ),
   );
   static const VerificationMeta _kindMeta = const VerificationMeta('kind');
   @override
@@ -2844,8 +2839,8 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
   @override
   List<GeneratedColumn> get $columns => [
     id,
-    extractId,
-    sourceId,
+    parentElementId,
+    parentElementType,
     kind,
     front,
     back,
@@ -2870,16 +2865,22 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
     } else if (isInserting) {
       context.missing(_idMeta);
     }
-    if (data.containsKey('extract_id')) {
+    if (data.containsKey('parent_element_id')) {
       context.handle(
-        _extractIdMeta,
-        extractId.isAcceptableOrUnknown(data['extract_id']!, _extractIdMeta),
+        _parentElementIdMeta,
+        parentElementId.isAcceptableOrUnknown(
+          data['parent_element_id']!,
+          _parentElementIdMeta,
+        ),
       );
     }
-    if (data.containsKey('source_id')) {
+    if (data.containsKey('parent_element_type')) {
       context.handle(
-        _sourceIdMeta,
-        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+        _parentElementTypeMeta,
+        parentElementType.isAcceptableOrUnknown(
+          data['parent_element_type']!,
+          _parentElementTypeMeta,
+        ),
       );
     }
     if (data.containsKey('kind')) {
@@ -2948,13 +2949,13 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
-      extractId: attachedDatabase.typeMapping.read(
+      parentElementId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}extract_id'],
+        data['${effectivePrefix}parent_element_id'],
       ),
-      sourceId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}source_id'],
+      parentElementType: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}parent_element_type'],
       ),
       kind: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -2992,15 +2993,12 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
 class CardRow extends DataClass implements Insertable<CardRow> {
   final String id;
 
-  /// Parent extract, when the card was formulated from one.
-  ///
-  /// Two nullable foreign keys rather than one polymorphic column: a card can
-  /// hang off an extract, off an article directly, or off nothing at all, and
-  /// each of the two real parents still gets database-level integrity.
-  final String? extractId;
-
-  /// Parent source, when the card was formulated straight from an article.
-  final String? sourceId;
+  /// Sole canonical learning-element parent. [parentElementType] is null iff
+  /// this is a standalone card. Referential validation is performed against
+  /// the common schedule table inside the insertion transaction because
+  /// SQLite cannot express a polymorphic foreign key.
+  final String? parentElementId;
+  final int? parentElementType;
 
   /// Index into the card-kind enum.
   final int kind;
@@ -3011,8 +3009,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
   final int? editedAtUtc;
   const CardRow({
     required this.id,
-    this.extractId,
-    this.sourceId,
+    this.parentElementId,
+    this.parentElementType,
     required this.kind,
     required this.front,
     required this.back,
@@ -3024,11 +3022,11 @@ class CardRow extends DataClass implements Insertable<CardRow> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
-    if (!nullToAbsent || extractId != null) {
-      map['extract_id'] = Variable<String>(extractId);
+    if (!nullToAbsent || parentElementId != null) {
+      map['parent_element_id'] = Variable<String>(parentElementId);
     }
-    if (!nullToAbsent || sourceId != null) {
-      map['source_id'] = Variable<String>(sourceId);
+    if (!nullToAbsent || parentElementType != null) {
+      map['parent_element_type'] = Variable<int>(parentElementType);
     }
     map['kind'] = Variable<int>(kind);
     map['front'] = Variable<String>(front);
@@ -3046,12 +3044,12 @@ class CardRow extends DataClass implements Insertable<CardRow> {
   CardsCompanion toCompanion(bool nullToAbsent) {
     return CardsCompanion(
       id: Value(id),
-      extractId: extractId == null && nullToAbsent
+      parentElementId: parentElementId == null && nullToAbsent
           ? const Value.absent()
-          : Value(extractId),
-      sourceId: sourceId == null && nullToAbsent
+          : Value(parentElementId),
+      parentElementType: parentElementType == null && nullToAbsent
           ? const Value.absent()
-          : Value(sourceId),
+          : Value(parentElementType),
       kind: Value(kind),
       front: Value(front),
       back: Value(back),
@@ -3072,8 +3070,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return CardRow(
       id: serializer.fromJson<String>(json['id']),
-      extractId: serializer.fromJson<String?>(json['extractId']),
-      sourceId: serializer.fromJson<String?>(json['sourceId']),
+      parentElementId: serializer.fromJson<String?>(json['parentElementId']),
+      parentElementType: serializer.fromJson<int?>(json['parentElementType']),
       kind: serializer.fromJson<int>(json['kind']),
       front: serializer.fromJson<String>(json['front']),
       back: serializer.fromJson<String>(json['back']),
@@ -3087,8 +3085,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
-      'extractId': serializer.toJson<String?>(extractId),
-      'sourceId': serializer.toJson<String?>(sourceId),
+      'parentElementId': serializer.toJson<String?>(parentElementId),
+      'parentElementType': serializer.toJson<int?>(parentElementType),
       'kind': serializer.toJson<int>(kind),
       'front': serializer.toJson<String>(front),
       'back': serializer.toJson<String>(back),
@@ -3100,8 +3098,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
 
   CardRow copyWith({
     String? id,
-    Value<String?> extractId = const Value.absent(),
-    Value<String?> sourceId = const Value.absent(),
+    Value<String?> parentElementId = const Value.absent(),
+    Value<int?> parentElementType = const Value.absent(),
     int? kind,
     String? front,
     String? back,
@@ -3110,8 +3108,12 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     Value<int?> editedAtUtc = const Value.absent(),
   }) => CardRow(
     id: id ?? this.id,
-    extractId: extractId.present ? extractId.value : this.extractId,
-    sourceId: sourceId.present ? sourceId.value : this.sourceId,
+    parentElementId: parentElementId.present
+        ? parentElementId.value
+        : this.parentElementId,
+    parentElementType: parentElementType.present
+        ? parentElementType.value
+        : this.parentElementType,
     kind: kind ?? this.kind,
     front: front ?? this.front,
     back: back ?? this.back,
@@ -3122,8 +3124,12 @@ class CardRow extends DataClass implements Insertable<CardRow> {
   CardRow copyWithCompanion(CardsCompanion data) {
     return CardRow(
       id: data.id.present ? data.id.value : this.id,
-      extractId: data.extractId.present ? data.extractId.value : this.extractId,
-      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      parentElementId: data.parentElementId.present
+          ? data.parentElementId.value
+          : this.parentElementId,
+      parentElementType: data.parentElementType.present
+          ? data.parentElementType.value
+          : this.parentElementType,
       kind: data.kind.present ? data.kind.value : this.kind,
       front: data.front.present ? data.front.value : this.front,
       back: data.back.present ? data.back.value : this.back,
@@ -3143,8 +3149,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
   String toString() {
     return (StringBuffer('CardRow(')
           ..write('id: $id, ')
-          ..write('extractId: $extractId, ')
-          ..write('sourceId: $sourceId, ')
+          ..write('parentElementId: $parentElementId, ')
+          ..write('parentElementType: $parentElementType, ')
           ..write('kind: $kind, ')
           ..write('front: $front, ')
           ..write('back: $back, ')
@@ -3158,8 +3164,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
   @override
   int get hashCode => Object.hash(
     id,
-    extractId,
-    sourceId,
+    parentElementId,
+    parentElementType,
     kind,
     front,
     back,
@@ -3172,8 +3178,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       identical(this, other) ||
       (other is CardRow &&
           other.id == this.id &&
-          other.extractId == this.extractId &&
-          other.sourceId == this.sourceId &&
+          other.parentElementId == this.parentElementId &&
+          other.parentElementType == this.parentElementType &&
           other.kind == this.kind &&
           other.front == this.front &&
           other.back == this.back &&
@@ -3184,8 +3190,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
 
 class CardsCompanion extends UpdateCompanion<CardRow> {
   final Value<String> id;
-  final Value<String?> extractId;
-  final Value<String?> sourceId;
+  final Value<String?> parentElementId;
+  final Value<int?> parentElementType;
   final Value<int> kind;
   final Value<String> front;
   final Value<String> back;
@@ -3195,8 +3201,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
   final Value<int> rowid;
   const CardsCompanion({
     this.id = const Value.absent(),
-    this.extractId = const Value.absent(),
-    this.sourceId = const Value.absent(),
+    this.parentElementId = const Value.absent(),
+    this.parentElementType = const Value.absent(),
     this.kind = const Value.absent(),
     this.front = const Value.absent(),
     this.back = const Value.absent(),
@@ -3207,8 +3213,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
   });
   CardsCompanion.insert({
     required String id,
-    this.extractId = const Value.absent(),
-    this.sourceId = const Value.absent(),
+    this.parentElementId = const Value.absent(),
+    this.parentElementType = const Value.absent(),
     required int kind,
     required String front,
     required String back,
@@ -3223,8 +3229,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
        createdAtUtc = Value(createdAtUtc);
   static Insertable<CardRow> custom({
     Expression<String>? id,
-    Expression<String>? extractId,
-    Expression<String>? sourceId,
+    Expression<String>? parentElementId,
+    Expression<int>? parentElementType,
     Expression<int>? kind,
     Expression<String>? front,
     Expression<String>? back,
@@ -3235,8 +3241,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
-      if (extractId != null) 'extract_id': extractId,
-      if (sourceId != null) 'source_id': sourceId,
+      if (parentElementId != null) 'parent_element_id': parentElementId,
+      if (parentElementType != null) 'parent_element_type': parentElementType,
       if (kind != null) 'kind': kind,
       if (front != null) 'front': front,
       if (back != null) 'back': back,
@@ -3249,8 +3255,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
 
   CardsCompanion copyWith({
     Value<String>? id,
-    Value<String?>? extractId,
-    Value<String?>? sourceId,
+    Value<String?>? parentElementId,
+    Value<int?>? parentElementType,
     Value<int>? kind,
     Value<String>? front,
     Value<String>? back,
@@ -3261,8 +3267,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
   }) {
     return CardsCompanion(
       id: id ?? this.id,
-      extractId: extractId ?? this.extractId,
-      sourceId: sourceId ?? this.sourceId,
+      parentElementId: parentElementId ?? this.parentElementId,
+      parentElementType: parentElementType ?? this.parentElementType,
       kind: kind ?? this.kind,
       front: front ?? this.front,
       back: back ?? this.back,
@@ -3279,11 +3285,11 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     if (id.present) {
       map['id'] = Variable<String>(id.value);
     }
-    if (extractId.present) {
-      map['extract_id'] = Variable<String>(extractId.value);
+    if (parentElementId.present) {
+      map['parent_element_id'] = Variable<String>(parentElementId.value);
     }
-    if (sourceId.present) {
-      map['source_id'] = Variable<String>(sourceId.value);
+    if (parentElementType.present) {
+      map['parent_element_type'] = Variable<int>(parentElementType.value);
     }
     if (kind.present) {
       map['kind'] = Variable<int>(kind.value);
@@ -3313,8 +3319,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
   String toString() {
     return (StringBuffer('CardsCompanion(')
           ..write('id: $id, ')
-          ..write('extractId: $extractId, ')
-          ..write('sourceId: $sourceId, ')
+          ..write('parentElementId: $parentElementId, ')
+          ..write('parentElementType: $parentElementType, ')
           ..write('kind: $kind, ')
           ..write('front: $front, ')
           ..write('back: $back, ')
@@ -3436,6 +3442,75 @@ class $ElementSchedulesTable extends ElementSchedules
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _parentElementIdMeta = const VerificationMeta(
+    'parentElementId',
+  );
+  @override
+  late final GeneratedColumn<String> parentElementId = GeneratedColumn<String>(
+    'parent_element_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _ordinalMeta = const VerificationMeta(
+    'ordinal',
+  );
+  @override
+  late final GeneratedColumn<int> ordinal = GeneratedColumn<int>(
+    'ordinal',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> createdAtUtc = GeneratedColumn<int>(
+    'created_at_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtUtcMeta = const VerificationMeta(
+    'updatedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAtUtc = GeneratedColumn<int>(
+    'updated_at_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(revision).isBiggerOrEqualValue(1),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _legacyDueProvenanceMeta =
+      const VerificationMeta('legacyDueProvenance');
+  @override
+  late final GeneratedColumn<int> legacyDueProvenance = GeneratedColumn<int>(
+    'legacy_due_provenance',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(legacyDueProvenance).isBetweenValues(0, 1),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _zoneIdMeta = const VerificationMeta('zoneId');
   @override
   late final GeneratedColumn<String> zoneId = GeneratedColumn<String>(
@@ -3456,6 +3531,12 @@ class $ElementSchedulesTable extends ElementSchedules
     deferredUntil,
     deferralKind,
     rootId,
+    parentElementId,
+    ordinal,
+    createdAtUtc,
+    updatedAtUtc,
+    revision,
+    legacyDueProvenance,
     zoneId,
   ];
   @override
@@ -3551,6 +3632,54 @@ class $ElementSchedulesTable extends ElementSchedules
         rootId.isAcceptableOrUnknown(data['root_id']!, _rootIdMeta),
       );
     }
+    if (data.containsKey('parent_element_id')) {
+      context.handle(
+        _parentElementIdMeta,
+        parentElementId.isAcceptableOrUnknown(
+          data['parent_element_id']!,
+          _parentElementIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('ordinal')) {
+      context.handle(
+        _ordinalMeta,
+        ordinal.isAcceptableOrUnknown(data['ordinal']!, _ordinalMeta),
+      );
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at_utc')) {
+      context.handle(
+        _updatedAtUtcMeta,
+        updatedAtUtc.isAcceptableOrUnknown(
+          data['updated_at_utc']!,
+          _updatedAtUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
+    if (data.containsKey('legacy_due_provenance')) {
+      context.handle(
+        _legacyDueProvenanceMeta,
+        legacyDueProvenance.isAcceptableOrUnknown(
+          data['legacy_due_provenance']!,
+          _legacyDueProvenanceMeta,
+        ),
+      );
+    }
     if (data.containsKey('zone_id')) {
       context.handle(
         _zoneIdMeta,
@@ -3604,6 +3733,30 @@ class $ElementSchedulesTable extends ElementSchedules
         DriftSqlType.string,
         data['${effectivePrefix}root_id'],
       ),
+      parentElementId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_element_id'],
+      ),
+      ordinal: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}ordinal'],
+      ),
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at_utc'],
+      ),
+      updatedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at_utc'],
+      ),
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      legacyDueProvenance: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}legacy_due_provenance'],
+      )!,
       zoneId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}zone_id'],
@@ -3651,6 +3804,18 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
   /// taking over a session. Denormalizing also means a card keeps its
   /// citation if its source is ever removed.
   final String? rootId;
+
+  /// Immediate learning-element parent; one coordinate for every kind.
+  final String? parentElementId;
+
+  /// Pending/user-visible order metadata, independent of priority and due.
+  final int? ordinal;
+  final int? createdAtUtc;
+  final int? updatedAtUtc;
+  final int revision;
+
+  /// canonical (0) or legacy_due_unknown (1).
+  final int legacyDueProvenance;
   final String zoneId;
   const ScheduleRow({
     required this.elementId,
@@ -3662,6 +3827,12 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
     this.deferredUntil,
     required this.deferralKind,
     this.rootId,
+    this.parentElementId,
+    this.ordinal,
+    this.createdAtUtc,
+    this.updatedAtUtc,
+    required this.revision,
+    required this.legacyDueProvenance,
     required this.zoneId,
   });
   @override
@@ -3680,6 +3851,20 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
     if (!nullToAbsent || rootId != null) {
       map['root_id'] = Variable<String>(rootId);
     }
+    if (!nullToAbsent || parentElementId != null) {
+      map['parent_element_id'] = Variable<String>(parentElementId);
+    }
+    if (!nullToAbsent || ordinal != null) {
+      map['ordinal'] = Variable<int>(ordinal);
+    }
+    if (!nullToAbsent || createdAtUtc != null) {
+      map['created_at_utc'] = Variable<int>(createdAtUtc);
+    }
+    if (!nullToAbsent || updatedAtUtc != null) {
+      map['updated_at_utc'] = Variable<int>(updatedAtUtc);
+    }
+    map['revision'] = Variable<int>(revision);
+    map['legacy_due_provenance'] = Variable<int>(legacyDueProvenance);
     map['zone_id'] = Variable<String>(zoneId);
     return map;
   }
@@ -3699,6 +3884,20 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
       rootId: rootId == null && nullToAbsent
           ? const Value.absent()
           : Value(rootId),
+      parentElementId: parentElementId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentElementId),
+      ordinal: ordinal == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ordinal),
+      createdAtUtc: createdAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(createdAtUtc),
+      updatedAtUtc: updatedAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAtUtc),
+      revision: Value(revision),
+      legacyDueProvenance: Value(legacyDueProvenance),
       zoneId: Value(zoneId),
     );
   }
@@ -3718,6 +3917,14 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
       deferredUntil: serializer.fromJson<int?>(json['deferredUntil']),
       deferralKind: serializer.fromJson<int>(json['deferralKind']),
       rootId: serializer.fromJson<String?>(json['rootId']),
+      parentElementId: serializer.fromJson<String?>(json['parentElementId']),
+      ordinal: serializer.fromJson<int?>(json['ordinal']),
+      createdAtUtc: serializer.fromJson<int?>(json['createdAtUtc']),
+      updatedAtUtc: serializer.fromJson<int?>(json['updatedAtUtc']),
+      revision: serializer.fromJson<int>(json['revision']),
+      legacyDueProvenance: serializer.fromJson<int>(
+        json['legacyDueProvenance'],
+      ),
       zoneId: serializer.fromJson<String>(json['zoneId']),
     );
   }
@@ -3734,6 +3941,12 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
       'deferredUntil': serializer.toJson<int?>(deferredUntil),
       'deferralKind': serializer.toJson<int>(deferralKind),
       'rootId': serializer.toJson<String?>(rootId),
+      'parentElementId': serializer.toJson<String?>(parentElementId),
+      'ordinal': serializer.toJson<int?>(ordinal),
+      'createdAtUtc': serializer.toJson<int?>(createdAtUtc),
+      'updatedAtUtc': serializer.toJson<int?>(updatedAtUtc),
+      'revision': serializer.toJson<int>(revision),
+      'legacyDueProvenance': serializer.toJson<int>(legacyDueProvenance),
       'zoneId': serializer.toJson<String>(zoneId),
     };
   }
@@ -3748,6 +3961,12 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
     Value<int?> deferredUntil = const Value.absent(),
     int? deferralKind,
     Value<String?> rootId = const Value.absent(),
+    Value<String?> parentElementId = const Value.absent(),
+    Value<int?> ordinal = const Value.absent(),
+    Value<int?> createdAtUtc = const Value.absent(),
+    Value<int?> updatedAtUtc = const Value.absent(),
+    int? revision,
+    int? legacyDueProvenance,
     String? zoneId,
   }) => ScheduleRow(
     elementId: elementId ?? this.elementId,
@@ -3761,6 +3980,14 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
         : this.deferredUntil,
     deferralKind: deferralKind ?? this.deferralKind,
     rootId: rootId.present ? rootId.value : this.rootId,
+    parentElementId: parentElementId.present
+        ? parentElementId.value
+        : this.parentElementId,
+    ordinal: ordinal.present ? ordinal.value : this.ordinal,
+    createdAtUtc: createdAtUtc.present ? createdAtUtc.value : this.createdAtUtc,
+    updatedAtUtc: updatedAtUtc.present ? updatedAtUtc.value : this.updatedAtUtc,
+    revision: revision ?? this.revision,
+    legacyDueProvenance: legacyDueProvenance ?? this.legacyDueProvenance,
     zoneId: zoneId ?? this.zoneId,
   );
   ScheduleRow copyWithCompanion(ElementSchedulesCompanion data) {
@@ -3784,6 +4011,20 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
           ? data.deferralKind.value
           : this.deferralKind,
       rootId: data.rootId.present ? data.rootId.value : this.rootId,
+      parentElementId: data.parentElementId.present
+          ? data.parentElementId.value
+          : this.parentElementId,
+      ordinal: data.ordinal.present ? data.ordinal.value : this.ordinal,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+      updatedAtUtc: data.updatedAtUtc.present
+          ? data.updatedAtUtc.value
+          : this.updatedAtUtc,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      legacyDueProvenance: data.legacyDueProvenance.present
+          ? data.legacyDueProvenance.value
+          : this.legacyDueProvenance,
       zoneId: data.zoneId.present ? data.zoneId.value : this.zoneId,
     );
   }
@@ -3800,6 +4041,12 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
           ..write('deferredUntil: $deferredUntil, ')
           ..write('deferralKind: $deferralKind, ')
           ..write('rootId: $rootId, ')
+          ..write('parentElementId: $parentElementId, ')
+          ..write('ordinal: $ordinal, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('updatedAtUtc: $updatedAtUtc, ')
+          ..write('revision: $revision, ')
+          ..write('legacyDueProvenance: $legacyDueProvenance, ')
           ..write('zoneId: $zoneId')
           ..write(')'))
         .toString();
@@ -3816,6 +4063,12 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
     deferredUntil,
     deferralKind,
     rootId,
+    parentElementId,
+    ordinal,
+    createdAtUtc,
+    updatedAtUtc,
+    revision,
+    legacyDueProvenance,
     zoneId,
   );
   @override
@@ -3831,6 +4084,12 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
           other.deferredUntil == this.deferredUntil &&
           other.deferralKind == this.deferralKind &&
           other.rootId == this.rootId &&
+          other.parentElementId == this.parentElementId &&
+          other.ordinal == this.ordinal &&
+          other.createdAtUtc == this.createdAtUtc &&
+          other.updatedAtUtc == this.updatedAtUtc &&
+          other.revision == this.revision &&
+          other.legacyDueProvenance == this.legacyDueProvenance &&
           other.zoneId == this.zoneId);
 }
 
@@ -3844,6 +4103,12 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
   final Value<int?> deferredUntil;
   final Value<int> deferralKind;
   final Value<String?> rootId;
+  final Value<String?> parentElementId;
+  final Value<int?> ordinal;
+  final Value<int?> createdAtUtc;
+  final Value<int?> updatedAtUtc;
+  final Value<int> revision;
+  final Value<int> legacyDueProvenance;
   final Value<String> zoneId;
   final Value<int> rowid;
   const ElementSchedulesCompanion({
@@ -3856,6 +4121,12 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     this.deferredUntil = const Value.absent(),
     this.deferralKind = const Value.absent(),
     this.rootId = const Value.absent(),
+    this.parentElementId = const Value.absent(),
+    this.ordinal = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.updatedAtUtc = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.legacyDueProvenance = const Value.absent(),
     this.zoneId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -3869,6 +4140,12 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     this.deferredUntil = const Value.absent(),
     this.deferralKind = const Value.absent(),
     this.rootId = const Value.absent(),
+    this.parentElementId = const Value.absent(),
+    this.ordinal = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.updatedAtUtc = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.legacyDueProvenance = const Value.absent(),
     required String zoneId,
     this.rowid = const Value.absent(),
   }) : elementId = Value(elementId),
@@ -3888,6 +4165,12 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     Expression<int>? deferredUntil,
     Expression<int>? deferralKind,
     Expression<String>? rootId,
+    Expression<String>? parentElementId,
+    Expression<int>? ordinal,
+    Expression<int>? createdAtUtc,
+    Expression<int>? updatedAtUtc,
+    Expression<int>? revision,
+    Expression<int>? legacyDueProvenance,
     Expression<String>? zoneId,
     Expression<int>? rowid,
   }) {
@@ -3901,6 +4184,13 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
       if (deferredUntil != null) 'deferred_until': deferredUntil,
       if (deferralKind != null) 'deferral_kind': deferralKind,
       if (rootId != null) 'root_id': rootId,
+      if (parentElementId != null) 'parent_element_id': parentElementId,
+      if (ordinal != null) 'ordinal': ordinal,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (updatedAtUtc != null) 'updated_at_utc': updatedAtUtc,
+      if (revision != null) 'revision': revision,
+      if (legacyDueProvenance != null)
+        'legacy_due_provenance': legacyDueProvenance,
       if (zoneId != null) 'zone_id': zoneId,
       if (rowid != null) 'rowid': rowid,
     });
@@ -3916,6 +4206,12 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     Value<int?>? deferredUntil,
     Value<int>? deferralKind,
     Value<String?>? rootId,
+    Value<String?>? parentElementId,
+    Value<int?>? ordinal,
+    Value<int?>? createdAtUtc,
+    Value<int?>? updatedAtUtc,
+    Value<int>? revision,
+    Value<int>? legacyDueProvenance,
     Value<String>? zoneId,
     Value<int>? rowid,
   }) {
@@ -3929,6 +4225,12 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
       deferredUntil: deferredUntil ?? this.deferredUntil,
       deferralKind: deferralKind ?? this.deferralKind,
       rootId: rootId ?? this.rootId,
+      parentElementId: parentElementId ?? this.parentElementId,
+      ordinal: ordinal ?? this.ordinal,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+      revision: revision ?? this.revision,
+      legacyDueProvenance: legacyDueProvenance ?? this.legacyDueProvenance,
       zoneId: zoneId ?? this.zoneId,
       rowid: rowid ?? this.rowid,
     );
@@ -3964,6 +4266,24 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     if (rootId.present) {
       map['root_id'] = Variable<String>(rootId.value);
     }
+    if (parentElementId.present) {
+      map['parent_element_id'] = Variable<String>(parentElementId.value);
+    }
+    if (ordinal.present) {
+      map['ordinal'] = Variable<int>(ordinal.value);
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<int>(createdAtUtc.value);
+    }
+    if (updatedAtUtc.present) {
+      map['updated_at_utc'] = Variable<int>(updatedAtUtc.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (legacyDueProvenance.present) {
+      map['legacy_due_provenance'] = Variable<int>(legacyDueProvenance.value);
+    }
     if (zoneId.present) {
       map['zone_id'] = Variable<String>(zoneId.value);
     }
@@ -3985,6 +4305,12 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
           ..write('deferredUntil: $deferredUntil, ')
           ..write('deferralKind: $deferralKind, ')
           ..write('rootId: $rootId, ')
+          ..write('parentElementId: $parentElementId, ')
+          ..write('ordinal: $ordinal, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('updatedAtUtc: $updatedAtUtc, ')
+          ..write('revision: $revision, ')
+          ..write('legacyDueProvenance: $legacyDueProvenance, ')
           ..write('zoneId: $zoneId, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -4134,6 +4460,65 @@ class $TopicStatesTable extends TopicStates
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _algorithmDueDayMeta = const VerificationMeta(
+    'algorithmDueDay',
+  );
+  @override
+  late final GeneratedColumn<int> algorithmDueDay = GeneratedColumn<int>(
+    'algorithm_due_day',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schedulerKindMeta = const VerificationMeta(
+    'schedulerKind',
+  );
+  @override
+  late final GeneratedColumn<String> schedulerKind = GeneratedColumn<String>(
+    'scheduler_kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('topic_afactor_v1'),
+  );
+  static const VerificationMeta _schedulerVersionMeta = const VerificationMeta(
+    'schedulerVersion',
+  );
+  @override
+  late final GeneratedColumn<String> schedulerVersion = GeneratedColumn<String>(
+    'scheduler_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('topic_afactor_v1/1'),
+  );
+  static const VerificationMeta _policyInputSnapshotMeta =
+      const VerificationMeta('policyInputSnapshot');
+  @override
+  late final GeneratedColumn<String> policyInputSnapshot =
+      GeneratedColumn<String>(
+        'policy_input_snapshot',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(revision).isBiggerOrEqualValue(1),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     elementId,
@@ -4147,6 +4532,11 @@ class $TopicStatesTable extends TopicStates
     postponeCount,
     encountersSinceLastCard,
     lastEncounterDay,
+    algorithmDueDay,
+    schedulerKind,
+    schedulerVersion,
+    policyInputSnapshot,
+    revision,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4249,6 +4639,48 @@ class $TopicStatesTable extends TopicStates
         ),
       );
     }
+    if (data.containsKey('algorithm_due_day')) {
+      context.handle(
+        _algorithmDueDayMeta,
+        algorithmDueDay.isAcceptableOrUnknown(
+          data['algorithm_due_day']!,
+          _algorithmDueDayMeta,
+        ),
+      );
+    }
+    if (data.containsKey('scheduler_kind')) {
+      context.handle(
+        _schedulerKindMeta,
+        schedulerKind.isAcceptableOrUnknown(
+          data['scheduler_kind']!,
+          _schedulerKindMeta,
+        ),
+      );
+    }
+    if (data.containsKey('scheduler_version')) {
+      context.handle(
+        _schedulerVersionMeta,
+        schedulerVersion.isAcceptableOrUnknown(
+          data['scheduler_version']!,
+          _schedulerVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('policy_input_snapshot')) {
+      context.handle(
+        _policyInputSnapshotMeta,
+        policyInputSnapshot.isAcceptableOrUnknown(
+          data['policy_input_snapshot']!,
+          _policyInputSnapshotMeta,
+        ),
+      );
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
     return context;
   }
 
@@ -4302,6 +4734,26 @@ class $TopicStatesTable extends TopicStates
         DriftSqlType.int,
         data['${effectivePrefix}last_encounter_day'],
       ),
+      algorithmDueDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}algorithm_due_day'],
+      ),
+      schedulerKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scheduler_kind'],
+      )!,
+      schedulerVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scheduler_version'],
+      )!,
+      policyInputSnapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}policy_input_snapshot'],
+      ),
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
     );
   }
 
@@ -4345,6 +4797,14 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
 
   /// Day of the last completed encounter, in days since the Unix epoch.
   final int? lastEncounterDay;
+
+  /// Canonical topic due in its local StudyDay domain. The common due column
+  /// remains only as a compatibility projection for older read models.
+  final int? algorithmDueDay;
+  final String schedulerKind;
+  final String schedulerVersion;
+  final String? policyInputSnapshot;
+  final int revision;
   const TopicStateRow({
     required this.elementId,
     required this.elementType,
@@ -4357,6 +4817,11 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
     required this.postponeCount,
     required this.encountersSinceLastCard,
     this.lastEncounterDay,
+    this.algorithmDueDay,
+    required this.schedulerKind,
+    required this.schedulerVersion,
+    this.policyInputSnapshot,
+    required this.revision,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4374,6 +4839,15 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
     if (!nullToAbsent || lastEncounterDay != null) {
       map['last_encounter_day'] = Variable<int>(lastEncounterDay);
     }
+    if (!nullToAbsent || algorithmDueDay != null) {
+      map['algorithm_due_day'] = Variable<int>(algorithmDueDay);
+    }
+    map['scheduler_kind'] = Variable<String>(schedulerKind);
+    map['scheduler_version'] = Variable<String>(schedulerVersion);
+    if (!nullToAbsent || policyInputSnapshot != null) {
+      map['policy_input_snapshot'] = Variable<String>(policyInputSnapshot);
+    }
+    map['revision'] = Variable<int>(revision);
     return map;
   }
 
@@ -4392,6 +4866,15 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
       lastEncounterDay: lastEncounterDay == null && nullToAbsent
           ? const Value.absent()
           : Value(lastEncounterDay),
+      algorithmDueDay: algorithmDueDay == null && nullToAbsent
+          ? const Value.absent()
+          : Value(algorithmDueDay),
+      schedulerKind: Value(schedulerKind),
+      schedulerVersion: Value(schedulerVersion),
+      policyInputSnapshot: policyInputSnapshot == null && nullToAbsent
+          ? const Value.absent()
+          : Value(policyInputSnapshot),
+      revision: Value(revision),
     );
   }
 
@@ -4414,6 +4897,13 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
         json['encountersSinceLastCard'],
       ),
       lastEncounterDay: serializer.fromJson<int?>(json['lastEncounterDay']),
+      algorithmDueDay: serializer.fromJson<int?>(json['algorithmDueDay']),
+      schedulerKind: serializer.fromJson<String>(json['schedulerKind']),
+      schedulerVersion: serializer.fromJson<String>(json['schedulerVersion']),
+      policyInputSnapshot: serializer.fromJson<String?>(
+        json['policyInputSnapshot'],
+      ),
+      revision: serializer.fromJson<int>(json['revision']),
     );
   }
   @override
@@ -4433,6 +4923,11 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
         encountersSinceLastCard,
       ),
       'lastEncounterDay': serializer.toJson<int?>(lastEncounterDay),
+      'algorithmDueDay': serializer.toJson<int?>(algorithmDueDay),
+      'schedulerKind': serializer.toJson<String>(schedulerKind),
+      'schedulerVersion': serializer.toJson<String>(schedulerVersion),
+      'policyInputSnapshot': serializer.toJson<String?>(policyInputSnapshot),
+      'revision': serializer.toJson<int>(revision),
     };
   }
 
@@ -4448,6 +4943,11 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
     int? postponeCount,
     int? encountersSinceLastCard,
     Value<int?> lastEncounterDay = const Value.absent(),
+    Value<int?> algorithmDueDay = const Value.absent(),
+    String? schedulerKind,
+    String? schedulerVersion,
+    Value<String?> policyInputSnapshot = const Value.absent(),
+    int? revision,
   }) => TopicStateRow(
     elementId: elementId ?? this.elementId,
     elementType: elementType ?? this.elementType,
@@ -4463,6 +4963,15 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
     lastEncounterDay: lastEncounterDay.present
         ? lastEncounterDay.value
         : this.lastEncounterDay,
+    algorithmDueDay: algorithmDueDay.present
+        ? algorithmDueDay.value
+        : this.algorithmDueDay,
+    schedulerKind: schedulerKind ?? this.schedulerKind,
+    schedulerVersion: schedulerVersion ?? this.schedulerVersion,
+    policyInputSnapshot: policyInputSnapshot.present
+        ? policyInputSnapshot.value
+        : this.policyInputSnapshot,
+    revision: revision ?? this.revision,
   );
   TopicStateRow copyWithCompanion(TopicStatesCompanion data) {
     return TopicStateRow(
@@ -4489,6 +4998,19 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
       lastEncounterDay: data.lastEncounterDay.present
           ? data.lastEncounterDay.value
           : this.lastEncounterDay,
+      algorithmDueDay: data.algorithmDueDay.present
+          ? data.algorithmDueDay.value
+          : this.algorithmDueDay,
+      schedulerKind: data.schedulerKind.present
+          ? data.schedulerKind.value
+          : this.schedulerKind,
+      schedulerVersion: data.schedulerVersion.present
+          ? data.schedulerVersion.value
+          : this.schedulerVersion,
+      policyInputSnapshot: data.policyInputSnapshot.present
+          ? data.policyInputSnapshot.value
+          : this.policyInputSnapshot,
+      revision: data.revision.present ? data.revision.value : this.revision,
     );
   }
 
@@ -4505,7 +5027,12 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
           ..write('encounters: $encounters, ')
           ..write('postponeCount: $postponeCount, ')
           ..write('encountersSinceLastCard: $encountersSinceLastCard, ')
-          ..write('lastEncounterDay: $lastEncounterDay')
+          ..write('lastEncounterDay: $lastEncounterDay, ')
+          ..write('algorithmDueDay: $algorithmDueDay, ')
+          ..write('schedulerKind: $schedulerKind, ')
+          ..write('schedulerVersion: $schedulerVersion, ')
+          ..write('policyInputSnapshot: $policyInputSnapshot, ')
+          ..write('revision: $revision')
           ..write(')'))
         .toString();
   }
@@ -4523,6 +5050,11 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
     postponeCount,
     encountersSinceLastCard,
     lastEncounterDay,
+    algorithmDueDay,
+    schedulerKind,
+    schedulerVersion,
+    policyInputSnapshot,
+    revision,
   );
   @override
   bool operator ==(Object other) =>
@@ -4538,7 +5070,12 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
           other.encounters == this.encounters &&
           other.postponeCount == this.postponeCount &&
           other.encountersSinceLastCard == this.encountersSinceLastCard &&
-          other.lastEncounterDay == this.lastEncounterDay);
+          other.lastEncounterDay == this.lastEncounterDay &&
+          other.algorithmDueDay == this.algorithmDueDay &&
+          other.schedulerKind == this.schedulerKind &&
+          other.schedulerVersion == this.schedulerVersion &&
+          other.policyInputSnapshot == this.policyInputSnapshot &&
+          other.revision == this.revision);
 }
 
 class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
@@ -4553,6 +5090,11 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
   final Value<int> postponeCount;
   final Value<int> encountersSinceLastCard;
   final Value<int?> lastEncounterDay;
+  final Value<int?> algorithmDueDay;
+  final Value<String> schedulerKind;
+  final Value<String> schedulerVersion;
+  final Value<String?> policyInputSnapshot;
+  final Value<int> revision;
   final Value<int> rowid;
   const TopicStatesCompanion({
     this.elementId = const Value.absent(),
@@ -4566,6 +5108,11 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
     this.postponeCount = const Value.absent(),
     this.encountersSinceLastCard = const Value.absent(),
     this.lastEncounterDay = const Value.absent(),
+    this.algorithmDueDay = const Value.absent(),
+    this.schedulerKind = const Value.absent(),
+    this.schedulerVersion = const Value.absent(),
+    this.policyInputSnapshot = const Value.absent(),
+    this.revision = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TopicStatesCompanion.insert({
@@ -4580,6 +5127,11 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
     this.postponeCount = const Value.absent(),
     this.encountersSinceLastCard = const Value.absent(),
     this.lastEncounterDay = const Value.absent(),
+    this.algorithmDueDay = const Value.absent(),
+    this.schedulerKind = const Value.absent(),
+    this.schedulerVersion = const Value.absent(),
+    this.policyInputSnapshot = const Value.absent(),
+    this.revision = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : elementId = Value(elementId),
        elementType = Value(elementType),
@@ -4597,6 +5149,11 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
     Expression<int>? postponeCount,
     Expression<int>? encountersSinceLastCard,
     Expression<int>? lastEncounterDay,
+    Expression<int>? algorithmDueDay,
+    Expression<String>? schedulerKind,
+    Expression<String>? schedulerVersion,
+    Expression<String>? policyInputSnapshot,
+    Expression<int>? revision,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -4612,6 +5169,12 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
       if (encountersSinceLastCard != null)
         'encounters_since_last_card': encountersSinceLastCard,
       if (lastEncounterDay != null) 'last_encounter_day': lastEncounterDay,
+      if (algorithmDueDay != null) 'algorithm_due_day': algorithmDueDay,
+      if (schedulerKind != null) 'scheduler_kind': schedulerKind,
+      if (schedulerVersion != null) 'scheduler_version': schedulerVersion,
+      if (policyInputSnapshot != null)
+        'policy_input_snapshot': policyInputSnapshot,
+      if (revision != null) 'revision': revision,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -4628,6 +5191,11 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
     Value<int>? postponeCount,
     Value<int>? encountersSinceLastCard,
     Value<int?>? lastEncounterDay,
+    Value<int?>? algorithmDueDay,
+    Value<String>? schedulerKind,
+    Value<String>? schedulerVersion,
+    Value<String?>? policyInputSnapshot,
+    Value<int>? revision,
     Value<int>? rowid,
   }) {
     return TopicStatesCompanion(
@@ -4643,6 +5211,11 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
       encountersSinceLastCard:
           encountersSinceLastCard ?? this.encountersSinceLastCard,
       lastEncounterDay: lastEncounterDay ?? this.lastEncounterDay,
+      algorithmDueDay: algorithmDueDay ?? this.algorithmDueDay,
+      schedulerKind: schedulerKind ?? this.schedulerKind,
+      schedulerVersion: schedulerVersion ?? this.schedulerVersion,
+      policyInputSnapshot: policyInputSnapshot ?? this.policyInputSnapshot,
+      revision: revision ?? this.revision,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -4685,6 +5258,23 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
     if (lastEncounterDay.present) {
       map['last_encounter_day'] = Variable<int>(lastEncounterDay.value);
     }
+    if (algorithmDueDay.present) {
+      map['algorithm_due_day'] = Variable<int>(algorithmDueDay.value);
+    }
+    if (schedulerKind.present) {
+      map['scheduler_kind'] = Variable<String>(schedulerKind.value);
+    }
+    if (schedulerVersion.present) {
+      map['scheduler_version'] = Variable<String>(schedulerVersion.value);
+    }
+    if (policyInputSnapshot.present) {
+      map['policy_input_snapshot'] = Variable<String>(
+        policyInputSnapshot.value,
+      );
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -4705,6 +5295,11 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
           ..write('postponeCount: $postponeCount, ')
           ..write('encountersSinceLastCard: $encountersSinceLastCard, ')
           ..write('lastEncounterDay: $lastEncounterDay, ')
+          ..write('algorithmDueDay: $algorithmDueDay, ')
+          ..write('schedulerKind: $schedulerKind, ')
+          ..write('schedulerVersion: $schedulerVersion, ')
+          ..write('policyInputSnapshot: $policyInputSnapshot, ')
+          ..write('revision: $revision, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -4726,7 +5321,7 @@ class $CardMemoriesTable extends CardMemories
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES cards (id) ON DELETE CASCADE',
+      'REFERENCES cards (id) ON DELETE RESTRICT',
     ),
   );
   static const VerificationMeta _stabilityMeta = const VerificationMeta(
@@ -4873,6 +5468,53 @@ class $CardMemoriesTable extends CardMemories
         type: DriftSqlType.string,
         requiredDuringInsert: true,
       );
+  static const VerificationMeta _schedulerNameMeta = const VerificationMeta(
+    'schedulerName',
+  );
+  @override
+  late final GeneratedColumn<String> schedulerName = GeneratedColumn<String>(
+    'scheduler_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('dart-fsrs'),
+  );
+  static const VerificationMeta _scheduledDaysMeta = const VerificationMeta(
+    'scheduledDays',
+  );
+  @override
+  late final GeneratedColumn<double> scheduledDays = GeneratedColumn<double>(
+    'scheduled_days',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fsrsStateJsonMeta = const VerificationMeta(
+    'fsrsStateJson',
+  );
+  @override
+  late final GeneratedColumn<String> fsrsStateJson = GeneratedColumn<String>(
+    'fsrs_state_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(revision).isBiggerOrEqualValue(1),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     cardId,
@@ -4889,6 +5531,10 @@ class $CardMemoriesTable extends CardMemories
     postponeCount,
     schedulerVersion,
     parametersVersion,
+    schedulerName,
+    scheduledDays,
+    fsrsStateJson,
+    revision,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5016,6 +5662,39 @@ class $CardMemoriesTable extends CardMemories
     } else if (isInserting) {
       context.missing(_parametersVersionMeta);
     }
+    if (data.containsKey('scheduler_name')) {
+      context.handle(
+        _schedulerNameMeta,
+        schedulerName.isAcceptableOrUnknown(
+          data['scheduler_name']!,
+          _schedulerNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('scheduled_days')) {
+      context.handle(
+        _scheduledDaysMeta,
+        scheduledDays.isAcceptableOrUnknown(
+          data['scheduled_days']!,
+          _scheduledDaysMeta,
+        ),
+      );
+    }
+    if (data.containsKey('fsrs_state_json')) {
+      context.handle(
+        _fsrsStateJsonMeta,
+        fsrsStateJson.isAcceptableOrUnknown(
+          data['fsrs_state_json']!,
+          _fsrsStateJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
     return context;
   }
 
@@ -5081,6 +5760,22 @@ class $CardMemoriesTable extends CardMemories
         DriftSqlType.string,
         data['${effectivePrefix}parameters_version'],
       )!,
+      schedulerName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scheduler_name'],
+      )!,
+      scheduledDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}scheduled_days'],
+      ),
+      fsrsStateJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}fsrs_state_json'],
+      ),
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
     );
   }
 
@@ -5118,6 +5813,13 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
   /// interpretable after either changes.
   final String schedulerVersion;
   final String parametersVersion;
+  final String schedulerName;
+  final double? scheduledDays;
+
+  /// Exact serialized state consumed by the pinned adapter. Nullable only for
+  /// legacy rows while a migration is validating/backfilling them.
+  final String? fsrsStateJson;
+  final int revision;
   const CardMemoryRow({
     required this.cardId,
     this.stability,
@@ -5133,6 +5835,10 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     required this.postponeCount,
     required this.schedulerVersion,
     required this.parametersVersion,
+    required this.schedulerName,
+    this.scheduledDays,
+    this.fsrsStateJson,
+    required this.revision,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -5161,6 +5867,14 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     map['postpone_count'] = Variable<int>(postponeCount);
     map['scheduler_version'] = Variable<String>(schedulerVersion);
     map['parameters_version'] = Variable<String>(parametersVersion);
+    map['scheduler_name'] = Variable<String>(schedulerName);
+    if (!nullToAbsent || scheduledDays != null) {
+      map['scheduled_days'] = Variable<double>(scheduledDays);
+    }
+    if (!nullToAbsent || fsrsStateJson != null) {
+      map['fsrs_state_json'] = Variable<String>(fsrsStateJson);
+    }
+    map['revision'] = Variable<int>(revision);
     return map;
   }
 
@@ -5188,6 +5902,14 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
       postponeCount: Value(postponeCount),
       schedulerVersion: Value(schedulerVersion),
       parametersVersion: Value(parametersVersion),
+      schedulerName: Value(schedulerName),
+      scheduledDays: scheduledDays == null && nullToAbsent
+          ? const Value.absent()
+          : Value(scheduledDays),
+      fsrsStateJson: fsrsStateJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fsrsStateJson),
+      revision: Value(revision),
     );
   }
 
@@ -5211,6 +5933,10 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
       postponeCount: serializer.fromJson<int>(json['postponeCount']),
       schedulerVersion: serializer.fromJson<String>(json['schedulerVersion']),
       parametersVersion: serializer.fromJson<String>(json['parametersVersion']),
+      schedulerName: serializer.fromJson<String>(json['schedulerName']),
+      scheduledDays: serializer.fromJson<double?>(json['scheduledDays']),
+      fsrsStateJson: serializer.fromJson<String?>(json['fsrsStateJson']),
+      revision: serializer.fromJson<int>(json['revision']),
     );
   }
   @override
@@ -5231,6 +5957,10 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
       'postponeCount': serializer.toJson<int>(postponeCount),
       'schedulerVersion': serializer.toJson<String>(schedulerVersion),
       'parametersVersion': serializer.toJson<String>(parametersVersion),
+      'schedulerName': serializer.toJson<String>(schedulerName),
+      'scheduledDays': serializer.toJson<double?>(scheduledDays),
+      'fsrsStateJson': serializer.toJson<String?>(fsrsStateJson),
+      'revision': serializer.toJson<int>(revision),
     };
   }
 
@@ -5249,6 +5979,10 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     int? postponeCount,
     String? schedulerVersion,
     String? parametersVersion,
+    String? schedulerName,
+    Value<double?> scheduledDays = const Value.absent(),
+    Value<String?> fsrsStateJson = const Value.absent(),
+    int? revision,
   }) => CardMemoryRow(
     cardId: cardId ?? this.cardId,
     stability: stability.present ? stability.value : this.stability,
@@ -5268,6 +6002,14 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     postponeCount: postponeCount ?? this.postponeCount,
     schedulerVersion: schedulerVersion ?? this.schedulerVersion,
     parametersVersion: parametersVersion ?? this.parametersVersion,
+    schedulerName: schedulerName ?? this.schedulerName,
+    scheduledDays: scheduledDays.present
+        ? scheduledDays.value
+        : this.scheduledDays,
+    fsrsStateJson: fsrsStateJson.present
+        ? fsrsStateJson.value
+        : this.fsrsStateJson,
+    revision: revision ?? this.revision,
   );
   CardMemoryRow copyWithCompanion(CardMemoriesCompanion data) {
     return CardMemoryRow(
@@ -5299,6 +6041,16 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
       parametersVersion: data.parametersVersion.present
           ? data.parametersVersion.value
           : this.parametersVersion,
+      schedulerName: data.schedulerName.present
+          ? data.schedulerName.value
+          : this.schedulerName,
+      scheduledDays: data.scheduledDays.present
+          ? data.scheduledDays.value
+          : this.scheduledDays,
+      fsrsStateJson: data.fsrsStateJson.present
+          ? data.fsrsStateJson.value
+          : this.fsrsStateJson,
+      revision: data.revision.present ? data.revision.value : this.revision,
     );
   }
 
@@ -5318,7 +6070,11 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
           ..write('deferredUntilUtc: $deferredUntilUtc, ')
           ..write('postponeCount: $postponeCount, ')
           ..write('schedulerVersion: $schedulerVersion, ')
-          ..write('parametersVersion: $parametersVersion')
+          ..write('parametersVersion: $parametersVersion, ')
+          ..write('schedulerName: $schedulerName, ')
+          ..write('scheduledDays: $scheduledDays, ')
+          ..write('fsrsStateJson: $fsrsStateJson, ')
+          ..write('revision: $revision')
           ..write(')'))
         .toString();
   }
@@ -5339,6 +6095,10 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     postponeCount,
     schedulerVersion,
     parametersVersion,
+    schedulerName,
+    scheduledDays,
+    fsrsStateJson,
+    revision,
   );
   @override
   bool operator ==(Object other) =>
@@ -5357,7 +6117,11 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
           other.deferredUntilUtc == this.deferredUntilUtc &&
           other.postponeCount == this.postponeCount &&
           other.schedulerVersion == this.schedulerVersion &&
-          other.parametersVersion == this.parametersVersion);
+          other.parametersVersion == this.parametersVersion &&
+          other.schedulerName == this.schedulerName &&
+          other.scheduledDays == this.scheduledDays &&
+          other.fsrsStateJson == this.fsrsStateJson &&
+          other.revision == this.revision);
 }
 
 class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
@@ -5375,6 +6139,10 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
   final Value<int> postponeCount;
   final Value<String> schedulerVersion;
   final Value<String> parametersVersion;
+  final Value<String> schedulerName;
+  final Value<double?> scheduledDays;
+  final Value<String?> fsrsStateJson;
+  final Value<int> revision;
   final Value<int> rowid;
   const CardMemoriesCompanion({
     this.cardId = const Value.absent(),
@@ -5391,6 +6159,10 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     this.postponeCount = const Value.absent(),
     this.schedulerVersion = const Value.absent(),
     this.parametersVersion = const Value.absent(),
+    this.schedulerName = const Value.absent(),
+    this.scheduledDays = const Value.absent(),
+    this.fsrsStateJson = const Value.absent(),
+    this.revision = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CardMemoriesCompanion.insert({
@@ -5408,6 +6180,10 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     this.postponeCount = const Value.absent(),
     required String schedulerVersion,
     required String parametersVersion,
+    this.schedulerName = const Value.absent(),
+    this.scheduledDays = const Value.absent(),
+    this.fsrsStateJson = const Value.absent(),
+    this.revision = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : cardId = Value(cardId),
        state = Value(state),
@@ -5430,6 +6206,10 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     Expression<int>? postponeCount,
     Expression<String>? schedulerVersion,
     Expression<String>? parametersVersion,
+    Expression<String>? schedulerName,
+    Expression<double>? scheduledDays,
+    Expression<String>? fsrsStateJson,
+    Expression<int>? revision,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -5447,6 +6227,10 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
       if (postponeCount != null) 'postpone_count': postponeCount,
       if (schedulerVersion != null) 'scheduler_version': schedulerVersion,
       if (parametersVersion != null) 'parameters_version': parametersVersion,
+      if (schedulerName != null) 'scheduler_name': schedulerName,
+      if (scheduledDays != null) 'scheduled_days': scheduledDays,
+      if (fsrsStateJson != null) 'fsrs_state_json': fsrsStateJson,
+      if (revision != null) 'revision': revision,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -5466,6 +6250,10 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     Value<int>? postponeCount,
     Value<String>? schedulerVersion,
     Value<String>? parametersVersion,
+    Value<String>? schedulerName,
+    Value<double?>? scheduledDays,
+    Value<String?>? fsrsStateJson,
+    Value<int>? revision,
     Value<int>? rowid,
   }) {
     return CardMemoriesCompanion(
@@ -5483,6 +6271,10 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
       postponeCount: postponeCount ?? this.postponeCount,
       schedulerVersion: schedulerVersion ?? this.schedulerVersion,
       parametersVersion: parametersVersion ?? this.parametersVersion,
+      schedulerName: schedulerName ?? this.schedulerName,
+      scheduledDays: scheduledDays ?? this.scheduledDays,
+      fsrsStateJson: fsrsStateJson ?? this.fsrsStateJson,
+      revision: revision ?? this.revision,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5532,6 +6324,18 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     if (parametersVersion.present) {
       map['parameters_version'] = Variable<String>(parametersVersion.value);
     }
+    if (schedulerName.present) {
+      map['scheduler_name'] = Variable<String>(schedulerName.value);
+    }
+    if (scheduledDays.present) {
+      map['scheduled_days'] = Variable<double>(scheduledDays.value);
+    }
+    if (fsrsStateJson.present) {
+      map['fsrs_state_json'] = Variable<String>(fsrsStateJson.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -5555,6 +6359,10 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
           ..write('postponeCount: $postponeCount, ')
           ..write('schedulerVersion: $schedulerVersion, ')
           ..write('parametersVersion: $parametersVersion, ')
+          ..write('schedulerName: $schedulerName, ')
+          ..write('scheduledDays: $scheduledDays, ')
+          ..write('fsrsStateJson: $fsrsStateJson, ')
+          ..write('revision: $revision, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7189,7 +7997,7 @@ class RevlogRow extends DataClass implements Insertable<RevlogRow> {
   final String elementId;
   final int elementType;
 
-  /// Stable [RevlogEventType] value. Never the enum index.
+  /// Stable `RevlogEventType` value. Never the enum index.
   final int eventType;
   final int atUtc;
 
@@ -8349,6 +9157,3464 @@ class RevlogEntriesCompanion extends UpdateCompanion<RevlogRow> {
           ..write('schedulerVersion: $schedulerVersion, ')
           ..write('parametersVersion: $parametersVersion, ')
           ..write('metadataJson: $metadataJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ScheduleAdjustmentsTable extends ScheduleAdjustments
+    with TableInfo<$ScheduleAdjustmentsTable, ScheduleAdjustmentRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ScheduleAdjustmentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _elementIdMeta = const VerificationMeta(
+    'elementId',
+  );
+  @override
+  late final GeneratedColumn<String> elementId = GeneratedColumn<String>(
+    'element_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _elementTypeMeta = const VerificationMeta(
+    'elementType',
+  );
+  @override
+  late final GeneratedColumn<int> elementType = GeneratedColumn<int>(
+    'element_type',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(elementType).isBetweenValues(0, 2),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _modeMeta = const VerificationMeta('mode');
+  @override
+  late final GeneratedColumn<int> mode = GeneratedColumn<int>(
+    'mode',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(mode).isBetweenValues(0, 1),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
+  @override
+  late final GeneratedColumn<int> reason = GeneratedColumn<int>(
+    'reason',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(reason).isBetweenValues(0, 4),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _notBeforeAtUtcMeta = const VerificationMeta(
+    'notBeforeAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> notBeforeAtUtc = GeneratedColumn<int>(
+    'not_before_at_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _notBeforeStudyDayMeta = const VerificationMeta(
+    'notBeforeStudyDay',
+  );
+  @override
+  late final GeneratedColumn<int> notBeforeStudyDay = GeneratedColumn<int>(
+    'not_before_study_day',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _scheduledForAtUtcMeta = const VerificationMeta(
+    'scheduledForAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> scheduledForAtUtc = GeneratedColumn<int>(
+    'scheduled_for_at_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _scheduledForStudyDayMeta =
+      const VerificationMeta('scheduledForStudyDay');
+  @override
+  late final GeneratedColumn<int> scheduledForStudyDay = GeneratedColumn<int>(
+    'scheduled_for_study_day',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _zoneIdMeta = const VerificationMeta('zoneId');
+  @override
+  late final GeneratedColumn<String> zoneId = GeneratedColumn<String>(
+    'zone_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _operationIdMeta = const VerificationMeta(
+    'operationId',
+  );
+  @override
+  late final GeneratedColumn<String> operationId = GeneratedColumn<String>(
+    'operation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _batchIdMeta = const VerificationMeta(
+    'batchId',
+  );
+  @override
+  late final GeneratedColumn<String> batchId = GeneratedColumn<String>(
+    'batch_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _policyVersionMeta = const VerificationMeta(
+    'policyVersion',
+  );
+  @override
+  late final GeneratedColumn<String> policyVersion = GeneratedColumn<String>(
+    'policy_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> createdAtUtc = GeneratedColumn<int>(
+    'created_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdStudyDayMeta = const VerificationMeta(
+    'createdStudyDay',
+  );
+  @override
+  late final GeneratedColumn<int> createdStudyDay = GeneratedColumn<int>(
+    'created_study_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdZoneIdMeta = const VerificationMeta(
+    'createdZoneId',
+  );
+  @override
+  late final GeneratedColumn<String> createdZoneId = GeneratedColumn<String>(
+    'created_zone_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clearedAtUtcMeta = const VerificationMeta(
+    'clearedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> clearedAtUtc = GeneratedColumn<int>(
+    'cleared_at_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _clearedByOperationIdMeta =
+      const VerificationMeta('clearedByOperationId');
+  @override
+  late final GeneratedColumn<String> clearedByOperationId =
+      GeneratedColumn<String>(
+        'cleared_by_operation_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    elementId,
+    elementType,
+    mode,
+    reason,
+    notBeforeAtUtc,
+    notBeforeStudyDay,
+    scheduledForAtUtc,
+    scheduledForStudyDay,
+    zoneId,
+    operationId,
+    batchId,
+    policyVersion,
+    createdAtUtc,
+    createdStudyDay,
+    createdZoneId,
+    clearedAtUtc,
+    clearedByOperationId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'schedule_adjustments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ScheduleAdjustmentRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('element_id')) {
+      context.handle(
+        _elementIdMeta,
+        elementId.isAcceptableOrUnknown(data['element_id']!, _elementIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_elementIdMeta);
+    }
+    if (data.containsKey('element_type')) {
+      context.handle(
+        _elementTypeMeta,
+        elementType.isAcceptableOrUnknown(
+          data['element_type']!,
+          _elementTypeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_elementTypeMeta);
+    }
+    if (data.containsKey('mode')) {
+      context.handle(
+        _modeMeta,
+        mode.isAcceptableOrUnknown(data['mode']!, _modeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_modeMeta);
+    }
+    if (data.containsKey('reason')) {
+      context.handle(
+        _reasonMeta,
+        reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonMeta);
+    }
+    if (data.containsKey('not_before_at_utc')) {
+      context.handle(
+        _notBeforeAtUtcMeta,
+        notBeforeAtUtc.isAcceptableOrUnknown(
+          data['not_before_at_utc']!,
+          _notBeforeAtUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('not_before_study_day')) {
+      context.handle(
+        _notBeforeStudyDayMeta,
+        notBeforeStudyDay.isAcceptableOrUnknown(
+          data['not_before_study_day']!,
+          _notBeforeStudyDayMeta,
+        ),
+      );
+    }
+    if (data.containsKey('scheduled_for_at_utc')) {
+      context.handle(
+        _scheduledForAtUtcMeta,
+        scheduledForAtUtc.isAcceptableOrUnknown(
+          data['scheduled_for_at_utc']!,
+          _scheduledForAtUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('scheduled_for_study_day')) {
+      context.handle(
+        _scheduledForStudyDayMeta,
+        scheduledForStudyDay.isAcceptableOrUnknown(
+          data['scheduled_for_study_day']!,
+          _scheduledForStudyDayMeta,
+        ),
+      );
+    }
+    if (data.containsKey('zone_id')) {
+      context.handle(
+        _zoneIdMeta,
+        zoneId.isAcceptableOrUnknown(data['zone_id']!, _zoneIdMeta),
+      );
+    }
+    if (data.containsKey('operation_id')) {
+      context.handle(
+        _operationIdMeta,
+        operationId.isAcceptableOrUnknown(
+          data['operation_id']!,
+          _operationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_operationIdMeta);
+    }
+    if (data.containsKey('batch_id')) {
+      context.handle(
+        _batchIdMeta,
+        batchId.isAcceptableOrUnknown(data['batch_id']!, _batchIdMeta),
+      );
+    }
+    if (data.containsKey('policy_version')) {
+      context.handle(
+        _policyVersionMeta,
+        policyVersion.isAcceptableOrUnknown(
+          data['policy_version']!,
+          _policyVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_policyVersionMeta);
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtUtcMeta);
+    }
+    if (data.containsKey('created_study_day')) {
+      context.handle(
+        _createdStudyDayMeta,
+        createdStudyDay.isAcceptableOrUnknown(
+          data['created_study_day']!,
+          _createdStudyDayMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdStudyDayMeta);
+    }
+    if (data.containsKey('created_zone_id')) {
+      context.handle(
+        _createdZoneIdMeta,
+        createdZoneId.isAcceptableOrUnknown(
+          data['created_zone_id']!,
+          _createdZoneIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdZoneIdMeta);
+    }
+    if (data.containsKey('cleared_at_utc')) {
+      context.handle(
+        _clearedAtUtcMeta,
+        clearedAtUtc.isAcceptableOrUnknown(
+          data['cleared_at_utc']!,
+          _clearedAtUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cleared_by_operation_id')) {
+      context.handle(
+        _clearedByOperationIdMeta,
+        clearedByOperationId.isAcceptableOrUnknown(
+          data['cleared_by_operation_id']!,
+          _clearedByOperationIdMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ScheduleAdjustmentRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ScheduleAdjustmentRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      elementId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}element_id'],
+      )!,
+      elementType: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}element_type'],
+      )!,
+      mode: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}mode'],
+      )!,
+      reason: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}reason'],
+      )!,
+      notBeforeAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}not_before_at_utc'],
+      ),
+      notBeforeStudyDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}not_before_study_day'],
+      ),
+      scheduledForAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}scheduled_for_at_utc'],
+      ),
+      scheduledForStudyDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}scheduled_for_study_day'],
+      ),
+      zoneId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}zone_id'],
+      ),
+      operationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation_id'],
+      )!,
+      batchId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}batch_id'],
+      ),
+      policyVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}policy_version'],
+      )!,
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at_utc'],
+      )!,
+      createdStudyDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_study_day'],
+      )!,
+      createdZoneId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}created_zone_id'],
+      )!,
+      clearedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cleared_at_utc'],
+      ),
+      clearedByOperationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cleared_by_operation_id'],
+      ),
+    );
+  }
+
+  @override
+  $ScheduleAdjustmentsTable createAlias(String alias) {
+    return $ScheduleAdjustmentsTable(attachedDatabase, alias);
+  }
+}
+
+class ScheduleAdjustmentRow extends DataClass
+    implements Insertable<ScheduleAdjustmentRow> {
+  final String id;
+  final String elementId;
+  final int elementType;
+  final int mode;
+  final int reason;
+  final int? notBeforeAtUtc;
+  final int? notBeforeStudyDay;
+  final int? scheduledForAtUtc;
+  final int? scheduledForStudyDay;
+  final String? zoneId;
+  final String operationId;
+  final String? batchId;
+  final String policyVersion;
+  final int createdAtUtc;
+  final int createdStudyDay;
+  final String createdZoneId;
+  final int? clearedAtUtc;
+  final String? clearedByOperationId;
+  const ScheduleAdjustmentRow({
+    required this.id,
+    required this.elementId,
+    required this.elementType,
+    required this.mode,
+    required this.reason,
+    this.notBeforeAtUtc,
+    this.notBeforeStudyDay,
+    this.scheduledForAtUtc,
+    this.scheduledForStudyDay,
+    this.zoneId,
+    required this.operationId,
+    this.batchId,
+    required this.policyVersion,
+    required this.createdAtUtc,
+    required this.createdStudyDay,
+    required this.createdZoneId,
+    this.clearedAtUtc,
+    this.clearedByOperationId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['element_id'] = Variable<String>(elementId);
+    map['element_type'] = Variable<int>(elementType);
+    map['mode'] = Variable<int>(mode);
+    map['reason'] = Variable<int>(reason);
+    if (!nullToAbsent || notBeforeAtUtc != null) {
+      map['not_before_at_utc'] = Variable<int>(notBeforeAtUtc);
+    }
+    if (!nullToAbsent || notBeforeStudyDay != null) {
+      map['not_before_study_day'] = Variable<int>(notBeforeStudyDay);
+    }
+    if (!nullToAbsent || scheduledForAtUtc != null) {
+      map['scheduled_for_at_utc'] = Variable<int>(scheduledForAtUtc);
+    }
+    if (!nullToAbsent || scheduledForStudyDay != null) {
+      map['scheduled_for_study_day'] = Variable<int>(scheduledForStudyDay);
+    }
+    if (!nullToAbsent || zoneId != null) {
+      map['zone_id'] = Variable<String>(zoneId);
+    }
+    map['operation_id'] = Variable<String>(operationId);
+    if (!nullToAbsent || batchId != null) {
+      map['batch_id'] = Variable<String>(batchId);
+    }
+    map['policy_version'] = Variable<String>(policyVersion);
+    map['created_at_utc'] = Variable<int>(createdAtUtc);
+    map['created_study_day'] = Variable<int>(createdStudyDay);
+    map['created_zone_id'] = Variable<String>(createdZoneId);
+    if (!nullToAbsent || clearedAtUtc != null) {
+      map['cleared_at_utc'] = Variable<int>(clearedAtUtc);
+    }
+    if (!nullToAbsent || clearedByOperationId != null) {
+      map['cleared_by_operation_id'] = Variable<String>(clearedByOperationId);
+    }
+    return map;
+  }
+
+  ScheduleAdjustmentsCompanion toCompanion(bool nullToAbsent) {
+    return ScheduleAdjustmentsCompanion(
+      id: Value(id),
+      elementId: Value(elementId),
+      elementType: Value(elementType),
+      mode: Value(mode),
+      reason: Value(reason),
+      notBeforeAtUtc: notBeforeAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notBeforeAtUtc),
+      notBeforeStudyDay: notBeforeStudyDay == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notBeforeStudyDay),
+      scheduledForAtUtc: scheduledForAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(scheduledForAtUtc),
+      scheduledForStudyDay: scheduledForStudyDay == null && nullToAbsent
+          ? const Value.absent()
+          : Value(scheduledForStudyDay),
+      zoneId: zoneId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(zoneId),
+      operationId: Value(operationId),
+      batchId: batchId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(batchId),
+      policyVersion: Value(policyVersion),
+      createdAtUtc: Value(createdAtUtc),
+      createdStudyDay: Value(createdStudyDay),
+      createdZoneId: Value(createdZoneId),
+      clearedAtUtc: clearedAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clearedAtUtc),
+      clearedByOperationId: clearedByOperationId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clearedByOperationId),
+    );
+  }
+
+  factory ScheduleAdjustmentRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ScheduleAdjustmentRow(
+      id: serializer.fromJson<String>(json['id']),
+      elementId: serializer.fromJson<String>(json['elementId']),
+      elementType: serializer.fromJson<int>(json['elementType']),
+      mode: serializer.fromJson<int>(json['mode']),
+      reason: serializer.fromJson<int>(json['reason']),
+      notBeforeAtUtc: serializer.fromJson<int?>(json['notBeforeAtUtc']),
+      notBeforeStudyDay: serializer.fromJson<int?>(json['notBeforeStudyDay']),
+      scheduledForAtUtc: serializer.fromJson<int?>(json['scheduledForAtUtc']),
+      scheduledForStudyDay: serializer.fromJson<int?>(
+        json['scheduledForStudyDay'],
+      ),
+      zoneId: serializer.fromJson<String?>(json['zoneId']),
+      operationId: serializer.fromJson<String>(json['operationId']),
+      batchId: serializer.fromJson<String?>(json['batchId']),
+      policyVersion: serializer.fromJson<String>(json['policyVersion']),
+      createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
+      createdStudyDay: serializer.fromJson<int>(json['createdStudyDay']),
+      createdZoneId: serializer.fromJson<String>(json['createdZoneId']),
+      clearedAtUtc: serializer.fromJson<int?>(json['clearedAtUtc']),
+      clearedByOperationId: serializer.fromJson<String?>(
+        json['clearedByOperationId'],
+      ),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'elementId': serializer.toJson<String>(elementId),
+      'elementType': serializer.toJson<int>(elementType),
+      'mode': serializer.toJson<int>(mode),
+      'reason': serializer.toJson<int>(reason),
+      'notBeforeAtUtc': serializer.toJson<int?>(notBeforeAtUtc),
+      'notBeforeStudyDay': serializer.toJson<int?>(notBeforeStudyDay),
+      'scheduledForAtUtc': serializer.toJson<int?>(scheduledForAtUtc),
+      'scheduledForStudyDay': serializer.toJson<int?>(scheduledForStudyDay),
+      'zoneId': serializer.toJson<String?>(zoneId),
+      'operationId': serializer.toJson<String>(operationId),
+      'batchId': serializer.toJson<String?>(batchId),
+      'policyVersion': serializer.toJson<String>(policyVersion),
+      'createdAtUtc': serializer.toJson<int>(createdAtUtc),
+      'createdStudyDay': serializer.toJson<int>(createdStudyDay),
+      'createdZoneId': serializer.toJson<String>(createdZoneId),
+      'clearedAtUtc': serializer.toJson<int?>(clearedAtUtc),
+      'clearedByOperationId': serializer.toJson<String?>(clearedByOperationId),
+    };
+  }
+
+  ScheduleAdjustmentRow copyWith({
+    String? id,
+    String? elementId,
+    int? elementType,
+    int? mode,
+    int? reason,
+    Value<int?> notBeforeAtUtc = const Value.absent(),
+    Value<int?> notBeforeStudyDay = const Value.absent(),
+    Value<int?> scheduledForAtUtc = const Value.absent(),
+    Value<int?> scheduledForStudyDay = const Value.absent(),
+    Value<String?> zoneId = const Value.absent(),
+    String? operationId,
+    Value<String?> batchId = const Value.absent(),
+    String? policyVersion,
+    int? createdAtUtc,
+    int? createdStudyDay,
+    String? createdZoneId,
+    Value<int?> clearedAtUtc = const Value.absent(),
+    Value<String?> clearedByOperationId = const Value.absent(),
+  }) => ScheduleAdjustmentRow(
+    id: id ?? this.id,
+    elementId: elementId ?? this.elementId,
+    elementType: elementType ?? this.elementType,
+    mode: mode ?? this.mode,
+    reason: reason ?? this.reason,
+    notBeforeAtUtc: notBeforeAtUtc.present
+        ? notBeforeAtUtc.value
+        : this.notBeforeAtUtc,
+    notBeforeStudyDay: notBeforeStudyDay.present
+        ? notBeforeStudyDay.value
+        : this.notBeforeStudyDay,
+    scheduledForAtUtc: scheduledForAtUtc.present
+        ? scheduledForAtUtc.value
+        : this.scheduledForAtUtc,
+    scheduledForStudyDay: scheduledForStudyDay.present
+        ? scheduledForStudyDay.value
+        : this.scheduledForStudyDay,
+    zoneId: zoneId.present ? zoneId.value : this.zoneId,
+    operationId: operationId ?? this.operationId,
+    batchId: batchId.present ? batchId.value : this.batchId,
+    policyVersion: policyVersion ?? this.policyVersion,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+    createdStudyDay: createdStudyDay ?? this.createdStudyDay,
+    createdZoneId: createdZoneId ?? this.createdZoneId,
+    clearedAtUtc: clearedAtUtc.present ? clearedAtUtc.value : this.clearedAtUtc,
+    clearedByOperationId: clearedByOperationId.present
+        ? clearedByOperationId.value
+        : this.clearedByOperationId,
+  );
+  ScheduleAdjustmentRow copyWithCompanion(ScheduleAdjustmentsCompanion data) {
+    return ScheduleAdjustmentRow(
+      id: data.id.present ? data.id.value : this.id,
+      elementId: data.elementId.present ? data.elementId.value : this.elementId,
+      elementType: data.elementType.present
+          ? data.elementType.value
+          : this.elementType,
+      mode: data.mode.present ? data.mode.value : this.mode,
+      reason: data.reason.present ? data.reason.value : this.reason,
+      notBeforeAtUtc: data.notBeforeAtUtc.present
+          ? data.notBeforeAtUtc.value
+          : this.notBeforeAtUtc,
+      notBeforeStudyDay: data.notBeforeStudyDay.present
+          ? data.notBeforeStudyDay.value
+          : this.notBeforeStudyDay,
+      scheduledForAtUtc: data.scheduledForAtUtc.present
+          ? data.scheduledForAtUtc.value
+          : this.scheduledForAtUtc,
+      scheduledForStudyDay: data.scheduledForStudyDay.present
+          ? data.scheduledForStudyDay.value
+          : this.scheduledForStudyDay,
+      zoneId: data.zoneId.present ? data.zoneId.value : this.zoneId,
+      operationId: data.operationId.present
+          ? data.operationId.value
+          : this.operationId,
+      batchId: data.batchId.present ? data.batchId.value : this.batchId,
+      policyVersion: data.policyVersion.present
+          ? data.policyVersion.value
+          : this.policyVersion,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+      createdStudyDay: data.createdStudyDay.present
+          ? data.createdStudyDay.value
+          : this.createdStudyDay,
+      createdZoneId: data.createdZoneId.present
+          ? data.createdZoneId.value
+          : this.createdZoneId,
+      clearedAtUtc: data.clearedAtUtc.present
+          ? data.clearedAtUtc.value
+          : this.clearedAtUtc,
+      clearedByOperationId: data.clearedByOperationId.present
+          ? data.clearedByOperationId.value
+          : this.clearedByOperationId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScheduleAdjustmentRow(')
+          ..write('id: $id, ')
+          ..write('elementId: $elementId, ')
+          ..write('elementType: $elementType, ')
+          ..write('mode: $mode, ')
+          ..write('reason: $reason, ')
+          ..write('notBeforeAtUtc: $notBeforeAtUtc, ')
+          ..write('notBeforeStudyDay: $notBeforeStudyDay, ')
+          ..write('scheduledForAtUtc: $scheduledForAtUtc, ')
+          ..write('scheduledForStudyDay: $scheduledForStudyDay, ')
+          ..write('zoneId: $zoneId, ')
+          ..write('operationId: $operationId, ')
+          ..write('batchId: $batchId, ')
+          ..write('policyVersion: $policyVersion, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('createdStudyDay: $createdStudyDay, ')
+          ..write('createdZoneId: $createdZoneId, ')
+          ..write('clearedAtUtc: $clearedAtUtc, ')
+          ..write('clearedByOperationId: $clearedByOperationId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    elementId,
+    elementType,
+    mode,
+    reason,
+    notBeforeAtUtc,
+    notBeforeStudyDay,
+    scheduledForAtUtc,
+    scheduledForStudyDay,
+    zoneId,
+    operationId,
+    batchId,
+    policyVersion,
+    createdAtUtc,
+    createdStudyDay,
+    createdZoneId,
+    clearedAtUtc,
+    clearedByOperationId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleAdjustmentRow &&
+          other.id == this.id &&
+          other.elementId == this.elementId &&
+          other.elementType == this.elementType &&
+          other.mode == this.mode &&
+          other.reason == this.reason &&
+          other.notBeforeAtUtc == this.notBeforeAtUtc &&
+          other.notBeforeStudyDay == this.notBeforeStudyDay &&
+          other.scheduledForAtUtc == this.scheduledForAtUtc &&
+          other.scheduledForStudyDay == this.scheduledForStudyDay &&
+          other.zoneId == this.zoneId &&
+          other.operationId == this.operationId &&
+          other.batchId == this.batchId &&
+          other.policyVersion == this.policyVersion &&
+          other.createdAtUtc == this.createdAtUtc &&
+          other.createdStudyDay == this.createdStudyDay &&
+          other.createdZoneId == this.createdZoneId &&
+          other.clearedAtUtc == this.clearedAtUtc &&
+          other.clearedByOperationId == this.clearedByOperationId);
+}
+
+class ScheduleAdjustmentsCompanion
+    extends UpdateCompanion<ScheduleAdjustmentRow> {
+  final Value<String> id;
+  final Value<String> elementId;
+  final Value<int> elementType;
+  final Value<int> mode;
+  final Value<int> reason;
+  final Value<int?> notBeforeAtUtc;
+  final Value<int?> notBeforeStudyDay;
+  final Value<int?> scheduledForAtUtc;
+  final Value<int?> scheduledForStudyDay;
+  final Value<String?> zoneId;
+  final Value<String> operationId;
+  final Value<String?> batchId;
+  final Value<String> policyVersion;
+  final Value<int> createdAtUtc;
+  final Value<int> createdStudyDay;
+  final Value<String> createdZoneId;
+  final Value<int?> clearedAtUtc;
+  final Value<String?> clearedByOperationId;
+  final Value<int> rowid;
+  const ScheduleAdjustmentsCompanion({
+    this.id = const Value.absent(),
+    this.elementId = const Value.absent(),
+    this.elementType = const Value.absent(),
+    this.mode = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.notBeforeAtUtc = const Value.absent(),
+    this.notBeforeStudyDay = const Value.absent(),
+    this.scheduledForAtUtc = const Value.absent(),
+    this.scheduledForStudyDay = const Value.absent(),
+    this.zoneId = const Value.absent(),
+    this.operationId = const Value.absent(),
+    this.batchId = const Value.absent(),
+    this.policyVersion = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.createdStudyDay = const Value.absent(),
+    this.createdZoneId = const Value.absent(),
+    this.clearedAtUtc = const Value.absent(),
+    this.clearedByOperationId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ScheduleAdjustmentsCompanion.insert({
+    required String id,
+    required String elementId,
+    required int elementType,
+    required int mode,
+    required int reason,
+    this.notBeforeAtUtc = const Value.absent(),
+    this.notBeforeStudyDay = const Value.absent(),
+    this.scheduledForAtUtc = const Value.absent(),
+    this.scheduledForStudyDay = const Value.absent(),
+    this.zoneId = const Value.absent(),
+    required String operationId,
+    this.batchId = const Value.absent(),
+    required String policyVersion,
+    required int createdAtUtc,
+    required int createdStudyDay,
+    required String createdZoneId,
+    this.clearedAtUtc = const Value.absent(),
+    this.clearedByOperationId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       elementId = Value(elementId),
+       elementType = Value(elementType),
+       mode = Value(mode),
+       reason = Value(reason),
+       operationId = Value(operationId),
+       policyVersion = Value(policyVersion),
+       createdAtUtc = Value(createdAtUtc),
+       createdStudyDay = Value(createdStudyDay),
+       createdZoneId = Value(createdZoneId);
+  static Insertable<ScheduleAdjustmentRow> custom({
+    Expression<String>? id,
+    Expression<String>? elementId,
+    Expression<int>? elementType,
+    Expression<int>? mode,
+    Expression<int>? reason,
+    Expression<int>? notBeforeAtUtc,
+    Expression<int>? notBeforeStudyDay,
+    Expression<int>? scheduledForAtUtc,
+    Expression<int>? scheduledForStudyDay,
+    Expression<String>? zoneId,
+    Expression<String>? operationId,
+    Expression<String>? batchId,
+    Expression<String>? policyVersion,
+    Expression<int>? createdAtUtc,
+    Expression<int>? createdStudyDay,
+    Expression<String>? createdZoneId,
+    Expression<int>? clearedAtUtc,
+    Expression<String>? clearedByOperationId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (elementId != null) 'element_id': elementId,
+      if (elementType != null) 'element_type': elementType,
+      if (mode != null) 'mode': mode,
+      if (reason != null) 'reason': reason,
+      if (notBeforeAtUtc != null) 'not_before_at_utc': notBeforeAtUtc,
+      if (notBeforeStudyDay != null) 'not_before_study_day': notBeforeStudyDay,
+      if (scheduledForAtUtc != null) 'scheduled_for_at_utc': scheduledForAtUtc,
+      if (scheduledForStudyDay != null)
+        'scheduled_for_study_day': scheduledForStudyDay,
+      if (zoneId != null) 'zone_id': zoneId,
+      if (operationId != null) 'operation_id': operationId,
+      if (batchId != null) 'batch_id': batchId,
+      if (policyVersion != null) 'policy_version': policyVersion,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (createdStudyDay != null) 'created_study_day': createdStudyDay,
+      if (createdZoneId != null) 'created_zone_id': createdZoneId,
+      if (clearedAtUtc != null) 'cleared_at_utc': clearedAtUtc,
+      if (clearedByOperationId != null)
+        'cleared_by_operation_id': clearedByOperationId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ScheduleAdjustmentsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? elementId,
+    Value<int>? elementType,
+    Value<int>? mode,
+    Value<int>? reason,
+    Value<int?>? notBeforeAtUtc,
+    Value<int?>? notBeforeStudyDay,
+    Value<int?>? scheduledForAtUtc,
+    Value<int?>? scheduledForStudyDay,
+    Value<String?>? zoneId,
+    Value<String>? operationId,
+    Value<String?>? batchId,
+    Value<String>? policyVersion,
+    Value<int>? createdAtUtc,
+    Value<int>? createdStudyDay,
+    Value<String>? createdZoneId,
+    Value<int?>? clearedAtUtc,
+    Value<String?>? clearedByOperationId,
+    Value<int>? rowid,
+  }) {
+    return ScheduleAdjustmentsCompanion(
+      id: id ?? this.id,
+      elementId: elementId ?? this.elementId,
+      elementType: elementType ?? this.elementType,
+      mode: mode ?? this.mode,
+      reason: reason ?? this.reason,
+      notBeforeAtUtc: notBeforeAtUtc ?? this.notBeforeAtUtc,
+      notBeforeStudyDay: notBeforeStudyDay ?? this.notBeforeStudyDay,
+      scheduledForAtUtc: scheduledForAtUtc ?? this.scheduledForAtUtc,
+      scheduledForStudyDay: scheduledForStudyDay ?? this.scheduledForStudyDay,
+      zoneId: zoneId ?? this.zoneId,
+      operationId: operationId ?? this.operationId,
+      batchId: batchId ?? this.batchId,
+      policyVersion: policyVersion ?? this.policyVersion,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      createdStudyDay: createdStudyDay ?? this.createdStudyDay,
+      createdZoneId: createdZoneId ?? this.createdZoneId,
+      clearedAtUtc: clearedAtUtc ?? this.clearedAtUtc,
+      clearedByOperationId: clearedByOperationId ?? this.clearedByOperationId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (elementId.present) {
+      map['element_id'] = Variable<String>(elementId.value);
+    }
+    if (elementType.present) {
+      map['element_type'] = Variable<int>(elementType.value);
+    }
+    if (mode.present) {
+      map['mode'] = Variable<int>(mode.value);
+    }
+    if (reason.present) {
+      map['reason'] = Variable<int>(reason.value);
+    }
+    if (notBeforeAtUtc.present) {
+      map['not_before_at_utc'] = Variable<int>(notBeforeAtUtc.value);
+    }
+    if (notBeforeStudyDay.present) {
+      map['not_before_study_day'] = Variable<int>(notBeforeStudyDay.value);
+    }
+    if (scheduledForAtUtc.present) {
+      map['scheduled_for_at_utc'] = Variable<int>(scheduledForAtUtc.value);
+    }
+    if (scheduledForStudyDay.present) {
+      map['scheduled_for_study_day'] = Variable<int>(
+        scheduledForStudyDay.value,
+      );
+    }
+    if (zoneId.present) {
+      map['zone_id'] = Variable<String>(zoneId.value);
+    }
+    if (operationId.present) {
+      map['operation_id'] = Variable<String>(operationId.value);
+    }
+    if (batchId.present) {
+      map['batch_id'] = Variable<String>(batchId.value);
+    }
+    if (policyVersion.present) {
+      map['policy_version'] = Variable<String>(policyVersion.value);
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<int>(createdAtUtc.value);
+    }
+    if (createdStudyDay.present) {
+      map['created_study_day'] = Variable<int>(createdStudyDay.value);
+    }
+    if (createdZoneId.present) {
+      map['created_zone_id'] = Variable<String>(createdZoneId.value);
+    }
+    if (clearedAtUtc.present) {
+      map['cleared_at_utc'] = Variable<int>(clearedAtUtc.value);
+    }
+    if (clearedByOperationId.present) {
+      map['cleared_by_operation_id'] = Variable<String>(
+        clearedByOperationId.value,
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScheduleAdjustmentsCompanion(')
+          ..write('id: $id, ')
+          ..write('elementId: $elementId, ')
+          ..write('elementType: $elementType, ')
+          ..write('mode: $mode, ')
+          ..write('reason: $reason, ')
+          ..write('notBeforeAtUtc: $notBeforeAtUtc, ')
+          ..write('notBeforeStudyDay: $notBeforeStudyDay, ')
+          ..write('scheduledForAtUtc: $scheduledForAtUtc, ')
+          ..write('scheduledForStudyDay: $scheduledForStudyDay, ')
+          ..write('zoneId: $zoneId, ')
+          ..write('operationId: $operationId, ')
+          ..write('batchId: $batchId, ')
+          ..write('policyVersion: $policyVersion, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('createdStudyDay: $createdStudyDay, ')
+          ..write('createdZoneId: $createdZoneId, ')
+          ..write('clearedAtUtc: $clearedAtUtc, ')
+          ..write('clearedByOperationId: $clearedByOperationId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SchedulerEventsTable extends SchedulerEvents
+    with TableInfo<$SchedulerEventsTable, SchedulerEventRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SchedulerEventsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operationIdMeta = const VerificationMeta(
+    'operationId',
+  );
+  @override
+  late final GeneratedColumn<String> operationId = GeneratedColumn<String>(
+    'operation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _elementIdMeta = const VerificationMeta(
+    'elementId',
+  );
+  @override
+  late final GeneratedColumn<String> elementId = GeneratedColumn<String>(
+    'element_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _elementTypeMeta = const VerificationMeta(
+    'elementType',
+  );
+  @override
+  late final GeneratedColumn<int> elementType = GeneratedColumn<int>(
+    'element_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _eventTypeMeta = const VerificationMeta(
+    'eventType',
+  );
+  @override
+  late final GeneratedColumn<String> eventType = GeneratedColumn<String>(
+    'event_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _occurredAtUtcMeta = const VerificationMeta(
+    'occurredAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> occurredAtUtc = GeneratedColumn<int>(
+    'occurred_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _studyDayMeta = const VerificationMeta(
+    'studyDay',
+  );
+  @override
+  late final GeneratedColumn<int> studyDay = GeneratedColumn<int>(
+    'study_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _studyDayZoneIdMeta = const VerificationMeta(
+    'studyDayZoneId',
+  );
+  @override
+  late final GeneratedColumn<String> studyDayZoneId = GeneratedColumn<String>(
+    'study_day_zone_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _schedulerNameMeta = const VerificationMeta(
+    'schedulerName',
+  );
+  @override
+  late final GeneratedColumn<String> schedulerName = GeneratedColumn<String>(
+    'scheduler_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schedulerVersionMeta = const VerificationMeta(
+    'schedulerVersion',
+  );
+  @override
+  late final GeneratedColumn<String> schedulerVersion = GeneratedColumn<String>(
+    'scheduler_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _policyVersionMeta = const VerificationMeta(
+    'policyVersion',
+  );
+  @override
+  late final GeneratedColumn<String> policyVersion = GeneratedColumn<String>(
+    'policy_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stateBeforeMeta = const VerificationMeta(
+    'stateBefore',
+  );
+  @override
+  late final GeneratedColumn<String> stateBefore = GeneratedColumn<String>(
+    'state_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stateAfterMeta = const VerificationMeta(
+    'stateAfter',
+  );
+  @override
+  late final GeneratedColumn<String> stateAfter = GeneratedColumn<String>(
+    'state_after',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _algorithmicDueBeforeMeta =
+      const VerificationMeta('algorithmicDueBefore');
+  @override
+  late final GeneratedColumn<String> algorithmicDueBefore =
+      GeneratedColumn<String>(
+        'algorithmic_due_before',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _algorithmicDueAfterMeta =
+      const VerificationMeta('algorithmicDueAfter');
+  @override
+  late final GeneratedColumn<String> algorithmicDueAfter =
+      GeneratedColumn<String>(
+        'algorithmic_due_after',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _adjustmentsBeforeMeta = const VerificationMeta(
+    'adjustmentsBefore',
+  );
+  @override
+  late final GeneratedColumn<String> adjustmentsBefore =
+      GeneratedColumn<String>(
+        'adjustments_before',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _adjustmentsAfterMeta = const VerificationMeta(
+    'adjustmentsAfter',
+  );
+  @override
+  late final GeneratedColumn<String> adjustmentsAfter = GeneratedColumn<String>(
+    'adjustments_after',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _undoesEventIdMeta = const VerificationMeta(
+    'undoesEventId',
+  );
+  @override
+  late final GeneratedColumn<String> undoesEventId = GeneratedColumn<String>(
+    'undoes_event_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _batchIdMeta = const VerificationMeta(
+    'batchId',
+  );
+  @override
+  late final GeneratedColumn<String> batchId = GeneratedColumn<String>(
+    'batch_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _metadataJsonMeta = const VerificationMeta(
+    'metadataJson',
+  );
+  @override
+  late final GeneratedColumn<String> metadataJson = GeneratedColumn<String>(
+    'metadata_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    operationId,
+    elementId,
+    elementType,
+    eventType,
+    occurredAtUtc,
+    studyDay,
+    studyDayZoneId,
+    schedulerName,
+    schedulerVersion,
+    policyVersion,
+    stateBefore,
+    stateAfter,
+    algorithmicDueBefore,
+    algorithmicDueAfter,
+    adjustmentsBefore,
+    adjustmentsAfter,
+    undoesEventId,
+    batchId,
+    metadataJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'scheduler_events';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SchedulerEventRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('operation_id')) {
+      context.handle(
+        _operationIdMeta,
+        operationId.isAcceptableOrUnknown(
+          data['operation_id']!,
+          _operationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_operationIdMeta);
+    }
+    if (data.containsKey('element_id')) {
+      context.handle(
+        _elementIdMeta,
+        elementId.isAcceptableOrUnknown(data['element_id']!, _elementIdMeta),
+      );
+    }
+    if (data.containsKey('element_type')) {
+      context.handle(
+        _elementTypeMeta,
+        elementType.isAcceptableOrUnknown(
+          data['element_type']!,
+          _elementTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('event_type')) {
+      context.handle(
+        _eventTypeMeta,
+        eventType.isAcceptableOrUnknown(data['event_type']!, _eventTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_eventTypeMeta);
+    }
+    if (data.containsKey('occurred_at_utc')) {
+      context.handle(
+        _occurredAtUtcMeta,
+        occurredAtUtc.isAcceptableOrUnknown(
+          data['occurred_at_utc']!,
+          _occurredAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_occurredAtUtcMeta);
+    }
+    if (data.containsKey('study_day')) {
+      context.handle(
+        _studyDayMeta,
+        studyDay.isAcceptableOrUnknown(data['study_day']!, _studyDayMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_studyDayMeta);
+    }
+    if (data.containsKey('study_day_zone_id')) {
+      context.handle(
+        _studyDayZoneIdMeta,
+        studyDayZoneId.isAcceptableOrUnknown(
+          data['study_day_zone_id']!,
+          _studyDayZoneIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_studyDayZoneIdMeta);
+    }
+    if (data.containsKey('scheduler_name')) {
+      context.handle(
+        _schedulerNameMeta,
+        schedulerName.isAcceptableOrUnknown(
+          data['scheduler_name']!,
+          _schedulerNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('scheduler_version')) {
+      context.handle(
+        _schedulerVersionMeta,
+        schedulerVersion.isAcceptableOrUnknown(
+          data['scheduler_version']!,
+          _schedulerVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('policy_version')) {
+      context.handle(
+        _policyVersionMeta,
+        policyVersion.isAcceptableOrUnknown(
+          data['policy_version']!,
+          _policyVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_policyVersionMeta);
+    }
+    if (data.containsKey('state_before')) {
+      context.handle(
+        _stateBeforeMeta,
+        stateBefore.isAcceptableOrUnknown(
+          data['state_before']!,
+          _stateBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('state_after')) {
+      context.handle(
+        _stateAfterMeta,
+        stateAfter.isAcceptableOrUnknown(data['state_after']!, _stateAfterMeta),
+      );
+    }
+    if (data.containsKey('algorithmic_due_before')) {
+      context.handle(
+        _algorithmicDueBeforeMeta,
+        algorithmicDueBefore.isAcceptableOrUnknown(
+          data['algorithmic_due_before']!,
+          _algorithmicDueBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('algorithmic_due_after')) {
+      context.handle(
+        _algorithmicDueAfterMeta,
+        algorithmicDueAfter.isAcceptableOrUnknown(
+          data['algorithmic_due_after']!,
+          _algorithmicDueAfterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('adjustments_before')) {
+      context.handle(
+        _adjustmentsBeforeMeta,
+        adjustmentsBefore.isAcceptableOrUnknown(
+          data['adjustments_before']!,
+          _adjustmentsBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('adjustments_after')) {
+      context.handle(
+        _adjustmentsAfterMeta,
+        adjustmentsAfter.isAcceptableOrUnknown(
+          data['adjustments_after']!,
+          _adjustmentsAfterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('undoes_event_id')) {
+      context.handle(
+        _undoesEventIdMeta,
+        undoesEventId.isAcceptableOrUnknown(
+          data['undoes_event_id']!,
+          _undoesEventIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('batch_id')) {
+      context.handle(
+        _batchIdMeta,
+        batchId.isAcceptableOrUnknown(data['batch_id']!, _batchIdMeta),
+      );
+    }
+    if (data.containsKey('metadata_json')) {
+      context.handle(
+        _metadataJsonMeta,
+        metadataJson.isAcceptableOrUnknown(
+          data['metadata_json']!,
+          _metadataJsonMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SchedulerEventRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SchedulerEventRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      operationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation_id'],
+      )!,
+      elementId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}element_id'],
+      ),
+      elementType: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}element_type'],
+      ),
+      eventType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}event_type'],
+      )!,
+      occurredAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}occurred_at_utc'],
+      )!,
+      studyDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}study_day'],
+      )!,
+      studyDayZoneId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}study_day_zone_id'],
+      )!,
+      schedulerName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scheduler_name'],
+      ),
+      schedulerVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scheduler_version'],
+      ),
+      policyVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}policy_version'],
+      )!,
+      stateBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}state_before'],
+      ),
+      stateAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}state_after'],
+      ),
+      algorithmicDueBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}algorithmic_due_before'],
+      ),
+      algorithmicDueAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}algorithmic_due_after'],
+      ),
+      adjustmentsBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}adjustments_before'],
+      ),
+      adjustmentsAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}adjustments_after'],
+      ),
+      undoesEventId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}undoes_event_id'],
+      ),
+      batchId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}batch_id'],
+      ),
+      metadataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}metadata_json'],
+      ),
+    );
+  }
+
+  @override
+  $SchedulerEventsTable createAlias(String alias) {
+    return $SchedulerEventsTable(attachedDatabase, alias);
+  }
+}
+
+class SchedulerEventRow extends DataClass
+    implements Insertable<SchedulerEventRow> {
+  final String id;
+  final String operationId;
+  final String? elementId;
+  final int? elementType;
+  final String eventType;
+  final int occurredAtUtc;
+  final int studyDay;
+  final String studyDayZoneId;
+  final String? schedulerName;
+  final String? schedulerVersion;
+  final String policyVersion;
+  final String? stateBefore;
+  final String? stateAfter;
+  final String? algorithmicDueBefore;
+  final String? algorithmicDueAfter;
+  final String? adjustmentsBefore;
+  final String? adjustmentsAfter;
+  final String? undoesEventId;
+  final String? batchId;
+  final String? metadataJson;
+  const SchedulerEventRow({
+    required this.id,
+    required this.operationId,
+    this.elementId,
+    this.elementType,
+    required this.eventType,
+    required this.occurredAtUtc,
+    required this.studyDay,
+    required this.studyDayZoneId,
+    this.schedulerName,
+    this.schedulerVersion,
+    required this.policyVersion,
+    this.stateBefore,
+    this.stateAfter,
+    this.algorithmicDueBefore,
+    this.algorithmicDueAfter,
+    this.adjustmentsBefore,
+    this.adjustmentsAfter,
+    this.undoesEventId,
+    this.batchId,
+    this.metadataJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['operation_id'] = Variable<String>(operationId);
+    if (!nullToAbsent || elementId != null) {
+      map['element_id'] = Variable<String>(elementId);
+    }
+    if (!nullToAbsent || elementType != null) {
+      map['element_type'] = Variable<int>(elementType);
+    }
+    map['event_type'] = Variable<String>(eventType);
+    map['occurred_at_utc'] = Variable<int>(occurredAtUtc);
+    map['study_day'] = Variable<int>(studyDay);
+    map['study_day_zone_id'] = Variable<String>(studyDayZoneId);
+    if (!nullToAbsent || schedulerName != null) {
+      map['scheduler_name'] = Variable<String>(schedulerName);
+    }
+    if (!nullToAbsent || schedulerVersion != null) {
+      map['scheduler_version'] = Variable<String>(schedulerVersion);
+    }
+    map['policy_version'] = Variable<String>(policyVersion);
+    if (!nullToAbsent || stateBefore != null) {
+      map['state_before'] = Variable<String>(stateBefore);
+    }
+    if (!nullToAbsent || stateAfter != null) {
+      map['state_after'] = Variable<String>(stateAfter);
+    }
+    if (!nullToAbsent || algorithmicDueBefore != null) {
+      map['algorithmic_due_before'] = Variable<String>(algorithmicDueBefore);
+    }
+    if (!nullToAbsent || algorithmicDueAfter != null) {
+      map['algorithmic_due_after'] = Variable<String>(algorithmicDueAfter);
+    }
+    if (!nullToAbsent || adjustmentsBefore != null) {
+      map['adjustments_before'] = Variable<String>(adjustmentsBefore);
+    }
+    if (!nullToAbsent || adjustmentsAfter != null) {
+      map['adjustments_after'] = Variable<String>(adjustmentsAfter);
+    }
+    if (!nullToAbsent || undoesEventId != null) {
+      map['undoes_event_id'] = Variable<String>(undoesEventId);
+    }
+    if (!nullToAbsent || batchId != null) {
+      map['batch_id'] = Variable<String>(batchId);
+    }
+    if (!nullToAbsent || metadataJson != null) {
+      map['metadata_json'] = Variable<String>(metadataJson);
+    }
+    return map;
+  }
+
+  SchedulerEventsCompanion toCompanion(bool nullToAbsent) {
+    return SchedulerEventsCompanion(
+      id: Value(id),
+      operationId: Value(operationId),
+      elementId: elementId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(elementId),
+      elementType: elementType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(elementType),
+      eventType: Value(eventType),
+      occurredAtUtc: Value(occurredAtUtc),
+      studyDay: Value(studyDay),
+      studyDayZoneId: Value(studyDayZoneId),
+      schedulerName: schedulerName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(schedulerName),
+      schedulerVersion: schedulerVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(schedulerVersion),
+      policyVersion: Value(policyVersion),
+      stateBefore: stateBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stateBefore),
+      stateAfter: stateAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stateAfter),
+      algorithmicDueBefore: algorithmicDueBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(algorithmicDueBefore),
+      algorithmicDueAfter: algorithmicDueAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(algorithmicDueAfter),
+      adjustmentsBefore: adjustmentsBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(adjustmentsBefore),
+      adjustmentsAfter: adjustmentsAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(adjustmentsAfter),
+      undoesEventId: undoesEventId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(undoesEventId),
+      batchId: batchId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(batchId),
+      metadataJson: metadataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(metadataJson),
+    );
+  }
+
+  factory SchedulerEventRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SchedulerEventRow(
+      id: serializer.fromJson<String>(json['id']),
+      operationId: serializer.fromJson<String>(json['operationId']),
+      elementId: serializer.fromJson<String?>(json['elementId']),
+      elementType: serializer.fromJson<int?>(json['elementType']),
+      eventType: serializer.fromJson<String>(json['eventType']),
+      occurredAtUtc: serializer.fromJson<int>(json['occurredAtUtc']),
+      studyDay: serializer.fromJson<int>(json['studyDay']),
+      studyDayZoneId: serializer.fromJson<String>(json['studyDayZoneId']),
+      schedulerName: serializer.fromJson<String?>(json['schedulerName']),
+      schedulerVersion: serializer.fromJson<String?>(json['schedulerVersion']),
+      policyVersion: serializer.fromJson<String>(json['policyVersion']),
+      stateBefore: serializer.fromJson<String?>(json['stateBefore']),
+      stateAfter: serializer.fromJson<String?>(json['stateAfter']),
+      algorithmicDueBefore: serializer.fromJson<String?>(
+        json['algorithmicDueBefore'],
+      ),
+      algorithmicDueAfter: serializer.fromJson<String?>(
+        json['algorithmicDueAfter'],
+      ),
+      adjustmentsBefore: serializer.fromJson<String?>(
+        json['adjustmentsBefore'],
+      ),
+      adjustmentsAfter: serializer.fromJson<String?>(json['adjustmentsAfter']),
+      undoesEventId: serializer.fromJson<String?>(json['undoesEventId']),
+      batchId: serializer.fromJson<String?>(json['batchId']),
+      metadataJson: serializer.fromJson<String?>(json['metadataJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'operationId': serializer.toJson<String>(operationId),
+      'elementId': serializer.toJson<String?>(elementId),
+      'elementType': serializer.toJson<int?>(elementType),
+      'eventType': serializer.toJson<String>(eventType),
+      'occurredAtUtc': serializer.toJson<int>(occurredAtUtc),
+      'studyDay': serializer.toJson<int>(studyDay),
+      'studyDayZoneId': serializer.toJson<String>(studyDayZoneId),
+      'schedulerName': serializer.toJson<String?>(schedulerName),
+      'schedulerVersion': serializer.toJson<String?>(schedulerVersion),
+      'policyVersion': serializer.toJson<String>(policyVersion),
+      'stateBefore': serializer.toJson<String?>(stateBefore),
+      'stateAfter': serializer.toJson<String?>(stateAfter),
+      'algorithmicDueBefore': serializer.toJson<String?>(algorithmicDueBefore),
+      'algorithmicDueAfter': serializer.toJson<String?>(algorithmicDueAfter),
+      'adjustmentsBefore': serializer.toJson<String?>(adjustmentsBefore),
+      'adjustmentsAfter': serializer.toJson<String?>(adjustmentsAfter),
+      'undoesEventId': serializer.toJson<String?>(undoesEventId),
+      'batchId': serializer.toJson<String?>(batchId),
+      'metadataJson': serializer.toJson<String?>(metadataJson),
+    };
+  }
+
+  SchedulerEventRow copyWith({
+    String? id,
+    String? operationId,
+    Value<String?> elementId = const Value.absent(),
+    Value<int?> elementType = const Value.absent(),
+    String? eventType,
+    int? occurredAtUtc,
+    int? studyDay,
+    String? studyDayZoneId,
+    Value<String?> schedulerName = const Value.absent(),
+    Value<String?> schedulerVersion = const Value.absent(),
+    String? policyVersion,
+    Value<String?> stateBefore = const Value.absent(),
+    Value<String?> stateAfter = const Value.absent(),
+    Value<String?> algorithmicDueBefore = const Value.absent(),
+    Value<String?> algorithmicDueAfter = const Value.absent(),
+    Value<String?> adjustmentsBefore = const Value.absent(),
+    Value<String?> adjustmentsAfter = const Value.absent(),
+    Value<String?> undoesEventId = const Value.absent(),
+    Value<String?> batchId = const Value.absent(),
+    Value<String?> metadataJson = const Value.absent(),
+  }) => SchedulerEventRow(
+    id: id ?? this.id,
+    operationId: operationId ?? this.operationId,
+    elementId: elementId.present ? elementId.value : this.elementId,
+    elementType: elementType.present ? elementType.value : this.elementType,
+    eventType: eventType ?? this.eventType,
+    occurredAtUtc: occurredAtUtc ?? this.occurredAtUtc,
+    studyDay: studyDay ?? this.studyDay,
+    studyDayZoneId: studyDayZoneId ?? this.studyDayZoneId,
+    schedulerName: schedulerName.present
+        ? schedulerName.value
+        : this.schedulerName,
+    schedulerVersion: schedulerVersion.present
+        ? schedulerVersion.value
+        : this.schedulerVersion,
+    policyVersion: policyVersion ?? this.policyVersion,
+    stateBefore: stateBefore.present ? stateBefore.value : this.stateBefore,
+    stateAfter: stateAfter.present ? stateAfter.value : this.stateAfter,
+    algorithmicDueBefore: algorithmicDueBefore.present
+        ? algorithmicDueBefore.value
+        : this.algorithmicDueBefore,
+    algorithmicDueAfter: algorithmicDueAfter.present
+        ? algorithmicDueAfter.value
+        : this.algorithmicDueAfter,
+    adjustmentsBefore: adjustmentsBefore.present
+        ? adjustmentsBefore.value
+        : this.adjustmentsBefore,
+    adjustmentsAfter: adjustmentsAfter.present
+        ? adjustmentsAfter.value
+        : this.adjustmentsAfter,
+    undoesEventId: undoesEventId.present
+        ? undoesEventId.value
+        : this.undoesEventId,
+    batchId: batchId.present ? batchId.value : this.batchId,
+    metadataJson: metadataJson.present ? metadataJson.value : this.metadataJson,
+  );
+  SchedulerEventRow copyWithCompanion(SchedulerEventsCompanion data) {
+    return SchedulerEventRow(
+      id: data.id.present ? data.id.value : this.id,
+      operationId: data.operationId.present
+          ? data.operationId.value
+          : this.operationId,
+      elementId: data.elementId.present ? data.elementId.value : this.elementId,
+      elementType: data.elementType.present
+          ? data.elementType.value
+          : this.elementType,
+      eventType: data.eventType.present ? data.eventType.value : this.eventType,
+      occurredAtUtc: data.occurredAtUtc.present
+          ? data.occurredAtUtc.value
+          : this.occurredAtUtc,
+      studyDay: data.studyDay.present ? data.studyDay.value : this.studyDay,
+      studyDayZoneId: data.studyDayZoneId.present
+          ? data.studyDayZoneId.value
+          : this.studyDayZoneId,
+      schedulerName: data.schedulerName.present
+          ? data.schedulerName.value
+          : this.schedulerName,
+      schedulerVersion: data.schedulerVersion.present
+          ? data.schedulerVersion.value
+          : this.schedulerVersion,
+      policyVersion: data.policyVersion.present
+          ? data.policyVersion.value
+          : this.policyVersion,
+      stateBefore: data.stateBefore.present
+          ? data.stateBefore.value
+          : this.stateBefore,
+      stateAfter: data.stateAfter.present
+          ? data.stateAfter.value
+          : this.stateAfter,
+      algorithmicDueBefore: data.algorithmicDueBefore.present
+          ? data.algorithmicDueBefore.value
+          : this.algorithmicDueBefore,
+      algorithmicDueAfter: data.algorithmicDueAfter.present
+          ? data.algorithmicDueAfter.value
+          : this.algorithmicDueAfter,
+      adjustmentsBefore: data.adjustmentsBefore.present
+          ? data.adjustmentsBefore.value
+          : this.adjustmentsBefore,
+      adjustmentsAfter: data.adjustmentsAfter.present
+          ? data.adjustmentsAfter.value
+          : this.adjustmentsAfter,
+      undoesEventId: data.undoesEventId.present
+          ? data.undoesEventId.value
+          : this.undoesEventId,
+      batchId: data.batchId.present ? data.batchId.value : this.batchId,
+      metadataJson: data.metadataJson.present
+          ? data.metadataJson.value
+          : this.metadataJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SchedulerEventRow(')
+          ..write('id: $id, ')
+          ..write('operationId: $operationId, ')
+          ..write('elementId: $elementId, ')
+          ..write('elementType: $elementType, ')
+          ..write('eventType: $eventType, ')
+          ..write('occurredAtUtc: $occurredAtUtc, ')
+          ..write('studyDay: $studyDay, ')
+          ..write('studyDayZoneId: $studyDayZoneId, ')
+          ..write('schedulerName: $schedulerName, ')
+          ..write('schedulerVersion: $schedulerVersion, ')
+          ..write('policyVersion: $policyVersion, ')
+          ..write('stateBefore: $stateBefore, ')
+          ..write('stateAfter: $stateAfter, ')
+          ..write('algorithmicDueBefore: $algorithmicDueBefore, ')
+          ..write('algorithmicDueAfter: $algorithmicDueAfter, ')
+          ..write('adjustmentsBefore: $adjustmentsBefore, ')
+          ..write('adjustmentsAfter: $adjustmentsAfter, ')
+          ..write('undoesEventId: $undoesEventId, ')
+          ..write('batchId: $batchId, ')
+          ..write('metadataJson: $metadataJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    operationId,
+    elementId,
+    elementType,
+    eventType,
+    occurredAtUtc,
+    studyDay,
+    studyDayZoneId,
+    schedulerName,
+    schedulerVersion,
+    policyVersion,
+    stateBefore,
+    stateAfter,
+    algorithmicDueBefore,
+    algorithmicDueAfter,
+    adjustmentsBefore,
+    adjustmentsAfter,
+    undoesEventId,
+    batchId,
+    metadataJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SchedulerEventRow &&
+          other.id == this.id &&
+          other.operationId == this.operationId &&
+          other.elementId == this.elementId &&
+          other.elementType == this.elementType &&
+          other.eventType == this.eventType &&
+          other.occurredAtUtc == this.occurredAtUtc &&
+          other.studyDay == this.studyDay &&
+          other.studyDayZoneId == this.studyDayZoneId &&
+          other.schedulerName == this.schedulerName &&
+          other.schedulerVersion == this.schedulerVersion &&
+          other.policyVersion == this.policyVersion &&
+          other.stateBefore == this.stateBefore &&
+          other.stateAfter == this.stateAfter &&
+          other.algorithmicDueBefore == this.algorithmicDueBefore &&
+          other.algorithmicDueAfter == this.algorithmicDueAfter &&
+          other.adjustmentsBefore == this.adjustmentsBefore &&
+          other.adjustmentsAfter == this.adjustmentsAfter &&
+          other.undoesEventId == this.undoesEventId &&
+          other.batchId == this.batchId &&
+          other.metadataJson == this.metadataJson);
+}
+
+class SchedulerEventsCompanion extends UpdateCompanion<SchedulerEventRow> {
+  final Value<String> id;
+  final Value<String> operationId;
+  final Value<String?> elementId;
+  final Value<int?> elementType;
+  final Value<String> eventType;
+  final Value<int> occurredAtUtc;
+  final Value<int> studyDay;
+  final Value<String> studyDayZoneId;
+  final Value<String?> schedulerName;
+  final Value<String?> schedulerVersion;
+  final Value<String> policyVersion;
+  final Value<String?> stateBefore;
+  final Value<String?> stateAfter;
+  final Value<String?> algorithmicDueBefore;
+  final Value<String?> algorithmicDueAfter;
+  final Value<String?> adjustmentsBefore;
+  final Value<String?> adjustmentsAfter;
+  final Value<String?> undoesEventId;
+  final Value<String?> batchId;
+  final Value<String?> metadataJson;
+  final Value<int> rowid;
+  const SchedulerEventsCompanion({
+    this.id = const Value.absent(),
+    this.operationId = const Value.absent(),
+    this.elementId = const Value.absent(),
+    this.elementType = const Value.absent(),
+    this.eventType = const Value.absent(),
+    this.occurredAtUtc = const Value.absent(),
+    this.studyDay = const Value.absent(),
+    this.studyDayZoneId = const Value.absent(),
+    this.schedulerName = const Value.absent(),
+    this.schedulerVersion = const Value.absent(),
+    this.policyVersion = const Value.absent(),
+    this.stateBefore = const Value.absent(),
+    this.stateAfter = const Value.absent(),
+    this.algorithmicDueBefore = const Value.absent(),
+    this.algorithmicDueAfter = const Value.absent(),
+    this.adjustmentsBefore = const Value.absent(),
+    this.adjustmentsAfter = const Value.absent(),
+    this.undoesEventId = const Value.absent(),
+    this.batchId = const Value.absent(),
+    this.metadataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SchedulerEventsCompanion.insert({
+    required String id,
+    required String operationId,
+    this.elementId = const Value.absent(),
+    this.elementType = const Value.absent(),
+    required String eventType,
+    required int occurredAtUtc,
+    required int studyDay,
+    required String studyDayZoneId,
+    this.schedulerName = const Value.absent(),
+    this.schedulerVersion = const Value.absent(),
+    required String policyVersion,
+    this.stateBefore = const Value.absent(),
+    this.stateAfter = const Value.absent(),
+    this.algorithmicDueBefore = const Value.absent(),
+    this.algorithmicDueAfter = const Value.absent(),
+    this.adjustmentsBefore = const Value.absent(),
+    this.adjustmentsAfter = const Value.absent(),
+    this.undoesEventId = const Value.absent(),
+    this.batchId = const Value.absent(),
+    this.metadataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       operationId = Value(operationId),
+       eventType = Value(eventType),
+       occurredAtUtc = Value(occurredAtUtc),
+       studyDay = Value(studyDay),
+       studyDayZoneId = Value(studyDayZoneId),
+       policyVersion = Value(policyVersion);
+  static Insertable<SchedulerEventRow> custom({
+    Expression<String>? id,
+    Expression<String>? operationId,
+    Expression<String>? elementId,
+    Expression<int>? elementType,
+    Expression<String>? eventType,
+    Expression<int>? occurredAtUtc,
+    Expression<int>? studyDay,
+    Expression<String>? studyDayZoneId,
+    Expression<String>? schedulerName,
+    Expression<String>? schedulerVersion,
+    Expression<String>? policyVersion,
+    Expression<String>? stateBefore,
+    Expression<String>? stateAfter,
+    Expression<String>? algorithmicDueBefore,
+    Expression<String>? algorithmicDueAfter,
+    Expression<String>? adjustmentsBefore,
+    Expression<String>? adjustmentsAfter,
+    Expression<String>? undoesEventId,
+    Expression<String>? batchId,
+    Expression<String>? metadataJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (operationId != null) 'operation_id': operationId,
+      if (elementId != null) 'element_id': elementId,
+      if (elementType != null) 'element_type': elementType,
+      if (eventType != null) 'event_type': eventType,
+      if (occurredAtUtc != null) 'occurred_at_utc': occurredAtUtc,
+      if (studyDay != null) 'study_day': studyDay,
+      if (studyDayZoneId != null) 'study_day_zone_id': studyDayZoneId,
+      if (schedulerName != null) 'scheduler_name': schedulerName,
+      if (schedulerVersion != null) 'scheduler_version': schedulerVersion,
+      if (policyVersion != null) 'policy_version': policyVersion,
+      if (stateBefore != null) 'state_before': stateBefore,
+      if (stateAfter != null) 'state_after': stateAfter,
+      if (algorithmicDueBefore != null)
+        'algorithmic_due_before': algorithmicDueBefore,
+      if (algorithmicDueAfter != null)
+        'algorithmic_due_after': algorithmicDueAfter,
+      if (adjustmentsBefore != null) 'adjustments_before': adjustmentsBefore,
+      if (adjustmentsAfter != null) 'adjustments_after': adjustmentsAfter,
+      if (undoesEventId != null) 'undoes_event_id': undoesEventId,
+      if (batchId != null) 'batch_id': batchId,
+      if (metadataJson != null) 'metadata_json': metadataJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SchedulerEventsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? operationId,
+    Value<String?>? elementId,
+    Value<int?>? elementType,
+    Value<String>? eventType,
+    Value<int>? occurredAtUtc,
+    Value<int>? studyDay,
+    Value<String>? studyDayZoneId,
+    Value<String?>? schedulerName,
+    Value<String?>? schedulerVersion,
+    Value<String>? policyVersion,
+    Value<String?>? stateBefore,
+    Value<String?>? stateAfter,
+    Value<String?>? algorithmicDueBefore,
+    Value<String?>? algorithmicDueAfter,
+    Value<String?>? adjustmentsBefore,
+    Value<String?>? adjustmentsAfter,
+    Value<String?>? undoesEventId,
+    Value<String?>? batchId,
+    Value<String?>? metadataJson,
+    Value<int>? rowid,
+  }) {
+    return SchedulerEventsCompanion(
+      id: id ?? this.id,
+      operationId: operationId ?? this.operationId,
+      elementId: elementId ?? this.elementId,
+      elementType: elementType ?? this.elementType,
+      eventType: eventType ?? this.eventType,
+      occurredAtUtc: occurredAtUtc ?? this.occurredAtUtc,
+      studyDay: studyDay ?? this.studyDay,
+      studyDayZoneId: studyDayZoneId ?? this.studyDayZoneId,
+      schedulerName: schedulerName ?? this.schedulerName,
+      schedulerVersion: schedulerVersion ?? this.schedulerVersion,
+      policyVersion: policyVersion ?? this.policyVersion,
+      stateBefore: stateBefore ?? this.stateBefore,
+      stateAfter: stateAfter ?? this.stateAfter,
+      algorithmicDueBefore: algorithmicDueBefore ?? this.algorithmicDueBefore,
+      algorithmicDueAfter: algorithmicDueAfter ?? this.algorithmicDueAfter,
+      adjustmentsBefore: adjustmentsBefore ?? this.adjustmentsBefore,
+      adjustmentsAfter: adjustmentsAfter ?? this.adjustmentsAfter,
+      undoesEventId: undoesEventId ?? this.undoesEventId,
+      batchId: batchId ?? this.batchId,
+      metadataJson: metadataJson ?? this.metadataJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (operationId.present) {
+      map['operation_id'] = Variable<String>(operationId.value);
+    }
+    if (elementId.present) {
+      map['element_id'] = Variable<String>(elementId.value);
+    }
+    if (elementType.present) {
+      map['element_type'] = Variable<int>(elementType.value);
+    }
+    if (eventType.present) {
+      map['event_type'] = Variable<String>(eventType.value);
+    }
+    if (occurredAtUtc.present) {
+      map['occurred_at_utc'] = Variable<int>(occurredAtUtc.value);
+    }
+    if (studyDay.present) {
+      map['study_day'] = Variable<int>(studyDay.value);
+    }
+    if (studyDayZoneId.present) {
+      map['study_day_zone_id'] = Variable<String>(studyDayZoneId.value);
+    }
+    if (schedulerName.present) {
+      map['scheduler_name'] = Variable<String>(schedulerName.value);
+    }
+    if (schedulerVersion.present) {
+      map['scheduler_version'] = Variable<String>(schedulerVersion.value);
+    }
+    if (policyVersion.present) {
+      map['policy_version'] = Variable<String>(policyVersion.value);
+    }
+    if (stateBefore.present) {
+      map['state_before'] = Variable<String>(stateBefore.value);
+    }
+    if (stateAfter.present) {
+      map['state_after'] = Variable<String>(stateAfter.value);
+    }
+    if (algorithmicDueBefore.present) {
+      map['algorithmic_due_before'] = Variable<String>(
+        algorithmicDueBefore.value,
+      );
+    }
+    if (algorithmicDueAfter.present) {
+      map['algorithmic_due_after'] = Variable<String>(
+        algorithmicDueAfter.value,
+      );
+    }
+    if (adjustmentsBefore.present) {
+      map['adjustments_before'] = Variable<String>(adjustmentsBefore.value);
+    }
+    if (adjustmentsAfter.present) {
+      map['adjustments_after'] = Variable<String>(adjustmentsAfter.value);
+    }
+    if (undoesEventId.present) {
+      map['undoes_event_id'] = Variable<String>(undoesEventId.value);
+    }
+    if (batchId.present) {
+      map['batch_id'] = Variable<String>(batchId.value);
+    }
+    if (metadataJson.present) {
+      map['metadata_json'] = Variable<String>(metadataJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SchedulerEventsCompanion(')
+          ..write('id: $id, ')
+          ..write('operationId: $operationId, ')
+          ..write('elementId: $elementId, ')
+          ..write('elementType: $elementType, ')
+          ..write('eventType: $eventType, ')
+          ..write('occurredAtUtc: $occurredAtUtc, ')
+          ..write('studyDay: $studyDay, ')
+          ..write('studyDayZoneId: $studyDayZoneId, ')
+          ..write('schedulerName: $schedulerName, ')
+          ..write('schedulerVersion: $schedulerVersion, ')
+          ..write('policyVersion: $policyVersion, ')
+          ..write('stateBefore: $stateBefore, ')
+          ..write('stateAfter: $stateAfter, ')
+          ..write('algorithmicDueBefore: $algorithmicDueBefore, ')
+          ..write('algorithmicDueAfter: $algorithmicDueAfter, ')
+          ..write('adjustmentsBefore: $adjustmentsBefore, ')
+          ..write('adjustmentsAfter: $adjustmentsAfter, ')
+          ..write('undoesEventId: $undoesEventId, ')
+          ..write('batchId: $batchId, ')
+          ..write('metadataJson: $metadataJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DailyPresentationPlansTable extends DailyPresentationPlans
+    with TableInfo<$DailyPresentationPlansTable, DailyPresentationPlanRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DailyPresentationPlansTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _studyDayMeta = const VerificationMeta(
+    'studyDay',
+  );
+  @override
+  late final GeneratedColumn<int> studyDay = GeneratedColumn<int>(
+    'study_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _zoneIdMeta = const VerificationMeta('zoneId');
+  @override
+  late final GeneratedColumn<String> zoneId = GeneratedColumn<String>(
+    'zone_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _identityJsonMeta = const VerificationMeta(
+    'identityJson',
+  );
+  @override
+  late final GeneratedColumn<String> identityJson = GeneratedColumn<String>(
+    'identity_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _remainingEntriesJsonMeta =
+      const VerificationMeta('remainingEntriesJson');
+  @override
+  late final GeneratedColumn<String> remainingEntriesJson =
+      GeneratedColumn<String>(
+        'remaining_entries_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _mergeCursorMeta = const VerificationMeta(
+    'mergeCursor',
+  );
+  @override
+  late final GeneratedColumn<int> mergeCursor = GeneratedColumn<int>(
+    'merge_cursor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> createdAtUtc = GeneratedColumn<int>(
+    'created_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtUtcMeta = const VerificationMeta(
+    'updatedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAtUtc = GeneratedColumn<int>(
+    'updated_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    studyDay,
+    zoneId,
+    identityJson,
+    remainingEntriesJson,
+    mergeCursor,
+    createdAtUtc,
+    updatedAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'daily_presentation_plans';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DailyPresentationPlanRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('study_day')) {
+      context.handle(
+        _studyDayMeta,
+        studyDay.isAcceptableOrUnknown(data['study_day']!, _studyDayMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_studyDayMeta);
+    }
+    if (data.containsKey('zone_id')) {
+      context.handle(
+        _zoneIdMeta,
+        zoneId.isAcceptableOrUnknown(data['zone_id']!, _zoneIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_zoneIdMeta);
+    }
+    if (data.containsKey('identity_json')) {
+      context.handle(
+        _identityJsonMeta,
+        identityJson.isAcceptableOrUnknown(
+          data['identity_json']!,
+          _identityJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_identityJsonMeta);
+    }
+    if (data.containsKey('remaining_entries_json')) {
+      context.handle(
+        _remainingEntriesJsonMeta,
+        remainingEntriesJson.isAcceptableOrUnknown(
+          data['remaining_entries_json']!,
+          _remainingEntriesJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_remainingEntriesJsonMeta);
+    }
+    if (data.containsKey('merge_cursor')) {
+      context.handle(
+        _mergeCursorMeta,
+        mergeCursor.isAcceptableOrUnknown(
+          data['merge_cursor']!,
+          _mergeCursorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtUtcMeta);
+    }
+    if (data.containsKey('updated_at_utc')) {
+      context.handle(
+        _updatedAtUtcMeta,
+        updatedAtUtc.isAcceptableOrUnknown(
+          data['updated_at_utc']!,
+          _updatedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtUtcMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {studyDay, zoneId};
+  @override
+  DailyPresentationPlanRow map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DailyPresentationPlanRow(
+      studyDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}study_day'],
+      )!,
+      zoneId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}zone_id'],
+      )!,
+      identityJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}identity_json'],
+      )!,
+      remainingEntriesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remaining_entries_json'],
+      )!,
+      mergeCursor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}merge_cursor'],
+      )!,
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at_utc'],
+      )!,
+      updatedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at_utc'],
+      )!,
+    );
+  }
+
+  @override
+  $DailyPresentationPlansTable createAlias(String alias) {
+    return $DailyPresentationPlansTable(attachedDatabase, alias);
+  }
+}
+
+class DailyPresentationPlanRow extends DataClass
+    implements Insertable<DailyPresentationPlanRow> {
+  final int studyDay;
+  final String zoneId;
+  final String identityJson;
+  final String remainingEntriesJson;
+  final int mergeCursor;
+  final int createdAtUtc;
+  final int updatedAtUtc;
+  const DailyPresentationPlanRow({
+    required this.studyDay,
+    required this.zoneId,
+    required this.identityJson,
+    required this.remainingEntriesJson,
+    required this.mergeCursor,
+    required this.createdAtUtc,
+    required this.updatedAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['study_day'] = Variable<int>(studyDay);
+    map['zone_id'] = Variable<String>(zoneId);
+    map['identity_json'] = Variable<String>(identityJson);
+    map['remaining_entries_json'] = Variable<String>(remainingEntriesJson);
+    map['merge_cursor'] = Variable<int>(mergeCursor);
+    map['created_at_utc'] = Variable<int>(createdAtUtc);
+    map['updated_at_utc'] = Variable<int>(updatedAtUtc);
+    return map;
+  }
+
+  DailyPresentationPlansCompanion toCompanion(bool nullToAbsent) {
+    return DailyPresentationPlansCompanion(
+      studyDay: Value(studyDay),
+      zoneId: Value(zoneId),
+      identityJson: Value(identityJson),
+      remainingEntriesJson: Value(remainingEntriesJson),
+      mergeCursor: Value(mergeCursor),
+      createdAtUtc: Value(createdAtUtc),
+      updatedAtUtc: Value(updatedAtUtc),
+    );
+  }
+
+  factory DailyPresentationPlanRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DailyPresentationPlanRow(
+      studyDay: serializer.fromJson<int>(json['studyDay']),
+      zoneId: serializer.fromJson<String>(json['zoneId']),
+      identityJson: serializer.fromJson<String>(json['identityJson']),
+      remainingEntriesJson: serializer.fromJson<String>(
+        json['remainingEntriesJson'],
+      ),
+      mergeCursor: serializer.fromJson<int>(json['mergeCursor']),
+      createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
+      updatedAtUtc: serializer.fromJson<int>(json['updatedAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'studyDay': serializer.toJson<int>(studyDay),
+      'zoneId': serializer.toJson<String>(zoneId),
+      'identityJson': serializer.toJson<String>(identityJson),
+      'remainingEntriesJson': serializer.toJson<String>(remainingEntriesJson),
+      'mergeCursor': serializer.toJson<int>(mergeCursor),
+      'createdAtUtc': serializer.toJson<int>(createdAtUtc),
+      'updatedAtUtc': serializer.toJson<int>(updatedAtUtc),
+    };
+  }
+
+  DailyPresentationPlanRow copyWith({
+    int? studyDay,
+    String? zoneId,
+    String? identityJson,
+    String? remainingEntriesJson,
+    int? mergeCursor,
+    int? createdAtUtc,
+    int? updatedAtUtc,
+  }) => DailyPresentationPlanRow(
+    studyDay: studyDay ?? this.studyDay,
+    zoneId: zoneId ?? this.zoneId,
+    identityJson: identityJson ?? this.identityJson,
+    remainingEntriesJson: remainingEntriesJson ?? this.remainingEntriesJson,
+    mergeCursor: mergeCursor ?? this.mergeCursor,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+    updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+  );
+  DailyPresentationPlanRow copyWithCompanion(
+    DailyPresentationPlansCompanion data,
+  ) {
+    return DailyPresentationPlanRow(
+      studyDay: data.studyDay.present ? data.studyDay.value : this.studyDay,
+      zoneId: data.zoneId.present ? data.zoneId.value : this.zoneId,
+      identityJson: data.identityJson.present
+          ? data.identityJson.value
+          : this.identityJson,
+      remainingEntriesJson: data.remainingEntriesJson.present
+          ? data.remainingEntriesJson.value
+          : this.remainingEntriesJson,
+      mergeCursor: data.mergeCursor.present
+          ? data.mergeCursor.value
+          : this.mergeCursor,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+      updatedAtUtc: data.updatedAtUtc.present
+          ? data.updatedAtUtc.value
+          : this.updatedAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DailyPresentationPlanRow(')
+          ..write('studyDay: $studyDay, ')
+          ..write('zoneId: $zoneId, ')
+          ..write('identityJson: $identityJson, ')
+          ..write('remainingEntriesJson: $remainingEntriesJson, ')
+          ..write('mergeCursor: $mergeCursor, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('updatedAtUtc: $updatedAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    studyDay,
+    zoneId,
+    identityJson,
+    remainingEntriesJson,
+    mergeCursor,
+    createdAtUtc,
+    updatedAtUtc,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DailyPresentationPlanRow &&
+          other.studyDay == this.studyDay &&
+          other.zoneId == this.zoneId &&
+          other.identityJson == this.identityJson &&
+          other.remainingEntriesJson == this.remainingEntriesJson &&
+          other.mergeCursor == this.mergeCursor &&
+          other.createdAtUtc == this.createdAtUtc &&
+          other.updatedAtUtc == this.updatedAtUtc);
+}
+
+class DailyPresentationPlansCompanion
+    extends UpdateCompanion<DailyPresentationPlanRow> {
+  final Value<int> studyDay;
+  final Value<String> zoneId;
+  final Value<String> identityJson;
+  final Value<String> remainingEntriesJson;
+  final Value<int> mergeCursor;
+  final Value<int> createdAtUtc;
+  final Value<int> updatedAtUtc;
+  final Value<int> rowid;
+  const DailyPresentationPlansCompanion({
+    this.studyDay = const Value.absent(),
+    this.zoneId = const Value.absent(),
+    this.identityJson = const Value.absent(),
+    this.remainingEntriesJson = const Value.absent(),
+    this.mergeCursor = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.updatedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DailyPresentationPlansCompanion.insert({
+    required int studyDay,
+    required String zoneId,
+    required String identityJson,
+    required String remainingEntriesJson,
+    this.mergeCursor = const Value.absent(),
+    required int createdAtUtc,
+    required int updatedAtUtc,
+    this.rowid = const Value.absent(),
+  }) : studyDay = Value(studyDay),
+       zoneId = Value(zoneId),
+       identityJson = Value(identityJson),
+       remainingEntriesJson = Value(remainingEntriesJson),
+       createdAtUtc = Value(createdAtUtc),
+       updatedAtUtc = Value(updatedAtUtc);
+  static Insertable<DailyPresentationPlanRow> custom({
+    Expression<int>? studyDay,
+    Expression<String>? zoneId,
+    Expression<String>? identityJson,
+    Expression<String>? remainingEntriesJson,
+    Expression<int>? mergeCursor,
+    Expression<int>? createdAtUtc,
+    Expression<int>? updatedAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (studyDay != null) 'study_day': studyDay,
+      if (zoneId != null) 'zone_id': zoneId,
+      if (identityJson != null) 'identity_json': identityJson,
+      if (remainingEntriesJson != null)
+        'remaining_entries_json': remainingEntriesJson,
+      if (mergeCursor != null) 'merge_cursor': mergeCursor,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (updatedAtUtc != null) 'updated_at_utc': updatedAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DailyPresentationPlansCompanion copyWith({
+    Value<int>? studyDay,
+    Value<String>? zoneId,
+    Value<String>? identityJson,
+    Value<String>? remainingEntriesJson,
+    Value<int>? mergeCursor,
+    Value<int>? createdAtUtc,
+    Value<int>? updatedAtUtc,
+    Value<int>? rowid,
+  }) {
+    return DailyPresentationPlansCompanion(
+      studyDay: studyDay ?? this.studyDay,
+      zoneId: zoneId ?? this.zoneId,
+      identityJson: identityJson ?? this.identityJson,
+      remainingEntriesJson: remainingEntriesJson ?? this.remainingEntriesJson,
+      mergeCursor: mergeCursor ?? this.mergeCursor,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (studyDay.present) {
+      map['study_day'] = Variable<int>(studyDay.value);
+    }
+    if (zoneId.present) {
+      map['zone_id'] = Variable<String>(zoneId.value);
+    }
+    if (identityJson.present) {
+      map['identity_json'] = Variable<String>(identityJson.value);
+    }
+    if (remainingEntriesJson.present) {
+      map['remaining_entries_json'] = Variable<String>(
+        remainingEntriesJson.value,
+      );
+    }
+    if (mergeCursor.present) {
+      map['merge_cursor'] = Variable<int>(mergeCursor.value);
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<int>(createdAtUtc.value);
+    }
+    if (updatedAtUtc.present) {
+      map['updated_at_utc'] = Variable<int>(updatedAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DailyPresentationPlansCompanion(')
+          ..write('studyDay: $studyDay, ')
+          ..write('zoneId: $zoneId, ')
+          ..write('identityJson: $identityJson, ')
+          ..write('remainingEntriesJson: $remainingEntriesJson, ')
+          ..write('mergeCursor: $mergeCursor, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('updatedAtUtc: $updatedAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MercyBatchesTable extends MercyBatches
+    with TableInfo<$MercyBatchesTable, MercyBatchRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MercyBatchesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _batchIdMeta = const VerificationMeta(
+    'batchId',
+  );
+  @override
+  late final GeneratedColumn<String> batchId = GeneratedColumn<String>(
+    'batch_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _previewOperationIdMeta =
+      const VerificationMeta('previewOperationId');
+  @override
+  late final GeneratedColumn<String> previewOperationId =
+      GeneratedColumn<String>(
+        'preview_operation_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _applyOperationIdMeta = const VerificationMeta(
+    'applyOperationId',
+  );
+  @override
+  late final GeneratedColumn<String> applyOperationId = GeneratedColumn<String>(
+    'apply_operation_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _undoOperationIdMeta = const VerificationMeta(
+    'undoOperationId',
+  );
+  @override
+  late final GeneratedColumn<String> undoOperationId = GeneratedColumn<String>(
+    'undo_operation_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _policyVersionMeta = const VerificationMeta(
+    'policyVersion',
+  );
+  @override
+  late final GeneratedColumn<String> policyVersion = GeneratedColumn<String>(
+    'policy_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _previewJsonMeta = const VerificationMeta(
+    'previewJson',
+  );
+  @override
+  late final GeneratedColumn<String> previewJson = GeneratedColumn<String>(
+    'preview_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _priorAdjustmentsJsonMeta =
+      const VerificationMeta('priorAdjustmentsJson');
+  @override
+  late final GeneratedColumn<String> priorAdjustmentsJson =
+      GeneratedColumn<String>(
+        'prior_adjustments_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> createdAtUtc = GeneratedColumn<int>(
+    'created_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _appliedAtUtcMeta = const VerificationMeta(
+    'appliedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> appliedAtUtc = GeneratedColumn<int>(
+    'applied_at_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _undoneAtUtcMeta = const VerificationMeta(
+    'undoneAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> undoneAtUtc = GeneratedColumn<int>(
+    'undone_at_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    batchId,
+    previewOperationId,
+    applyOperationId,
+    undoOperationId,
+    policyVersion,
+    previewJson,
+    priorAdjustmentsJson,
+    createdAtUtc,
+    appliedAtUtc,
+    undoneAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'mercy_batches';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MercyBatchRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('batch_id')) {
+      context.handle(
+        _batchIdMeta,
+        batchId.isAcceptableOrUnknown(data['batch_id']!, _batchIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_batchIdMeta);
+    }
+    if (data.containsKey('preview_operation_id')) {
+      context.handle(
+        _previewOperationIdMeta,
+        previewOperationId.isAcceptableOrUnknown(
+          data['preview_operation_id']!,
+          _previewOperationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_previewOperationIdMeta);
+    }
+    if (data.containsKey('apply_operation_id')) {
+      context.handle(
+        _applyOperationIdMeta,
+        applyOperationId.isAcceptableOrUnknown(
+          data['apply_operation_id']!,
+          _applyOperationIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('undo_operation_id')) {
+      context.handle(
+        _undoOperationIdMeta,
+        undoOperationId.isAcceptableOrUnknown(
+          data['undo_operation_id']!,
+          _undoOperationIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('policy_version')) {
+      context.handle(
+        _policyVersionMeta,
+        policyVersion.isAcceptableOrUnknown(
+          data['policy_version']!,
+          _policyVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_policyVersionMeta);
+    }
+    if (data.containsKey('preview_json')) {
+      context.handle(
+        _previewJsonMeta,
+        previewJson.isAcceptableOrUnknown(
+          data['preview_json']!,
+          _previewJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_previewJsonMeta);
+    }
+    if (data.containsKey('prior_adjustments_json')) {
+      context.handle(
+        _priorAdjustmentsJsonMeta,
+        priorAdjustmentsJson.isAcceptableOrUnknown(
+          data['prior_adjustments_json']!,
+          _priorAdjustmentsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtUtcMeta);
+    }
+    if (data.containsKey('applied_at_utc')) {
+      context.handle(
+        _appliedAtUtcMeta,
+        appliedAtUtc.isAcceptableOrUnknown(
+          data['applied_at_utc']!,
+          _appliedAtUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('undone_at_utc')) {
+      context.handle(
+        _undoneAtUtcMeta,
+        undoneAtUtc.isAcceptableOrUnknown(
+          data['undone_at_utc']!,
+          _undoneAtUtcMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {batchId};
+  @override
+  MercyBatchRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MercyBatchRow(
+      batchId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}batch_id'],
+      )!,
+      previewOperationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}preview_operation_id'],
+      )!,
+      applyOperationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}apply_operation_id'],
+      ),
+      undoOperationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}undo_operation_id'],
+      ),
+      policyVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}policy_version'],
+      )!,
+      previewJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}preview_json'],
+      )!,
+      priorAdjustmentsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}prior_adjustments_json'],
+      ),
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at_utc'],
+      )!,
+      appliedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}applied_at_utc'],
+      ),
+      undoneAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}undone_at_utc'],
+      ),
+    );
+  }
+
+  @override
+  $MercyBatchesTable createAlias(String alias) {
+    return $MercyBatchesTable(attachedDatabase, alias);
+  }
+}
+
+class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
+  final String batchId;
+  final String previewOperationId;
+  final String? applyOperationId;
+  final String? undoOperationId;
+  final String policyVersion;
+  final String previewJson;
+  final String? priorAdjustmentsJson;
+  final int createdAtUtc;
+  final int? appliedAtUtc;
+  final int? undoneAtUtc;
+  const MercyBatchRow({
+    required this.batchId,
+    required this.previewOperationId,
+    this.applyOperationId,
+    this.undoOperationId,
+    required this.policyVersion,
+    required this.previewJson,
+    this.priorAdjustmentsJson,
+    required this.createdAtUtc,
+    this.appliedAtUtc,
+    this.undoneAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['batch_id'] = Variable<String>(batchId);
+    map['preview_operation_id'] = Variable<String>(previewOperationId);
+    if (!nullToAbsent || applyOperationId != null) {
+      map['apply_operation_id'] = Variable<String>(applyOperationId);
+    }
+    if (!nullToAbsent || undoOperationId != null) {
+      map['undo_operation_id'] = Variable<String>(undoOperationId);
+    }
+    map['policy_version'] = Variable<String>(policyVersion);
+    map['preview_json'] = Variable<String>(previewJson);
+    if (!nullToAbsent || priorAdjustmentsJson != null) {
+      map['prior_adjustments_json'] = Variable<String>(priorAdjustmentsJson);
+    }
+    map['created_at_utc'] = Variable<int>(createdAtUtc);
+    if (!nullToAbsent || appliedAtUtc != null) {
+      map['applied_at_utc'] = Variable<int>(appliedAtUtc);
+    }
+    if (!nullToAbsent || undoneAtUtc != null) {
+      map['undone_at_utc'] = Variable<int>(undoneAtUtc);
+    }
+    return map;
+  }
+
+  MercyBatchesCompanion toCompanion(bool nullToAbsent) {
+    return MercyBatchesCompanion(
+      batchId: Value(batchId),
+      previewOperationId: Value(previewOperationId),
+      applyOperationId: applyOperationId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(applyOperationId),
+      undoOperationId: undoOperationId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(undoOperationId),
+      policyVersion: Value(policyVersion),
+      previewJson: Value(previewJson),
+      priorAdjustmentsJson: priorAdjustmentsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(priorAdjustmentsJson),
+      createdAtUtc: Value(createdAtUtc),
+      appliedAtUtc: appliedAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(appliedAtUtc),
+      undoneAtUtc: undoneAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(undoneAtUtc),
+    );
+  }
+
+  factory MercyBatchRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MercyBatchRow(
+      batchId: serializer.fromJson<String>(json['batchId']),
+      previewOperationId: serializer.fromJson<String>(
+        json['previewOperationId'],
+      ),
+      applyOperationId: serializer.fromJson<String?>(json['applyOperationId']),
+      undoOperationId: serializer.fromJson<String?>(json['undoOperationId']),
+      policyVersion: serializer.fromJson<String>(json['policyVersion']),
+      previewJson: serializer.fromJson<String>(json['previewJson']),
+      priorAdjustmentsJson: serializer.fromJson<String?>(
+        json['priorAdjustmentsJson'],
+      ),
+      createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
+      appliedAtUtc: serializer.fromJson<int?>(json['appliedAtUtc']),
+      undoneAtUtc: serializer.fromJson<int?>(json['undoneAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'batchId': serializer.toJson<String>(batchId),
+      'previewOperationId': serializer.toJson<String>(previewOperationId),
+      'applyOperationId': serializer.toJson<String?>(applyOperationId),
+      'undoOperationId': serializer.toJson<String?>(undoOperationId),
+      'policyVersion': serializer.toJson<String>(policyVersion),
+      'previewJson': serializer.toJson<String>(previewJson),
+      'priorAdjustmentsJson': serializer.toJson<String?>(priorAdjustmentsJson),
+      'createdAtUtc': serializer.toJson<int>(createdAtUtc),
+      'appliedAtUtc': serializer.toJson<int?>(appliedAtUtc),
+      'undoneAtUtc': serializer.toJson<int?>(undoneAtUtc),
+    };
+  }
+
+  MercyBatchRow copyWith({
+    String? batchId,
+    String? previewOperationId,
+    Value<String?> applyOperationId = const Value.absent(),
+    Value<String?> undoOperationId = const Value.absent(),
+    String? policyVersion,
+    String? previewJson,
+    Value<String?> priorAdjustmentsJson = const Value.absent(),
+    int? createdAtUtc,
+    Value<int?> appliedAtUtc = const Value.absent(),
+    Value<int?> undoneAtUtc = const Value.absent(),
+  }) => MercyBatchRow(
+    batchId: batchId ?? this.batchId,
+    previewOperationId: previewOperationId ?? this.previewOperationId,
+    applyOperationId: applyOperationId.present
+        ? applyOperationId.value
+        : this.applyOperationId,
+    undoOperationId: undoOperationId.present
+        ? undoOperationId.value
+        : this.undoOperationId,
+    policyVersion: policyVersion ?? this.policyVersion,
+    previewJson: previewJson ?? this.previewJson,
+    priorAdjustmentsJson: priorAdjustmentsJson.present
+        ? priorAdjustmentsJson.value
+        : this.priorAdjustmentsJson,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+    appliedAtUtc: appliedAtUtc.present ? appliedAtUtc.value : this.appliedAtUtc,
+    undoneAtUtc: undoneAtUtc.present ? undoneAtUtc.value : this.undoneAtUtc,
+  );
+  MercyBatchRow copyWithCompanion(MercyBatchesCompanion data) {
+    return MercyBatchRow(
+      batchId: data.batchId.present ? data.batchId.value : this.batchId,
+      previewOperationId: data.previewOperationId.present
+          ? data.previewOperationId.value
+          : this.previewOperationId,
+      applyOperationId: data.applyOperationId.present
+          ? data.applyOperationId.value
+          : this.applyOperationId,
+      undoOperationId: data.undoOperationId.present
+          ? data.undoOperationId.value
+          : this.undoOperationId,
+      policyVersion: data.policyVersion.present
+          ? data.policyVersion.value
+          : this.policyVersion,
+      previewJson: data.previewJson.present
+          ? data.previewJson.value
+          : this.previewJson,
+      priorAdjustmentsJson: data.priorAdjustmentsJson.present
+          ? data.priorAdjustmentsJson.value
+          : this.priorAdjustmentsJson,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+      appliedAtUtc: data.appliedAtUtc.present
+          ? data.appliedAtUtc.value
+          : this.appliedAtUtc,
+      undoneAtUtc: data.undoneAtUtc.present
+          ? data.undoneAtUtc.value
+          : this.undoneAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MercyBatchRow(')
+          ..write('batchId: $batchId, ')
+          ..write('previewOperationId: $previewOperationId, ')
+          ..write('applyOperationId: $applyOperationId, ')
+          ..write('undoOperationId: $undoOperationId, ')
+          ..write('policyVersion: $policyVersion, ')
+          ..write('previewJson: $previewJson, ')
+          ..write('priorAdjustmentsJson: $priorAdjustmentsJson, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('appliedAtUtc: $appliedAtUtc, ')
+          ..write('undoneAtUtc: $undoneAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    batchId,
+    previewOperationId,
+    applyOperationId,
+    undoOperationId,
+    policyVersion,
+    previewJson,
+    priorAdjustmentsJson,
+    createdAtUtc,
+    appliedAtUtc,
+    undoneAtUtc,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MercyBatchRow &&
+          other.batchId == this.batchId &&
+          other.previewOperationId == this.previewOperationId &&
+          other.applyOperationId == this.applyOperationId &&
+          other.undoOperationId == this.undoOperationId &&
+          other.policyVersion == this.policyVersion &&
+          other.previewJson == this.previewJson &&
+          other.priorAdjustmentsJson == this.priorAdjustmentsJson &&
+          other.createdAtUtc == this.createdAtUtc &&
+          other.appliedAtUtc == this.appliedAtUtc &&
+          other.undoneAtUtc == this.undoneAtUtc);
+}
+
+class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
+  final Value<String> batchId;
+  final Value<String> previewOperationId;
+  final Value<String?> applyOperationId;
+  final Value<String?> undoOperationId;
+  final Value<String> policyVersion;
+  final Value<String> previewJson;
+  final Value<String?> priorAdjustmentsJson;
+  final Value<int> createdAtUtc;
+  final Value<int?> appliedAtUtc;
+  final Value<int?> undoneAtUtc;
+  final Value<int> rowid;
+  const MercyBatchesCompanion({
+    this.batchId = const Value.absent(),
+    this.previewOperationId = const Value.absent(),
+    this.applyOperationId = const Value.absent(),
+    this.undoOperationId = const Value.absent(),
+    this.policyVersion = const Value.absent(),
+    this.previewJson = const Value.absent(),
+    this.priorAdjustmentsJson = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.appliedAtUtc = const Value.absent(),
+    this.undoneAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MercyBatchesCompanion.insert({
+    required String batchId,
+    required String previewOperationId,
+    this.applyOperationId = const Value.absent(),
+    this.undoOperationId = const Value.absent(),
+    required String policyVersion,
+    required String previewJson,
+    this.priorAdjustmentsJson = const Value.absent(),
+    required int createdAtUtc,
+    this.appliedAtUtc = const Value.absent(),
+    this.undoneAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : batchId = Value(batchId),
+       previewOperationId = Value(previewOperationId),
+       policyVersion = Value(policyVersion),
+       previewJson = Value(previewJson),
+       createdAtUtc = Value(createdAtUtc);
+  static Insertable<MercyBatchRow> custom({
+    Expression<String>? batchId,
+    Expression<String>? previewOperationId,
+    Expression<String>? applyOperationId,
+    Expression<String>? undoOperationId,
+    Expression<String>? policyVersion,
+    Expression<String>? previewJson,
+    Expression<String>? priorAdjustmentsJson,
+    Expression<int>? createdAtUtc,
+    Expression<int>? appliedAtUtc,
+    Expression<int>? undoneAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (batchId != null) 'batch_id': batchId,
+      if (previewOperationId != null)
+        'preview_operation_id': previewOperationId,
+      if (applyOperationId != null) 'apply_operation_id': applyOperationId,
+      if (undoOperationId != null) 'undo_operation_id': undoOperationId,
+      if (policyVersion != null) 'policy_version': policyVersion,
+      if (previewJson != null) 'preview_json': previewJson,
+      if (priorAdjustmentsJson != null)
+        'prior_adjustments_json': priorAdjustmentsJson,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (appliedAtUtc != null) 'applied_at_utc': appliedAtUtc,
+      if (undoneAtUtc != null) 'undone_at_utc': undoneAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MercyBatchesCompanion copyWith({
+    Value<String>? batchId,
+    Value<String>? previewOperationId,
+    Value<String?>? applyOperationId,
+    Value<String?>? undoOperationId,
+    Value<String>? policyVersion,
+    Value<String>? previewJson,
+    Value<String?>? priorAdjustmentsJson,
+    Value<int>? createdAtUtc,
+    Value<int?>? appliedAtUtc,
+    Value<int?>? undoneAtUtc,
+    Value<int>? rowid,
+  }) {
+    return MercyBatchesCompanion(
+      batchId: batchId ?? this.batchId,
+      previewOperationId: previewOperationId ?? this.previewOperationId,
+      applyOperationId: applyOperationId ?? this.applyOperationId,
+      undoOperationId: undoOperationId ?? this.undoOperationId,
+      policyVersion: policyVersion ?? this.policyVersion,
+      previewJson: previewJson ?? this.previewJson,
+      priorAdjustmentsJson: priorAdjustmentsJson ?? this.priorAdjustmentsJson,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      appliedAtUtc: appliedAtUtc ?? this.appliedAtUtc,
+      undoneAtUtc: undoneAtUtc ?? this.undoneAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (batchId.present) {
+      map['batch_id'] = Variable<String>(batchId.value);
+    }
+    if (previewOperationId.present) {
+      map['preview_operation_id'] = Variable<String>(previewOperationId.value);
+    }
+    if (applyOperationId.present) {
+      map['apply_operation_id'] = Variable<String>(applyOperationId.value);
+    }
+    if (undoOperationId.present) {
+      map['undo_operation_id'] = Variable<String>(undoOperationId.value);
+    }
+    if (policyVersion.present) {
+      map['policy_version'] = Variable<String>(policyVersion.value);
+    }
+    if (previewJson.present) {
+      map['preview_json'] = Variable<String>(previewJson.value);
+    }
+    if (priorAdjustmentsJson.present) {
+      map['prior_adjustments_json'] = Variable<String>(
+        priorAdjustmentsJson.value,
+      );
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<int>(createdAtUtc.value);
+    }
+    if (appliedAtUtc.present) {
+      map['applied_at_utc'] = Variable<int>(appliedAtUtc.value);
+    }
+    if (undoneAtUtc.present) {
+      map['undone_at_utc'] = Variable<int>(undoneAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MercyBatchesCompanion(')
+          ..write('batchId: $batchId, ')
+          ..write('previewOperationId: $previewOperationId, ')
+          ..write('applyOperationId: $applyOperationId, ')
+          ..write('undoOperationId: $undoOperationId, ')
+          ..write('policyVersion: $policyVersion, ')
+          ..write('previewJson: $previewJson, ')
+          ..write('priorAdjustmentsJson: $priorAdjustmentsJson, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('appliedAtUtc: $appliedAtUtc, ')
+          ..write('undoneAtUtc: $undoneAtUtc, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -9902,6 +14168,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CardMemoriesTable cardMemories = $CardMemoriesTable(this);
   late final $ReviewEventsTable reviewEvents = $ReviewEventsTable(this);
   late final $RevlogEntriesTable revlogEntries = $RevlogEntriesTable(this);
+  late final $ScheduleAdjustmentsTable scheduleAdjustments =
+      $ScheduleAdjustmentsTable(this);
+  late final $SchedulerEventsTable schedulerEvents = $SchedulerEventsTable(
+    this,
+  );
+  late final $DailyPresentationPlansTable dailyPresentationPlans =
+      $DailyPresentationPlansTable(this);
+  late final $MercyBatchesTable mercyBatches = $MercyBatchesTable(this);
   late final $SearchDocumentsTable searchDocuments = $SearchDocumentsTable(
     this,
   );
@@ -9923,6 +14197,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     cardMemories,
     reviewEvents,
     revlogEntries,
+    scheduleAdjustments,
+    schedulerEvents,
+    dailyPresentationPlans,
+    mercyBatches,
     searchDocuments,
     activityEvents,
     settings,
@@ -9943,13 +14221,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('blocks', kind: UpdateKind.delete)],
-    ),
-    WritePropagation(
-      on: TableUpdateQuery.onTableName(
-        'cards',
-        limitUpdateKind: UpdateKind.delete,
-      ),
-      result: [TableUpdate('card_memories', kind: UpdateKind.delete)],
     ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
@@ -10332,25 +14603,6 @@ final class $$SourcesTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
-
-  static MultiTypedResultKey<$CardsTable, List<CardRow>> _cardsRefsTable(
-    _$AppDatabase db,
-  ) => MultiTypedResultKey.fromTable(
-    db.cards,
-    aliasName: 'sources__id__cards__source_id',
-  );
-
-  $$CardsTableProcessedTableManager get cardsRefs {
-    final manager = $$CardsTableTableManager(
-      $_db,
-      $_db.cards,
-    ).filter((f) => f.sourceId.id.sqlEquals($_itemColumn<String>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_cardsRefsTable($_db));
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
 }
 
 class $$SourcesTableFilterComposer
@@ -10486,31 +14738,6 @@ class $$SourcesTableFilterComposer
           }) => $$ExtractsTableFilterComposer(
             $db: $db,
             $table: $db.extracts,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
-  Expression<bool> cardsRefs(
-    Expression<bool> Function($$CardsTableFilterComposer f) f,
-  ) {
-    final $$CardsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.cards,
-      getReferencedColumn: (t) => t.sourceId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$CardsTableFilterComposer(
-            $db: $db,
-            $table: $db.cards,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -10743,31 +14970,6 @@ class $$SourcesTableAnnotationComposer
     );
     return f(composer);
   }
-
-  Expression<T> cardsRefs<T extends Object>(
-    Expression<T> Function($$CardsTableAnnotationComposer a) f,
-  ) {
-    final $$CardsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.cards,
-      getReferencedColumn: (t) => t.sourceId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$CardsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.cards,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
 }
 
 class $$SourcesTableTableManager
@@ -10787,7 +14989,6 @@ class $$SourcesTableTableManager
             bool folderId,
             bool blocksRefs,
             bool extractsRefs,
-            bool cardsRefs,
           })
         > {
   $$SourcesTableTableManager(_$AppDatabase db, $SourcesTable table)
@@ -10874,18 +15075,12 @@ class $$SourcesTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({
-                folderId = false,
-                blocksRefs = false,
-                extractsRefs = false,
-                cardsRefs = false,
-              }) {
+              ({folderId = false, blocksRefs = false, extractsRefs = false}) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (blocksRefs) db.blocks,
                     if (extractsRefs) db.extracts,
-                    if (cardsRefs) db.cards,
                   ],
                   addJoins:
                       <
@@ -10963,23 +15158,6 @@ class $$SourcesTableTableManager
                               ),
                           typedResults: items,
                         ),
-                      if (cardsRefs)
-                        await $_getPrefetchedData<
-                          SourceRow,
-                          $SourcesTable,
-                          CardRow
-                        >(
-                          currentTable: table,
-                          referencedTable: $$SourcesTableReferences
-                              ._cardsRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$SourcesTableReferences(db, table, p0).cardsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.sourceId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
                     ];
                   },
                 );
@@ -11004,7 +15182,6 @@ typedef $$SourcesTableProcessedTableManager =
         bool folderId,
         bool blocksRefs,
         bool extractsRefs,
-        bool cardsRefs,
       })
     >;
 typedef $$BlocksTableCreateCompanionBuilder =
@@ -11577,25 +15754,6 @@ final class $$ExtractsTableReferences
       manager.$state.copyWith(prefetchedData: [item]),
     );
   }
-
-  static MultiTypedResultKey<$CardsTable, List<CardRow>> _cardsRefsTable(
-    _$AppDatabase db,
-  ) => MultiTypedResultKey.fromTable(
-    db.cards,
-    aliasName: 'extracts__id__cards__extract_id',
-  );
-
-  $$CardsTableProcessedTableManager get cardsRefs {
-    final manager = $$CardsTableTableManager(
-      $_db,
-      $_db.cards,
-    ).filter((f) => f.extractId.id.sqlEquals($_itemColumn<String>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_cardsRefsTable($_db));
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
 }
 
 class $$ExtractsTableFilterComposer
@@ -11683,31 +15841,6 @@ class $$ExtractsTableFilterComposer
           ),
     );
     return composer;
-  }
-
-  Expression<bool> cardsRefs(
-    Expression<bool> Function($$CardsTableFilterComposer f) f,
-  ) {
-    final $$CardsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.cards,
-      getReferencedColumn: (t) => t.extractId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$CardsTableFilterComposer(
-            $db: $db,
-            $table: $db.cards,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
   }
 }
 
@@ -11877,31 +16010,6 @@ class $$ExtractsTableAnnotationComposer
     );
     return composer;
   }
-
-  Expression<T> cardsRefs<T extends Object>(
-    Expression<T> Function($$CardsTableAnnotationComposer a) f,
-  ) {
-    final $$CardsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.cards,
-      getReferencedColumn: (t) => t.extractId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$CardsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.cards,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
 }
 
 class $$ExtractsTableTableManager
@@ -11917,7 +16025,7 @@ class $$ExtractsTableTableManager
           $$ExtractsTableUpdateCompanionBuilder,
           (ExtractRow, $$ExtractsTableReferences),
           ExtractRow,
-          PrefetchHooks Function({bool sourceId, bool cardsRefs})
+          PrefetchHooks Function({bool sourceId})
         > {
   $$ExtractsTableTableManager(_$AppDatabase db, $ExtractsTable table)
     : super(
@@ -11998,10 +16106,10 @@ class $$ExtractsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({sourceId = false, cardsRefs = false}) {
+          prefetchHooksCallback: ({sourceId = false}) {
             return PrefetchHooks(
               db: db,
-              explicitlyWatchedTables: [if (cardsRefs) db.cards],
+              explicitlyWatchedTables: [],
               addJoins:
                   <
                     T extends TableManagerState<
@@ -12035,23 +16143,7 @@ class $$ExtractsTableTableManager
                     return state;
                   },
               getPrefetchedDataCallback: (items) async {
-                return [
-                  if (cardsRefs)
-                    await $_getPrefetchedData<
-                      ExtractRow,
-                      $ExtractsTable,
-                      CardRow
-                    >(
-                      currentTable: table,
-                      referencedTable: $$ExtractsTableReferences
-                          ._cardsRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$ExtractsTableReferences(db, table, p0).cardsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.extractId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+                return [];
               },
             );
           },
@@ -12071,13 +16163,13 @@ typedef $$ExtractsTableProcessedTableManager =
       $$ExtractsTableUpdateCompanionBuilder,
       (ExtractRow, $$ExtractsTableReferences),
       ExtractRow,
-      PrefetchHooks Function({bool sourceId, bool cardsRefs})
+      PrefetchHooks Function({bool sourceId})
     >;
 typedef $$CardsTableCreateCompanionBuilder =
     CardsCompanion Function({
       required String id,
-      Value<String?> extractId,
-      Value<String?> sourceId,
+      Value<String?> parentElementId,
+      Value<int?> parentElementType,
       required int kind,
       required String front,
       required String back,
@@ -12089,8 +16181,8 @@ typedef $$CardsTableCreateCompanionBuilder =
 typedef $$CardsTableUpdateCompanionBuilder =
     CardsCompanion Function({
       Value<String> id,
-      Value<String?> extractId,
-      Value<String?> sourceId,
+      Value<String?> parentElementId,
+      Value<int?> parentElementType,
       Value<int> kind,
       Value<String> front,
       Value<String> back,
@@ -12103,40 +16195,6 @@ typedef $$CardsTableUpdateCompanionBuilder =
 final class $$CardsTableReferences
     extends BaseReferences<_$AppDatabase, $CardsTable, CardRow> {
   $$CardsTableReferences(super.$_db, super.$_table, super.$_typedResult);
-
-  static $ExtractsTable _extractIdTable(_$AppDatabase db) =>
-      db.extracts.createAlias('cards__extract_id__extracts__id');
-
-  $$ExtractsTableProcessedTableManager? get extractId {
-    final $_column = $_itemColumn<String>('extract_id');
-    if ($_column == null) return null;
-    final manager = $$ExtractsTableTableManager(
-      $_db,
-      $_db.extracts,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_extractIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
-    );
-  }
-
-  static $SourcesTable _sourceIdTable(_$AppDatabase db) =>
-      db.sources.createAlias('cards__source_id__sources__id');
-
-  $$SourcesTableProcessedTableManager? get sourceId {
-    final $_column = $_itemColumn<String>('source_id');
-    if ($_column == null) return null;
-    final manager = $$SourcesTableTableManager(
-      $_db,
-      $_db.sources,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_sourceIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
-    );
-  }
 
   static MultiTypedResultKey<$CardMemoriesTable, List<CardMemoryRow>>
   _cardMemoriesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
@@ -12188,6 +16246,16 @@ class $$CardsTableFilterComposer extends Composer<_$AppDatabase, $CardsTable> {
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get parentElementId => $composableBuilder(
+    column: $table.parentElementId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get parentElementType => $composableBuilder(
+    column: $table.parentElementType,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get kind => $composableBuilder(
     column: $table.kind,
     builder: (column) => ColumnFilters(column),
@@ -12217,52 +16285,6 @@ class $$CardsTableFilterComposer extends Composer<_$AppDatabase, $CardsTable> {
     column: $table.editedAtUtc,
     builder: (column) => ColumnFilters(column),
   );
-
-  $$ExtractsTableFilterComposer get extractId {
-    final $$ExtractsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.extractId,
-      referencedTable: $db.extracts,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$ExtractsTableFilterComposer(
-            $db: $db,
-            $table: $db.extracts,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  $$SourcesTableFilterComposer get sourceId {
-    final $$SourcesTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.sourceId,
-      referencedTable: $db.sources,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$SourcesTableFilterComposer(
-            $db: $db,
-            $table: $db.sources,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 
   Expression<bool> cardMemoriesRefs(
     Expression<bool> Function($$CardMemoriesTableFilterComposer f) f,
@@ -12329,6 +16351,16 @@ class $$CardsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentElementId => $composableBuilder(
+    column: $table.parentElementId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get parentElementType => $composableBuilder(
+    column: $table.parentElementType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get kind => $composableBuilder(
     column: $table.kind,
     builder: (column) => ColumnOrderings(column),
@@ -12358,52 +16390,6 @@ class $$CardsTableOrderingComposer
     column: $table.editedAtUtc,
     builder: (column) => ColumnOrderings(column),
   );
-
-  $$ExtractsTableOrderingComposer get extractId {
-    final $$ExtractsTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.extractId,
-      referencedTable: $db.extracts,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$ExtractsTableOrderingComposer(
-            $db: $db,
-            $table: $db.extracts,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  $$SourcesTableOrderingComposer get sourceId {
-    final $$SourcesTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.sourceId,
-      referencedTable: $db.sources,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$SourcesTableOrderingComposer(
-            $db: $db,
-            $table: $db.sources,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 }
 
 class $$CardsTableAnnotationComposer
@@ -12417,6 +16403,16 @@ class $$CardsTableAnnotationComposer
   });
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get parentElementId => $composableBuilder(
+    column: $table.parentElementId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get parentElementType => $composableBuilder(
+    column: $table.parentElementType,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get kind =>
       $composableBuilder(column: $table.kind, builder: (column) => column);
@@ -12441,52 +16437,6 @@ class $$CardsTableAnnotationComposer
     column: $table.editedAtUtc,
     builder: (column) => column,
   );
-
-  $$ExtractsTableAnnotationComposer get extractId {
-    final $$ExtractsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.extractId,
-      referencedTable: $db.extracts,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$ExtractsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.extracts,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  $$SourcesTableAnnotationComposer get sourceId {
-    final $$SourcesTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.sourceId,
-      referencedTable: $db.sources,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$SourcesTableAnnotationComposer(
-            $db: $db,
-            $table: $db.sources,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 
   Expression<T> cardMemoriesRefs<T extends Object>(
     Expression<T> Function($$CardMemoriesTableAnnotationComposer a) f,
@@ -12552,12 +16502,7 @@ class $$CardsTableTableManager
           $$CardsTableUpdateCompanionBuilder,
           (CardRow, $$CardsTableReferences),
           CardRow,
-          PrefetchHooks Function({
-            bool extractId,
-            bool sourceId,
-            bool cardMemoriesRefs,
-            bool reviewEventsRefs,
-          })
+          PrefetchHooks Function({bool cardMemoriesRefs, bool reviewEventsRefs})
         > {
   $$CardsTableTableManager(_$AppDatabase db, $CardsTable table)
     : super(
@@ -12573,8 +16518,8 @@ class $$CardsTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
-                Value<String?> extractId = const Value.absent(),
-                Value<String?> sourceId = const Value.absent(),
+                Value<String?> parentElementId = const Value.absent(),
+                Value<int?> parentElementType = const Value.absent(),
                 Value<int> kind = const Value.absent(),
                 Value<String> front = const Value.absent(),
                 Value<String> back = const Value.absent(),
@@ -12584,8 +16529,8 @@ class $$CardsTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => CardsCompanion(
                 id: id,
-                extractId: extractId,
-                sourceId: sourceId,
+                parentElementId: parentElementId,
+                parentElementType: parentElementType,
                 kind: kind,
                 front: front,
                 back: back,
@@ -12597,8 +16542,8 @@ class $$CardsTableTableManager
           createCompanionCallback:
               ({
                 required String id,
-                Value<String?> extractId = const Value.absent(),
-                Value<String?> sourceId = const Value.absent(),
+                Value<String?> parentElementId = const Value.absent(),
+                Value<int?> parentElementType = const Value.absent(),
                 required int kind,
                 required String front,
                 required String back,
@@ -12608,8 +16553,8 @@ class $$CardsTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => CardsCompanion.insert(
                 id: id,
-                extractId: extractId,
-                sourceId: sourceId,
+                parentElementId: parentElementId,
+                parentElementType: parentElementType,
                 kind: kind,
                 front: front,
                 back: back,
@@ -12625,63 +16570,14 @@ class $$CardsTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({
-                extractId = false,
-                sourceId = false,
-                cardMemoriesRefs = false,
-                reviewEventsRefs = false,
-              }) {
+              ({cardMemoriesRefs = false, reviewEventsRefs = false}) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (cardMemoriesRefs) db.cardMemories,
                     if (reviewEventsRefs) db.reviewEvents,
                   ],
-                  addJoins:
-                      <
-                        T extends TableManagerState<
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic
-                        >
-                      >(state) {
-                        if (extractId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.extractId,
-                                    referencedTable: $$CardsTableReferences
-                                        ._extractIdTable(db),
-                                    referencedColumn: $$CardsTableReferences
-                                        ._extractIdTable(db)
-                                        .id,
-                                  )
-                                  as T;
-                        }
-                        if (sourceId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.sourceId,
-                                    referencedTable: $$CardsTableReferences
-                                        ._sourceIdTable(db),
-                                    referencedColumn: $$CardsTableReferences
-                                        ._sourceIdTable(db)
-                                        .id,
-                                  )
-                                  as T;
-                        }
-
-                        return state;
-                      },
+                  addJoins: null,
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (cardMemoriesRefs)
@@ -12746,12 +16642,7 @@ typedef $$CardsTableProcessedTableManager =
       $$CardsTableUpdateCompanionBuilder,
       (CardRow, $$CardsTableReferences),
       CardRow,
-      PrefetchHooks Function({
-        bool extractId,
-        bool sourceId,
-        bool cardMemoriesRefs,
-        bool reviewEventsRefs,
-      })
+      PrefetchHooks Function({bool cardMemoriesRefs, bool reviewEventsRefs})
     >;
 typedef $$ElementSchedulesTableCreateCompanionBuilder =
     ElementSchedulesCompanion Function({
@@ -12764,6 +16655,12 @@ typedef $$ElementSchedulesTableCreateCompanionBuilder =
       Value<int?> deferredUntil,
       Value<int> deferralKind,
       Value<String?> rootId,
+      Value<String?> parentElementId,
+      Value<int?> ordinal,
+      Value<int?> createdAtUtc,
+      Value<int?> updatedAtUtc,
+      Value<int> revision,
+      Value<int> legacyDueProvenance,
       required String zoneId,
       Value<int> rowid,
     });
@@ -12778,6 +16675,12 @@ typedef $$ElementSchedulesTableUpdateCompanionBuilder =
       Value<int?> deferredUntil,
       Value<int> deferralKind,
       Value<String?> rootId,
+      Value<String?> parentElementId,
+      Value<int?> ordinal,
+      Value<int?> createdAtUtc,
+      Value<int?> updatedAtUtc,
+      Value<int> revision,
+      Value<int> legacyDueProvenance,
       Value<String> zoneId,
       Value<int> rowid,
     });
@@ -12833,6 +16736,36 @@ class $$ElementSchedulesTableFilterComposer
 
   ColumnFilters<String> get rootId => $composableBuilder(
     column: $table.rootId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentElementId => $composableBuilder(
+    column: $table.parentElementId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get ordinal => $composableBuilder(
+    column: $table.ordinal,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get legacyDueProvenance => $composableBuilder(
+    column: $table.legacyDueProvenance,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12896,6 +16829,36 @@ class $$ElementSchedulesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentElementId => $composableBuilder(
+    column: $table.parentElementId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get ordinal => $composableBuilder(
+    column: $table.ordinal,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get legacyDueProvenance => $composableBuilder(
+    column: $table.legacyDueProvenance,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get zoneId => $composableBuilder(
     column: $table.zoneId,
     builder: (column) => ColumnOrderings(column),
@@ -12948,6 +16911,32 @@ class $$ElementSchedulesTableAnnotationComposer
   GeneratedColumn<String> get rootId =>
       $composableBuilder(column: $table.rootId, builder: (column) => column);
 
+  GeneratedColumn<String> get parentElementId => $composableBuilder(
+    column: $table.parentElementId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get ordinal =>
+      $composableBuilder(column: $table.ordinal, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<int> get legacyDueProvenance => $composableBuilder(
+    column: $table.legacyDueProvenance,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get zoneId =>
       $composableBuilder(column: $table.zoneId, builder: (column) => column);
 }
@@ -12994,6 +16983,12 @@ class $$ElementSchedulesTableTableManager
                 Value<int?> deferredUntil = const Value.absent(),
                 Value<int> deferralKind = const Value.absent(),
                 Value<String?> rootId = const Value.absent(),
+                Value<String?> parentElementId = const Value.absent(),
+                Value<int?> ordinal = const Value.absent(),
+                Value<int?> createdAtUtc = const Value.absent(),
+                Value<int?> updatedAtUtc = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<int> legacyDueProvenance = const Value.absent(),
                 Value<String> zoneId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ElementSchedulesCompanion(
@@ -13006,6 +17001,12 @@ class $$ElementSchedulesTableTableManager
                 deferredUntil: deferredUntil,
                 deferralKind: deferralKind,
                 rootId: rootId,
+                parentElementId: parentElementId,
+                ordinal: ordinal,
+                createdAtUtc: createdAtUtc,
+                updatedAtUtc: updatedAtUtc,
+                revision: revision,
+                legacyDueProvenance: legacyDueProvenance,
                 zoneId: zoneId,
                 rowid: rowid,
               ),
@@ -13020,6 +17021,12 @@ class $$ElementSchedulesTableTableManager
                 Value<int?> deferredUntil = const Value.absent(),
                 Value<int> deferralKind = const Value.absent(),
                 Value<String?> rootId = const Value.absent(),
+                Value<String?> parentElementId = const Value.absent(),
+                Value<int?> ordinal = const Value.absent(),
+                Value<int?> createdAtUtc = const Value.absent(),
+                Value<int?> updatedAtUtc = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<int> legacyDueProvenance = const Value.absent(),
                 required String zoneId,
                 Value<int> rowid = const Value.absent(),
               }) => ElementSchedulesCompanion.insert(
@@ -13032,6 +17039,12 @@ class $$ElementSchedulesTableTableManager
                 deferredUntil: deferredUntil,
                 deferralKind: deferralKind,
                 rootId: rootId,
+                parentElementId: parentElementId,
+                ordinal: ordinal,
+                createdAtUtc: createdAtUtc,
+                updatedAtUtc: updatedAtUtc,
+                revision: revision,
+                legacyDueProvenance: legacyDueProvenance,
                 zoneId: zoneId,
                 rowid: rowid,
               ),
@@ -13073,6 +17086,11 @@ typedef $$TopicStatesTableCreateCompanionBuilder =
       Value<int> postponeCount,
       Value<int> encountersSinceLastCard,
       Value<int?> lastEncounterDay,
+      Value<int?> algorithmDueDay,
+      Value<String> schedulerKind,
+      Value<String> schedulerVersion,
+      Value<String?> policyInputSnapshot,
+      Value<int> revision,
       Value<int> rowid,
     });
 typedef $$TopicStatesTableUpdateCompanionBuilder =
@@ -13088,6 +17106,11 @@ typedef $$TopicStatesTableUpdateCompanionBuilder =
       Value<int> postponeCount,
       Value<int> encountersSinceLastCard,
       Value<int?> lastEncounterDay,
+      Value<int?> algorithmDueDay,
+      Value<String> schedulerKind,
+      Value<String> schedulerVersion,
+      Value<String?> policyInputSnapshot,
+      Value<int> revision,
       Value<int> rowid,
     });
 
@@ -13152,6 +17175,31 @@ class $$TopicStatesTableFilterComposer
 
   ColumnFilters<int> get lastEncounterDay => $composableBuilder(
     column: $table.lastEncounterDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get algorithmDueDay => $composableBuilder(
+    column: $table.algorithmDueDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get schedulerKind => $composableBuilder(
+    column: $table.schedulerKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get schedulerVersion => $composableBuilder(
+    column: $table.schedulerVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get policyInputSnapshot => $composableBuilder(
+    column: $table.policyInputSnapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -13219,6 +17267,31 @@ class $$TopicStatesTableOrderingComposer
     column: $table.lastEncounterDay,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get algorithmDueDay => $composableBuilder(
+    column: $table.algorithmDueDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get schedulerKind => $composableBuilder(
+    column: $table.schedulerKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get schedulerVersion => $composableBuilder(
+    column: $table.schedulerVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get policyInputSnapshot => $composableBuilder(
+    column: $table.policyInputSnapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$TopicStatesTableAnnotationComposer
@@ -13274,6 +17347,29 @@ class $$TopicStatesTableAnnotationComposer
     column: $table.lastEncounterDay,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get algorithmDueDay => $composableBuilder(
+    column: $table.algorithmDueDay,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get schedulerKind => $composableBuilder(
+    column: $table.schedulerKind,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get schedulerVersion => $composableBuilder(
+    column: $table.schedulerVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get policyInputSnapshot => $composableBuilder(
+    column: $table.policyInputSnapshot,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
 }
 
 class $$TopicStatesTableTableManager
@@ -13318,6 +17414,11 @@ class $$TopicStatesTableTableManager
                 Value<int> postponeCount = const Value.absent(),
                 Value<int> encountersSinceLastCard = const Value.absent(),
                 Value<int?> lastEncounterDay = const Value.absent(),
+                Value<int?> algorithmDueDay = const Value.absent(),
+                Value<String> schedulerKind = const Value.absent(),
+                Value<String> schedulerVersion = const Value.absent(),
+                Value<String?> policyInputSnapshot = const Value.absent(),
+                Value<int> revision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TopicStatesCompanion(
                 elementId: elementId,
@@ -13331,6 +17432,11 @@ class $$TopicStatesTableTableManager
                 postponeCount: postponeCount,
                 encountersSinceLastCard: encountersSinceLastCard,
                 lastEncounterDay: lastEncounterDay,
+                algorithmDueDay: algorithmDueDay,
+                schedulerKind: schedulerKind,
+                schedulerVersion: schedulerVersion,
+                policyInputSnapshot: policyInputSnapshot,
+                revision: revision,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -13346,6 +17452,11 @@ class $$TopicStatesTableTableManager
                 Value<int> postponeCount = const Value.absent(),
                 Value<int> encountersSinceLastCard = const Value.absent(),
                 Value<int?> lastEncounterDay = const Value.absent(),
+                Value<int?> algorithmDueDay = const Value.absent(),
+                Value<String> schedulerKind = const Value.absent(),
+                Value<String> schedulerVersion = const Value.absent(),
+                Value<String?> policyInputSnapshot = const Value.absent(),
+                Value<int> revision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TopicStatesCompanion.insert(
                 elementId: elementId,
@@ -13359,6 +17470,11 @@ class $$TopicStatesTableTableManager
                 postponeCount: postponeCount,
                 encountersSinceLastCard: encountersSinceLastCard,
                 lastEncounterDay: lastEncounterDay,
+                algorithmDueDay: algorithmDueDay,
+                schedulerKind: schedulerKind,
+                schedulerVersion: schedulerVersion,
+                policyInputSnapshot: policyInputSnapshot,
+                revision: revision,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -13402,6 +17518,10 @@ typedef $$CardMemoriesTableCreateCompanionBuilder =
       Value<int> postponeCount,
       required String schedulerVersion,
       required String parametersVersion,
+      Value<String> schedulerName,
+      Value<double?> scheduledDays,
+      Value<String?> fsrsStateJson,
+      Value<int> revision,
       Value<int> rowid,
     });
 typedef $$CardMemoriesTableUpdateCompanionBuilder =
@@ -13420,6 +17540,10 @@ typedef $$CardMemoriesTableUpdateCompanionBuilder =
       Value<int> postponeCount,
       Value<String> schedulerVersion,
       Value<String> parametersVersion,
+      Value<String> schedulerName,
+      Value<double?> scheduledDays,
+      Value<String?> fsrsStateJson,
+      Value<int> revision,
       Value<int> rowid,
     });
 
@@ -13516,6 +17640,26 @@ class $$CardMemoriesTableFilterComposer
 
   ColumnFilters<String> get parametersVersion => $composableBuilder(
     column: $table.parametersVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get schedulerName => $composableBuilder(
+    column: $table.schedulerName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get scheduledDays => $composableBuilder(
+    column: $table.scheduledDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fsrsStateJson => $composableBuilder(
+    column: $table.fsrsStateJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13617,6 +17761,26 @@ class $$CardMemoriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get schedulerName => $composableBuilder(
+    column: $table.schedulerName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get scheduledDays => $composableBuilder(
+    column: $table.scheduledDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fsrsStateJson => $composableBuilder(
+    column: $table.fsrsStateJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$CardsTableOrderingComposer get cardId {
     final $$CardsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -13703,6 +17867,24 @@ class $$CardMemoriesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get schedulerName => $composableBuilder(
+    column: $table.schedulerName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get scheduledDays => $composableBuilder(
+    column: $table.scheduledDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get fsrsStateJson => $composableBuilder(
+    column: $table.fsrsStateJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
   $$CardsTableAnnotationComposer get cardId {
     final $$CardsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -13769,6 +17951,10 @@ class $$CardMemoriesTableTableManager
                 Value<int> postponeCount = const Value.absent(),
                 Value<String> schedulerVersion = const Value.absent(),
                 Value<String> parametersVersion = const Value.absent(),
+                Value<String> schedulerName = const Value.absent(),
+                Value<double?> scheduledDays = const Value.absent(),
+                Value<String?> fsrsStateJson = const Value.absent(),
+                Value<int> revision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CardMemoriesCompanion(
                 cardId: cardId,
@@ -13785,6 +17971,10 @@ class $$CardMemoriesTableTableManager
                 postponeCount: postponeCount,
                 schedulerVersion: schedulerVersion,
                 parametersVersion: parametersVersion,
+                schedulerName: schedulerName,
+                scheduledDays: scheduledDays,
+                fsrsStateJson: fsrsStateJson,
+                revision: revision,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -13803,6 +17993,10 @@ class $$CardMemoriesTableTableManager
                 Value<int> postponeCount = const Value.absent(),
                 required String schedulerVersion,
                 required String parametersVersion,
+                Value<String> schedulerName = const Value.absent(),
+                Value<double?> scheduledDays = const Value.absent(),
+                Value<String?> fsrsStateJson = const Value.absent(),
+                Value<int> revision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CardMemoriesCompanion.insert(
                 cardId: cardId,
@@ -13819,6 +18013,10 @@ class $$CardMemoriesTableTableManager
                 postponeCount: postponeCount,
                 schedulerVersion: schedulerVersion,
                 parametersVersion: parametersVersion,
+                schedulerName: schedulerName,
+                scheduledDays: scheduledDays,
+                fsrsStateJson: fsrsStateJson,
+                revision: revision,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -15184,6 +19382,1594 @@ typedef $$RevlogEntriesTableProcessedTableManager =
       RevlogRow,
       PrefetchHooks Function()
     >;
+typedef $$ScheduleAdjustmentsTableCreateCompanionBuilder =
+    ScheduleAdjustmentsCompanion Function({
+      required String id,
+      required String elementId,
+      required int elementType,
+      required int mode,
+      required int reason,
+      Value<int?> notBeforeAtUtc,
+      Value<int?> notBeforeStudyDay,
+      Value<int?> scheduledForAtUtc,
+      Value<int?> scheduledForStudyDay,
+      Value<String?> zoneId,
+      required String operationId,
+      Value<String?> batchId,
+      required String policyVersion,
+      required int createdAtUtc,
+      required int createdStudyDay,
+      required String createdZoneId,
+      Value<int?> clearedAtUtc,
+      Value<String?> clearedByOperationId,
+      Value<int> rowid,
+    });
+typedef $$ScheduleAdjustmentsTableUpdateCompanionBuilder =
+    ScheduleAdjustmentsCompanion Function({
+      Value<String> id,
+      Value<String> elementId,
+      Value<int> elementType,
+      Value<int> mode,
+      Value<int> reason,
+      Value<int?> notBeforeAtUtc,
+      Value<int?> notBeforeStudyDay,
+      Value<int?> scheduledForAtUtc,
+      Value<int?> scheduledForStudyDay,
+      Value<String?> zoneId,
+      Value<String> operationId,
+      Value<String?> batchId,
+      Value<String> policyVersion,
+      Value<int> createdAtUtc,
+      Value<int> createdStudyDay,
+      Value<String> createdZoneId,
+      Value<int?> clearedAtUtc,
+      Value<String?> clearedByOperationId,
+      Value<int> rowid,
+    });
+
+class $$ScheduleAdjustmentsTableFilterComposer
+    extends Composer<_$AppDatabase, $ScheduleAdjustmentsTable> {
+  $$ScheduleAdjustmentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get elementId => $composableBuilder(
+    column: $table.elementId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get notBeforeAtUtc => $composableBuilder(
+    column: $table.notBeforeAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get notBeforeStudyDay => $composableBuilder(
+    column: $table.notBeforeStudyDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get scheduledForAtUtc => $composableBuilder(
+    column: $table.scheduledForAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get scheduledForStudyDay => $composableBuilder(
+    column: $table.scheduledForStudyDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get zoneId => $composableBuilder(
+    column: $table.zoneId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get batchId => $composableBuilder(
+    column: $table.batchId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get policyVersion => $composableBuilder(
+    column: $table.policyVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdStudyDay => $composableBuilder(
+    column: $table.createdStudyDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get createdZoneId => $composableBuilder(
+    column: $table.createdZoneId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get clearedAtUtc => $composableBuilder(
+    column: $table.clearedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clearedByOperationId => $composableBuilder(
+    column: $table.clearedByOperationId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ScheduleAdjustmentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ScheduleAdjustmentsTable> {
+  $$ScheduleAdjustmentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get elementId => $composableBuilder(
+    column: $table.elementId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get notBeforeAtUtc => $composableBuilder(
+    column: $table.notBeforeAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get notBeforeStudyDay => $composableBuilder(
+    column: $table.notBeforeStudyDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get scheduledForAtUtc => $composableBuilder(
+    column: $table.scheduledForAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get scheduledForStudyDay => $composableBuilder(
+    column: $table.scheduledForStudyDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get zoneId => $composableBuilder(
+    column: $table.zoneId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get batchId => $composableBuilder(
+    column: $table.batchId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get policyVersion => $composableBuilder(
+    column: $table.policyVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdStudyDay => $composableBuilder(
+    column: $table.createdStudyDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get createdZoneId => $composableBuilder(
+    column: $table.createdZoneId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get clearedAtUtc => $composableBuilder(
+    column: $table.clearedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clearedByOperationId => $composableBuilder(
+    column: $table.clearedByOperationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ScheduleAdjustmentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ScheduleAdjustmentsTable> {
+  $$ScheduleAdjustmentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get elementId =>
+      $composableBuilder(column: $table.elementId, builder: (column) => column);
+
+  GeneratedColumn<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get mode =>
+      $composableBuilder(column: $table.mode, builder: (column) => column);
+
+  GeneratedColumn<int> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
+
+  GeneratedColumn<int> get notBeforeAtUtc => $composableBuilder(
+    column: $table.notBeforeAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get notBeforeStudyDay => $composableBuilder(
+    column: $table.notBeforeStudyDay,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get scheduledForAtUtc => $composableBuilder(
+    column: $table.scheduledForAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get scheduledForStudyDay => $composableBuilder(
+    column: $table.scheduledForStudyDay,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get zoneId =>
+      $composableBuilder(column: $table.zoneId, builder: (column) => column);
+
+  GeneratedColumn<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get batchId =>
+      $composableBuilder(column: $table.batchId, builder: (column) => column);
+
+  GeneratedColumn<String> get policyVersion => $composableBuilder(
+    column: $table.policyVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdStudyDay => $composableBuilder(
+    column: $table.createdStudyDay,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get createdZoneId => $composableBuilder(
+    column: $table.createdZoneId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get clearedAtUtc => $composableBuilder(
+    column: $table.clearedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get clearedByOperationId => $composableBuilder(
+    column: $table.clearedByOperationId,
+    builder: (column) => column,
+  );
+}
+
+class $$ScheduleAdjustmentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ScheduleAdjustmentsTable,
+          ScheduleAdjustmentRow,
+          $$ScheduleAdjustmentsTableFilterComposer,
+          $$ScheduleAdjustmentsTableOrderingComposer,
+          $$ScheduleAdjustmentsTableAnnotationComposer,
+          $$ScheduleAdjustmentsTableCreateCompanionBuilder,
+          $$ScheduleAdjustmentsTableUpdateCompanionBuilder,
+          (
+            ScheduleAdjustmentRow,
+            BaseReferences<
+              _$AppDatabase,
+              $ScheduleAdjustmentsTable,
+              ScheduleAdjustmentRow
+            >,
+          ),
+          ScheduleAdjustmentRow,
+          PrefetchHooks Function()
+        > {
+  $$ScheduleAdjustmentsTableTableManager(
+    _$AppDatabase db,
+    $ScheduleAdjustmentsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ScheduleAdjustmentsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ScheduleAdjustmentsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ScheduleAdjustmentsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> elementId = const Value.absent(),
+                Value<int> elementType = const Value.absent(),
+                Value<int> mode = const Value.absent(),
+                Value<int> reason = const Value.absent(),
+                Value<int?> notBeforeAtUtc = const Value.absent(),
+                Value<int?> notBeforeStudyDay = const Value.absent(),
+                Value<int?> scheduledForAtUtc = const Value.absent(),
+                Value<int?> scheduledForStudyDay = const Value.absent(),
+                Value<String?> zoneId = const Value.absent(),
+                Value<String> operationId = const Value.absent(),
+                Value<String?> batchId = const Value.absent(),
+                Value<String> policyVersion = const Value.absent(),
+                Value<int> createdAtUtc = const Value.absent(),
+                Value<int> createdStudyDay = const Value.absent(),
+                Value<String> createdZoneId = const Value.absent(),
+                Value<int?> clearedAtUtc = const Value.absent(),
+                Value<String?> clearedByOperationId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ScheduleAdjustmentsCompanion(
+                id: id,
+                elementId: elementId,
+                elementType: elementType,
+                mode: mode,
+                reason: reason,
+                notBeforeAtUtc: notBeforeAtUtc,
+                notBeforeStudyDay: notBeforeStudyDay,
+                scheduledForAtUtc: scheduledForAtUtc,
+                scheduledForStudyDay: scheduledForStudyDay,
+                zoneId: zoneId,
+                operationId: operationId,
+                batchId: batchId,
+                policyVersion: policyVersion,
+                createdAtUtc: createdAtUtc,
+                createdStudyDay: createdStudyDay,
+                createdZoneId: createdZoneId,
+                clearedAtUtc: clearedAtUtc,
+                clearedByOperationId: clearedByOperationId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String elementId,
+                required int elementType,
+                required int mode,
+                required int reason,
+                Value<int?> notBeforeAtUtc = const Value.absent(),
+                Value<int?> notBeforeStudyDay = const Value.absent(),
+                Value<int?> scheduledForAtUtc = const Value.absent(),
+                Value<int?> scheduledForStudyDay = const Value.absent(),
+                Value<String?> zoneId = const Value.absent(),
+                required String operationId,
+                Value<String?> batchId = const Value.absent(),
+                required String policyVersion,
+                required int createdAtUtc,
+                required int createdStudyDay,
+                required String createdZoneId,
+                Value<int?> clearedAtUtc = const Value.absent(),
+                Value<String?> clearedByOperationId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ScheduleAdjustmentsCompanion.insert(
+                id: id,
+                elementId: elementId,
+                elementType: elementType,
+                mode: mode,
+                reason: reason,
+                notBeforeAtUtc: notBeforeAtUtc,
+                notBeforeStudyDay: notBeforeStudyDay,
+                scheduledForAtUtc: scheduledForAtUtc,
+                scheduledForStudyDay: scheduledForStudyDay,
+                zoneId: zoneId,
+                operationId: operationId,
+                batchId: batchId,
+                policyVersion: policyVersion,
+                createdAtUtc: createdAtUtc,
+                createdStudyDay: createdStudyDay,
+                createdZoneId: createdZoneId,
+                clearedAtUtc: clearedAtUtc,
+                clearedByOperationId: clearedByOperationId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ScheduleAdjustmentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ScheduleAdjustmentsTable,
+      ScheduleAdjustmentRow,
+      $$ScheduleAdjustmentsTableFilterComposer,
+      $$ScheduleAdjustmentsTableOrderingComposer,
+      $$ScheduleAdjustmentsTableAnnotationComposer,
+      $$ScheduleAdjustmentsTableCreateCompanionBuilder,
+      $$ScheduleAdjustmentsTableUpdateCompanionBuilder,
+      (
+        ScheduleAdjustmentRow,
+        BaseReferences<
+          _$AppDatabase,
+          $ScheduleAdjustmentsTable,
+          ScheduleAdjustmentRow
+        >,
+      ),
+      ScheduleAdjustmentRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SchedulerEventsTableCreateCompanionBuilder =
+    SchedulerEventsCompanion Function({
+      required String id,
+      required String operationId,
+      Value<String?> elementId,
+      Value<int?> elementType,
+      required String eventType,
+      required int occurredAtUtc,
+      required int studyDay,
+      required String studyDayZoneId,
+      Value<String?> schedulerName,
+      Value<String?> schedulerVersion,
+      required String policyVersion,
+      Value<String?> stateBefore,
+      Value<String?> stateAfter,
+      Value<String?> algorithmicDueBefore,
+      Value<String?> algorithmicDueAfter,
+      Value<String?> adjustmentsBefore,
+      Value<String?> adjustmentsAfter,
+      Value<String?> undoesEventId,
+      Value<String?> batchId,
+      Value<String?> metadataJson,
+      Value<int> rowid,
+    });
+typedef $$SchedulerEventsTableUpdateCompanionBuilder =
+    SchedulerEventsCompanion Function({
+      Value<String> id,
+      Value<String> operationId,
+      Value<String?> elementId,
+      Value<int?> elementType,
+      Value<String> eventType,
+      Value<int> occurredAtUtc,
+      Value<int> studyDay,
+      Value<String> studyDayZoneId,
+      Value<String?> schedulerName,
+      Value<String?> schedulerVersion,
+      Value<String> policyVersion,
+      Value<String?> stateBefore,
+      Value<String?> stateAfter,
+      Value<String?> algorithmicDueBefore,
+      Value<String?> algorithmicDueAfter,
+      Value<String?> adjustmentsBefore,
+      Value<String?> adjustmentsAfter,
+      Value<String?> undoesEventId,
+      Value<String?> batchId,
+      Value<String?> metadataJson,
+      Value<int> rowid,
+    });
+
+class $$SchedulerEventsTableFilterComposer
+    extends Composer<_$AppDatabase, $SchedulerEventsTable> {
+  $$SchedulerEventsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get elementId => $composableBuilder(
+    column: $table.elementId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get eventType => $composableBuilder(
+    column: $table.eventType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get occurredAtUtc => $composableBuilder(
+    column: $table.occurredAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get studyDay => $composableBuilder(
+    column: $table.studyDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get studyDayZoneId => $composableBuilder(
+    column: $table.studyDayZoneId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get schedulerName => $composableBuilder(
+    column: $table.schedulerName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get schedulerVersion => $composableBuilder(
+    column: $table.schedulerVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get policyVersion => $composableBuilder(
+    column: $table.policyVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stateBefore => $composableBuilder(
+    column: $table.stateBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stateAfter => $composableBuilder(
+    column: $table.stateAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get algorithmicDueBefore => $composableBuilder(
+    column: $table.algorithmicDueBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get algorithmicDueAfter => $composableBuilder(
+    column: $table.algorithmicDueAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get adjustmentsBefore => $composableBuilder(
+    column: $table.adjustmentsBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get adjustmentsAfter => $composableBuilder(
+    column: $table.adjustmentsAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get undoesEventId => $composableBuilder(
+    column: $table.undoesEventId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get batchId => $composableBuilder(
+    column: $table.batchId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get metadataJson => $composableBuilder(
+    column: $table.metadataJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SchedulerEventsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SchedulerEventsTable> {
+  $$SchedulerEventsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get elementId => $composableBuilder(
+    column: $table.elementId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get eventType => $composableBuilder(
+    column: $table.eventType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get occurredAtUtc => $composableBuilder(
+    column: $table.occurredAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get studyDay => $composableBuilder(
+    column: $table.studyDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get studyDayZoneId => $composableBuilder(
+    column: $table.studyDayZoneId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get schedulerName => $composableBuilder(
+    column: $table.schedulerName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get schedulerVersion => $composableBuilder(
+    column: $table.schedulerVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get policyVersion => $composableBuilder(
+    column: $table.policyVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stateBefore => $composableBuilder(
+    column: $table.stateBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stateAfter => $composableBuilder(
+    column: $table.stateAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get algorithmicDueBefore => $composableBuilder(
+    column: $table.algorithmicDueBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get algorithmicDueAfter => $composableBuilder(
+    column: $table.algorithmicDueAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get adjustmentsBefore => $composableBuilder(
+    column: $table.adjustmentsBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get adjustmentsAfter => $composableBuilder(
+    column: $table.adjustmentsAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get undoesEventId => $composableBuilder(
+    column: $table.undoesEventId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get batchId => $composableBuilder(
+    column: $table.batchId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get metadataJson => $composableBuilder(
+    column: $table.metadataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SchedulerEventsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SchedulerEventsTable> {
+  $$SchedulerEventsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get elementId =>
+      $composableBuilder(column: $table.elementId, builder: (column) => column);
+
+  GeneratedColumn<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get eventType =>
+      $composableBuilder(column: $table.eventType, builder: (column) => column);
+
+  GeneratedColumn<int> get occurredAtUtc => $composableBuilder(
+    column: $table.occurredAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get studyDay =>
+      $composableBuilder(column: $table.studyDay, builder: (column) => column);
+
+  GeneratedColumn<String> get studyDayZoneId => $composableBuilder(
+    column: $table.studyDayZoneId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get schedulerName => $composableBuilder(
+    column: $table.schedulerName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get schedulerVersion => $composableBuilder(
+    column: $table.schedulerVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get policyVersion => $composableBuilder(
+    column: $table.policyVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stateBefore => $composableBuilder(
+    column: $table.stateBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stateAfter => $composableBuilder(
+    column: $table.stateAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get algorithmicDueBefore => $composableBuilder(
+    column: $table.algorithmicDueBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get algorithmicDueAfter => $composableBuilder(
+    column: $table.algorithmicDueAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get adjustmentsBefore => $composableBuilder(
+    column: $table.adjustmentsBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get adjustmentsAfter => $composableBuilder(
+    column: $table.adjustmentsAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get undoesEventId => $composableBuilder(
+    column: $table.undoesEventId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get batchId =>
+      $composableBuilder(column: $table.batchId, builder: (column) => column);
+
+  GeneratedColumn<String> get metadataJson => $composableBuilder(
+    column: $table.metadataJson,
+    builder: (column) => column,
+  );
+}
+
+class $$SchedulerEventsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SchedulerEventsTable,
+          SchedulerEventRow,
+          $$SchedulerEventsTableFilterComposer,
+          $$SchedulerEventsTableOrderingComposer,
+          $$SchedulerEventsTableAnnotationComposer,
+          $$SchedulerEventsTableCreateCompanionBuilder,
+          $$SchedulerEventsTableUpdateCompanionBuilder,
+          (
+            SchedulerEventRow,
+            BaseReferences<
+              _$AppDatabase,
+              $SchedulerEventsTable,
+              SchedulerEventRow
+            >,
+          ),
+          SchedulerEventRow,
+          PrefetchHooks Function()
+        > {
+  $$SchedulerEventsTableTableManager(
+    _$AppDatabase db,
+    $SchedulerEventsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SchedulerEventsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SchedulerEventsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SchedulerEventsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> operationId = const Value.absent(),
+                Value<String?> elementId = const Value.absent(),
+                Value<int?> elementType = const Value.absent(),
+                Value<String> eventType = const Value.absent(),
+                Value<int> occurredAtUtc = const Value.absent(),
+                Value<int> studyDay = const Value.absent(),
+                Value<String> studyDayZoneId = const Value.absent(),
+                Value<String?> schedulerName = const Value.absent(),
+                Value<String?> schedulerVersion = const Value.absent(),
+                Value<String> policyVersion = const Value.absent(),
+                Value<String?> stateBefore = const Value.absent(),
+                Value<String?> stateAfter = const Value.absent(),
+                Value<String?> algorithmicDueBefore = const Value.absent(),
+                Value<String?> algorithmicDueAfter = const Value.absent(),
+                Value<String?> adjustmentsBefore = const Value.absent(),
+                Value<String?> adjustmentsAfter = const Value.absent(),
+                Value<String?> undoesEventId = const Value.absent(),
+                Value<String?> batchId = const Value.absent(),
+                Value<String?> metadataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SchedulerEventsCompanion(
+                id: id,
+                operationId: operationId,
+                elementId: elementId,
+                elementType: elementType,
+                eventType: eventType,
+                occurredAtUtc: occurredAtUtc,
+                studyDay: studyDay,
+                studyDayZoneId: studyDayZoneId,
+                schedulerName: schedulerName,
+                schedulerVersion: schedulerVersion,
+                policyVersion: policyVersion,
+                stateBefore: stateBefore,
+                stateAfter: stateAfter,
+                algorithmicDueBefore: algorithmicDueBefore,
+                algorithmicDueAfter: algorithmicDueAfter,
+                adjustmentsBefore: adjustmentsBefore,
+                adjustmentsAfter: adjustmentsAfter,
+                undoesEventId: undoesEventId,
+                batchId: batchId,
+                metadataJson: metadataJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String operationId,
+                Value<String?> elementId = const Value.absent(),
+                Value<int?> elementType = const Value.absent(),
+                required String eventType,
+                required int occurredAtUtc,
+                required int studyDay,
+                required String studyDayZoneId,
+                Value<String?> schedulerName = const Value.absent(),
+                Value<String?> schedulerVersion = const Value.absent(),
+                required String policyVersion,
+                Value<String?> stateBefore = const Value.absent(),
+                Value<String?> stateAfter = const Value.absent(),
+                Value<String?> algorithmicDueBefore = const Value.absent(),
+                Value<String?> algorithmicDueAfter = const Value.absent(),
+                Value<String?> adjustmentsBefore = const Value.absent(),
+                Value<String?> adjustmentsAfter = const Value.absent(),
+                Value<String?> undoesEventId = const Value.absent(),
+                Value<String?> batchId = const Value.absent(),
+                Value<String?> metadataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SchedulerEventsCompanion.insert(
+                id: id,
+                operationId: operationId,
+                elementId: elementId,
+                elementType: elementType,
+                eventType: eventType,
+                occurredAtUtc: occurredAtUtc,
+                studyDay: studyDay,
+                studyDayZoneId: studyDayZoneId,
+                schedulerName: schedulerName,
+                schedulerVersion: schedulerVersion,
+                policyVersion: policyVersion,
+                stateBefore: stateBefore,
+                stateAfter: stateAfter,
+                algorithmicDueBefore: algorithmicDueBefore,
+                algorithmicDueAfter: algorithmicDueAfter,
+                adjustmentsBefore: adjustmentsBefore,
+                adjustmentsAfter: adjustmentsAfter,
+                undoesEventId: undoesEventId,
+                batchId: batchId,
+                metadataJson: metadataJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SchedulerEventsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SchedulerEventsTable,
+      SchedulerEventRow,
+      $$SchedulerEventsTableFilterComposer,
+      $$SchedulerEventsTableOrderingComposer,
+      $$SchedulerEventsTableAnnotationComposer,
+      $$SchedulerEventsTableCreateCompanionBuilder,
+      $$SchedulerEventsTableUpdateCompanionBuilder,
+      (
+        SchedulerEventRow,
+        BaseReferences<_$AppDatabase, $SchedulerEventsTable, SchedulerEventRow>,
+      ),
+      SchedulerEventRow,
+      PrefetchHooks Function()
+    >;
+typedef $$DailyPresentationPlansTableCreateCompanionBuilder =
+    DailyPresentationPlansCompanion Function({
+      required int studyDay,
+      required String zoneId,
+      required String identityJson,
+      required String remainingEntriesJson,
+      Value<int> mergeCursor,
+      required int createdAtUtc,
+      required int updatedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$DailyPresentationPlansTableUpdateCompanionBuilder =
+    DailyPresentationPlansCompanion Function({
+      Value<int> studyDay,
+      Value<String> zoneId,
+      Value<String> identityJson,
+      Value<String> remainingEntriesJson,
+      Value<int> mergeCursor,
+      Value<int> createdAtUtc,
+      Value<int> updatedAtUtc,
+      Value<int> rowid,
+    });
+
+class $$DailyPresentationPlansTableFilterComposer
+    extends Composer<_$AppDatabase, $DailyPresentationPlansTable> {
+  $$DailyPresentationPlansTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get studyDay => $composableBuilder(
+    column: $table.studyDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get zoneId => $composableBuilder(
+    column: $table.zoneId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get identityJson => $composableBuilder(
+    column: $table.identityJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remainingEntriesJson => $composableBuilder(
+    column: $table.remainingEntriesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get mergeCursor => $composableBuilder(
+    column: $table.mergeCursor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DailyPresentationPlansTableOrderingComposer
+    extends Composer<_$AppDatabase, $DailyPresentationPlansTable> {
+  $$DailyPresentationPlansTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get studyDay => $composableBuilder(
+    column: $table.studyDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get zoneId => $composableBuilder(
+    column: $table.zoneId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get identityJson => $composableBuilder(
+    column: $table.identityJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remainingEntriesJson => $composableBuilder(
+    column: $table.remainingEntriesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get mergeCursor => $composableBuilder(
+    column: $table.mergeCursor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DailyPresentationPlansTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DailyPresentationPlansTable> {
+  $$DailyPresentationPlansTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get studyDay =>
+      $composableBuilder(column: $table.studyDay, builder: (column) => column);
+
+  GeneratedColumn<String> get zoneId =>
+      $composableBuilder(column: $table.zoneId, builder: (column) => column);
+
+  GeneratedColumn<String> get identityJson => $composableBuilder(
+    column: $table.identityJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get remainingEntriesJson => $composableBuilder(
+    column: $table.remainingEntriesJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get mergeCursor => $composableBuilder(
+    column: $table.mergeCursor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => column,
+  );
+}
+
+class $$DailyPresentationPlansTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DailyPresentationPlansTable,
+          DailyPresentationPlanRow,
+          $$DailyPresentationPlansTableFilterComposer,
+          $$DailyPresentationPlansTableOrderingComposer,
+          $$DailyPresentationPlansTableAnnotationComposer,
+          $$DailyPresentationPlansTableCreateCompanionBuilder,
+          $$DailyPresentationPlansTableUpdateCompanionBuilder,
+          (
+            DailyPresentationPlanRow,
+            BaseReferences<
+              _$AppDatabase,
+              $DailyPresentationPlansTable,
+              DailyPresentationPlanRow
+            >,
+          ),
+          DailyPresentationPlanRow,
+          PrefetchHooks Function()
+        > {
+  $$DailyPresentationPlansTableTableManager(
+    _$AppDatabase db,
+    $DailyPresentationPlansTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DailyPresentationPlansTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DailyPresentationPlansTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DailyPresentationPlansTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> studyDay = const Value.absent(),
+                Value<String> zoneId = const Value.absent(),
+                Value<String> identityJson = const Value.absent(),
+                Value<String> remainingEntriesJson = const Value.absent(),
+                Value<int> mergeCursor = const Value.absent(),
+                Value<int> createdAtUtc = const Value.absent(),
+                Value<int> updatedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DailyPresentationPlansCompanion(
+                studyDay: studyDay,
+                zoneId: zoneId,
+                identityJson: identityJson,
+                remainingEntriesJson: remainingEntriesJson,
+                mergeCursor: mergeCursor,
+                createdAtUtc: createdAtUtc,
+                updatedAtUtc: updatedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required int studyDay,
+                required String zoneId,
+                required String identityJson,
+                required String remainingEntriesJson,
+                Value<int> mergeCursor = const Value.absent(),
+                required int createdAtUtc,
+                required int updatedAtUtc,
+                Value<int> rowid = const Value.absent(),
+              }) => DailyPresentationPlansCompanion.insert(
+                studyDay: studyDay,
+                zoneId: zoneId,
+                identityJson: identityJson,
+                remainingEntriesJson: remainingEntriesJson,
+                mergeCursor: mergeCursor,
+                createdAtUtc: createdAtUtc,
+                updatedAtUtc: updatedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DailyPresentationPlansTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DailyPresentationPlansTable,
+      DailyPresentationPlanRow,
+      $$DailyPresentationPlansTableFilterComposer,
+      $$DailyPresentationPlansTableOrderingComposer,
+      $$DailyPresentationPlansTableAnnotationComposer,
+      $$DailyPresentationPlansTableCreateCompanionBuilder,
+      $$DailyPresentationPlansTableUpdateCompanionBuilder,
+      (
+        DailyPresentationPlanRow,
+        BaseReferences<
+          _$AppDatabase,
+          $DailyPresentationPlansTable,
+          DailyPresentationPlanRow
+        >,
+      ),
+      DailyPresentationPlanRow,
+      PrefetchHooks Function()
+    >;
+typedef $$MercyBatchesTableCreateCompanionBuilder =
+    MercyBatchesCompanion Function({
+      required String batchId,
+      required String previewOperationId,
+      Value<String?> applyOperationId,
+      Value<String?> undoOperationId,
+      required String policyVersion,
+      required String previewJson,
+      Value<String?> priorAdjustmentsJson,
+      required int createdAtUtc,
+      Value<int?> appliedAtUtc,
+      Value<int?> undoneAtUtc,
+      Value<int> rowid,
+    });
+typedef $$MercyBatchesTableUpdateCompanionBuilder =
+    MercyBatchesCompanion Function({
+      Value<String> batchId,
+      Value<String> previewOperationId,
+      Value<String?> applyOperationId,
+      Value<String?> undoOperationId,
+      Value<String> policyVersion,
+      Value<String> previewJson,
+      Value<String?> priorAdjustmentsJson,
+      Value<int> createdAtUtc,
+      Value<int?> appliedAtUtc,
+      Value<int?> undoneAtUtc,
+      Value<int> rowid,
+    });
+
+class $$MercyBatchesTableFilterComposer
+    extends Composer<_$AppDatabase, $MercyBatchesTable> {
+  $$MercyBatchesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get batchId => $composableBuilder(
+    column: $table.batchId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get previewOperationId => $composableBuilder(
+    column: $table.previewOperationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get applyOperationId => $composableBuilder(
+    column: $table.applyOperationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get undoOperationId => $composableBuilder(
+    column: $table.undoOperationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get policyVersion => $composableBuilder(
+    column: $table.policyVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get previewJson => $composableBuilder(
+    column: $table.previewJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get priorAdjustmentsJson => $composableBuilder(
+    column: $table.priorAdjustmentsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get appliedAtUtc => $composableBuilder(
+    column: $table.appliedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get undoneAtUtc => $composableBuilder(
+    column: $table.undoneAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MercyBatchesTableOrderingComposer
+    extends Composer<_$AppDatabase, $MercyBatchesTable> {
+  $$MercyBatchesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get batchId => $composableBuilder(
+    column: $table.batchId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get previewOperationId => $composableBuilder(
+    column: $table.previewOperationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get applyOperationId => $composableBuilder(
+    column: $table.applyOperationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get undoOperationId => $composableBuilder(
+    column: $table.undoOperationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get policyVersion => $composableBuilder(
+    column: $table.policyVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get previewJson => $composableBuilder(
+    column: $table.previewJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get priorAdjustmentsJson => $composableBuilder(
+    column: $table.priorAdjustmentsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get appliedAtUtc => $composableBuilder(
+    column: $table.appliedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get undoneAtUtc => $composableBuilder(
+    column: $table.undoneAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MercyBatchesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MercyBatchesTable> {
+  $$MercyBatchesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get batchId =>
+      $composableBuilder(column: $table.batchId, builder: (column) => column);
+
+  GeneratedColumn<String> get previewOperationId => $composableBuilder(
+    column: $table.previewOperationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get applyOperationId => $composableBuilder(
+    column: $table.applyOperationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get undoOperationId => $composableBuilder(
+    column: $table.undoOperationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get policyVersion => $composableBuilder(
+    column: $table.policyVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get previewJson => $composableBuilder(
+    column: $table.previewJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get priorAdjustmentsJson => $composableBuilder(
+    column: $table.priorAdjustmentsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get appliedAtUtc => $composableBuilder(
+    column: $table.appliedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get undoneAtUtc => $composableBuilder(
+    column: $table.undoneAtUtc,
+    builder: (column) => column,
+  );
+}
+
+class $$MercyBatchesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MercyBatchesTable,
+          MercyBatchRow,
+          $$MercyBatchesTableFilterComposer,
+          $$MercyBatchesTableOrderingComposer,
+          $$MercyBatchesTableAnnotationComposer,
+          $$MercyBatchesTableCreateCompanionBuilder,
+          $$MercyBatchesTableUpdateCompanionBuilder,
+          (
+            MercyBatchRow,
+            BaseReferences<_$AppDatabase, $MercyBatchesTable, MercyBatchRow>,
+          ),
+          MercyBatchRow,
+          PrefetchHooks Function()
+        > {
+  $$MercyBatchesTableTableManager(_$AppDatabase db, $MercyBatchesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MercyBatchesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MercyBatchesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MercyBatchesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> batchId = const Value.absent(),
+                Value<String> previewOperationId = const Value.absent(),
+                Value<String?> applyOperationId = const Value.absent(),
+                Value<String?> undoOperationId = const Value.absent(),
+                Value<String> policyVersion = const Value.absent(),
+                Value<String> previewJson = const Value.absent(),
+                Value<String?> priorAdjustmentsJson = const Value.absent(),
+                Value<int> createdAtUtc = const Value.absent(),
+                Value<int?> appliedAtUtc = const Value.absent(),
+                Value<int?> undoneAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MercyBatchesCompanion(
+                batchId: batchId,
+                previewOperationId: previewOperationId,
+                applyOperationId: applyOperationId,
+                undoOperationId: undoOperationId,
+                policyVersion: policyVersion,
+                previewJson: previewJson,
+                priorAdjustmentsJson: priorAdjustmentsJson,
+                createdAtUtc: createdAtUtc,
+                appliedAtUtc: appliedAtUtc,
+                undoneAtUtc: undoneAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String batchId,
+                required String previewOperationId,
+                Value<String?> applyOperationId = const Value.absent(),
+                Value<String?> undoOperationId = const Value.absent(),
+                required String policyVersion,
+                required String previewJson,
+                Value<String?> priorAdjustmentsJson = const Value.absent(),
+                required int createdAtUtc,
+                Value<int?> appliedAtUtc = const Value.absent(),
+                Value<int?> undoneAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MercyBatchesCompanion.insert(
+                batchId: batchId,
+                previewOperationId: previewOperationId,
+                applyOperationId: applyOperationId,
+                undoOperationId: undoOperationId,
+                policyVersion: policyVersion,
+                previewJson: previewJson,
+                priorAdjustmentsJson: priorAdjustmentsJson,
+                createdAtUtc: createdAtUtc,
+                appliedAtUtc: appliedAtUtc,
+                undoneAtUtc: undoneAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MercyBatchesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MercyBatchesTable,
+      MercyBatchRow,
+      $$MercyBatchesTableFilterComposer,
+      $$MercyBatchesTableOrderingComposer,
+      $$MercyBatchesTableAnnotationComposer,
+      $$MercyBatchesTableCreateCompanionBuilder,
+      $$MercyBatchesTableUpdateCompanionBuilder,
+      (
+        MercyBatchRow,
+        BaseReferences<_$AppDatabase, $MercyBatchesTable, MercyBatchRow>,
+      ),
+      MercyBatchRow,
+      PrefetchHooks Function()
+    >;
 typedef $$SearchDocumentsTableCreateCompanionBuilder =
     SearchDocumentsCompanion Function({
       required String elementId,
@@ -16044,6 +21830,17 @@ class $AppDatabaseManager {
       $$ReviewEventsTableTableManager(_db, _db.reviewEvents);
   $$RevlogEntriesTableTableManager get revlogEntries =>
       $$RevlogEntriesTableTableManager(_db, _db.revlogEntries);
+  $$ScheduleAdjustmentsTableTableManager get scheduleAdjustments =>
+      $$ScheduleAdjustmentsTableTableManager(_db, _db.scheduleAdjustments);
+  $$SchedulerEventsTableTableManager get schedulerEvents =>
+      $$SchedulerEventsTableTableManager(_db, _db.schedulerEvents);
+  $$DailyPresentationPlansTableTableManager get dailyPresentationPlans =>
+      $$DailyPresentationPlansTableTableManager(
+        _db,
+        _db.dailyPresentationPlans,
+      );
+  $$MercyBatchesTableTableManager get mercyBatches =>
+      $$MercyBatchesTableTableManager(_db, _db.mercyBatches);
   $$SearchDocumentsTableTableManager get searchDocuments =>
       $$SearchDocumentsTableTableManager(_db, _db.searchDocuments);
   $$ActivityEventsTableTableManager get activityEvents =>

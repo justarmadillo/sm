@@ -128,9 +128,7 @@ final class PriorityPosition {
 
   @override
   bool operator ==(Object other) =>
-      other is PriorityPosition &&
-      other.index == index &&
-      other.total == total;
+      other is PriorityPosition && other.index == index && other.total == total;
 
   @override
   int get hashCode => Object.hash(index, total);

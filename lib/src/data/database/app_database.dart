@@ -13,7 +13,7 @@ import 'tables.dart';
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 5;
+const int kSchemaVersion = 6;
 
 /// Name of the external-content FTS5 index over [SearchDocuments].
 const String kSearchIndexTable = 'search_index';
@@ -29,6 +29,10 @@ const String kSearchIndexTable = 'search_index';
     CardMemories,
     ReviewEvents,
     RevlogEntries,
+    ScheduleAdjustments,
+    SchedulerEvents,
+    DailyPresentationPlans,
+    MercyBatches,
     SearchDocuments,
     ActivityEvents,
     Folders,
@@ -62,7 +66,8 @@ class AppDatabase extends _$AppDatabase {
         // an accidental physical parent delete. The app uses lifecycle
         // soft deletion; RESTRICT is the database-level backstop.
         await m.alterTable(TableMigration(extracts));
-        await m.alterTable(TableMigration(cards));
+        // Cards are rebuilt once in v6 when their two legacy parent columns
+        // are converted into the single typed parent coordinate.
         await _createIndexes(m);
       }
       if (from < 3) {
@@ -76,7 +81,14 @@ class AppDatabase extends _$AppDatabase {
             // postpone_count arrives with M4 but has to be named here too:
             // rebuilding the table copies every column of the *current*
             // definition, and a v2 row has no value to copy for it.
-            newColumns: [cardMemories.step, cardMemories.postponeCount],
+            newColumns: [
+              cardMemories.step,
+              cardMemories.postponeCount,
+              cardMemories.schedulerName,
+              cardMemories.scheduledDays,
+              cardMemories.fsrsStateJson,
+              cardMemories.revision,
+            ],
             columnTransformer: {
               cardMemories.state: const CustomExpression<int>(
                 'CASE WHEN state = 0 THEN 1 ELSE state END',
@@ -100,12 +112,12 @@ class AppDatabase extends _$AppDatabase {
         // obligatory extract, matching SuperMemo: an item can be made
         // directly from an article, or stand alone. Existing rows already
         // name an extract and are copied across unchanged.
-        await m.alterTable(
-          TableMigration(
-            cards,
-            newColumns: <GeneratedColumn<Object>>[cards.sourceId],
-          ),
-        );
+        if (!await _hasColumn('cards', 'source_id')) {
+          await customStatement(
+            'ALTER TABLE cards ADD COLUMN source_id TEXT NULL '
+            'REFERENCES sources(id) ON DELETE RESTRICT',
+          );
+        }
         await _createIndexes(m);
       }
       if (from < 5) {
@@ -114,16 +126,15 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(revlogEntries);
         await m.createTable(searchDocuments);
         await _addColumnIfMissing(m, elementSchedules, elementSchedules.rootId);
-        for (final GeneratedColumn<Object> column
-            in <GeneratedColumn<Object>>[
-              topicStates.intervalDays,
-              topicStates.aFactor,
-              topicStates.yieldEwma,
-              topicStates.encounters,
-              topicStates.postponeCount,
-              topicStates.encountersSinceLastCard,
-              topicStates.lastEncounterDay,
-            ]) {
+        for (final GeneratedColumn<Object> column in <GeneratedColumn<Object>>[
+          topicStates.intervalDays,
+          topicStates.aFactor,
+          topicStates.yieldEwma,
+          topicStates.encounters,
+          topicStates.postponeCount,
+          topicStates.encountersSinceLastCard,
+          topicStates.lastEncounterDay,
+        ]) {
           await _addColumnIfMissing(m, topicStates, column);
         }
         await _addColumnIfMissing(m, cardMemories, cardMemories.postponeCount);
@@ -176,6 +187,149 @@ class AppDatabase extends _$AppDatabase {
         await _createIndexes(m);
         await _createSearchIndex();
       }
+      if (from < 6) {
+        // Scheduler contract migration: add typed/versioned scheduling state
+        // without deleting legacy schedule or history columns.
+        await m.alterTable(
+          TableMigration(
+            cards,
+            newColumns: <GeneratedColumn<Object>>[
+              cards.parentElementId,
+              cards.parentElementType,
+            ],
+            columnTransformer: <GeneratedColumn<Object>, Expression<Object>>{
+              cards.parentElementId: const CustomExpression<String>(
+                'COALESCE(extract_id, source_id)',
+              ),
+              cards.parentElementType: const CustomExpression<int>(
+                'CASE WHEN extract_id IS NOT NULL THEN 1 '
+                'WHEN source_id IS NOT NULL THEN 0 ELSE NULL END',
+              ),
+            },
+          ),
+        );
+        // History must outlive content-level cleanup. Rebuild the legacy
+        // CASCADE foreign key as RESTRICT before importing scheduler events.
+        await m.alterTable(TableMigration(reviewEvents));
+
+        for (final GeneratedColumn<Object> column in <GeneratedColumn<Object>>[
+          elementSchedules.parentElementId,
+          elementSchedules.ordinal,
+          elementSchedules.createdAtUtc,
+          elementSchedules.updatedAtUtc,
+          elementSchedules.revision,
+          elementSchedules.legacyDueProvenance,
+          topicStates.algorithmDueDay,
+          topicStates.schedulerKind,
+          topicStates.schedulerVersion,
+          topicStates.policyInputSnapshot,
+          topicStates.revision,
+          cardMemories.schedulerName,
+          cardMemories.scheduledDays,
+          cardMemories.fsrsStateJson,
+          cardMemories.revision,
+        ]) {
+          final TableInfo<Table, Object?> table = switch (column.tableName) {
+            'element_schedules' => elementSchedules,
+            'topic_states' => topicStates,
+            'card_memories' => cardMemories,
+            _ => throw StateError('unexpected scheduler column'),
+          };
+          await _addColumnIfMissing(m, table, column);
+        }
+
+        await m.createTable(scheduleAdjustments);
+        await m.createTable(schedulerEvents);
+        await m.createTable(dailyPresentationPlans);
+        await m.createTable(mercyBatches);
+
+        // Import every historical card observation into the new append-only
+        // envelope. Old schemas did not persist the home-zone StudyDay at the
+        // event, so retain one fixed migration bucket and mark that limitation
+        // explicitly instead of pretending it is exact.
+        await customStatement(
+          'INSERT OR IGNORE INTO scheduler_events ('
+          'id, operation_id, element_id, element_type, event_type, '
+          'occurred_at_utc, study_day, study_day_zone_id, scheduler_name, '
+          'scheduler_version, policy_version, state_before, state_after, '
+          'algorithmic_due_before, algorithmic_due_after, metadata_json) '
+          "SELECT 'migrated-review:' || r.id, r.operation_id, r.card_id, 2, "
+          "CASE WHEN r.is_practice = 1 THEN 'practice_reviewed' "
+          "ELSE 'card_reviewed' END, r.reviewed_at_utc, "
+          'CAST((r.reviewed_at_utc - 14400000) / 86400000 AS INTEGER), '
+          "COALESCE(s.zone_id, 'UTC'), 'dart-fsrs', r.scheduler_version, "
+          "'legacy_import_v1', r.pre_state_json, r.post_state_json, "
+          "'utc:' || json_extract(r.pre_state_json, '\$.due_at_utc_ms'), "
+          "'utc:' || json_extract(r.post_state_json, '\$.due_at_utc_ms'), "
+          "'{\"migration\":\"legacy_review\","
+          '"snapshot_completeness":"review_state_only",'
+          "\"study_day_provenance\":\"utc_minus_4h_approximation\"}' "
+          'FROM review_events r LEFT JOIN element_schedules s '
+          'ON s.element_id = r.card_id AND s.element_type = 2',
+        );
+
+        // All pre-v6 topic rows lack trustworthy policy provenance. Preserve
+        // their exact due/interval/step and label them legacy; never infer
+        // that the global setting in force today produced yesterday's row.
+        await customStatement(
+          "UPDATE topic_states SET scheduler_kind = 'legacy_sequence', "
+          "scheduler_version = 'legacy_sequence/1', "
+          'algorithm_due_day = (SELECT due_day FROM element_schedules e '
+          'WHERE e.element_id = topic_states.element_id '
+          'AND e.element_type = topic_states.element_type), revision = 1',
+        );
+
+        // Recover common element audit/provenance from immutable content rows.
+        await customStatement(
+          'UPDATE element_schedules SET parent_element_id = CASE element_type '
+          'WHEN 1 THEN (SELECT parent_id FROM extracts x '
+          'WHERE x.id = element_id) '
+          'WHEN 2 THEN (SELECT parent_element_id FROM cards c '
+          'WHERE c.id = element_id) ELSE NULL END, '
+          'created_at_utc = CASE element_type '
+          'WHEN 0 THEN (SELECT imported_at_utc FROM sources s '
+          'WHERE s.id = element_id) '
+          'WHEN 1 THEN (SELECT created_at_utc FROM extracts x '
+          'WHERE x.id = element_id) '
+          'WHEN 2 THEN (SELECT created_at_utc FROM cards c '
+          'WHERE c.id = element_id) END, '
+          'updated_at_utc = CASE element_type '
+          'WHEN 0 THEN (SELECT imported_at_utc FROM sources s '
+          'WHERE s.id = element_id) '
+          'WHEN 1 THEN COALESCE((SELECT edited_at_utc FROM extracts x '
+          'WHERE x.id = element_id), (SELECT created_at_utc FROM extracts x '
+          'WHERE x.id = element_id)) '
+          'WHEN 2 THEN COALESCE((SELECT edited_at_utc FROM cards c '
+          'WHERE c.id = element_id), (SELECT created_at_utc FROM cards c '
+          'WHERE c.id = element_id)) END, revision = 1',
+        );
+
+        // Persist the exact adapter input reconstructed from the canonical v5
+        // columns; do not invent stability, difficulty, or a last review.
+        await customStatement(
+          "UPDATE card_memories SET scheduler_name = 'dart-fsrs', "
+          'scheduled_days = CASE WHEN last_review_utc IS NULL THEN NULL '
+          'ELSE MAX(0.0, (original_due_at_utc - last_review_utc) / 86400000.0) END, '
+          "fsrs_state_json = json_object('state', state, 'step', step, "
+          "'stability', stability, 'difficulty', difficulty, "
+          "'due_at_utc_ms', due_at_utc, "
+          "'last_review_at_utc_ms', last_review_utc), revision = 1",
+        );
+
+        // Canonicalize every legacy priority into one stable total order. The
+        // old key and immutable ID decide rank; fixed-width keys keep it after
+        // restart and remove ambiguous duplicate percentiles.
+        await customStatement(
+          'WITH ranked AS (SELECT element_id, element_type, '
+          'ROW_NUMBER() OVER (ORDER BY priority_key, element_id, element_type) rn '
+          'FROM element_schedules) UPDATE element_schedules '
+          "SET priority_key = (SELECT printf('%020dV', rn) FROM ranked r "
+          'WHERE r.element_id = element_schedules.element_id '
+          'AND r.element_type = element_schedules.element_type)',
+        );
+
+        await _createIndexes(m);
+      }
     },
     beforeOpen: (OpeningDetails details) async {
       // SQLite disables foreign keys per connection by default, so this
@@ -219,12 +373,23 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_extracts_source '
       'ON extracts (source_id)',
     );
-    await customStatement(
-      'CREATE INDEX IF NOT EXISTS idx_cards_extract ON cards (extract_id)',
-    );
-    await customStatement(
-      'CREATE INDEX IF NOT EXISTS idx_cards_source ON cards (source_id)',
-    );
+    if (await _hasColumn('cards', 'parent_element_id')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_cards_parent '
+        'ON cards (parent_element_id, parent_element_type)',
+      );
+    } else {
+      if (await _hasColumn('cards', 'extract_id')) {
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_cards_extract ON cards (extract_id)',
+        );
+      }
+      if (await _hasColumn('cards', 'source_id')) {
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_cards_source ON cards (source_id)',
+        );
+      }
+    }
     // The queue's hot path: eligible elements of a type, in priority order.
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_schedules_due '
@@ -278,6 +443,49 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_search_documents_source '
       'ON search_documents (source_id)',
     );
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_element_identity '
+      'ON element_schedules (element_id)',
+    );
+    if (await _hasTable('schedule_adjustments')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_adjustments_element '
+        'ON schedule_adjustments (element_id, element_type, cleared_at_utc)',
+      );
+      await customStatement(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_adjustments_active_exact '
+        'ON schedule_adjustments (element_id, element_type) '
+        'WHERE mode = 1 AND cleared_at_utc IS NULL',
+      );
+      await customStatement(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_adjustments_operation_reason '
+        'ON schedule_adjustments '
+        '(operation_id, element_id, element_type, reason)',
+      );
+    }
+    if (await _hasTable('scheduler_events')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_scheduler_events_element '
+        'ON scheduler_events (element_id, element_type, occurred_at_utc)',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_scheduler_events_operation '
+        'ON scheduler_events (operation_id)',
+      );
+    }
+  }
+
+  Future<bool> _hasTable(String name) async {
+    final rows = await customSelect(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+      variables: <Variable<Object>>[Variable<String>(name)],
+    ).get();
+    return rows.isNotEmpty;
+  }
+
+  Future<bool> _hasColumn(String table, String column) async {
+    final rows = await customSelect('PRAGMA table_info($table)').get();
+    return rows.any((QueryRow row) => row.read<String>('name') == column);
   }
 
   /// Creates the FTS5 index and the triggers that keep it in step.

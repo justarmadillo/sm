@@ -18,8 +18,11 @@ import '../../domain/content/reader_anchor.dart';
 import '../../domain/content/source.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
+import '../../domain/scheduling/presentation_plan.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/revlog.dart';
+import '../../domain/scheduling/schedule_adjustment.dart';
+import '../../domain/scheduling/scheduler_event.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../../domain/transfer/dataset_lineage.dart';
@@ -160,6 +163,13 @@ abstract interface class LearningRepository {
   /// Replaces a topic's schedule and pacing rows.
   Future<void> saveTopic(TopicState topic);
 
+  /// Replaces one canonical topic only if the stored snapshot is still
+  /// current. Both the common-element and topic revisions must advance once.
+  Future<bool> compareAndSwapTopic({
+    required TopicState expected,
+    required TopicState replacement,
+  });
+
   /// Creates the common schedule and FSRS memory rows for a formulated card.
   Future<void> insertCardState(CardState card);
 
@@ -170,11 +180,21 @@ abstract interface class LearningRepository {
   /// caller's transaction.
   Future<void> saveCardState(CardState card);
 
+  Future<bool> compareAndSwapCardState({
+    required CardState expected,
+    required CardState replacement,
+  });
+
   /// Active cards whose exact UTC due instant has arrived.
   ///
   /// Unlike topics, cards can be due again within the same study day, so this
   /// must use the memory row's instant and not only the common due-day field.
   Future<List<CardState>> listDueCards(DateTime nowUtc);
+
+  /// Card candidates irrespective of due. Effective-due evaluation needs
+  /// this because an exact override may legitimately move a future card
+  /// earlier than its canonical FSRS due.
+  Future<List<CardState>> listCardStates({Set<ElementLifecycle>? lifecycles});
 
   /// Appends one lossless FSRS review event.
   Future<void> appendReview(ReviewRecord record);
@@ -184,6 +204,9 @@ abstract interface class LearningRepository {
 
   /// Review history for one card, oldest first.
   Future<List<ReviewRecord>> listReviewsForCard(String cardId);
+
+  /// Optimizer input: genuine card reviews which have not been undone.
+  Future<List<ReviewRecord>> listOptimizerReviews();
 
   /// Topic state for many refs at once, keyed by ref.
   Future<Map<ElementRef, TopicState>> findTopics(List<ElementRef> refs);
@@ -241,14 +264,61 @@ abstract interface class LearningRepository {
   /// The most recent entries across the whole collection, newest first.
   Future<List<RevlogEntry>> recentRevlog({int limit = 100});
 
+  /// Appends the authoritative scheduler event. Events are never updated or
+  /// deleted; an undo is another event referencing its target.
+  Future<void> appendSchedulerEvent(SchedulerEvent event);
+
+  Future<void> appendSchedulerEvents(List<SchedulerEvent> events);
+
+  /// Event originally written for [operationId], used for idempotent replay.
+  Future<SchedulerEvent?> findSchedulerEventByOperationId(
+    String operationId, {
+    SchedulerEventType? eventType,
+  });
+
+  Future<SchedulerEvent?> findSchedulerEvent(String eventId);
+
+  Future<SchedulerEvent?> findLastSchedulerEvent(
+    ElementRef ref,
+    SchedulerEventType eventType, {
+    bool excludeUndone = true,
+  });
+
+  Future<List<SchedulerEvent>> listSchedulerEventsFor(
+    ElementRef ref, {
+    int? limit,
+  });
+
+  /// All adjustments for one element. Cleared rows remain queryable for audit
+  /// and exact undo.
+  Future<List<ScheduleAdjustment>> listAdjustmentsFor(
+    ElementRef ref, {
+    bool includeCleared = false,
+  });
+
+  /// Active adjustments for a bounded or collection-wide scope.
+  Future<List<ScheduleAdjustment>> listActiveAdjustments({
+    Set<ElementRef>? elements,
+    Set<ScheduleAdjustmentReason>? reasons,
+  });
+
+  Future<void> saveAdjustment(ScheduleAdjustment adjustment);
+
+  Future<void> saveAdjustments(List<ScheduleAdjustment> adjustments);
+
+  Future<StoredPresentationPlan?> findPresentationPlan(StudyDay day);
+
+  Future<void> savePresentationPlan(StoredPresentationPlan plan);
+
+  /// Removes one completed element and advances the persisted merge cursor.
+  Future<StoredPresentationPlan?> consumePresentationPlanEntry({
+    required StudyDay day,
+    required ElementRef ref,
+    required DateTime atUtc,
+  });
+
   /// How many entries of each event type were written on [day].
   Future<Map<RevlogEventType, int>> countRevlogOn(StudyDay day);
-
-  /// Removes the rows one operation wrote. Only undo may call this.
-  Future<void> deleteRevlogByOperationId(String operationId);
-
-  /// Removes one lossless FSRS review event. Only undo may call this.
-  Future<void> deleteReview(String operationId);
 
   /// The most recent non-practice review of [cardId], or null.
   Future<ReviewRecord?> findLastReview(String cardId);
@@ -259,7 +329,7 @@ abstract interface class LearningRepository {
   /// graded last rather than only on the card currently open.
   Future<ReviewRecord?> findLastReviewOverall();
 
-  /// Priority keys of every element the queue could ever consider, ascending.
+  /// Priority keys of every non-deleted learning element, ascending.
   ///
   /// This is the input to [PriorityScale]: percentiles are derived from the
   /// live order rather than stored, so promoting one element necessarily
@@ -280,7 +350,9 @@ abstract interface class LearningRepository {
 
   /// Active elements the app deferred automatically to a day at or after
   /// [from], so raising a limit or Study More can recall them.
-  Future<List<ElementSchedule>> listAutomaticDeferrals({required StudyDay from});
+  Future<List<ElementSchedule>> listAutomaticDeferrals({
+    required StudyDay from,
+  });
 
   /// Active elements whose original due day is before [day], oldest first.
   ///

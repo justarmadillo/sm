@@ -100,10 +100,8 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
       ),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stack) => _QueueError(
-          error: error,
-          onRetry: model.refresh,
-        ),
+        error: (Object error, StackTrace stack) =>
+            _QueueError(error: error, onRetry: model.refresh),
         data: (QueueUiState data) => data.entries.isEmpty
             ? _QueueEmpty(state: data, model: model)
             : _QueueBody(
@@ -250,14 +248,8 @@ class _LoadPanel extends StatelessWidget {
               spacing: 20,
               runSpacing: 6,
               children: <Widget>[
-                _Metric(
-                  label: 'due',
-                  value: '${counters.dueTotal}',
-                ),
-                _Metric(
-                  label: 'admitted',
-                  value: '${counters.admittedTotal}',
-                ),
+                _Metric(label: 'due', value: '${counters.dueTotal}'),
+                _Metric(label: 'admitted', value: '${counters.admittedTotal}'),
                 _Metric(
                   label: 'new cards',
                   value: '${counters.admittedNewCards}',
@@ -429,7 +421,8 @@ class _QueueTile extends ConsumerWidget {
                           ),
                           const SizedBox(width: 8),
                         ],
-                        if (entry.priorityPercent case final percent?) ...<Widget>[
+                        if (entry.priorityPercent
+                            case final percent?) ...<Widget>[
                           PriorityBadge(
                             percent: percent,
                             onTap: () async {

@@ -109,11 +109,10 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
         .findCardState(arg);
     if (cardState == null) throw StateError('card $arg has no memory state');
 
-    final int leechLapses = (await ref
-            .read(schedulingContextProvider)
-            .settings())
-        .cards
-        .leechLapses;
+    final int leechLapses =
+        (await ref.read(schedulingContextProvider).settings())
+            .cards
+            .leechLapses;
     return ReviewUiState(
       card: card,
       cardState: cardState,
@@ -273,11 +272,8 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
     final ReviewUiState latest = state.valueOrNull ?? current;
     state = AsyncValue<ReviewUiState>.data(
       result.fold(
-        (CardState deferred) => latest.copyWith(
-          cardState: deferred,
-          isBusy: false,
-          isDone: true,
-        ),
+        (CardState deferred) =>
+            latest.copyWith(cardState: deferred, isBusy: false, isDone: true),
         (AppFailure failure) => latest.copyWith(
           isBusy: false,
           message: UiMessage(failure.message, isError: true),

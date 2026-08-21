@@ -52,8 +52,10 @@ final class RotatingLogSink implements DiagnosticSink {
   bool _disabled = false;
 
   /// The active log file.
-  File get file => File('${_directory.path}${Platform.pathSeparator}'
-      '$kDiagnosticLogName');
+  File get file => File(
+    '${_directory.path}${Platform.pathSeparator}'
+    '$kDiagnosticLogName',
+  );
 
   @override
   void record(DiagnosticEvent event) {
@@ -66,14 +68,15 @@ final class RotatingLogSink implements DiagnosticSink {
       'app': _appVersion,
       'schema': kSchemaVersion,
       if (event.fields.isNotEmpty) 'fields': _sanitize(event.fields),
-      if (event.failure != null) 'failure': <String, Object?>{
-        'type': event.failure.runtimeType.toString(),
-        'message': event.failure!.message,
-        if (event.failure!.cause != null)
-          'cause': event.failure!.cause.runtimeType.toString(),
-        if (event.failure!.stackTrace != null)
-          'stack': _trim(event.failure!.stackTrace!.toString()),
-      },
+      if (event.failure != null)
+        'failure': <String, Object?>{
+          'type': event.failure.runtimeType.toString(),
+          'message': event.failure!.message,
+          if (event.failure!.cause != null)
+            'cause': event.failure!.cause.runtimeType.toString(),
+          if (event.failure!.stackTrace != null)
+            'stack': _trim(event.failure!.stackTrace!.toString()),
+        },
     });
     // Fire-and-forget by design: a diagnostic write must never make a caller
     // wait, and must never be the thing that fails a transaction.
@@ -141,9 +144,8 @@ final class RotatingLogSink implements DiagnosticSink {
             null => null,
             final num value => value,
             final bool value => value,
-            final String value => value.length <= 120
-                ? value
-                : '${value.substring(0, 117)}...',
+            final String value =>
+              value.length <= 120 ? value : '${value.substring(0, 117)}...',
             final Object value => value.runtimeType.toString(),
           },
       };

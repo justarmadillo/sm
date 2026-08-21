@@ -17,6 +17,9 @@ import '../../core/ids.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/revlog.dart';
+import '../../domain/scheduling/schedule_adjustment.dart';
+import '../../domain/scheduling/schedule_adjustment_codec.dart';
+import '../../domain/scheduling/scheduler_event.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../ports/repositories.dart';
@@ -103,6 +106,56 @@ final class SchedulingJournal {
   /// Appends many entries, for the daily valve and Mercy.
   Future<void> appendAll(List<RevlogEntry> entries) =>
       _learning.appendRevlogBatch(entries);
+
+  /// Appends the full scheduler audit envelope. The caller supplies the
+  /// calendar-derived [studyDay] at operation time; it is persisted and never
+  /// recalculated after a home-zone change.
+  Future<SchedulerEvent> appendScheduler({
+    required String operationId,
+    required SchedulerEventType eventType,
+    required DateTime atUtc,
+    required StudyDay studyDay,
+    required String policyVersion,
+    ElementRef? ref,
+    String? schedulerName,
+    String? schedulerVersion,
+    String? stateBefore,
+    String? stateAfter,
+    String? algorithmicDueBefore,
+    String? algorithmicDueAfter,
+    ScheduleAdjustmentSnapshot? adjustmentsBefore,
+    ScheduleAdjustmentSnapshot? adjustmentsAfter,
+    String? undoesEventId,
+    String? batchId,
+    Map<String, Object?>? metadata,
+  }) async {
+    final SchedulerEvent event = SchedulerEvent(
+      id: _ids.newId(),
+      operationId: operationId,
+      element: ref,
+      eventType: eventType,
+      occurredAtUtc: atUtc,
+      studyDay: studyDay,
+      schedulerName: schedulerName,
+      schedulerVersion: schedulerVersion,
+      policyVersion: policyVersion,
+      stateBefore: stateBefore,
+      stateAfter: stateAfter,
+      algorithmicDueBefore: algorithmicDueBefore,
+      algorithmicDueAfter: algorithmicDueAfter,
+      adjustmentsBefore: adjustmentsBefore == null
+          ? null
+          : encodeAdjustmentSnapshot(adjustmentsBefore),
+      adjustmentsAfter: adjustmentsAfter == null
+          ? null
+          : encodeAdjustmentSnapshot(adjustmentsAfter),
+      undoesEventId: undoesEventId,
+      batchId: batchId,
+      metadata: metadata,
+    );
+    await _learning.appendSchedulerEvent(event);
+    return event;
+  }
 
   /// Builds an entry without appending it, for batched callers.
   RevlogEntry build({

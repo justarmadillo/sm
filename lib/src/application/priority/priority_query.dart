@@ -93,8 +93,7 @@ final class PriorityQuery {
   }) async {
     final List<ElementSchedule> schedules = await _learning.listSchedules(
       types: types ?? ElementType.values.toSet(),
-      lifecycles:
-          lifecycles ?? <ElementLifecycle>{ElementLifecycle.active},
+      lifecycles: lifecycles ?? <ElementLifecycle>{ElementLifecycle.active},
       limit: limit,
       offset: offset,
     );

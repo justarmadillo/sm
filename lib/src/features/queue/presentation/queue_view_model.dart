@@ -197,7 +197,9 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
   void clearMessage() {
     final QueueUiState? current = state.valueOrNull;
     if (current?.message == null) return;
-    state = AsyncValue<QueueUiState>.data(current!.copyWith(clearMessage: true));
+    state = AsyncValue<QueueUiState>.data(
+      current!.copyWith(clearMessage: true),
+    );
   }
 
   Future<void> _reload({required bool countEncounter}) async {

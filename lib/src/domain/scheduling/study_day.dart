@@ -18,6 +18,28 @@ abstract interface class TimeZoneRules {
   int offsetMinutesAt(DateTime instantUtc);
 }
 
+/// A configured rollover landed in a repeated or nonexistent local wall time.
+///
+/// The default 04:00 boundary is unique in normal civil-time transitions. If
+/// a user configures a boundary inside a DST fold or gap, silently selecting
+/// either possible instant would make scheduling policy implicit, so the time
+/// service fails explicitly.
+final class StudyDayBoundaryException implements Exception {
+  const StudyDayBoundaryException({
+    required this.zoneId,
+    required this.localBoundary,
+    required this.kind,
+  });
+
+  final String zoneId;
+  final DateTime localBoundary;
+  final String kind;
+
+  @override
+  String toString() =>
+      '$kind StudyDay boundary $localBoundary in home timezone $zoneId';
+}
+
 /// A zone with one fixed offset. Useful for UTC and for deterministic tests.
 @immutable
 final class FixedOffsetZone implements TimeZoneRules {
@@ -133,6 +155,7 @@ final class StudyDayCalendar {
 
   /// Study day that [instantUtc] falls in.
   StudyDay dayOf(DateTime instantUtc) {
+    _validateRollover();
     final utc = instantUtc.toUtc();
     final local = utc.add(Duration(minutes: zone.offsetMinutesAt(utc)));
     final shifted = local.subtract(rollover);
@@ -149,16 +172,48 @@ final class StudyDayCalendar {
   /// Resolved against the offset in effect around the boundary, so a DST
   /// change on the boundary day does not shift the day by an hour.
   DateTime startOfDayUtc(StudyDay day) {
+    _validateRollover();
+    if (day.zoneId != zone.zoneId) {
+      throw ArgumentError.value(
+        day.zoneId,
+        'day.zoneId',
+        'StudyDay belongs to ${day.zoneId}, not ${zone.zoneId}',
+      );
+    }
     final naiveLocal = DateTime.utc(day.year, day.month, day.day).add(rollover);
-    // First guess with the offset that applies at the naive instant, then
-    // re-resolve once with the offset that actually applies there.
-    final firstGuess = naiveLocal.subtract(
-      Duration(minutes: zone.offsetMinutesAt(naiveLocal)),
+
+    if (zone case final FixedOffsetZone fixed) {
+      return naiveLocal.subtract(Duration(minutes: fixed.offsetMinutes));
+    }
+
+    // A local timestamp is not itself an instant. Discover every offset near
+    // the date, project the local boundary through each one, and retain only
+    // candidates whose actual offset maps exactly back to that wall time.
+    // Sampling three days either side also covers unusual political jumps,
+    // while the candidate validation prevents a neighboring offset from being
+    // accepted accidentally.
+    final Set<int> nearbyOffsets = <int>{};
+    for (final int hours in _offsetProbeHours) {
+      nearbyOffsets.add(
+        zone.offsetMinutesAt(naiveLocal.add(Duration(hours: hours))),
+      );
+    }
+
+    final Set<DateTime> candidates = <DateTime>{};
+    for (final int offset in nearbyOffsets) {
+      final DateTime candidate = naiveLocal.subtract(Duration(minutes: offset));
+      final DateTime projected = candidate.add(
+        Duration(minutes: zone.offsetMinutesAt(candidate)),
+      );
+      if (projected == naiveLocal) candidates.add(candidate);
+    }
+
+    if (candidates.length == 1) return candidates.single;
+    throw StudyDayBoundaryException(
+      zoneId: zone.zoneId,
+      localBoundary: naiveLocal,
+      kind: candidates.isEmpty ? 'Nonexistent' : 'Ambiguous',
     );
-    final settled = naiveLocal.subtract(
-      Duration(minutes: zone.offsetMinutesAt(firstGuess)),
-    );
-    return settled;
   }
 
   /// Instant at which [day] ends, exclusive.
@@ -169,4 +224,42 @@ final class StudyDayCalendar {
     final utc = instantUtc.toUtc();
     return !utc.isBefore(startOfDayUtc(day)) && utc.isBefore(endOfDayUtc(day));
   }
+
+  void _validateRollover() {
+    if (rollover.isNegative || rollover >= const Duration(days: 1)) {
+      throw ArgumentError.value(
+        rollover,
+        'rollover',
+        'must be within one local calendar day',
+      );
+    }
+  }
 }
+
+const List<int> _offsetProbeHours = <int>[
+  -72,
+  -66,
+  -60,
+  -54,
+  -48,
+  -42,
+  -36,
+  -30,
+  -24,
+  -18,
+  -12,
+  -6,
+  0,
+  6,
+  12,
+  18,
+  24,
+  30,
+  36,
+  42,
+  48,
+  54,
+  60,
+  66,
+  72,
+];

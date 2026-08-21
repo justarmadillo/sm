@@ -62,8 +62,11 @@ final class QueueProjection {
   });
 
   /// An empty day.
-  static QueueProjection emptyOn(StudyDay today) =>
-      QueueProjection(entries: const <QueueEntry>[], counters: QueuePlan.empty.counters, today: today);
+  static QueueProjection emptyOn(StudyDay today) => QueueProjection(
+    entries: const <QueueEntry>[],
+    counters: QueuePlan.empty.counters,
+    today: today,
+  );
 
   final List<QueueEntry> entries;
 
@@ -120,20 +123,10 @@ final class QueueQuery {
     if (outcome.isErr) return QueueProjection.emptyOn(today);
 
     final AdmissionOutcome value = outcome.unwrap();
-    // Either the day was admitted earlier or this run just wrote deferrals;
-    // both mean the schedules on disk have moved since the plan was computed,
-    // so the rows to show come from a fresh read.
-    final QueuePlan plan = value.alreadyApplied || value.deferred > 0
-        ? await _rebuild(today, extraAdmissions)
-        : value.plan;
-    // The counters describe the day's *decision*, not what is left over
-    // afterwards — otherwise the deferred volume would vanish from the very
-    // report that exists to show it. On the run that made the decision they
-    // come from the plan the valve judged; on any later build of the same day
-    // they are read back from the row it wrote.
-    final QueueCounters counters = value.alreadyApplied
-        ? (await _handlers.recordedCounters(today) ?? plan.counters)
-        : value.plan.counters;
+    // The handler owns the durable remaining plan. Rebuilding here would
+    // discard its completion set and merge cursor and reshuffle a live day.
+    final QueuePlan plan = value.plan;
+    final QueueCounters counters = plan.counters;
 
     final PriorityScale scale = await _context.priorityScale();
     final int leechLapses = (await _context.settings()).cards.leechLapses;
@@ -161,16 +154,6 @@ final class QueueQuery {
           today: today,
         )
         .counters;
-  }
-
-  Future<QueuePlan> _rebuild(StudyDay today, int extraAdmissions) async {
-    final QueuePolicy policy = await _context.queuePolicy();
-    return policy.build(
-      candidates: await _handlers.loadCandidates(today),
-      nowUtc: _clock.nowUtc(),
-      today: today,
-      extraAdmissions: extraAdmissions,
-    );
   }
 
   Future<QueueEntry?> _project(

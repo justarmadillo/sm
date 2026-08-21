@@ -21,6 +21,8 @@ const String kCardSchedulerVersion = 'dart-fsrs/2.0.1+FSRS-6';
 /// The pinned FSRS-6 default parameter set shipped by dart-fsrs 2.0.1.
 const String kCardParametersVersion = 'dart-fsrs/2.0.1/defaultParameters';
 
+const String kCardSchedulerName = 'dart-fsrs';
+
 /// The four recall outcomes accepted by FSRS.
 enum CardRating {
   again(1),
@@ -143,6 +145,9 @@ final class CardMemory {
     required String schedulerVersion,
     required String parametersVersion,
     int postponeCount = 0,
+    double? scheduledDays,
+    String schedulerName = kCardSchedulerName,
+    int revision = 1,
   }) {
     if (cardId.isEmpty) {
       throw ArgumentError.value(cardId, 'cardId', 'must not be empty');
@@ -178,6 +183,17 @@ final class CardMemory {
     if (schedulerVersion.isEmpty || parametersVersion.isEmpty) {
       throw ArgumentError('scheduler versions must not be empty');
     }
+    if (scheduledDays != null &&
+        (!scheduledDays.isFinite || scheduledDays < 0)) {
+      throw ArgumentError.value(
+        scheduledDays,
+        'scheduledDays',
+        'must be finite and non-negative',
+      );
+    }
+    if (schedulerName.isEmpty || revision < 1) {
+      throw ArgumentError('scheduler name and revision must be valid');
+    }
     return CardMemory._(
       cardId: cardId,
       state: state,
@@ -193,6 +209,9 @@ final class CardMemory {
       schedulerVersion: schedulerVersion,
       parametersVersion: parametersVersion,
       postponeCount: postponeCount,
+      scheduledDays: scheduledDays,
+      schedulerName: schedulerName,
+      revision: revision,
     );
   }
 
@@ -211,6 +230,9 @@ final class CardMemory {
     required this.schedulerVersion,
     required this.parametersVersion,
     required this.postponeCount,
+    required this.scheduledDays,
+    required this.schedulerName,
+    required this.revision,
   });
 
   /// Memory for a newly formulated card, eligible immediately.
@@ -251,6 +273,9 @@ final class CardMemory {
     schedulerVersion: _required<String>(map, 'scheduler_version'),
     parametersVersion: _required<String>(map, 'parameters_version'),
     postponeCount: (map['postpone_count'] as int?) ?? 0,
+    scheduledDays: (map['scheduled_days'] as num?)?.toDouble(),
+    schedulerName: (map['scheduler_name'] as String?) ?? kCardSchedulerName,
+    revision: (map['revision'] as int?) ?? 1,
   );
 
   /// Restores the exact state emitted by [toJson].
@@ -281,6 +306,14 @@ final class CardMemory {
 
   /// Deferrals so far. Never a review, so it is counted apart from [reps].
   final int postponeCount;
+
+  /// Interval produced by the most recent genuine review, when applicable.
+  final double? scheduledDays;
+
+  final String schedulerName;
+
+  /// Optimistic-concurrency revision of the canonical card schedule.
+  final int revision;
 
   /// A card with no recorded reviews yet.
   bool get isNew => reps == 0;
@@ -330,6 +363,9 @@ final class CardMemory {
       schedulerVersion: schedulerVersion,
       parametersVersion: parametersVersion,
       postponeCount: untilUtc == null ? postponeCount : postponeCount + 1,
+      scheduledDays: scheduledDays,
+      schedulerName: schedulerName,
+      revision: revision,
     );
   }
 
@@ -349,7 +385,23 @@ final class CardMemory {
     'scheduler_version': schedulerVersion,
     'parameters_version': parametersVersion,
     'postpone_count': postponeCount,
+    'scheduled_days': scheduledDays,
+    'scheduler_name': schedulerName,
+    'revision': revision,
   };
+
+  /// Exact state consumed and returned by dart-fsrs. Presentation adjustments
+  /// and diagnostic counters are deliberately excluded.
+  Map<String, Object?> canonicalFsrsMap() => <String, Object?>{
+    'state': state.value,
+    'step': step,
+    'stability': stability,
+    'difficulty': difficulty,
+    'due_at_utc_ms': dueAtUtc.millisecondsSinceEpoch,
+    'last_review_at_utc_ms': lastReviewAtUtc?.millisecondsSinceEpoch,
+  };
+
+  String canonicalFsrsJson() => jsonEncode(canonicalFsrsMap());
 
   /// Canonical snapshot persisted with every review event.
   String toJson() => jsonEncode(toMap());
@@ -370,7 +422,10 @@ final class CardMemory {
       other.deferredUntilUtc == deferredUntilUtc &&
       other.schedulerVersion == schedulerVersion &&
       other.parametersVersion == parametersVersion &&
-      other.postponeCount == postponeCount;
+      other.postponeCount == postponeCount &&
+      other.scheduledDays == scheduledDays &&
+      other.schedulerName == schedulerName &&
+      other.revision == revision;
 
   @override
   int get hashCode => Object.hash(
@@ -388,6 +443,9 @@ final class CardMemory {
     schedulerVersion,
     parametersVersion,
     postponeCount,
+    scheduledDays,
+    schedulerName,
+    revision,
   );
 }
 
@@ -521,8 +579,21 @@ final class CardReviewTransition {
 }
 
 /// Pure adapter around the pinned dart-fsrs implementation.
+abstract interface class FsrsAdapter {
+  CardReviewTransition review(
+    CardState state, {
+    required CardRating rating,
+    required DateTime reviewedAtUtc,
+    required String operationId,
+    int? elapsedMs,
+  });
+
+  double retrievability(CardMemory memory, {required DateTime atUtc});
+}
+
+/// The sole dart-fsrs integration boundary used by the application.
 @immutable
-final class CardScheduler {
+final class CardScheduler implements FsrsAdapter {
   const CardScheduler({
     required this.calendar,
     this.settings = const CardSchedulerSettings(),
@@ -536,6 +607,7 @@ final class CardScheduler {
   /// Fuzzing remains enabled by default, but its random stream is derived from
   /// [operationId]. Retrying one command therefore produces the same due date
   /// and exact state snapshot instead of rolling a second interval.
+  @override
   CardReviewTransition review(
     CardState state, {
     required CardRating rating,
@@ -558,9 +630,10 @@ final class CardScheduler {
     if (lastReview != null && reviewedAtUtc.isBefore(lastReview)) {
       throw ArgumentError('a review cannot predate the previous review');
     }
-    if (!state.memory.isDueAt(reviewedAtUtc)) {
-      throw StateError('a card cannot be reviewed before it is due');
-    }
+    // Presentation eligibility is evaluated by the application against the
+    // canonical due plus typed adjustments. An exact manual/Mercy override
+    // may intentionally present a card before its algorithmic due, so the
+    // FSRS adapter must not repeat a canonical-only due check here.
 
     final String preStateJson = state.memory.toJson();
     final fsrs.Card external = _toFsrsCard(state.memory);
@@ -591,12 +664,16 @@ final class CardScheduler {
       schedulerVersion: settings.schedulerVersion,
       parametersVersion: settings.parametersVersion,
       postponeCount: state.memory.postponeCount,
+      scheduledDays: result.card.due.difference(reviewedAtUtc).inMinutes / 1440,
+      schedulerName: kCardSchedulerName,
+      revision: state.memory.revision + 1,
     );
     final StudyDay dueDay = calendar.dayOf(memory.dueAtUtc);
     final ElementSchedule schedule = state.schedule.copyWith(
       dueDay: dueDay,
       originalDueDay: dueDay,
       clearDeferral: true,
+      revision: state.schedule.revision + 1,
     );
     final CardState next = CardState(schedule: schedule, memory: memory);
     final ReviewRecord record = ReviewRecord(
@@ -668,19 +745,42 @@ final class CardScheduler {
     if (record.cardId != current.ref.id) {
       throw ArgumentError('that review belongs to a different card');
     }
-    final CardMemory restored = record.preState;
+    final CardMemory prior = record.preState;
+    // Revisions are concurrency tokens, not FSRS memory. Preserve the exact
+    // prior scheduler fields while advancing the token to avoid ABA writes.
+    final CardMemory restored = CardMemory(
+      cardId: prior.cardId,
+      state: prior.state,
+      step: prior.step,
+      stability: prior.stability,
+      difficulty: prior.difficulty,
+      reps: prior.reps,
+      lapses: prior.lapses,
+      lastReviewAtUtc: prior.lastReviewAtUtc,
+      dueAtUtc: prior.dueAtUtc,
+      originalDueAtUtc: prior.originalDueAtUtc,
+      deferredUntilUtc: prior.deferredUntilUtc,
+      schedulerVersion: prior.schedulerVersion,
+      parametersVersion: prior.parametersVersion,
+      postponeCount: prior.postponeCount,
+      scheduledDays: prior.scheduledDays,
+      schedulerName: prior.schedulerName,
+      revision: current.memory.revision + 1,
+    );
     final StudyDay dueDay = calendar.dayOf(restored.dueAtUtc);
     return CardState(
       schedule: current.schedule.copyWith(
         dueDay: dueDay,
         originalDueDay: calendar.dayOf(restored.originalDueAtUtc),
         clearDeferral: true,
+        revision: current.schedule.revision + 1,
       ),
       memory: restored,
     );
   }
 
   /// Predicted probability that [memory] is currently recallable.
+  @override
   double retrievability(CardMemory memory, {required DateTime atUtc}) {
     _requireUtc(atUtc, 'atUtc');
     return _engineFor(

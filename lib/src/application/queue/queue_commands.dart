@@ -36,7 +36,12 @@ final class RunDailyAdmission extends AppCommand {
 /// "not now", and asking for more work is not them changing their mind about
 /// a specific element.
 final class StudyMore extends AppCommand {
-  StudyMore(super.operationId, {required this.day, this.count, super.timestampUtc});
+  StudyMore(
+    super.operationId, {
+    required this.day,
+    this.count,
+    super.timestampUtc,
+  });
 
   final StudyDay day;
 

@@ -120,7 +120,11 @@ class _Body extends ConsumerWidget {
   ) async {
     final String? sourceId = entry.schedule.rootId;
     if (sourceId == null) {
-      showToast(context, 'That element has no article to spread', isError: true);
+      showToast(
+        context,
+        'That element has no article to spread',
+        isError: true,
+      );
       return;
     }
     final (double, double)? range = await showDialog<(double, double)>(
@@ -155,10 +159,10 @@ class _FilterBar extends StatelessWidget {
         for (final (String label, Set<ElementType> types)
             in <(String, Set<ElementType>)>[
               ('All', <ElementType>{}),
-              ('Topics', <ElementType>{
-                ElementType.source,
-                ElementType.extract,
-              }),
+              (
+                'Topics',
+                <ElementType>{ElementType.source, ElementType.extract},
+              ),
               ('Cards', <ElementType>{ElementType.card}),
             ])
           Padding(
@@ -336,8 +340,7 @@ class _SpreadDialogState extends State<_SpreadDialog> {
         child: const Text('Cancel'),
       ),
       FilledButton(
-        onPressed: () =>
-            Navigator.of(context).pop((_range.start, _range.end)),
+        onPressed: () => Navigator.of(context).pop((_range.start, _range.end)),
         child: const Text('Spread'),
       ),
     ],

@@ -19,7 +19,7 @@ void main() {
     test('every section survives being edited', () {
       final AppSettings edited = const AppSettings().copyWith(
         studyDay: const StudyDaySettings(
-          zoneId: 'UTC+02:00',
+          zoneId: 'Europe/Berlin',
           rolloverMinutes: 300,
         ),
         queue: const QueueSettings(
@@ -201,7 +201,7 @@ void main() {
       expect(queue.maxTopics, 50);
       expect(queue.cardsPerTopic, 4);
       expect(queue.randomization, 0.05);
-      expect(queue.protectedPercentile, 0.05);
+      expect(queue.protectedPercentile, 0.01);
     });
 
     test('the interval sequences are the ones the plan names', () {

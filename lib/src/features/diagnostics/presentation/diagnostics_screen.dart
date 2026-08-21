@@ -37,7 +37,9 @@ Future<void> openDiagnostics(
 final FutureProvider<CollectionDiagnostics> collectionDiagnosticsProvider =
     FutureProvider<CollectionDiagnostics>((Ref ref) async {
       final DiagnosticsQuery query = ref.watch(diagnosticsQueryProvider);
-      return query.forCollection(await ref.watch(queueQueryProvider).counters());
+      return query.forCollection(
+        await ref.watch(queueQueryProvider).counters(),
+      );
     });
 
 /// Recent commands, newest first.
@@ -94,9 +96,11 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
           children: <Widget>[
             const _CollectionPanel(),
             const SizedBox(height: 16),
-            _CommandsPanel(onSelect: (ElementRef ref_) {
-              setState(() => _focus = ref_);
-            }),
+            _CommandsPanel(
+              onSelect: (ElementRef ref_) {
+                setState(() => _focus = ref_);
+              },
+            ),
             if (_focus case final ElementRef focus) ...<Widget>[
               const SizedBox(height: 16),
               _ElementPanel(elementRef: focus),
@@ -241,9 +245,7 @@ class _CommandsPanel extends ConsumerWidget {
           children: <Widget>[
             for (final ActivityRecord record in records.take(40))
               InkWell(
-                onTap: record.ref == null
-                    ? null
-                    : () => onSelect(record.ref!),
+                onTap: record.ref == null ? null : () => onSelect(record.ref!),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 5),
                   child: Row(
@@ -372,10 +374,7 @@ class _ElementPanel extends ConsumerWidget {
                       value: topic.aFactor.toStringAsFixed(3),
                     ),
                     _Stat(label: 'Encounters', value: '${topic.encounters}'),
-                    _Stat(
-                      label: 'Postponed',
-                      value: '${topic.postponeCount}',
-                    ),
+                    _Stat(label: 'Postponed', value: '${topic.postponeCount}'),
                   ],
                   if (data.card case final card?) ...<Widget>[
                     _Stat(label: 'State', value: card.memory.state.name),
@@ -456,10 +455,10 @@ class _HistoryRow extends StatelessWidget {
         SizedBox(
           width: 112,
           child: Text(
-            entry.atUtc.toIso8601String().substring(0, 16).replaceFirst(
-              'T',
-              ' ',
-            ),
+            entry.atUtc
+                .toIso8601String()
+                .substring(0, 16)
+                .replaceFirst('T', ' '),
             style: const TextStyle(
               fontFamily: 'Consolas',
               fontSize: 11,
@@ -474,9 +473,7 @@ class _HistoryRow extends StatelessWidget {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
-              color: entry.feedsOptimizer
-                  ? AppColors.accent
-                  : AppColors.muted,
+              color: entry.feedsOptimizer ? AppColors.accent : AppColors.muted,
             ),
           ),
         ),

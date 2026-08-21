@@ -64,8 +64,7 @@ class _PriorityDialog extends ConsumerWidget {
             height: 160,
             child: Center(child: Text('No priority for this element.\n$error')),
           ),
-          data: (PrioritySliderState data) =>
-              _Body(state: data, model: model),
+          data: (PrioritySliderState data) => _Body(state: data, model: model),
         ),
       ),
       actions: <Widget>[
@@ -82,12 +81,11 @@ class _PriorityDialog extends ConsumerWidget {
                   if (ok) {
                     Navigator.of(context).pop(true);
                   } else {
-                    final String? message =
-                        ref
-                            .read(prioritySliderProvider(elementRef))
-                            .valueOrNull
-                            ?.message
-                            ?.text;
+                    final String? message = ref
+                        .read(prioritySliderProvider(elementRef))
+                        .valueOrNull
+                        ?.message
+                        ?.text;
                     if (message != null) {
                       showToast(context, message, isError: true);
                     }
@@ -135,9 +133,7 @@ class _Body extends StatelessWidget {
             const Spacer(),
             IconButton(
               tooltip: 'More important (Shift+Ctrl+Up)',
-              onPressed: state.isBusy
-                  ? null
-                  : () => model.step(increase: true),
+              onPressed: state.isBusy ? null : () => model.step(increase: true),
               icon: const Icon(Icons.keyboard_arrow_up),
             ),
             IconButton(

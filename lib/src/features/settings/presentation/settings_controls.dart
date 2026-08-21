@@ -283,11 +283,7 @@ class _IntListFieldState extends State<IntListField> {
 
 /// A yes/no setting.
 class SwitchField extends StatelessWidget {
-  const SwitchField({
-    required this.value,
-    required this.onChanged,
-    super.key,
-  });
+  const SwitchField({required this.value, required this.onChanged, super.key});
 
   final bool value;
   final ValueChanged<bool> onChanged;

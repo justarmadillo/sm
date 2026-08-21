@@ -21,8 +21,12 @@ import '../../domain/content/reader_anchor.dart';
 import '../../domain/content/source.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
+import '../../domain/scheduling/presentation_plan.dart';
 import '../../domain/scheduling/priority_rank.dart';
+import '../../domain/scheduling/queue_policy.dart';
 import '../../domain/scheduling/revlog.dart';
+import '../../domain/scheduling/schedule_adjustment.dart';
+import '../../domain/scheduling/scheduler_event.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../../domain/transfer/dataset_lineage.dart';
@@ -239,7 +243,11 @@ final class DriftContentRepository implements ContentRepository {
   Future<List<Card>> listCardsOfExtract(String extractId) async {
     final rows =
         await (_database.select(_database.cards)
-              ..where(($CardsTable t) => t.extractId.equals(extractId))
+              ..where(
+                ($CardsTable t) =>
+                    t.parentElementId.equals(extractId) &
+                    t.parentElementType.equals(ElementType.extract.index),
+              )
               ..orderBy(<OrderClauseGenerator<$CardsTable>>[
                 ($CardsTable t) => OrderingTerm.asc(t.createdAtUtc),
               ]))
@@ -251,7 +259,11 @@ final class DriftContentRepository implements ContentRepository {
   Future<List<Card>> listCardsOfSource(String sourceId) async {
     final rows =
         await (_database.select(_database.cards)
-              ..where(($CardsTable t) => t.sourceId.equals(sourceId))
+              ..where(
+                ($CardsTable t) =>
+                    t.parentElementId.equals(sourceId) &
+                    t.parentElementType.equals(ElementType.source.index),
+              )
               ..orderBy(<OrderClauseGenerator<$CardsTable>>[
                 ($CardsTable t) => OrderingTerm.asc(t.createdAtUtc),
               ]))
@@ -276,17 +288,18 @@ final class DriftContentRepository implements ContentRepository {
 
   @override
   Future<List<Card>> listSiblingCards(String cardId) async {
-    // Siblings share a parent, whichever of the two parent columns holds it.
+    // Siblings share the same typed provenance group. A standalone card has
+    // no siblings.
     // A card with no parent has no siblings, which is why the query is keyed
     // on the parent rather than on a shared source.
     final rows = await _database
         .customSelect(
           'SELECT c.* FROM cards c '
           'JOIN cards origin ON origin.id = ? '
-          'WHERE c.id != origin.id AND ('
-          '(origin.extract_id IS NOT NULL '
-          'AND c.extract_id = origin.extract_id) OR '
-          '(origin.source_id IS NOT NULL AND c.source_id = origin.source_id))'
+          'WHERE c.id != origin.id '
+          'AND origin.parent_element_id IS NOT NULL '
+          'AND c.parent_element_id = origin.parent_element_id '
+          'AND c.parent_element_type = origin.parent_element_type '
           'ORDER BY c.created_at_utc, c.id',
           variables: <Variable<Object>>[Variable<String>(cardId)],
           readsFrom: <ResultSetImplementation<Object, Object>>{_database.cards},
@@ -303,16 +316,12 @@ final class DriftContentRepository implements ContentRepository {
     final placeholders = List<String>.filled(parentIds.length, '?').join(', ');
     final variables = <Variable<Object>>[
       for (final id in parentIds) Variable<String>(id),
-      for (final id in parentIds) Variable<String>(id),
     ];
     final rows = await _database
         .customSelect(
-          'SELECT parent_id, COUNT(*) AS n FROM ('
-          'SELECT extract_id AS parent_id FROM cards '
-          'WHERE extract_id IN ($placeholders) '
-          'UNION ALL '
-          'SELECT source_id AS parent_id FROM cards '
-          'WHERE source_id IN ($placeholders)) GROUP BY parent_id',
+          'SELECT parent_element_id AS parent_id, COUNT(*) AS n FROM cards '
+          'WHERE parent_element_id IN ($placeholders) '
+          'GROUP BY parent_element_id',
           variables: variables,
         )
         .get();
@@ -342,6 +351,40 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
+  Future<bool> compareAndSwapTopic({
+    required TopicState expected,
+    required TopicState replacement,
+  }) {
+    if (replacement.revision != expected.revision + 1 ||
+        replacement.schedule.revision != expected.schedule.revision + 1) {
+      throw ArgumentError('topic replacement must advance both revisions');
+    }
+    return _database.transaction(() async {
+      final int scheduleWrites =
+          await (_database.update(_database.elementSchedules)..where(
+                ($ElementSchedulesTable table) =>
+                    table.elementId.equals(expected.ref.id) &
+                    table.elementType.equals(expected.ref.type.index) &
+                    table.revision.equals(expected.schedule.revision),
+              ))
+              .write(scheduleToCompanion(replacement.schedule));
+      if (scheduleWrites == 0) return false;
+      final int topicWrites =
+          await (_database.update(_database.topicStates)..where(
+                ($TopicStatesTable table) =>
+                    table.elementId.equals(expected.ref.id) &
+                    table.elementType.equals(expected.ref.type.index) &
+                    table.revision.equals(expected.revision),
+              ))
+              .write(topicStateToCompanion(replacement));
+      if (topicWrites != 1) {
+        throw StateError('stale topic revision after schedule CAS');
+      }
+      return true;
+    });
+  }
+
+  @override
   Future<void> insertCardState(CardState card) => saveCardState(card);
 
   @override
@@ -352,6 +395,39 @@ final class DriftLearningRepository implements LearningRepository {
     await _database
         .into(_database.cardMemories)
         .insertOnConflictUpdate(cardMemoryToCompanion(card.memory));
+  }
+
+  @override
+  Future<bool> compareAndSwapCardState({
+    required CardState expected,
+    required CardState replacement,
+  }) {
+    if (replacement.memory.revision != expected.memory.revision + 1 ||
+        replacement.schedule.revision != expected.schedule.revision + 1) {
+      throw ArgumentError('card replacement must advance both revisions');
+    }
+    return _database.transaction(() async {
+      final int scheduleWrites =
+          await (_database.update(_database.elementSchedules)..where(
+                ($ElementSchedulesTable table) =>
+                    table.elementId.equals(expected.ref.id) &
+                    table.elementType.equals(ElementType.card.index) &
+                    table.revision.equals(expected.schedule.revision),
+              ))
+              .write(scheduleToCompanion(replacement.schedule));
+      if (scheduleWrites == 0) return false;
+      final int memoryWrites =
+          await (_database.update(_database.cardMemories)..where(
+                ($CardMemoriesTable table) =>
+                    table.cardId.equals(expected.ref.id) &
+                    table.revision.equals(expected.memory.revision),
+              ))
+              .write(cardMemoryToCompanion(replacement.memory));
+      if (memoryWrites != 1) {
+        throw StateError('stale card revision after schedule CAS');
+      }
+      return true;
+    });
   }
 
   @override
@@ -400,6 +476,40 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
+  Future<List<CardState>> listCardStates({
+    Set<ElementLifecycle>? lifecycles,
+  }) async {
+    final scheduleQuery = _database.select(_database.elementSchedules)
+      ..where(
+        ($ElementSchedulesTable table) =>
+            table.elementType.equals(ElementType.card.index) &
+            (lifecycles == null
+                ? const CustomExpression<bool>('1')
+                : table.lifecycle.isIn(
+                    lifecycles
+                        .map((ElementLifecycle lifecycle) => lifecycle.index)
+                        .toList(),
+                  )),
+      );
+    final scheduleRows = await scheduleQuery.get();
+    if (scheduleRows.isEmpty) return <CardState>[];
+    final Map<String, ElementSchedule> schedules = <String, ElementSchedule>{
+      for (final row in scheduleRows) row.elementId: scheduleFromRow(row),
+    };
+    final memoryRows =
+        await (_database.select(_database.cardMemories)..where(
+              ($CardMemoriesTable table) =>
+                  table.cardId.isIn(schedules.keys.toList()),
+            ))
+            .get();
+    return <CardState>[
+      for (final row in memoryRows)
+        if (schedules[row.cardId] case final ElementSchedule schedule)
+          CardState(schedule: schedule, memory: cardMemoryFromRow(row)),
+    ];
+  }
+
+  @override
   Future<void> appendReview(ReviewRecord record) => _database
       .into(_database.reviewEvents)
       .insert(reviewRecordToCompanion(record));
@@ -430,6 +540,31 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
+  Future<List<ReviewRecord>> listOptimizerReviews() async {
+    final rows = await _database
+        .customSelect(
+          'SELECT r.* FROM review_events r '
+          'WHERE r.is_practice = 0 AND NOT EXISTS ('
+          'SELECT 1 FROM scheduler_events original '
+          'JOIN scheduler_events inverse '
+          'ON inverse.undoes_event_id = original.id '
+          'WHERE original.operation_id = r.operation_id '
+          "AND original.event_type = 'card_reviewed' "
+          "AND inverse.event_type = 'card_review_undone') "
+          'ORDER BY r.reviewed_at_utc, r.id',
+          readsFrom: <ResultSetImplementation<Table, Object?>>{
+            _database.reviewEvents,
+            _database.schedulerEvents,
+          },
+        )
+        .get();
+    return <ReviewRecord>[
+      for (final row in rows)
+        reviewRecordFromRow(_database.reviewEvents.map(row.data)),
+    ];
+  }
+
+  @override
   Future<TopicState?> findTopic(ElementRef ref) async {
     final schedule = await findSchedule(ref);
     if (schedule == null) return null;
@@ -453,9 +588,14 @@ final class DriftLearningRepository implements LearningRepository {
         .customSelect(
           'SELECT s.element_id, s.element_type, s.priority_key, s.lifecycle, '
           's.due_day, s.original_due_day, s.deferred_until, s.deferral_kind, '
-          's.root_id, s.zone_id, t.profile_id, t.step_index, t.interval_days, '
+          's.root_id, s.parent_element_id, s.ordinal, s.created_at_utc, '
+          's.updated_at_utc, s.revision AS schedule_revision, '
+          's.legacy_due_provenance, s.zone_id, t.profile_id, t.step_index, '
+          't.interval_days, '
           't.a_factor, t.yield_ewma, t.encounters, t.postpone_count, '
-          't.encounters_since_last_card, t.last_encounter_day '
+          't.encounters_since_last_card, t.last_encounter_day, '
+          't.scheduler_kind, t.scheduler_version, t.policy_input_snapshot, '
+          't.revision AS topic_revision '
           'FROM element_schedules s '
           'JOIN topic_states t ON t.element_id = s.element_id '
           'AND t.element_type = s.element_type '
@@ -475,6 +615,8 @@ final class DriftLearningRepository implements LearningRepository {
       final zoneId = row.read<String>('zone_id');
       final deferred = row.read<int?>('deferred_until');
       final lastEncounter = row.read<int?>('last_encounter_day');
+      final createdAt = row.read<int?>('created_at_utc');
+      final updatedAt = row.read<int?>('updated_at_utc');
       result[ref] = TopicState(
         schedule: ElementSchedule(
           ref: ref,
@@ -490,6 +632,13 @@ final class DriftLearningRepository implements LearningRepository {
               : studyDayFromEpochDay(deferred, zoneId),
           deferralKind: DeferralKind.values[row.read<int>('deferral_kind')],
           rootId: row.read<String?>('root_id'),
+          parentElementId: row.read<String?>('parent_element_id'),
+          ordinal: row.read<int?>('ordinal'),
+          createdAtUtc: createdAt == null ? null : fromEpochMs(createdAt),
+          updatedAtUtc: updatedAt == null ? null : fromEpochMs(updatedAt),
+          revision: row.read<int>('schedule_revision'),
+          legacyDueProvenance: LegacyDueProvenance
+              .values[row.read<int>('legacy_due_provenance')],
         ),
         profileId: row.read<String>('profile_id'),
         stepIndex: row.read<int>('step_index'),
@@ -502,6 +651,15 @@ final class DriftLearningRepository implements LearningRepository {
         lastEncounterDay: lastEncounter == null
             ? null
             : studyDayFromEpochDay(lastEncounter, zoneId),
+        schedulerKind: TopicSchedulerKind.parse(
+          row.read<String>('scheduler_kind'),
+        ),
+        schedulerVersion: row.read<String>('scheduler_version'),
+        policyInputSnapshot: row.read<String?>('policy_input_snapshot') == null
+            ? null
+            : jsonDecode(row.read<String>('policy_input_snapshot'))
+                  as Map<String, Object?>,
+        revision: row.read<int>('topic_revision'),
       );
     }
     return result;
@@ -672,6 +830,153 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
+  Future<void> appendSchedulerEvent(SchedulerEvent event) => _database
+      .into(_database.schedulerEvents)
+      .insert(schedulerEventToCompanion(event));
+
+  @override
+  Future<void> appendSchedulerEvents(List<SchedulerEvent> events) async {
+    if (events.isEmpty) return;
+    await _database.batch((Batch batch) {
+      batch.insertAll(_database.schedulerEvents, <SchedulerEventsCompanion>[
+        for (final event in events) schedulerEventToCompanion(event),
+      ]);
+    });
+  }
+
+  @override
+  Future<SchedulerEvent?> findSchedulerEventByOperationId(
+    String operationId, {
+    SchedulerEventType? eventType,
+  }) async {
+    final query = _database.select(_database.schedulerEvents)
+      ..where(
+        ($SchedulerEventsTable table) =>
+            table.operationId.equals(operationId) &
+            (eventType == null
+                ? const CustomExpression<bool>('1')
+                : table.eventType.equals(eventType.wireName)),
+      )
+      ..orderBy(<OrderClauseGenerator<$SchedulerEventsTable>>[
+        ($SchedulerEventsTable table) => OrderingTerm.asc(table.occurredAtUtc),
+        ($SchedulerEventsTable table) => OrderingTerm.asc(table.id),
+      ])
+      ..limit(1);
+    final row = await query.getSingleOrNull();
+    return row == null ? null : schedulerEventFromRow(row);
+  }
+
+  @override
+  Future<SchedulerEvent?> findSchedulerEvent(String eventId) async {
+    final row =
+        await (_database.select(
+              _database.schedulerEvents,
+            )..where(($SchedulerEventsTable table) => table.id.equals(eventId)))
+            .getSingleOrNull();
+    return row == null ? null : schedulerEventFromRow(row);
+  }
+
+  @override
+  Future<List<SchedulerEvent>> listSchedulerEventsFor(
+    ElementRef ref, {
+    int? limit,
+  }) async {
+    final query = _database.select(_database.schedulerEvents)
+      ..where(
+        ($SchedulerEventsTable table) =>
+            table.elementId.equals(ref.id) &
+            table.elementType.equals(ref.type.index),
+      )
+      ..orderBy(<OrderClauseGenerator<$SchedulerEventsTable>>[
+        ($SchedulerEventsTable table) => OrderingTerm.asc(table.occurredAtUtc),
+        ($SchedulerEventsTable table) => OrderingTerm.asc(table.id),
+      ]);
+    if (limit != null) query.limit(limit);
+    final rows = await query.get();
+    return <SchedulerEvent>[for (final row in rows) schedulerEventFromRow(row)];
+  }
+
+  @override
+  Future<List<ScheduleAdjustment>> listAdjustmentsFor(
+    ElementRef ref, {
+    bool includeCleared = false,
+  }) async {
+    final rows =
+        await (_database.select(_database.scheduleAdjustments)
+              ..where(
+                ($ScheduleAdjustmentsTable table) =>
+                    table.elementId.equals(ref.id) &
+                    table.elementType.equals(ref.type.index) &
+                    (includeCleared
+                        ? const CustomExpression<bool>('1')
+                        : table.clearedAtUtc.isNull()),
+              )
+              ..orderBy(<OrderClauseGenerator<$ScheduleAdjustmentsTable>>[
+                ($ScheduleAdjustmentsTable table) =>
+                    OrderingTerm.asc(table.createdAtUtc),
+                ($ScheduleAdjustmentsTable table) => OrderingTerm.asc(table.id),
+              ]))
+            .get();
+    return <ScheduleAdjustment>[
+      for (final row in rows) scheduleAdjustmentFromRow(row),
+    ];
+  }
+
+  @override
+  Future<List<ScheduleAdjustment>> listActiveAdjustments({
+    Set<ElementRef>? elements,
+    Set<ScheduleAdjustmentReason>? reasons,
+  }) async {
+    if (elements != null && elements.isEmpty) return <ScheduleAdjustment>[];
+    if (reasons != null && reasons.isEmpty) return <ScheduleAdjustment>[];
+    final query = _database.select(_database.scheduleAdjustments)
+      ..where(
+        ($ScheduleAdjustmentsTable table) =>
+            table.clearedAtUtc.isNull() &
+            (reasons == null
+                ? const CustomExpression<bool>('1')
+                : table.reason.isIn(
+                    reasons
+                        .map((ScheduleAdjustmentReason reason) => reason.index)
+                        .toList(),
+                  )),
+      )
+      ..orderBy(<OrderClauseGenerator<$ScheduleAdjustmentsTable>>[
+        ($ScheduleAdjustmentsTable table) => OrderingTerm.asc(table.elementId),
+        ($ScheduleAdjustmentsTable table) =>
+            OrderingTerm.asc(table.createdAtUtc),
+        ($ScheduleAdjustmentsTable table) => OrderingTerm.asc(table.id),
+      ]);
+    final rows = await query.get();
+    return <ScheduleAdjustment>[
+      for (final row in rows)
+        if (elements == null ||
+            elements.contains(
+              ElementRef(
+                id: row.elementId,
+                type: ElementType.values[row.elementType],
+              ),
+            ))
+          scheduleAdjustmentFromRow(row),
+    ];
+  }
+
+  @override
+  Future<void> saveAdjustment(ScheduleAdjustment adjustment) => _database
+      .into(_database.scheduleAdjustments)
+      .insertOnConflictUpdate(scheduleAdjustmentToCompanion(adjustment));
+
+  @override
+  Future<void> saveAdjustments(List<ScheduleAdjustment> adjustments) async {
+    if (adjustments.isEmpty) return;
+    // Preserve transition order: clear replaced exact/upserted rows before
+    // inserting their replacement so the active uniqueness constraints hold.
+    for (final adjustment in adjustments) {
+      await saveAdjustment(adjustment);
+    }
+  }
+
+  @override
   Future<Map<RevlogEventType, int>> countRevlogOn(StudyDay day) async {
     // Day boundaries come from the caller's calendar, so the log is bucketed
     // by the same study day the scheduler used rather than by UTC midnight.
@@ -693,50 +998,115 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
-  Future<void> deleteRevlogByOperationId(String operationId) async {
-    await (_database.delete(_database.revlogEntries)..where(
-          ($RevlogEntriesTable t) => t.operationId.equals(operationId),
-        ))
-        .go();
+  Future<ReviewRecord?> findLastReview(String cardId) =>
+      _findLastUnundoneReview(cardId);
+
+  @override
+  Future<ReviewRecord?> findLastReviewOverall() =>
+      _findLastUnundoneReview(null);
+
+  Future<ReviewRecord?> _findLastUnundoneReview(String? cardId) async {
+    final String cardPredicate = cardId == null ? '' : 'AND r.card_id = ? ';
+    final rows = await _database
+        .customSelect(
+          'SELECT r.* FROM review_events r '
+          'WHERE r.is_practice = 0 $cardPredicate'
+          'AND NOT EXISTS (SELECT 1 FROM scheduler_events original '
+          'JOIN scheduler_events inverse '
+          'ON inverse.undoes_event_id = original.id '
+          'WHERE original.operation_id = r.operation_id '
+          "AND original.event_type = 'card_reviewed' "
+          "AND inverse.event_type = 'card_review_undone') "
+          'ORDER BY r.reviewed_at_utc DESC, r.id DESC LIMIT 1',
+          variables: <Variable<Object>>[
+            if (cardId != null) Variable<String>(cardId),
+          ],
+          readsFrom: <ResultSetImplementation<Table, Object?>>{
+            _database.reviewEvents,
+            _database.schedulerEvents,
+          },
+        )
+        .get();
+    if (rows.isEmpty) return null;
+    return reviewRecordFromRow(_database.reviewEvents.map(rows.single.data));
   }
 
   @override
-  Future<void> deleteReview(String operationId) async {
-    await (_database.delete(_database.reviewEvents)..where(
-          ($ReviewEventsTable t) => t.operationId.equals(operationId),
-        ))
-        .go();
-  }
-
-  @override
-  Future<ReviewRecord?> findLastReview(String cardId) async {
+  Future<StoredPresentationPlan?> findPresentationPlan(StudyDay day) async {
     final row =
-        await (_database.select(_database.reviewEvents)
-              ..where(
-                ($ReviewEventsTable t) =>
-                    t.cardId.equals(cardId) & t.isPractice.equals(false),
-              )
-              ..orderBy(<OrderClauseGenerator<$ReviewEventsTable>>[
-                ($ReviewEventsTable t) => OrderingTerm.desc(t.reviewedAtUtc),
-                ($ReviewEventsTable t) => OrderingTerm.desc(t.id),
-              ])
-              ..limit(1))
+        await (_database.select(_database.dailyPresentationPlans)..where(
+              ($DailyPresentationPlansTable table) =>
+                  table.studyDay.equals(day.epochDay) &
+                  table.zoneId.equals(day.zoneId),
+            ))
             .getSingleOrNull();
-    return row == null ? null : reviewRecordFromRow(row);
+    if (row == null) return null;
+    return StoredPresentationPlan(
+      identity: PresentationPlanIdentity.fromJson(row.identityJson),
+      remainingEntries: StoredPresentationPlan.decodeEntries(
+        row.remainingEntriesJson,
+      ),
+      mergeCursor: QueueMergeCursor(ordinaryCardsSinceTopic: row.mergeCursor),
+      createdAtUtc: fromEpochMs(row.createdAtUtc),
+      updatedAtUtc: fromEpochMs(row.updatedAtUtc),
+    );
   }
 
   @override
-  Future<ReviewRecord?> findLastReviewOverall() async {
-    final row =
-        await (_database.select(_database.reviewEvents)
-              ..where(($ReviewEventsTable t) => t.isPractice.equals(false))
-              ..orderBy(<OrderClauseGenerator<$ReviewEventsTable>>[
-                ($ReviewEventsTable t) => OrderingTerm.desc(t.reviewedAtUtc),
-                ($ReviewEventsTable t) => OrderingTerm.desc(t.id),
-              ])
-              ..limit(1))
-            .getSingleOrNull();
-    return row == null ? null : reviewRecordFromRow(row);
+  Future<void> savePresentationPlan(StoredPresentationPlan plan) => _database
+      .into(_database.dailyPresentationPlans)
+      .insertOnConflictUpdate(
+        DailyPresentationPlansCompanion.insert(
+          studyDay: plan.identity.studyDay.epochDay,
+          zoneId: plan.identity.studyDay.zoneId,
+          identityJson: plan.identity.toJson(),
+          remainingEntriesJson: plan.entriesJson(),
+          mergeCursor: Value<int>(plan.mergeCursor.ordinaryCardsSinceTopic),
+          createdAtUtc: toEpochMs(plan.createdAtUtc),
+          updatedAtUtc: toEpochMs(plan.updatedAtUtc),
+        ),
+      );
+
+  @override
+  Future<StoredPresentationPlan?> consumePresentationPlanEntry({
+    required StudyDay day,
+    required ElementRef ref,
+    required DateTime atUtc,
+  }) async {
+    final StoredPresentationPlan? current = await findPresentationPlan(day);
+    if (current == null) return null;
+    final StoredPresentationPlan next = current.consume(ref, atUtc);
+    if (!identical(next, current)) await savePresentationPlan(next);
+    return next;
+  }
+
+  @override
+  Future<SchedulerEvent?> findLastSchedulerEvent(
+    ElementRef ref,
+    SchedulerEventType eventType, {
+    bool excludeUndone = true,
+  }) async {
+    final List<QueryRow> rows = await _database
+        .customSelect(
+          'SELECT original.* FROM scheduler_events original '
+          'WHERE original.element_id = ? AND original.element_type = ? '
+          'AND original.event_type = ? '
+          '${excludeUndone ? 'AND NOT EXISTS (SELECT 1 FROM scheduler_events inverse WHERE inverse.undoes_event_id = original.id) ' : ''}'
+          'ORDER BY original.occurred_at_utc DESC, original.id DESC LIMIT 1',
+          variables: <Variable<Object>>[
+            Variable<String>(ref.id),
+            Variable<int>(ref.type.index),
+            Variable<String>(eventType.wireName),
+          ],
+          readsFrom: <ResultSetImplementation<Table, Object?>>{
+            _database.schedulerEvents,
+          },
+        )
+        .get();
+    if (rows.isEmpty) return null;
+    return schedulerEventFromRow(
+      _database.schedulerEvents.map(rows.single.data),
+    );
   }
 
   @override
@@ -744,9 +1114,9 @@ final class DriftLearningRepository implements LearningRepository {
     final rows = await _database
         .customSelect(
           'SELECT priority_key FROM element_schedules '
-          'WHERE lifecycle = ? ORDER BY priority_key',
+          'WHERE lifecycle != ? ORDER BY priority_key, element_id',
           variables: <Variable<Object>>[
-            Variable<int>(ElementLifecycle.active.index),
+            Variable<int>(ElementLifecycle.deleted.index),
           ],
         )
         .get();
@@ -994,8 +1364,7 @@ final class DriftSearchRepository implements SearchRepository {
   Future<void> deleteDocument(ElementRef ref) async {
     await (_database.delete(_database.searchDocuments)..where(
           ($SearchDocumentsTable t) =>
-              t.elementId.equals(ref.id) &
-              t.elementType.equals(ref.type.index),
+              t.elementId.equals(ref.id) & t.elementType.equals(ref.type.index),
         ))
         .go();
   }

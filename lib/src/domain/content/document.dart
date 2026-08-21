@@ -207,8 +207,8 @@ final class Document {
       final int? indexA = _indexById[a.blockId];
       final int? indexB = _indexById[b.blockId];
       if (indexA == null || indexB == null) continue;
-      final bool forward = indexA < indexB ||
-          (indexA == indexB && a.utf8Offset <= b.utf8Offset);
+      final bool forward =
+          indexA < indexB || (indexA == indexB && a.utf8Offset <= b.utf8Offset);
       final ReaderAnchor start = forward ? a : b;
       final ReaderAnchor end = forward ? b : a;
       final int from = forward ? indexA : indexB;
@@ -216,9 +216,7 @@ final class Document {
 
       for (var i = from; i <= to; i++) {
         final Block block = blocks[i];
-        final int lo = i == from
-            ? block.utf8ToRendered(start.utf8Offset)
-            : 0;
+        final int lo = i == from ? block.utf8ToRendered(start.utf8Offset) : 0;
         final int hi = i == to
             ? block.utf8ToRendered(end.utf8Offset)
             : block.renderedText.length;

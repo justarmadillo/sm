@@ -160,16 +160,30 @@ final class FormulationHandlers {
         final StudyDay today = await _context.today();
         final StudyDayCalendar calendar = await _context.calendar();
         final String? rootId = parentSchedule?.rootId ?? parent?.id;
+        final PriorityScale scale = await _context.priorityScale();
+        final List<PriorityRank> childRanks;
+        if (parentSchedule case final ElementSchedule parentState) {
+          childRanks = PriorityRank.spread(
+            count: cards.length,
+            before: parentState.priority,
+            after: scale.neighbourBelow(parentState.priority),
+          );
+        } else {
+          final PriorityRank first = scale.rankAtPercent(50);
+          final PriorityRank? after = scale.neighbourBelow(first);
+          childRanks = <PriorityRank>[first];
+          while (childRanks.length < cards.length) {
+            childRanks.add(PriorityRank.between(childRanks.last, after));
+          }
+        }
         await _content.insertCards(cards);
-        for (final card in cards) {
+        for (var cardIndex = 0; cardIndex < cards.length; cardIndex++) {
+          final Card card = cards[cardIndex];
           final ref = ElementRef(id: card.id, type: ElementType.card);
           final CardState state = CardState(
             schedule: ElementSchedule(
               ref: ref,
-              // Priority is inherited once, from whatever element the card
-              // was made from. Later changes to that parent do not silently
-              // reorder cards already formulated from it.
-              priority: parentSchedule?.priority ?? PriorityRank.middle,
+              priority: childRanks[cardIndex],
               lifecycle: ElementLifecycle.active,
               dueDay: today,
               originalDueDay: today,
@@ -177,6 +191,9 @@ final class FormulationHandlers {
               // session, and so the card keeps its citation if the source is
               // ever removed.
               rootId: rootId,
+              parentElementId: card.parent?.id,
+              createdAtUtc: card.createdAtUtc,
+              updatedAtUtc: card.createdAtUtc,
             ),
             memory: CardMemory.newCard(cardId: card.id, dueAtUtc: now),
           );
@@ -213,9 +230,7 @@ final class FormulationHandlers {
           final TopicState? parentTopic = await _learning.findTopic(parentRef);
           if (parentTopic != null) {
             final TopicScheduler scheduler = await _context.topicScheduler();
-            await _learning.saveTopic(
-              scheduler.notifyCardCreated(parentTopic),
-            );
+            await _learning.saveTopic(scheduler.notifyCardCreated(parentTopic));
           }
         }
         await _learning.appendActivity(
