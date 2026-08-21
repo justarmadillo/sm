@@ -1,0 +1,431 @@
+/// Drift table definitions for the whole v1 schema.
+///
+/// Invariants live in SQL, not only in Dart: check constraints on enums and
+/// ranges, foreign keys with explicit delete behaviour, and unique indexes on
+/// the one-to-one subtype rows. A bug in a handler should hit a constraint,
+/// not quietly write a collection that no longer makes sense.
+library;
+
+// Drift's check() idiom names the column inside its own definition. The
+// analyzer reads that as a recursive getter; it is not, because the builder
+// evaluates it once at schema-construction time.
+// ignore_for_file: recursive_getters
+
+import 'package:drift/drift.dart';
+
+/// Imported documents. The markdown is an immutable snapshot.
+@DataClassName('SourceRow')
+class Sources extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get title => text().withLength(min: 1, max: 500)();
+
+  /// Normalized original markdown. Every anchor addresses this exact text.
+  TextColumn get markdown => text()();
+
+  TextColumn get contentHash => text().withLength(min: 64, max: 64)();
+
+  IntColumn get wordCount =>
+      integer().check(wordCount.isBiggerOrEqualValue(0))();
+
+  IntColumn get importedAtUtc => integer()();
+
+  /// Index into the reading-pace enum.
+  IntColumn get pace => integer()
+      .check(pace.isBetweenValues(0, 2))
+      .withDefault(const Constant(1))();
+
+  /// Explicit resume marker. Both columns are set or both are null.
+  TextColumn get markerBlockId => text().nullable()();
+
+  IntColumn get markerOffset => integer().nullable()();
+
+  /// Soft position. Never drives scheduling.
+  TextColumn get softBlockId => text().nullable()();
+
+  IntColumn get softOffset => integer().nullable()();
+
+  TextColumn get folderId =>
+      text().nullable().references(Folders, #id, onDelete: KeyAction.setNull)();
+
+  /// Bumped on every write, for change detection and diagnostics.
+  IntColumn get revision => integer().withDefault(const Constant(1))();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+
+  @override
+  List<String> get customConstraints => <String>[
+    'CHECK ((marker_block_id IS NULL) = (marker_offset IS NULL))',
+    'CHECK ((soft_block_id IS NULL) = (soft_offset IS NULL))',
+  ];
+}
+
+/// Immutable blocks derived from a source at import.
+@DataClassName('BlockRow')
+class Blocks extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get sourceId =>
+      text().references(Sources, #id, onDelete: KeyAction.cascade)();
+
+  IntColumn get idx => integer().check(idx.isBiggerOrEqualValue(0))();
+
+  /// Index into the block-type enum.
+  IntColumn get type => integer().check(type.isBetweenValues(0, 7))();
+
+  TextColumn get raw => text()();
+
+  IntColumn get startUtf8 => integer()();
+
+  IntColumn get endUtf8 => integer()();
+
+  IntColumn get startUtf16 => integer()();
+
+  /// JSON array of `[start, end]` UTF-16 pairs, relative to [raw].
+  TextColumn get contentSpans => text()();
+
+  IntColumn get headingLevel => integer().nullable()();
+
+  TextColumn get codeLanguage => text().nullable()();
+
+  BoolColumn get ordered => boolean().withDefault(const Constant(false))();
+
+  TextColumn get listMarker => text().nullable()();
+
+  IntColumn get listDepth => integer().withDefault(const Constant(0))();
+
+  IntColumn get quoteDepth => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+
+  @override
+  List<String> get customConstraints => <String>[
+    'UNIQUE (source_id, idx)',
+    'CHECK (end_utf8 >= start_utf8)',
+  ];
+}
+
+/// Passages promoted into independent learning objects.
+@DataClassName('ExtractRow')
+class Extracts extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get markdown => text()();
+
+  /// Root source, denormalized so opening context never walks the chain.
+  TextColumn get sourceId =>
+      text().references(Sources, #id, onDelete: KeyAction.restrict)();
+
+  /// Immediate parent: a source or another extract.
+  TextColumn get parentId => text()();
+
+  BoolColumn get parentIsSource => boolean()();
+
+  TextColumn get startBlockId => text()();
+
+  IntColumn get startOffset => integer()();
+
+  TextColumn get endBlockId => text()();
+
+  IntColumn get endOffset => integer()();
+
+  TextColumn get selectedTextHash => text().withLength(min: 64, max: 64)();
+
+  IntColumn get createdAtUtc => integer()();
+
+  IntColumn get editedAtUtc => integer().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+
+  @override
+  List<String> get customConstraints => <String>[
+    'CHECK (start_offset >= 0)',
+    'CHECK (end_offset >= 0)',
+    'CHECK ((start_block_id != end_block_id) OR (end_offset > start_offset))',
+  ];
+}
+
+/// Formulated items.
+@DataClassName('CardRow')
+class Cards extends Table {
+  TextColumn get id => text()();
+
+  /// Parent extract, when the card was formulated from one.
+  ///
+  /// Two nullable foreign keys rather than one polymorphic column: a card can
+  /// hang off an extract, off an article directly, or off nothing at all, and
+  /// each of the two real parents still gets database-level integrity.
+  TextColumn get extractId => text().nullable().references(
+    Extracts,
+    #id,
+    onDelete: KeyAction.restrict,
+  )();
+
+  /// Parent source, when the card was formulated straight from an article.
+  TextColumn get sourceId => text().nullable().references(
+    Sources,
+    #id,
+    onDelete: KeyAction.restrict,
+  )();
+
+  /// Index into the card-kind enum.
+  IntColumn get kind => integer().check(kind.isBetweenValues(0, 1))();
+
+  TextColumn get front => text()();
+
+  TextColumn get back => text()();
+
+  IntColumn get clozeOrdinal => integer().nullable()();
+
+  IntColumn get createdAtUtc => integer()();
+
+  IntColumn get editedAtUtc => integer().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+
+  @override
+  List<String> get customConstraints => <String>[
+    // A cloze card names the deletion it tests; a Q&A card never does.
+    'CHECK ((kind = 1) = (cloze_ordinal IS NOT NULL))',
+    // One parent at most: an extract already knows its own source, so a card
+    // holding both would give two answers to "where did this come from".
+    'CHECK (extract_id IS NULL OR source_id IS NULL)',
+  ];
+}
+
+/// The scheduling row every element has, whatever its type.
+@DataClassName('ScheduleRow')
+class ElementSchedules extends Table {
+  TextColumn get elementId => text()();
+
+  /// Index into the element-type enum.
+  IntColumn get elementType =>
+      integer().check(elementType.isBetweenValues(0, 2))();
+
+  /// Sortable relative priority. Lower sorts as more important.
+  TextColumn get priorityKey => text().withLength(min: 1, max: 128)();
+
+  /// Index into the lifecycle enum.
+  IntColumn get lifecycle => integer().check(lifecycle.isBetweenValues(0, 4))();
+
+  /// Days since the Unix epoch.
+  IntColumn get dueDay => integer()();
+
+  /// What the scheduler chose, preserved across postponement.
+  IntColumn get originalDueDay => integer()();
+
+  /// Where auto-postpone or a manual Later moved the element to.
+  IntColumn get deferredUntil => integer().nullable()();
+
+  /// Index into the deferral-kind enum: none, manual, automatic.
+  ///
+  /// Recalling same-day overload deferrals must not undo what the user
+  /// deliberately pushed away, so the two are distinguishable in storage.
+  IntColumn get deferralKind => integer()
+      .check(deferralKind.isBetweenValues(0, 2))
+      .withDefault(const Constant(0))();
+
+  TextColumn get zoneId => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{
+    elementId,
+    elementType,
+  };
+
+  @override
+  List<String> get customConstraints => <String>[
+    'CHECK ((deferred_until IS NULL) = (deferral_kind = 0))',
+  ];
+}
+
+/// Topic pacing state for sources and extracts.
+@DataClassName('TopicStateRow')
+class TopicStates extends Table {
+  TextColumn get elementId => text()();
+
+  IntColumn get elementType =>
+      integer().check(elementType.isBetweenValues(0, 1))();
+
+  /// Which configured interval sequence paces this topic.
+  TextColumn get profileId => text()();
+
+  /// Position in that sequence. The final value repeats.
+  IntColumn get stepIndex =>
+      integer().check(stepIndex.isBiggerOrEqualValue(0))();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{
+    elementId,
+    elementType,
+  };
+}
+
+/// FSRS memory state for cards, one row per card.
+@DataClassName('CardMemoryRow')
+class CardMemories extends Table {
+  TextColumn get cardId =>
+      text().references(Cards, #id, onDelete: KeyAction.cascade)();
+
+  /// Null until the first review, matching dart-fsrs' new-card shape.
+  RealColumn get stability => real().nullable()();
+
+  /// Null until the first review, matching dart-fsrs' new-card shape.
+  RealColumn get difficulty => real().nullable()();
+
+  /// dart-fsrs state: learning (1), review (2), relearning (3).
+  IntColumn get state => integer().check(state.isBetweenValues(1, 3))();
+
+  /// Position in the active learning or relearning steps. Null in review.
+  IntColumn get step =>
+      integer().nullable().check(step.isBiggerOrEqualValue(0))();
+
+  IntColumn get reps => integer()
+      .check(reps.isBiggerOrEqualValue(0))
+      .withDefault(const Constant(0))();
+
+  IntColumn get lapses => integer()
+      .check(lapses.isBiggerOrEqualValue(0))
+      .withDefault(const Constant(0))();
+
+  IntColumn get lastReviewUtc => integer().nullable()();
+
+  IntColumn get dueAtUtc => integer()();
+
+  IntColumn get originalDueAtUtc => integer()();
+
+  IntColumn get deferredUntilUtc => integer().nullable()();
+
+  /// Pinned scheduler build and parameter set, recorded so history stays
+  /// interpretable after either changes.
+  TextColumn get schedulerVersion => text()();
+
+  TextColumn get parametersVersion => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{cardId};
+
+  @override
+  List<String> get customConstraints => <String>[
+    'CHECK ((state = 2 AND step IS NULL) OR '
+        '(state IN (1, 3) AND step IS NOT NULL))',
+    'CHECK ((stability IS NULL) = (difficulty IS NULL))',
+    'CHECK (lapses <= reps)',
+    'CHECK ((reps = 0 AND stability IS NULL AND difficulty IS NULL '
+        'AND last_review_utc IS NULL) OR '
+        '(reps > 0 AND stability IS NOT NULL AND difficulty IS NOT NULL '
+        'AND last_review_utc IS NOT NULL))',
+  ];
+}
+
+/// Append-only review log. Never updated, never deleted outside of undo.
+@DataClassName('ReviewEventRow')
+class ReviewEvents extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get cardId =>
+      text().references(Cards, #id, onDelete: KeyAction.cascade)();
+
+  IntColumn get reviewedAtUtc => integer()();
+
+  /// Again, Hard, Good, Easy.
+  IntColumn get rating => integer().check(rating.isBetweenValues(1, 4))();
+
+  /// FSRS state before the review, as JSON. Undo restores from this, and a
+  /// future parameter optimizer replays from it.
+  TextColumn get preStateJson => text()();
+
+  TextColumn get postStateJson => text()();
+
+  IntColumn get elapsedMs => integer().nullable()();
+
+  TextColumn get schedulerVersion => text()();
+
+  TextColumn get parametersVersion => text()();
+
+  /// Practice-session grades are logged but never touch memory state, due
+  /// dates, admission, or future optimization.
+  BoolColumn get isPractice => boolean().withDefault(const Constant(false))();
+
+  TextColumn get operationId => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+/// Append-only activity log for diagnosis and audit.
+@DataClassName('ActivityEventRow')
+class ActivityEvents extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get operationId => text()();
+
+  TextColumn get elementId => text().nullable()();
+
+  IntColumn get elementType => integer().nullable()();
+
+  /// Stable dotted event name, for example `reader.done`.
+  TextColumn get kind => text()();
+
+  IntColumn get atUtc => integer()();
+
+  /// Foreground duration, logged from day one so time-based features remain
+  /// possible later even though v1 is count-based.
+  IntColumn get durationMs => integer().nullable()();
+
+  TextColumn get metadataJson => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+/// User-organized upper levels of the knowledge tree.
+@DataClassName('FolderRow')
+class Folders extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get parentId => text().nullable()();
+
+  TextColumn get name => text().withLength(min: 1, max: 200)();
+
+  IntColumn get position => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+/// Key/value settings.
+@DataClassName('SettingRow')
+class Settings extends Table {
+  TextColumn get key => text()();
+
+  TextColumn get value => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{key};
+}
+
+/// Single-row dataset identity and lineage.
+///
+/// Present from the first migration so the v1.1 handoff protocol needs no
+/// migration of accumulated history.
+@DataClassName('DatasetMetaRow')
+class DatasetMeta extends Table {
+  /// Always 1: the table holds exactly one row.
+  IntColumn get id => integer().check(id.equals(1))();
+
+  TextColumn get datasetId => text()();
+
+  IntColumn get generation => integer()();
+
+  IntColumn get writerEpoch => integer()();
+
+  TextColumn get ownerDeviceId => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
