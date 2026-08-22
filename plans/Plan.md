@@ -32,8 +32,8 @@ Core principles the implementation must preserve:
 * **The source itself is a scheduled learning object.** Unfinished reading is scheduled work, not a bookmark. A source is never "done/not done" — it has a reading position (the resume marker = the processing frontier cursor) and its own schedule. Position answers "how far have I processed this?"; the schedule answers "when do I process more?". Never conflate them.
 * **Extraction creates a new independent object; it never cuts or moves source text.** An extract references its origin (source ID, block IDs, offsets — provenance) so context is always recoverable, but from creation onward it has its own schedule, priority, and lifecycle, fully independent of the parent's reading position or fate. Extracts can be extracted from recursively (source → extract → smaller extract → card).
 * **Capture and formulation are separate operations, possibly days apart.** An extract is not obligated to become a card — it can stay an extract forever, be dismissed, or be refined across encounters until the user understands it well enough to formulate. Formulating never converts, reschedules, or removes the extract. This is the key difference from Anki's "interesting passage → card immediately" workflow.
-* **Extraction must be frictionless**: select → extract → keep reading. No modal, no metadata prompts. Metadata (provenance, priority) is inherited automatically.
-* **Priority is attention allocation, separate from due-ness.** Scheduling decides *eligibility* (what may appear today); priority decides *ordering and admission* among eligible elements (what deserves limited attention first). Priority never pulls not-yet-due material forward and never changes intervals. The collection is expected to exceed learning capacity — auto-postpone of lowest-priority overflow is normal, not an error.
+* **Extraction must be frictionless**: select → extract → keep reading. No modal, no metadata prompts. Provenance is inherited automatically; initial priority placement follows the versioned scheduler policy.
+* **Priority is attention allocation, separate from due-ness.** Scheduling decides *eligibility* (what may appear today); priority decides *ordering and admission* among eligible elements (what deserves limited attention first). Absolute priority placement never pulls not-yet-due material forward or changes intervals/A-Factor; any separately named coupled nudge is versioned and calibrated independently. The collection is expected to exceed learning capacity — auto-postpone of lowest-priority overflow is normal, not an error.
 * **Two scheduler families, one queue.** Cards use FSRS (memory model: "when should I retrieve this again?"). Topics use simple growing interval sequences (processing pacing: "when should I continue this?"). A unified queue mixes both streams so reading never starves review and vice versa. **The queue is the heart of the application** — the user's session is "work through today's queue", not "open a deck" or "open a book".
 * **Every element shares a common scheduling shape** (type, priority rank, due, state, lifecycle) so the queue and scheduler treat sources, extracts, and cards uniformly, while each type keeps its own state (position for sources, provenance for extracts, FSRS state for cards).
 * **Postpone ≠ failure.** "Later" means "wrong task right now" and only shifts eligibility; Anki-style Again is a memory signal that belongs to cards only. The two signals are modeled separately.
@@ -166,10 +166,11 @@ Important domain types and interfaces
 * `ReaderAnchor(blockId, utf8Offset)`
 * `SelectionRange(startAnchor, endAnchor, selectedTextHash)`
 * `StudyDay(localDate, zoneId, rollover)`
-* `TopicState(profileId, stepIndex, intervalDays, aFactor, yieldEwma, encounters, postponeCount, encountersSinceLastCard)` over a shared `ElementSchedule(priority, lifecycle, dueDay, originalDueDay, deferredUntil, deferralKind, rootId)`
-* `CardMemory(fsrsState, dueAtUtc, originalDueAtUtc, deferredUntilUtc, postponeCount)`
-* `TopicEncounter` — the A-factor's session inputs — and `AFactorComputation`, its logged output
-* `PriorityRank(orderKey)` and `PriorityScale`, which derives position, percentile, pressure, and the protected floor
+* `TopicSchedule(schedulerKind, schedulerVersion, creationMode, initializerVersion, initialTextUtf16Length, intervalDays, aFactor, algorithmDueStudyDay, encounters, lastEncounterStudyDay)`
+* `CardMemory(fsrsState, algorithmDueAtUtc, schedulerVersion)`
+* Typed `ScheduleAdjustment` records for Later, overflow, siblings, Mercy, and exact manual presentation dates; these never overwrite either canonical schedule above
+* `TopicEncounter`, `AFactorInitialization`, and later `AFactorTransition` events, with policy version and before/after snapshots
+* `PriorityRank(orderKey)` and `PriorityScale`, which derive position, percentile, and the protected floor
 * `RevlogEntry` / `RevlogEventType` — the universal repetition log
 * `OverloadValve` — manual Later, auto-postpone, and Mercy delay arithmetic
 * `AppSettings` — every tunable, as one immutable value with a total decoder
@@ -204,7 +205,7 @@ Reader
 Extraction and formulation
 
 * Same-block extraction ships first; multi-block extraction is required before v1 release but is not a prerequisite for daily use (it lands in M5, after dogfooding begins).
-* Extraction is modal-free, preserves selected Markdown, does not move viewport or marker, inherits provenance and priority, and offers Undo.
+* Extraction is modal-free, preserves selected Markdown, does not move viewport or marker, inherits provenance, uses the versioned initial-rank fallback, and offers Undo.
 * Store immutable source/block IDs, precise source offsets, and selected-text hash.
 * Show prior extractions through persistent gutter marks.
 * Context opens in a temporary browse overlay containing the selected passage, adjacent blocks, Expand, and Open Source.
@@ -212,7 +213,7 @@ Extraction and formulation
 * Formulate creates one or more linked Q&A/cloze cards and returns to the same element. It is available on an extract *and* in the Reader (Alt+Z), where the current selection seeds the card text and the parent is the source.
 * Formulate does not reschedule or dismiss the extract. Done advances it; Dismiss retains it while removing it from learning.
 * Store clozes using canonical Anki syntax such as `{{c1::answer}}`; derive rendered ranges. The syntax is Anki's, not SuperMemo's — one canonical string stays the single source of truth, so editing the sentence can never desynchronize the deletions.
-* A card's parent is optional and may be an extract or a source. Priority is inherited from whatever element produced it, once, at creation.
+* A card's parent is optional and may be an extract or a source. Its initial rank follows the explicit, versioned card-insertion fallback; parent linkage must not silently turn an uncalibrated SuperMemo rule into a claim of fidelity.
 
 Card scheduling
 
@@ -256,74 +257,31 @@ Card scheduling
 
 Topic scheduling
 
-**A topic is any element that is not graded.** Articles and extracts are both
-topics; an extract is simply a topic with a parent and less text. They share one
-table, one queue, and one scheduler. There is no Again/Hard/Good/Easy on a topic
-and no concept of failure — you do not fail a paragraph, you see it again and do
-more work on it. That distinction, not the storage table, is what decides which
-scheduler applies.
+The complete scheduling contract is
+[`plans/scheduler/LLM_FIX_INSTRUCTIONS.md`](scheduler/LLM_FIX_INSTRUCTIONS.md),
+with the rationale in
+[`plans/scheduler/ARCHITECT_GUIDE.md`](scheduler/ARCHITECT_GUIDE.md). Those two
+documents override this product plan for every scheduler behavior.
 
-Two interval models ship, chosen in Settings. Every coefficient below is
-editable; none of them is compiled in.
+Canonical summary:
 
-**A-factor (default).** `next_interval = current_interval × A`, with
-
-```text
-A = base                                  (2.0)
-  × (priorityFloor + prioritySpan × pressure)          (0.7 + 0.8p)
-  × (completionFloor + completionSpan × fractionRead)  (0.7 + 0.6c)  sources
-  × conversionFactor                       (0.75 unconverted / 1.25 converted)  extracts
-  × (1 − yieldWeight × normalizedDensity)  (optional, off by default)
-A = clamp(A, 1.0, 6.0)
-```
-
-* **Priority** shortens intervals as well as sorting: top-priority material
-  returns often, the bottom recedes fast. Note the compounding — low priority is
-  both pushed further by the valve and grown faster here. That is intended, and
-  it is the knob to watch first if material disappears sooner than expected.
-* **Completion** applies to articles: barely started comes back sooner because
-  there is a lot left; nearly finished recedes.
-* **Conversion** applies to extracts and is the most useful term in the model.
-  An extract turned into three clozes has served its purpose and should quietly
-  recede; one sitting unconverted for two months should keep nagging.
-* **Yield** — extraction density per thousand words, exponentially smoothed — is
-  experimental and ships off. When on, a productive source keeps coming back and
-  a barren one lets go.
-* The floor of 1.0 means a repetition never *shortens* an interval by itself;
-  only the user can do that.
-* The unrounded interval is carried forward, so an A only slightly above 1.0
-  still accumulates instead of being rounded away on every step.
-* Every input and the resulting A are written to the repetition log, so the
-  constants can be retuned against real data rather than against the design's
-  arithmetic.
-
-**First interval, set at creation, driven by priority:**
-
-```text
-pressure = position from the top of the collection, 0 = most important
-source  = clamp(round(1 + 20 × pressure²), 1, 30) days
-extract = clamp(round(1 + 10 × pressure²), 1, 14) days
-```
-
-The squaring keeps the top of the collection tight and lets the bottom spread
-out fast. Extracts start shorter because an unconverted extract is a debt —
-material committed to but not yet turned into anything durable.
-
-**Fixed sequences (alternative).** Explicit, user-edited day intervals whose
-last value repeats. Fully predictable, and the model M0–M3 shipped with:
-
-* Focused source: `1,2,3,5,7,10,14,21,30`
-* Normal source: `1,3,7,14,30,60,120,240,365`
-* Slow source: `7,14,30,60,120,240,365,730`
-* Extract: `1,3,7,14,30,60,120`
-
-Behavior, in both models:
-
-* New sources are due today whatever their priority — unfinished reading is work
-  waiting to start, not a bookmark. Priority decides the first *interval*, which
-  applies from the first Done onward. New extracts are due after their
-  priority-derived first interval, at minimum the next study day.
-* **Four end-of-encounter actions, and they must behave differently:**
+* **A topic is any ungraded learnable element.** Articles and extracts share the
+  versioned `topic_afactor_v2` scheduler; cards use FSRS exclusively.
+* A blank-created topic starts with A `1.2`, interval `1 day`, and due on the next
+  StudyDay. Pasting or editing it later does not recalculate A.
+* An atomic plain-text clipboard topic uses the recovered creation initializer
+  `A = 1.25 + 150 / (UTF16_length + 200)`, displayed to three decimals, with the
+  same one-day initial schedule.
+* Absolute priority placement changes global rank only. It does not change A,
+  interval, or next repetition. Special coupled priority commands remain behind
+  an uncalibrated, versioned policy.
+* A genuine topic encounter grows the stored interval from stored A. Exact
+  SuperMemo rounding and later A transitions are still being calibrated; the
+  transparent temporary fallback is
+  `max(current + 1, round(current × A))`.
+* Legacy fixed-sequence schedules retain their stored dates and steps until an
+  explicit, previewed migration. They are not mixed with the new transition.
+* **Four end-of-encounter actions must behave differently:**
 
   | Action | Interval | Read point | Logged as |
   |---|---|---|---|
@@ -340,11 +298,8 @@ Behavior, in both models:
 * A manual interval change is available (SuperMemo reads "I must see this in 11
   days, not 30" as a priority signal), but the priority change stays a separate,
   visible command rather than a hidden side effect.
-* **Auto-finish** closes an article only when the reading position has reached
-  the end *and* every word of it sits inside an extract. Deliberately strict:
-  closing a source the user still wanted is worse than leaving a dead one in the
-  queue. It stays in the tree either way, as the provenance root, resurrectable.
-  Configurable, and on by default.
+* **Finish is always explicit.** Reaching the end, extracting every word,
+  closing, navigating away, or crashing never finishes a topic automatically.
 * **Extract finish nudge:** an extract that has produced at least one card and
   has been seen N times since the last one (default 3) is offered Finish.
   Without it, a collection fills with extracts the user mentally finished months
@@ -368,26 +323,28 @@ Priority is **relative**, displayed as `0%` highest through `100%` lowest:
   nothing and the overload valve has nothing left to work with. A relative order
   enforces scarcity structurally: there is exactly one 0%, and promoting one
   element necessarily demotes another.
+* The rankable population contains every non-deleted element, including concepts
+  and the collection root even when that root is unscheduled. Percent is a
+  derived, discrete view of rank, not an independently stored value.
 * Setting a priority rewrites one row. Reordering never renumbers the collection.
 * **Priority UI:**
    * A percent slider on any element — reader, extract view, review, library,
      queue, and browser — on **Alt+P**, SuperMemo's own key. The dialog names the
      elements immediately above and below, because "more important than this,
      less important than that" is a judgement a person can make while an
-     abstract 42% is not. Shift+Ctrl+Up/Down steps past one neighbour.
+     abstract 42% is not. SuperMemo's Shift+Ctrl+Up/Down Increase/Decrease
+     commands are a separate, potentially A-coupled operation and stay disabled
+     or version-gated until their transition is calibrated.
    * A **priority browser**: every element in one ordered list with
      drag-to-rebalance, filterable by type. The only place the shape of a
      collection's priorities is visible — usually the moment the user discovers
      that four hundred things are all "urgent".
-   * **Spread**: lay a percent range across everything under one article, keeping
-     their relative order. This is what makes exact inheritance survivable — an
-     article given a high priority hands it to every extract and card it
-     produces, which is right at creation and wrong once the reading is done.
-* New root elements start at the middle unless the import names a percent.
-  Extracts and cards inherit their parent's rank **exactly**, once, at creation.
-  Slight decay was considered and rejected: it is a blunt instrument that quietly
-  demotes material the user deliberately marked critical. The queue caps one
-  subtree's share of a session instead.
+   * **Spread**: lay a rank range across everything under one article while
+     keeping its relative order. This is an explicit bulk reorder, not evidence
+     that every new child inherits the parent's exact SuperMemo rank.
+* SuperMemo 20 clipboard imports entered at position 1 in the controlled fresh
+  collections. Exact extract, formatted-import, clone, and card insertion rules
+  remain versioned product fallbacks until separately calibrated.
 * Later parent-priority changes do not silently cascade.
 
 Queue construction, per study day:
@@ -438,9 +395,9 @@ because one row is malformed is a collection that has been lost.
 
 Sections: study day (zone, rollover) · daily queue (caps, proportion of topics,
 interleave floor, randomization, sort weights, protected percentile, overload
-tolerance, per-article share, Study More step) · topic scheduling (interval
-model, every A-factor coefficient and clamp, first-interval spans, auto-finish,
-finish nudge) · interval sequences · cards (retention, learning and relearning
+tolerance, per-article share, Study More step) · topic scheduling (initializer
+and transition policy versions, fallback bounds, explicit Finish, finish nudge)
+· legacy interval sequences · cards (retention, learning and relearning
 steps, maximum interval, fuzzing, leech threshold, sibling burying) ·
 postponement (Later band, auto-postpone base, priority multiplier, dispersal,
 Mercy horizon and cap) · reader (reminder distance) · diagnostics (log on/off,
@@ -555,8 +512,8 @@ Rules all three obey:
   the inputs and the outputs of every scheduling decision — the A-factor's terms,
   a delay formula's inputs, the cap that triggered a deferral, the priority
   percentile at the time — for every element type in one indexed, queryable
-  shape. It is append-only, written inside the same transaction as the change it
-  describes, and only undo removes rows from it.
+  shape. It is append-only and written inside the same transaction as the change
+  it describes. Undo appends an inverse/tombstone event; it never removes history.
    * One row per event: `review`, `topic_read`, `postpone`, `auto_postpone`,
      `manual_reschedule`, `dismiss`, `finish`, `suspend`, `resume`,
      `priority_change`, `bury`, `mercy`, `undo`, `practice`, `created`.
@@ -641,20 +598,19 @@ Gate: import → read → extract → revisit → formulate multiple cards → D
 
 M4 — Production queue, search, priority UI, and diagnostics
 
-**Status: complete.** Built from `plans/scheduler/scheduler1.md` (the topic
-scheduler and the A-factor model), `plans/scheduler/scheduler2.md` (the overload
-valve, the repetition log, percentile priority), and
-`plans/scheduler/priority_queue.md` (SuperMemo's own account of the priority
-queue, sorting, randomization, and the proportion of topics). Verified by 384
-project tests, clean static analysis, the native Windows M4 workflow, the M2 and
-M3 native regressions, and a Windows debug build.
+**Historical implementation status: complete; scheduling reconciliation now
+required.** M4 was verified by 384 project tests, clean static analysis, the
+native Windows workflow, the M2 and M3 regressions, and a Windows debug build.
+Its scheduler sources and later SuperMemo calibration are now consolidated in
+`plans/scheduler/LLM_FIX_INSTRUCTIONS.md`; any M4 behavior that conflicts with
+that contract is legacy behavior to migrate, not current authority.
 
 Delivered:
 
-* **The A-factor topic model**, with priority, completion, and extract-conversion
-  modulation, an optional yield term, priority-derived first intervals, and
-  auto-finish. The fixed-sequence model is retained as a selectable alternative,
-  so an M3 collection can switch back without losing anything.
+* **The historical A-factor topic model.** Its priority/completion/conversion
+  modulation, priority-derived first intervals, and auto-finish are superseded.
+  New work follows `topic_afactor_v2`; existing fixed-sequence and earlier
+  A-factor data remain preserved until an explicit migration.
 * **Relative priority in full**: derived percentiles and pressure, the Alt+P
   slider on every surface, Shift+Ctrl+Up/Down stepping, the priority browser with
   drag-to-rebalance and type filters, and Spread across an article's subtree.
@@ -681,12 +637,11 @@ Delivered:
   and app versions. Bounded, never throwing, and never containing element
   content.
 
-Three decisions departed from the earlier plan and are recorded above in place:
-sibling burying ships (as a setting, on by default) rather than being deferred
-past v1; auto-finish exists but is deliberately hard to trigger, so "reaching the
-end does not finish a source" still holds in practice; and the home timezone
-offers the machine's own zone plus fixed offsets rather than arbitrary IANA
-names, because v1 carries no timezone database.
+Two product decisions departed from the earlier plan and are recorded above in
+place: sibling burying ships (as a setting, on by default) rather than being
+deferred past v1; and the home timezone offers the machine's own zone plus fixed
+offsets rather than arbitrary IANA names, because v1 carries no timezone
+database. Topic completion now always requires explicit Finish.
 
 Gate — met: deterministic tests cover backlog (Mercy), repeated queue builds,
 cap changes, DST, priority changes, failure recovery, and operation tracing;
@@ -730,17 +685,17 @@ Required scenarios include:
 
 * Every source/extract/card lifecycle transition.
 * FSRS reference-vector compatibility.
-* Undo-grade restoring the exact pre-review FSRS state and removing the event.
+* Undo-grade restoring the exact pre-review FSRS state while appending an inverse/tombstone event and preserving the original event.
 * Formulate without extract rescheduling.
 * Back/crash without topic advancement; soft-position restore after process death.
 * Idempotent Done, review, extraction, and auto-postpone.
 * Unicode and formatted selection/provenance; anchors under virtualization (unmounted blocks).
 * Timezone, DST, and 04:00 rollover.
 * Migration, corruption, disk-full, restore, and interrupted export. (Handoff-return and divergence move to v1.1.)
-* The A-factor's three published checks: Later leaves an interval unchanged
-  while Done grows it; a high-priority new article first appears in about a day
-  and a low-priority one in about three weeks; an extract that has produced
-  cards grows its interval faster than one that has not.
+* Topic initialization reference vectors: blank Alt+N starts at A `1.2`; later
+  paste does not change it; Ctrl+N uses UTF-16 length; ASCII, `é`, and emoji at
+  200 UTF-16 units all display A `1.625`; Later leaves canonical interval and A
+  unchanged while a genuine Done advances exactly once.
 * A postponement of any kind never writes a grade, an interval, or a
   last-review instant — and the log records it as a deferral.
 * The protected top percentile survives a day that sheds everything else.

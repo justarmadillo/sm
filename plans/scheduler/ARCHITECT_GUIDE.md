@@ -2,9 +2,9 @@
 
 Audience: the project architect
 
-Purpose: explain, in plain language, what the scheduler should do, which plan conflicts were resolved, and why the design is safe.
+Purpose: explain, in plain language, what the scheduler should do, what the SuperMemo 20 experiments established, what remains unknown, and why the design is safe.
 
-For the coding-agent contract, see [LLM_FIX_INSTRUCTIONS.md](./LLM_FIX_INSTRUCTIONS.md).
+For the only normative coding-agent contract, see [LLM_FIX_INSTRUCTIONS.md](./LLM_FIX_INSTRUCTIONS.md). These are the only two active scheduler documents; older scheduler notes have been consolidated and retired.
 
 ---
 
@@ -60,7 +60,7 @@ There is no honest Again/Hard/Good/Easy rating because reading is not a recall t
 - a current interval;
 - an A-Factor that controls interval growth;
 - a next topic date;
-- a priority that affects how quickly it recedes.
+- a priority that controls relative attention and overload protection.
 
 An extract is simply a smaller topic with a parent. It becomes an independent piece of work and can later produce cards.
 
@@ -115,13 +115,15 @@ This gives the SuperMemo-like feeling without forcing unlike records into one fr
 
 The SuperMemo screenshots are useful because they show these values side by side rather than treating them as one field.
 
-| Coordinate | Plain meaning | What it answers |
-|---|---|---|
-| Due date | the scheduler's appointment | “May this appear now?” |
-| Priority | relative value compared with the whole collection | “If several things can appear, which matters more?” |
-| Ordinal | separate manual/pending-order metadata | “Where is it in that independent order?” |
+| Coordinate | Plain meaning | What it answers | Needed in this app? |
+|---|---|---|---|
+| Due date | the scheduler's appointment | “May this appear now?” | Yes |
+| Priority | relative value compared with the whole collection | “If several eligible things can appear, which matters more?” | Yes |
+| A-Factor | stored topic interval-growth factor | “How quickly does this topic's interval expand?” | Yes for topics |
+| Forgetting index | SuperMemo item's acceptable forgetting percentage | “What recall target should the item algorithm aim for?” | No as a second algorithm; FSRS desired retention replaces it for cards |
+| Ordinal | separate legacy/pending-order metadata | “Where is it in that independent order?” | Preserve for import/debugging; do not drive the hybrid scheduler unless a later calibrated feature needs it |
 
-The database ID is a fourth concept: it is identity and never changes.
+The database ID is another independent concept: it is identity and never changes. In SuperMemo terms, forgetting index `10` corresponds roughly to a 10% forgetting allowance, or 90% desired recall. In this product, configure FSRS desired retention directly; do not feed both forgetting index and desired retention into card scheduling.
 
 ### Why this separation matters
 
@@ -145,7 +147,7 @@ Eligibility must come first; priority ranks what is already eligible.
 
 ## 4. The priority queue is one relative order
 
-SuperMemo describes priority as a global position:
+SuperMemo describes priority as a global position. Here, “global” means across all element types inside one collection/dataset; unrelated collections keep independent orders:
 
 - position 1 is the highest;
 - 0% is the top;
@@ -163,140 +165,100 @@ Special case: a collection with one element reports 0%.
 
 This makes both endpoints exact and makes the screenshot's “position” and “percent” two views of one underlying order.
 
-### A specific error in the current plan
+### What the controlled tests established
 
-scheduler1.md writes:
+The percentage is not a free numeric property. It is a display of an integer rank. Therefore a small collection only offers a small set of legal percentages:
 
-~~~text
-pressure = 1 - priority_percentile_from_top
-~~~
+- two topics plus the root concept: `0%`, `50%`, `100%`;
+- three topics plus the root concept: `0%`, `33.33%`, `66.67%`, `100%`;
+- ten topics plus the root concept: `0%`, `10%`, `20%`, through `100%`.
 
-but its table and worked example use the percentile directly. The written equation is inverted.
+The priority dialog's higher/current/lower rows are a preview of the proposed neighbors. Moving the slider selects a rank between elements; it does not assign an arbitrary permanent percentage.
 
-Use:
-
-~~~text
-p = priority_percentile_from_top
-~~~
-
-where p is 0 at the top and 1 at the bottom.
-
-Without this fix, the highest-priority topic gets the behavior intended for the lowest-priority topic.
+Most importantly, moving a topic through absolute priority positions did not change its A-Factor, current interval, or next repetition. Priority and A-Factor are separate stored coordinates. SuperMemo's separately named Increase/Decrease commands may couple them, but that transition is still unmeasured and must not be guessed from the slider.
 
 ### Who belongs in the order
 
-Recommended decision:
+Observed and recommended rule:
 
-- include every non-deleted source, extract, and card in one global rankable order;
+- include every non-deleted concept, source, extract, and card in one global rankable order;
+- include the collection root concept even when it has no repetition schedule;
 - keep the order key when an element is suspended, dismissed, or finished;
-- exclude folders and UI-only nodes;
+- exclude only folders and UI-only nodes that are not actual elements;
 - independently exclude inactive elements from today's eligible work.
 
-Why: temporarily suspending a branch should not destroy its place in the collection or cause a giant, hard-to-explain reorder.
+Why: the root was visibly counted in the controlled SuperMemo collections, and temporarily suspending a branch should not destroy its place or cause a giant, hard-to-explain reorder.
+
+The observed root dialog showed A `1.2`, ordinal `0`, and no interval or repetition date. That A is best treated as an unscheduled type/default display value, not as proof that the root has a topic schedule.
 
 This is a transparent product choice. Keep the population rule versioned because SuperMemo's exact inactive-element treatment may vary.
 
 ---
 
-## 5. How topic intervals should work
+## 5. How topic intervals and A-Factor should work
 
-Sources and extracts use the same kind of scheduler.
+Sources and extracts use the same kind of scheduler, but creation initializes state differently from a genuine later encounter.
 
-When a real topic encounter finishes:
+### What creation actually did in SuperMemo 20
 
-~~~text
-next interval = current interval × A-Factor
-~~~
+The tests falsified the “first topic sets A for the collection” hypothesis. A depended on the command that created the topic:
 
-The repaired implementation also guarantees that the rounded interval grows by at least one day:
+- **Alt+N blank topic:** A started at `1.2`. Pasting short or long text afterward left it at `1.2`.
+- **Ctrl+N plain-text clipboard topic:** A was calculated from the imported text's UTF-16 length.
+- Both ordinary topic paths started with interval `1 day` and next repetition on the next StudyDay.
+- Creation displayed or inserted the topic but did not constitute a repetition.
 
-~~~text
-next interval = max(current interval + 1, round(current interval × A))
-~~~
-
-Why: with a one-day interval and A equal to 1.0, rounding can keep the topic at one day forever.
-
-### Simple examples
-
-- Current interval 5 days, A 1.2 → next interval 6 days.
-- Current interval 5 days, A 1.8 → next interval 9 days.
-- Current interval 20 days, A 1.2 → next interval 24 days.
-- Current interval 20 days, A 1.8 → next interval 36 days.
-
-A smaller A means the topic returns more often. A larger A lets it recede.
-
-Therefore higher-priority topics should generally receive a smaller A than lower-priority topics.
-
-### What is known and what is not
-
-SuperMemo documents the broad behavior:
-
-- topics have intervals and A-Factors;
-- A-Factor affects interval growth;
-- priority and the way a topic is processed matter.
-
-SuperMemo does not publish a complete current formula for:
-
-- priority to A-Factor;
-- topic length;
-- read progress;
-- extraction yield;
-- investment;
-- manual advance or delay;
-- random variation;
-- Mercy sorting.
-
-That means a claim of a “perfect clone” formula would be false without controlled observations.
-
-The safe architecture uses a named, versioned policy. The first transparent policy can be improved later without silently rewriting old schedules.
-
-### The provisional first policy
-
-The repaired plan keeps the simple priority term already proposed, with the direction fixed:
+For atomic plain-text clipboard creation, the observed formula in SuperMemo `20.00.33.64` is:
 
 ~~~text
-p = 0 at top, 1 at bottom
-A = clamp(2.0 × (0.7 + 0.8 × p), 1.01, 6.0)
-~~~
-
-So:
-
-- top priority starts near A 1.4;
-- middle starts near A 2.2;
-- bottom starts near A 3.0.
-
-This is a product formula, not a recovered SuperMemo secret.
-
-The completion, yield, and conversion multipliers in scheduler1.md should initially be disabled and only measured in the background. They sound sensible, but together they can compound dramatically and make material vanish. They also have cold-start problems such as a zero-word source or no historical median reading speed.
-
-Promoting any of them should create a new policy version and require simulation.
-
-### The provisional first interval
-
-After the first explicit encounter, the first policy uses priority to choose a short starting interval:
-
-~~~text
-source: round(1 + 20 × p²) days
-extract: round(1 + 10 × p²) days
+L = UTF-16 code-unit count of imported plain text
+A = 1.25 + 150 / (L + 200)
+display A rounded to 3 decimal places
 ~~~
 
 Examples:
 
-- top priority is about one day;
-- middle priority is about six days for a source and four for an extract;
-- bottom priority is about 21 days for a source and 11 for an extract.
+| UTF-16 length | Displayed A |
+|---:|---:|
+| 15 | 1.948 |
+| 71 | 1.804 |
+| 263 | 1.574 |
+| 1,031 | 1.372 |
+| 8,199 | 1.268 |
+| 16,391 | 1.259 |
 
-This is another transparent starting rule, not a recovered SuperMemo formula. Extracts return sooner because they are usually smaller pieces waiting to be processed or converted.
+It is character-storage length, not vocabulary complexity. Two hundred ASCII characters, two hundred `é` characters, and one hundred emoji all occupy 200 UTF-16 units in the tested cases and all produced A `1.625`. One huge word and many small words produced the same result when their UTF-16 length matched.
 
-### Creation and the first encounter
+Keep the internal unrounded value and round only for display until the natural-repetition experiment reveals whether SuperMemo stores hidden precision. The exact three-decimal tie rule has not yet been tested.
 
-Resolve the existing plan conflict this way:
+Empty clipboard creation was not tested. The safe product behavior is to reject an empty atomic import and open the blank-topic path, which starts at A `1.2`, rather than pretend the recovered formula is known at zero length.
 
-- a new source is eligible today;
-- a new extract is eligible on the next StudyDay;
-- the first explicit Done creates its first post-encounter interval.
+### What a genuine later encounter does
 
-Creation is not a repetition. Extracting a passage is not a repetition. Merely reaching the end of an article is not a repetition.
+SuperMemo documents the broad idea that the current topic interval expands by A-Factor:
+
+~~~text
+next interval ≈ current interval × stored A-Factor
+~~~
+
+The exact integer rounding, minimum growth, dispersion, hidden A precision, and possible A update during a normal encounter remain unknown. Until the retained collections answer those questions, use this clearly labeled product fallback:
+
+~~~text
+next interval = max(current interval + 1, round(current interval × stored A))
+~~~
+
+Examples under that fallback:
+
+- interval 5, A 1.2 → 6 days;
+- interval 5, A 1.8 → 9 days;
+- interval 20, A 1.2 → 24 days;
+- interval 20, A 1.8 → 36 days.
+
+A smaller A brings a topic back sooner. A larger A lets it recede faster. However, absolute priority placement must not be used to synthesize A: the controlled slider tests left A unchanged.
+
+The exact A transitions for Increase/Decrease Priority, extraction, investment, manual advance/delay, completion, HTML import, split, and clone are still unknown. Each belongs behind a named policy version. Older completion/yield/conversion multipliers should remain disabled unless future controlled data and simulation justify them.
+
+Creation is not a repetition. Extracting a passage is not a repetition. Merely reaching the end of an article is not a repetition. Only an explicit, genuine Next repetition advances an already-created topic schedule.
 
 ---
 
@@ -330,6 +292,8 @@ Why: automatic advancement turns navigation accidents into months-long schedule 
 
 Sources should never auto-finish. The interface may suggest Finish at the end, but the learner confirms it.
 
+Prefer Dismiss when the learner only wants an element out of rotation. A destructive Delete must preview descendants and review history, never cascade silently, and leave surviving extracts/cards with an immutable provenance snapshot so their origin remains explainable.
+
 ---
 
 ## 7. Cards belong entirely to FSRS
@@ -360,6 +324,8 @@ In this product:
 - FSRS replaces those item-scheduler controls;
 - card A-Factor should not become a second competing scheduler input;
 - any FSRS stability, difficulty, or retention information should be diagnostic unless there is a deliberately designed expert setting.
+
+If FSRS interval fuzzing is enabled, retries still need the same result. Supply a stable seed when the library permits it; otherwise persist the first returned fuzzed schedule and return that stored result for the same operation ID. Run mathematical reference vectors with fuzz disabled or a fixed seed.
 
 Copy the behavior of separating priority from scheduling state, not every legacy field name.
 
@@ -448,6 +414,7 @@ If every adjustment is only “not before,” Mercy cannot move a future repetit
 - Auto-overflow can be cleared by Study More.
 - Mercy replaces conflicting automatic overflow for the elements it redistributes.
 - Mercy keeps manual Later unless the user explicitly chooses otherwise.
+- Mercy also preserves an exact manual reschedule by default. The preview must flag it, and replacing it requires explicit confirmation plus enough batch history for exact undo.
 - A real review or topic encounter writes a new algorithmic date and clears adjustments that the new result makes obsolete.
 
 ---
@@ -494,6 +461,8 @@ The current plans risk using “postpone” for several different intentions. Ke
 - may move work earlier or later;
 - supports exact batch undo;
 - is not a normal daily habit.
+
+New cards and other pending introductions are outside Mercy in the first version. If exam-style spreading is later added, give it a separate planned-introduction date; it must never manufacture a review or bypass due-review protection.
 
 Keeping the four separate makes history explainable. It also lets the architect later tune or remove one behavior without changing the others.
 
@@ -754,15 +723,15 @@ The recommendations below are already used in the coding-agent instructions. Cha
 
 ### 1. Canonical topic policy
 
-Recommended: new topics use versioned topic_afactor_v1; old fixed-sequence topics remain legacy until explicit migration.
+Recommended: new topics use versioned `topic_afactor_v2`; old fixed-sequence topics remain legacy until explicit migration.
 
 Why: mixing both state transitions is impossible to reason about.
 
-### 2. Provisional A-Factor
+### 2. Creation A-Factor and interval transition
 
-Recommended: use the corrected transparent priority term first; keep completion/yield/conversion modifiers disabled but shadow-logged.
+Recommended: use the observed blank-topic A `1.2` and the recovered UTF-16 clipboard initializer. Preserve stored A across ordinary edits and absolute priority moves. Keep the natural interval transition explicitly provisional until the retained collections provide three genuine cycles.
 
-Why: it is implementable now and easy to calibrate without pretending to know SuperMemo's private formula.
+Why: creation behavior is now strongly evidenced, while later rounding and A changes are not. Keeping those two stages separate prevents a known result from lending false confidence to an unknown one.
 
 ### 3. Auto-postpone default
 
@@ -796,9 +765,9 @@ Why: it improves review quality without corrupting FSRS.
 
 ### 8. Global priority population
 
-Recommended: all non-deleted learning elements retain a place; lifecycle controls eligibility separately.
+Recommended: every non-deleted element, including concepts and the collection root, retains a place; lifecycle controls eligibility separately. Pure UI folders that are not elements remain excluded.
 
-Why: suspend/dismiss should not destroy strategic order.
+Why: the controlled SuperMemo collections counted the unscheduled root in the rank denominator, and suspend/dismiss should not destroy strategic order.
 
 ### 9. Mercy and manual Later
 
@@ -837,8 +806,8 @@ We can reproduce this confidently:
 
 We can get close through controlled observations:
 
-- how A-Factor responds to priority and topic type;
-- first topic intervals;
+- natural topic interval rounding and dispersion;
+- later A-Factor changes during normal or special processing;
 - cloze introduction dispersion;
 - amount and distribution of auto-postpone;
 - Mercy criteria and ordering;
@@ -846,47 +815,80 @@ We can get close through controlled observations:
 
 ### Layer 3: formula identity
 
-This may be impossible without source code or a large black-box dataset:
+Some parts may remain impossible without source code or a large black-box dataset:
 
-- exact A-Factor formula;
+- exact A transitions after creation;
 - exact priority drift;
 - exact multi-criteria Mercy weights;
 - exact randomization transforms;
 - version-specific hidden heuristics.
 
-The architecture should therefore optimize for **behavioral compatibility plus transparent modern safety**, not make an unverifiable “identical formula” claim.
+The plain-text clipboard **creation** formula is no longer in this unknown bucket: it exactly fits the controlled length and Unicode fixtures for the tested build. That does not establish the later A transition or other import modes.
+
+The architecture should therefore optimize for **behavioral compatibility plus transparent modern safety**, and label every boundary between observed, recovered, provisional, and unknown behavior.
 
 FSRS for cards is already an intentional departure, and a good one.
 
 ---
 
-## 21. The most useful SuperMemo evidence to collect next
+## 21. What to do next with the three retained collections
 
-More random screenshots will help less than small controlled before/after experiments.
+Do not create more calibration collections yet. The next highest-value evidence is three cycles of untouched, naturally due topic repetitions.
 
-For every experiment, record:
+### Keep all elements in these baselines
 
-- exact SuperMemo version;
-- collection settings;
-- home date/time and day boundary;
-- element type;
-- priority position and percent;
-- interval, next repetition, A-Factor, ordinal;
-- the exact action taken;
-- the same fields afterward.
+- `SM20_CALIBRATION`: keep all five neutral topics; record `CAL-P000`, `CAL-P040`, and `CAL-P100` in detail.
+- `afactor test`: keep all ten Alt+N topics; record the highest-, middle-, and lowest-priority **topic**, not the root.
+- `AF_LENGTH_CURVE`: keep the full length series; record `LEN0001` (`1.948`), `LEN0008` (`1.804`), `LEN0032` (`1.574`), `LEN0128` (`1.372`), and `LEN2048` (`1.259`).
 
-Highest-value experiments:
+Do not delete even the unrecorded topics: deletion changes total rank count and therefore changes every displayed priority percent. Treat these collections as read-only fixtures except for normal due repetitions.
 
-1. Move the same topic through top, middle, and bottom priority positions, then perform a normal encounter at each position in cloned collections.
-2. Compare a long source and a short extract at the same priority.
-3. Extract without confirming a repetition, then inspect whether the parent or child schedule changed.
-4. Reach the end of a source and close it without Finish.
-5. Create several extracts and clozes from one passage and record their first dates.
-6. Carry a small known backlog across midnight/rollover and compare old backlog with work newly due today.
-7. Run Mercy on a ten-element subset with each criterion setting, saving the preview and final dates.
-8. Repeat the same queue build to see which randomization is stable within a day.
+### Before each tracked topic is due
 
-Store the results as fixtures, not only images. A compact table or JSON/CSV export will let a future policy be replayed and tested.
+Using the same Element Priority and Element Data dialogs already used in the earlier tests, write down:
+
+- build and collection;
+- local date/time and StudyDay or Home-date setting;
+- element ID and exact title;
+- type;
+- priority position and total;
+- displayed percent;
+- displayed A-Factor;
+- interval;
+- next repetition;
+- ordinal;
+- collection learning and randomization settings.
+
+Screenshots are useful evidence, but transcribe the values into a table too. Images alone are hard to calculate from.
+
+### On its real due day
+
+1. Start normal learning with `Ctrl+L`.
+2. If SuperMemo says **Nothing more to learn**, stop. Nothing is broken; the topic is still in the future. Wait for its displayed next-repetition date. Do not force it and do not change the computer clock.
+3. Write down the complete order in which topics appear in that small collection.
+4. Process every due topic—not only the tracked ones—with the normal **Next repetition** action exactly once, in SuperMemo's displayed order.
+5. Do not edit, paste, extract, formulate, Finish, change priority, Later, Advance, Delay, Reschedule, Postpone, or use Mercy.
+6. Immediately after each tracked topic, reopen it only to inspect and record the same fields again; do not trigger another repetition.
+
+Repeat this on each topic's own next due date until every tracked topic has three before/after pairs. Topics with different A-Factors will eventually diverge, so follow the date shown on each topic rather than forcing one common session.
+
+Use this table shape:
+
+~~~text
+build | collection | cycle | before/after | timestamp | StudyDay |
+element ID | title | position/total | percent | A | interval |
+next repetition | ordinal | presentation index | action | notes
+~~~
+
+This one experiment can reveal:
+
+- whether interval multiplication uses displayed or hidden A precision;
+- the integer rounding and minimum-growth rule;
+- whether normal processing changes A;
+- whether priority drifts automatically;
+- how the collection chooses presentation order.
+
+After all three natural cycles are recorded, make **copies** for destructive one-variable experiments such as Increase/Decrease Priority, extraction, HTML import, manual advance/delay, Mercy, and rollover. Never use the three baselines for those tests.
 
 ---
 
@@ -960,6 +962,7 @@ That is the foundation needed before chasing the last few percent of SuperMemo f
 - Priority queue: https://www.super-memory.org/archive/help/priority.htm
 - Incremental reading: https://www.super-memory.org/archive/help/read.htm
 - Element data: https://help.supermemo.org/wiki/Element_data
+- Keyboard shortcuts: https://help.supermemo.org/wiki/Keyboard_shortcuts
 - Element parameters: https://www.super-memory.org/archive/help/elparam.htm
 - Element types: https://www.super-memory.org/archive/help/eltypes.htm
 - Forgetting index: https://www.super-memory.org/archive/help/fi.htm
@@ -969,5 +972,6 @@ That is the foundation needed before chasing the last few percent of SuperMemo f
 - Cloze interval: https://supermemo.guru/wiki/Cloze_interval
 - Learn menu and sorting: https://www.super-memory.org/archive/help/learnmenu.htm
 - Subset operations: https://www.super-memory.org/archive/help/subsetop.htm
+- SuperMemo 12 topic A-Factor notes: https://www.super-memory.org/archive/articles/soft/sm12.htm
 - FSRS tutorial: https://github.com/open-spaced-repetition/fsrs4anki/blob/main/docs/tutorial.md
 - Dart fsrs releases: https://pub.dev/packages/fsrs/versions
