@@ -1,0 +1,10 @@
+name: fsrs_dart
+description: A pure Dart port of ts-fsrs (Free Spaced Repetition Scheduler, FSRS-6). No Flutter dependency.
+version: 5.4.1
+publish_to: 'none'
+
+environment:
+  sdk: ^3.5.0
+
+dev_dependencies:
+  test: ^1.25.0

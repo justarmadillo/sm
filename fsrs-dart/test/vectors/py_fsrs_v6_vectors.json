@@ -1,0 +1,4713 @@
+{
+  "generator": "py-fsrs",
+  "start": "2022-11-29T12:30:00+00:00",
+  "parameters": [
+    0.212,
+    1.2931,
+    2.3065,
+    8.2956,
+    6.4133,
+    0.8334,
+    3.0194,
+    0.001,
+    1.8722,
+    0.1666,
+    0.796,
+    1.4835,
+    0.0614,
+    0.2629,
+    1.6483,
+    0.6014,
+    1.8729,
+    0.5425,
+    0.0912,
+    0.0658,
+    0.1542
+  ],
+  "desired_retention": 0.9,
+  "decay": -0.1542,
+  "factor": 0.9803464944134797,
+  "primitives": {
+    "initial_stability": [
+      {
+        "rating": 1,
+        "value": 0.212
+      },
+      {
+        "rating": 2,
+        "value": 1.2931
+      },
+      {
+        "rating": 3,
+        "value": 2.3065
+      },
+      {
+        "rating": 4,
+        "value": 8.2956
+      }
+    ],
+    "initial_difficulty": [
+      {
+        "rating": 1,
+        "value": 6.4133
+      },
+      {
+        "rating": 2,
+        "value": 5.112170705601056
+      },
+      {
+        "rating": 3,
+        "value": 2.118103970459016
+      },
+      {
+        "rating": 4,
+        "value": 1.0
+      }
+    ],
+    "initial_difficulty_unclamped": [
+      {
+        "rating": 1,
+        "value": 6.4133
+      },
+      {
+        "rating": 2,
+        "value": 5.112170705601056
+      },
+      {
+        "rating": 3,
+        "value": 2.118103970459016
+      },
+      {
+        "rating": 4,
+        "value": -4.771630703161737
+      }
+    ],
+    "next_difficulty": [
+      {
+        "difficulty": 1.0,
+        "rating": 1,
+        "value": 7.0269895692968385
+      },
+      {
+        "difficulty": 1.0,
+        "rating": 2,
+        "value": 4.010608969296839
+      },
+      {
+        "difficulty": 1.0,
+        "rating": 3,
+        "value": 1.0
+      },
+      {
+        "difficulty": 1.0,
+        "rating": 4,
+        "value": 1.0
+      },
+      {
+        "difficulty": 1.5,
+        "rating": 1,
+        "value": 7.1913361692968385
+      },
+      {
+        "difficulty": 1.5,
+        "rating": 2,
+        "value": 4.342532269296838
+      },
+      {
+        "difficulty": 1.5,
+        "rating": 3,
+        "value": 1.4937283692968382
+      },
+      {
+        "difficulty": 1.5,
+        "rating": 4,
+        "value": 1.0
+      },
+      {
+        "difficulty": 3.0,
+        "rating": 1,
+        "value": 7.6843759692968385
+      },
+      {
+        "difficulty": 3.0,
+        "rating": 2,
+        "value": 5.338302169296838
+      },
+      {
+        "difficulty": 3.0,
+        "rating": 3,
+        "value": 2.9922283692968383
+      },
+      {
+        "difficulty": 3.0,
+        "rating": 4,
+        "value": 1.0
+      },
+      {
+        "difficulty": 5.0,
+        "rating": 1,
+        "value": 8.341762369296838
+      },
+      {
+        "difficulty": 5.0,
+        "rating": 2,
+        "value": 6.665995369296838
+      },
+      {
+        "difficulty": 5.0,
+        "rating": 3,
+        "value": 4.9902283692968386
+      },
+      {
+        "difficulty": 5.0,
+        "rating": 4,
+        "value": 3.3144613692968385
+      },
+      {
+        "difficulty": 6.3574867,
+        "rating": 1,
+        "value": 8.787959016677279
+      },
+      {
+        "difficulty": 6.3574867,
+        "rating": 2,
+        "value": 7.567158299637058
+      },
+      {
+        "difficulty": 6.3574867,
+        "rating": 3,
+        "value": 6.346357582596839
+      },
+      {
+        "difficulty": 6.3574867,
+        "rating": 4,
+        "value": 5.125556865556619
+      },
+      {
+        "difficulty": 8.0,
+        "rating": 1,
+        "value": 9.327841969296838
+      },
+      {
+        "difficulty": 8.0,
+        "rating": 2,
+        "value": 8.657535169296837
+      },
+      {
+        "difficulty": 8.0,
+        "rating": 3,
+        "value": 7.987228369296838
+      },
+      {
+        "difficulty": 8.0,
+        "rating": 4,
+        "value": 7.316921569296838
+      },
+      {
+        "difficulty": 9.5,
+        "rating": 1,
+        "value": 9.820881769296838
+      },
+      {
+        "difficulty": 9.5,
+        "rating": 2,
+        "value": 9.653305069296838
+      },
+      {
+        "difficulty": 9.5,
+        "rating": 3,
+        "value": 9.485728369296838
+      },
+      {
+        "difficulty": 9.5,
+        "rating": 4,
+        "value": 9.318151669296837
+      },
+      {
+        "difficulty": 10.0,
+        "rating": 1,
+        "value": 9.985228369296838
+      },
+      {
+        "difficulty": 10.0,
+        "rating": 2,
+        "value": 9.985228369296838
+      },
+      {
+        "difficulty": 10.0,
+        "rating": 3,
+        "value": 9.985228369296838
+      },
+      {
+        "difficulty": 10.0,
+        "rating": 4,
+        "value": 9.985228369296838
+      }
+    ],
+    "short_term_stability": [
+      {
+        "stability": 0.001,
+        "rating": 1,
+        "value": 0.001
+      },
+      {
+        "stability": 0.001,
+        "rating": 2,
+        "value": 0.001
+      },
+      {
+        "stability": 0.001,
+        "rating": 3,
+        "value": 0.0016553397873898706
+      },
+      {
+        "stability": 0.001,
+        "rating": 4,
+        "value": 0.0028476847546917263
+      },
+      {
+        "stability": 0.1,
+        "rating": 1,
+        "value": 0.041312135108756684
+      },
+      {
+        "stability": 0.1,
+        "rating": 2,
+        "value": 0.1
+      },
+      {
+        "stability": 0.1,
+        "rating": 3,
+        "value": 0.12226077763800024
+      },
+      {
+        "stability": 0.1,
+        "rating": 4,
+        "value": 0.2103254904091112
+      },
+      {
+        "stability": 0.5,
+        "rating": 1,
+        "value": 0.1858041538884619
+      },
+      {
+        "stability": 0.5,
+        "rating": 2,
+        "value": 0.5
+      },
+      {
+        "stability": 0.5,
+        "rating": 3,
+        "value": 0.5498762115047141
+      },
+      {
+        "stability": 0.5,
+        "rating": 4,
+        "value": 0.9459532818568193
+      },
+      {
+        "stability": 1.0,
+        "rating": 1,
+        "value": 0.3550402910611492
+      },
+      {
+        "stability": 1.0,
+        "rating": 2,
+        "value": 1.0
+      },
+      {
+        "stability": 1.0,
+        "rating": 3,
+        "value": 1.0507203746232234
+      },
+      {
+        "stability": 1.0,
+        "rating": 4,
+        "value": 1.8075566207325262
+      },
+      {
+        "stability": 2.3065,
+        "rating": 1,
+        "value": 0.7750839828558984
+      },
+      {
+        "stability": 2.3065,
+        "rating": 2,
+        "value": 2.3065
+      },
+      {
+        "stability": 2.3065,
+        "rating": 3,
+        "value": 2.3065
+      },
+      {
+        "stability": 2.3065,
+        "rating": 4,
+        "value": 3.946054067969477
+      },
+      {
+        "stability": 10.0,
+        "rating": 1,
+        "value": 3.051248935571638
+      },
+      {
+        "stability": 10.0,
+        "rating": 2,
+        "value": 10.0
+      },
+      {
+        "stability": 10.0,
+        "rating": 3,
+        "value": 10.0
+      },
+      {
+        "stability": 10.0,
+        "rating": 4,
+        "value": 15.534307947166699
+      },
+      {
+        "stability": 53.62691,
+        "rating": 1,
+        "value": 14.650991888966113
+      },
+      {
+        "stability": 53.62691,
+        "rating": 2,
+        "value": 53.62691
+      },
+      {
+        "stability": 53.62691,
+        "rating": 3,
+        "value": 53.62691
+      },
+      {
+        "stability": 53.62691,
+        "rating": 4,
+        "value": 74.59011851879681
+      },
+      {
+        "stability": 365.0,
+        "rating": 1,
+        "value": 87.89651070521079
+      },
+      {
+        "stability": 365.0,
+        "rating": 2,
+        "value": 365.0
+      },
+      {
+        "stability": 365.0,
+        "rating": 3,
+        "value": 365.0
+      },
+      {
+        "stability": 365.0,
+        "rating": 4,
+        "value": 447.49264763622926
+      },
+      {
+        "stability": 3650.0,
+        "rating": 1,
+        "value": 755.3907020753988
+      },
+      {
+        "stability": 3650.0,
+        "rating": 2,
+        "value": 3650.0
+      },
+      {
+        "stability": 3650.0,
+        "rating": 3,
+        "value": 3650.0
+      },
+      {
+        "stability": 3650.0,
+        "rating": 4,
+        "value": 3845.7929963250604
+      }
+    ],
+    "next_recall_stability": [
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 6.586222814794882
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 10.885205877610378
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 20.299612088176477
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 2.9055619860370223
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 4.7650515231742965
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 8.83717499775314
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 0.5755127776451312
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 0.8906763845113588
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 1.5808578005513239
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 0.14586614705327758
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 0.17626562529643763
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 0.24283788961769803
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 0.1
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 0.1
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 0.1
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 45.19690557365316
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 74.4900325468127
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 138.6394819569255
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 20.11700564696533
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 32.7875052327325
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 60.534818550384706
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 4.240128181336923
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 6.387642469798674
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 11.090515581685937
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 1.3125303937627844
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 1.519671422951088
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 1.9732926080450925
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 1.0
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 1.0
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 1.0
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 311.15623808526027
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 510.75862667984745
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 947.8708319086863
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 140.26263783333204
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 226.59899872519458
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 415.6682647124169
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 32.078125184111364
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 46.71121580331121
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 78.75643607802157
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 12.129571662343093
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 13.541023715236268
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 16.631983316266005
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 10.0
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 10.0
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 10.0
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 2152.0685455348134
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 3512.1525532670657
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 6490.620517013887
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 987.605262490018
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 1575.8983413535384
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 2864.2100035210424
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 250.4396074368163
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 350.14899806587346
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 568.5040584775744
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 114.51083016423968
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 124.12841730003272
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 145.19011276123132
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 100.0
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 100.0
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 100.0
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 14982.726515468012
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 24250.293507595627
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 44545.47471037585
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 7048.112606225591
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 11056.721992393732
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 19835.234619554216
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 2025.0904593126725
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 2704.5069160503363
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 4192.371003070676
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 1098.8763119733346
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 1164.410229420244
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 1307.9239186811747
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 5.288978251835906
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 8.728164702088304
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 16.259689670541185
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 2.344449588829618
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 3.8320412185394375
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 7.089739998202512
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 0.48041022211610507
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 0.7325411076090872
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 1.2846862404410595
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 0.13669291764262206
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 0.16101250023715008
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 0.21427031169415842
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 0.1
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 0.1
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 0.1
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 36.35752445892253
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 59.79202603745017
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 111.11158556554042
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 16.293604517572263
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 26.430004186186004
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 48.62785484030777
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 3.5921025450695385
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 5.31011397583894
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 9.07241246534875
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 1.2500243150102275
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 1.4157371383608703
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 1.7786340864360741
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 1.0
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 1.0
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 1.0
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 250.92499046820822
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 410.606901343878
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 760.296665526949
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 114.21011026666562
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 183.27919898015566
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 334.5346117699335
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 27.66250014728909
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 39.36897264264897
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 65.00514886241726
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 11.703657329874472
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 12.832818972189015
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 15.305586653012803
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 10.0
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 10.0
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 10.0
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 1741.6548364278513
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 2829.722042613653
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 5212.496413611111
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 810.0842099920145
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 1280.7186730828307
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 2311.3680028168337
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 220.35168594945307
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 300.1191984526988
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 474.8032467820595
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 111.60866413139175
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 119.30273384002619
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 136.15209020898504
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 100.0
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 100.0
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 100.0
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 12186.181212374411
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 19600.234806076503
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 35836.37976830068
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 5838.4900849804735
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 9045.377593914987
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 16068.18769564338
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 1820.072367450138
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 2363.6055328402695
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 3553.8968024565406
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 1079.1010495786677
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 1131.528183536195
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 1246.3391349449398
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 3.9917336888769293
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 6.571123526566227
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 12.219767252905887
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 1.7833371916222136
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 2.8990309139045785
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 5.342304998651884
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 0.38530766658707877
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 0.5744058307068153
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 0.9885146803307944
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 0.12751968823196655
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 0.14575937517786258
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 0.18570273377061883
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 0.1
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 0.1
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 0.1
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 27.518143344191902
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 45.09401952808763
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 83.58368917415532
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 12.470203388179197
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 20.0725031396395
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 36.720891130230825
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 2.944076908802154
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 4.232585481879205
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 7.054309349011563
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 1.1875182362576706
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 1.3118028537706528
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 1.5839755648270557
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 1.0
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 1.0
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 1.0
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 190.69374285115614
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 310.45517600790845
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 572.7224991452117
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 88.15758269999921
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 139.95939923511673
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 253.40095882745015
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 23.246875110466814
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 32.02672948198672
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 51.253861646812936
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 11.277742997405856
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 12.124614229141761
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 13.979189989759604
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 10.0
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 10.0
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 10.0
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 1331.2411273208882
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 2147.29153196024
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 3934.372310208333
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 632.563157494011
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 985.5390048121232
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 1758.5260021126253
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 190.2637644620898
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 250.08939883952408
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 381.1024350865447
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 108.7064980985438
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 114.47705038001963
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 127.11406765673878
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 100.0
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 100.0
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 100.0
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 9389.635909280805
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 14950.176104557375
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 27127.28482622551
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 4628.867563735355
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 7034.03319543624
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 12301.140771732535
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 1615.0542755876033
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 2022.7041496302015
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 2915.4226018424047
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 1059.3257871840008
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 1098.6461376521463
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 1184.754351208705
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 2.3701779851782088
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 3.8748220571636325
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 7.169864230861768
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 1.0819466951129577
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 1.7327680331110038
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 3.158011249213599
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 0.26642947217579593
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 0.3767367345789756
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 0.6183002301929634
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 0.11605315146864714
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 0.12669296885375317
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 0.14999326136619429
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 0.1
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 0.1
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 0.1
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 16.46891695077861
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 26.72151139138445
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 49.17381868492394
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 7.690951976437865
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 12.125626831456376
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 21.837186492634647
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 2.134044863467923
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 2.8856748644295362
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 4.531680453590079
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 1.1093856378169744
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 1.1818849980328807
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 1.3406524128157824
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 1.0
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 1.0
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 1.0
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 115.4046833298411
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 185.2655193379466
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 338.2547911680402
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 55.5919232416662
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 85.80964955381809
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 151.9838926493459
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 17.727343814438974
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 22.84892553115892
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 34.06475262730754
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 10.745350081820082
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 11.239358300332693
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 12.3211941606931
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 10.0
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 10.0
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 10.0
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 818.2239909371848
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 1294.2533936434731
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 2336.717180954861
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 410.66184187150634
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 616.5644194737384
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 1067.4735012323647
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 152.6538626028857
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 187.55214932305572
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 263.97642046715106
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 105.07879055748388
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 108.44494605501144
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 115.81653946643095
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 100.0
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 100.0
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 100.0
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 5893.954280413804
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 9137.60272765847
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 16240.916148631548
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 3116.8394121789574
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 4519.8526973378075
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 7592.332116843979
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 1358.7816607594355
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 1596.577420617618
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 2117.329851074737
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 1034.6067091906673
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 1057.5435802970853
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 1107.773371538411
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 0.7486222814794883
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 1.1785205877610379
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 2.119961208817648
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 0.38055619860370227
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 0.5665051523174297
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 0.9737174997753141
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 0.14755127776451313
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 0.1790676384511359
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 0.24808578005513243
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 0.10458661470532776
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 0.10762656252964375
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 0.11428378896176981
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 0.1
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 0.1
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 0.1
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 5.419690557365317
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 8.349003254681271
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 14.763948195692553
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 2.911700564696533
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 4.1787505232732505
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 6.953481855038471
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 1.3240128181336923
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 1.5387642469798675
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 2.0090515581685935
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 1.0312530393762784
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 1.051967142295109
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 1.0973292608045093
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 1.0
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 1.0
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 1.0
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 40.115623808526024
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 60.07586266798475
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 103.78708319086863
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 23.026263783333203
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 31.659899872519457
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 50.56682647124169
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 12.207812518411137
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 13.671121580331121
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 16.875643607802154
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 10.21295716623431
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 10.354102371523625
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 10.6631983316266
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 10.0
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 10.0
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 10.0
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 305.2068545534814
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 441.21525532670665
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 739.0620517013889
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 188.76052624900183
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 247.58983413535384
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 376.4210003521042
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 115.04396074368164
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 125.01489980658735
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 146.85040584775743
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 101.45108301642396
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 102.41284173000327
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 104.51901127612314
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 100.0
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 100.0
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 100.0
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 2,
+        "value": 2398.272651546801
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 3,
+        "value": 3325.029350759563
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "rating": 4,
+        "value": 5354.547471037585
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 2,
+        "value": 1604.8112606225593
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 3,
+        "value": 2005.6721992393732
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "rating": 4,
+        "value": 2883.5234619554226
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 2,
+        "value": 1102.509045931267
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 3,
+        "value": 1170.4506916050336
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "rating": 4,
+        "value": 1319.2371003070675
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 2,
+        "value": 1009.8876311973335
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 3,
+        "value": 1016.4410229420245
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "rating": 4,
+        "value": 1030.7923918681174
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 2,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 3,
+        "value": 1000.0
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "rating": 4,
+        "value": 1000.0
+      }
+    ],
+    "next_forget_stability": [
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "value": 0.09517279993343508
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "value": 0.08582101620535391
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "value": 0.044386879571358596
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "value": 0.038267344964689476
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "value": 0.03764175428699974
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "value": 0.9517279993343508
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "value": 0.676080680594767
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "value": 0.34967089737408596
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "value": 0.30146243626823876
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "value": 0.2965341589085979
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "value": 6.237669850090534
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "value": 2.9709200654345636
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "value": 1.5365685119019845
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "value": 1.324724735657579
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "value": 1.3030682699190472
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "value": 16.79206935707191
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "value": 7.997841660755695
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "value": 4.136507004033951
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "value": 3.5662146562418586
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "value": 3.507914540421333
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "value": 36.565974549503274
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "value": 17.415892490640896
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "value": 9.007550327300603
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "value": 7.76569650739842
+      },
+      {
+        "difficulty": 1.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "value": 7.638743687826565
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "value": 0.09517279993343508
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "value": 0.08022290929139653
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "value": 0.04149152236860952
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "value": 0.03577116514886184
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "value": 0.03518638176585273
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "value": 0.9517279993343508
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "value": 0.6319799218322009
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "value": 0.3268618564800044
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "value": 0.2817980344306573
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "value": 0.2771912287195797
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "value": 5.830786498450648
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "value": 2.7771268794004134
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "value": 1.4363381115806342
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "value": 1.2383129098638823
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "value": 1.2180690958969476
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "value": 15.69672227632257
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "value": 7.476142260335175
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "value": 3.8666825544666548
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "value": 3.333590389989949
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "value": 3.279093192101302
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "value": 34.18077516604043
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "value": 16.279853412155674
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "value": 8.419987606714512
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "value": 7.259139940814094
+      },
+      {
+        "difficulty": 3.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "value": 7.140468256661226
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "value": 0.09517279993343508
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "value": 0.07774579241879359
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "value": 0.04021035030645037
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "value": 0.03466662584050726
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "value": 0.034099899354183456
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "value": 0.9517279993343508
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "value": 0.6124656940219072
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "value": 0.31676904101309167
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "value": 0.2730966962229019
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "value": 0.268632139107101
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "value": 5.650743917803346
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "value": 2.6913749674953724
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "value": 1.3919869729546932
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "value": 1.20007637830849
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "value": 1.1804576512847522
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "value": 15.212040083434172
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "value": 7.245294510002562
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "value": 3.747287425553074
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "value": 3.2306560402595443
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "value": 3.177841602689514
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "value": 33.12534379823879
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "value": 15.777165340544212
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "value": 8.159995871785783
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "value": 7.034992771547759
+      },
+      {
+        "difficulty": 5.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "value": 6.919985422604269
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "value": 0.09517279993343508
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "value": 0.07583416184994952
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "value": 0.03922164940781297
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "value": 0.033814235253008744
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "value": 0.033261443561633
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "value": 0.9517279993343508
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "value": 0.5974062534189513
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "value": 0.3089802544662629
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "value": 0.26638173485318767
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "value": 0.26202695324540326
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "value": 5.511802188946888
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "value": 2.6251988504346357
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "value": 1.3577604924449949
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "value": 1.1705686375247248
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "value": 1.1514323000571751
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "value": 14.838003110715063
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "value": 7.067145622008839
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "value": 3.655148301748857
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "value": 3.1512199620893777
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "value": 3.0997041374756775
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "value": 32.31085059110704
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "value": 15.389232944251592
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "value": 7.959356106406323
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "value": 6.862014828751247
+      },
+      {
+        "difficulty": 7.5,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "value": 6.749835305688003
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.05,
+        "value": 0.09517279993343508
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.5,
+        "value": 0.0745064125299244
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.9,
+        "value": 0.038534933591865404
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 0.99,
+        "value": 0.03322219563960618
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 0.1,
+        "retrievability": 1.0,
+        "value": 0.03267908255183644
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.05,
+        "value": 0.9517279993343508
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.5,
+        "value": 0.5869465116956202
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.9,
+        "value": 0.3035704455785414
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 0.99,
+        "value": 0.261717766020536
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1.0,
+        "retrievability": 1.0,
+        "value": 0.2574392305026079
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.05,
+        "value": 5.415298299011799
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.5,
+        "value": 2.5792353175944873
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.9,
+        "value": 1.3339880193718714
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 0.99,
+        "value": 1.150073630068963
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 10.0,
+        "retrievability": 1.0,
+        "value": 1.1312723429064535
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.05,
+        "value": 14.57821058370376
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.5,
+        "value": 6.943409860114254
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.9,
+        "value": 3.591151805264321
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 0.99,
+        "value": 3.096046540773104
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 100.0,
+        "retrievability": 1.0,
+        "value": 3.0454326856601246
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.05,
+        "value": 31.745133124793355
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.5,
+        "value": 15.119789159564311
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.9,
+        "value": 7.81999899609726
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 0.99,
+        "value": 6.7418706180074865
+      },
+      {
+        "difficulty": 10.0,
+        "stability": 1000.0,
+        "retrievability": 1.0,
+        "value": 6.631655200326757
+      }
+    ],
+    "next_interval": [
+      {
+        "desired_retention": 0.7,
+        "stability": 0.001,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.7,
+        "stability": 0.1,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.7,
+        "stability": 1.0,
+        "value": 9
+      },
+      {
+        "desired_retention": 0.7,
+        "stability": 2.3065,
+        "value": 21
+      },
+      {
+        "desired_retention": 0.7,
+        "stability": 10.0,
+        "value": 93
+      },
+      {
+        "desired_retention": 0.7,
+        "stability": 53.62691,
+        "value": 498
+      },
+      {
+        "desired_retention": 0.7,
+        "stability": 365.0,
+        "value": 3390
+      },
+      {
+        "desired_retention": 0.7,
+        "stability": 3650.0,
+        "value": 33901
+      },
+      {
+        "desired_retention": 0.7,
+        "stability": 36500.0,
+        "value": 36500
+      },
+      {
+        "desired_retention": 0.8,
+        "stability": 0.001,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.8,
+        "stability": 0.1,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.8,
+        "stability": 1.0,
+        "value": 3
+      },
+      {
+        "desired_retention": 0.8,
+        "stability": 2.3065,
+        "value": 8
+      },
+      {
+        "desired_retention": 0.8,
+        "stability": 10.0,
+        "value": 33
+      },
+      {
+        "desired_retention": 0.8,
+        "stability": 53.62691,
+        "value": 178
+      },
+      {
+        "desired_retention": 0.8,
+        "stability": 365.0,
+        "value": 1210
+      },
+      {
+        "desired_retention": 0.8,
+        "stability": 3650.0,
+        "value": 12103
+      },
+      {
+        "desired_retention": 0.8,
+        "stability": 36500.0,
+        "value": 36500
+      },
+      {
+        "desired_retention": 0.9,
+        "stability": 0.001,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.9,
+        "stability": 0.1,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.9,
+        "stability": 1.0,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.9,
+        "stability": 2.3065,
+        "value": 2
+      },
+      {
+        "desired_retention": 0.9,
+        "stability": 10.0,
+        "value": 10
+      },
+      {
+        "desired_retention": 0.9,
+        "stability": 53.62691,
+        "value": 54
+      },
+      {
+        "desired_retention": 0.9,
+        "stability": 365.0,
+        "value": 365
+      },
+      {
+        "desired_retention": 0.9,
+        "stability": 3650.0,
+        "value": 3650
+      },
+      {
+        "desired_retention": 0.9,
+        "stability": 36500.0,
+        "value": 36500
+      },
+      {
+        "desired_retention": 0.95,
+        "stability": 0.001,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.95,
+        "stability": 0.1,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.95,
+        "stability": 1.0,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.95,
+        "stability": 2.3065,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.95,
+        "stability": 10.0,
+        "value": 4
+      },
+      {
+        "desired_retention": 0.95,
+        "stability": 53.62691,
+        "value": 22
+      },
+      {
+        "desired_retention": 0.95,
+        "stability": 365.0,
+        "value": 147
+      },
+      {
+        "desired_retention": 0.95,
+        "stability": 3650.0,
+        "value": 1469
+      },
+      {
+        "desired_retention": 0.95,
+        "stability": 36500.0,
+        "value": 14693
+      },
+      {
+        "desired_retention": 0.99,
+        "stability": 0.001,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.99,
+        "stability": 0.1,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.99,
+        "stability": 1.0,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.99,
+        "stability": 2.3065,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.99,
+        "stability": 10.0,
+        "value": 1
+      },
+      {
+        "desired_retention": 0.99,
+        "stability": 53.62691,
+        "value": 4
+      },
+      {
+        "desired_retention": 0.99,
+        "stability": 365.0,
+        "value": 25
+      },
+      {
+        "desired_retention": 0.99,
+        "stability": 3650.0,
+        "value": 251
+      },
+      {
+        "desired_retention": 0.99,
+        "stability": 36500.0,
+        "value": 2507
+      }
+    ],
+    "retrievability": [
+      {
+        "stability": 0.1,
+        "elapsed_days": 0,
+        "value": 1.0
+      },
+      {
+        "stability": 0.1,
+        "elapsed_days": 1,
+        "value": 0.6928266345726218
+      },
+      {
+        "stability": 0.1,
+        "elapsed_days": 2,
+        "value": 0.6271611534010325
+      },
+      {
+        "stability": 0.1,
+        "elapsed_days": 5,
+        "value": 0.54701045268947
+      },
+      {
+        "stability": 0.1,
+        "elapsed_days": 10,
+        "value": 0.4923224255829389
+      },
+      {
+        "stability": 0.1,
+        "elapsed_days": 30,
+        "value": 0.4160349842927802
+      },
+      {
+        "stability": 0.1,
+        "elapsed_days": 100,
+        "value": 0.3456694429039765
+      },
+      {
+        "stability": 0.1,
+        "elapsed_days": 365,
+        "value": 0.28314245498427143
+      },
+      {
+        "stability": 0.1,
+        "elapsed_days": 1000,
+        "value": 0.2423943178147179
+      },
+      {
+        "stability": 1.0,
+        "elapsed_days": 0,
+        "value": 1.0
+      },
+      {
+        "stability": 1.0,
+        "elapsed_days": 1,
+        "value": 0.9
+      },
+      {
+        "stability": 1.0,
+        "elapsed_days": 2,
+        "value": 0.8458846451494336
+      },
+      {
+        "stability": 1.0,
+        "elapsed_days": 5,
+        "value": 0.7605275627180896
+      },
+      {
+        "stability": 1.0,
+        "elapsed_days": 10,
+        "value": 0.6928266345726217
+      },
+      {
+        "stability": 1.0,
+        "elapsed_days": 30,
+        "value": 0.5906333946776322
+      },
+      {
+        "stability": 1.0,
+        "elapsed_days": 100,
+        "value": 0.4923224255829389
+      },
+      {
+        "stability": 1.0,
+        "elapsed_days": 365,
+        "value": 0.4036796105835889
+      },
+      {
+        "stability": 1.0,
+        "elapsed_days": 1000,
+        "value": 0.3456694429039765
+      },
+      {
+        "stability": 2.3065,
+        "elapsed_days": 0,
+        "value": 1.0
+      },
+      {
+        "stability": 2.3065,
+        "elapsed_days": 1,
+        "value": 0.9468474993825461
+      },
+      {
+        "stability": 2.3065,
+        "elapsed_days": 2,
+        "value": 0.9094932559773545
+      },
+      {
+        "stability": 2.3065,
+        "elapsed_days": 5,
+        "value": 0.8388614268145294
+      },
+      {
+        "stability": 2.3065,
+        "elapsed_days": 10,
+        "value": 0.7743669167614039
+      },
+      {
+        "stability": 2.3065,
+        "elapsed_days": 30,
+        "value": 0.6675263338730357
+      },
+      {
+        "stability": 2.3065,
+        "elapsed_days": 100,
+        "value": 0.5589067446271925
+      },
+      {
+        "stability": 2.3065,
+        "elapsed_days": 365,
+        "value": 0.45894521558406376
+      },
+      {
+        "stability": 2.3065,
+        "elapsed_days": 1000,
+        "value": 0.3931328323809719
+      },
+      {
+        "stability": 10.0,
+        "elapsed_days": 0,
+        "value": 1.0
+      },
+      {
+        "stability": 10.0,
+        "elapsed_days": 1,
+        "value": 0.9856824087775146
+      },
+      {
+        "stability": 10.0,
+        "elapsed_days": 2,
+        "value": 0.9727695594804078
+      },
+      {
+        "stability": 10.0,
+        "elapsed_days": 5,
+        "value": 0.9403442888929227
+      },
+      {
+        "stability": 10.0,
+        "elapsed_days": 10,
+        "value": 0.9
+      },
+      {
+        "stability": 10.0,
+        "elapsed_days": 30,
+        "value": 0.8093881035731708
+      },
+      {
+        "stability": 10.0,
+        "elapsed_days": 100,
+        "value": 0.6928266345726217
+      },
+      {
+        "stability": 10.0,
+        "elapsed_days": 365,
+        "value": 0.5735586746235102
+      },
+      {
+        "stability": 10.0,
+        "elapsed_days": 1000,
+        "value": 0.4923224255829389
+      },
+      {
+        "stability": 53.62691,
+        "elapsed_days": 0,
+        "value": 1.0
+      },
+      {
+        "stability": 53.62691,
+        "elapsed_days": 1,
+        "value": 0.9972104444121604
+      },
+      {
+        "stability": 53.62691,
+        "elapsed_days": 2,
+        "value": 0.9944781012043516
+      },
+      {
+        "stability": 53.62691,
+        "elapsed_days": 5,
+        "value": 0.9866034016670578
+      },
+      {
+        "stability": 53.62691,
+        "elapsed_days": 10,
+        "value": 0.9744433212076429
+      },
+      {
+        "stability": 53.62691,
+        "elapsed_days": 30,
+        "value": 0.9348003995382126
+      },
+      {
+        "stability": 53.62691,
+        "elapsed_days": 100,
+        "value": 0.8518827396497056
+      },
+      {
+        "stability": 53.62691,
+        "elapsed_days": 365,
+        "value": 0.7303694207616038
+      },
+      {
+        "stability": 53.62691,
+        "elapsed_days": 1000,
+        "value": 0.6336267141250386
+      },
+      {
+        "stability": 365.0,
+        "elapsed_days": 0,
+        "value": 1.0
+      },
+      {
+        "stability": 365.0,
+        "elapsed_days": 1,
+        "value": 0.9995864779055293
+      },
+      {
+        "stability": 365.0,
+        "elapsed_days": 2,
+        "value": 0.9991742323417272
+      },
+      {
+        "stability": 365.0,
+        "elapsed_days": 5,
+        "value": 0.9979450817899127
+      },
+      {
+        "stability": 365.0,
+        "elapsed_days": 10,
+        "value": 0.9959213554740629
+      },
+      {
+        "stability": 365.0,
+        "elapsed_days": 30,
+        "value": 0.9881214426222933
+      },
+      {
+        "stability": 365.0,
+        "elapsed_days": 100,
+        "value": 0.9639798575751849
+      },
+      {
+        "stability": 365.0,
+        "elapsed_days": 365,
+        "value": 0.9
+      },
+      {
+        "stability": 365.0,
+        "elapsed_days": 1000,
+        "value": 0.8177853637749763
+      }
+    ]
+  },
+  "sequences": [
+    {
+      "label": "good-only",
+      "reviews": [
+        {
+          "rating": 3,
+          "offset_days": 0,
+          "retrievability_before": 0,
+          "stability": 2.3065,
+          "difficulty": 2.118103970459016,
+          "next_interval": 2
+        },
+        {
+          "rating": 3,
+          "offset_days": 0,
+          "retrievability_before": 1.0,
+          "stability": 2.3065,
+          "difficulty": 2.111214235785395,
+          "next_interval": 2
+        },
+        {
+          "rating": 3,
+          "offset_days": 1,
+          "retrievability_before": 0.9468474993825461,
+          "stability": 7.319186097840142,
+          "difficulty": 2.1043313908464483,
+          "next_interval": 7
+        },
+        {
+          "rating": 3,
+          "offset_days": 3,
+          "retrievability_before": 0.9492481660614618,
+          "stability": 19.846984845265304,
+          "difficulty": 2.0974554287524403,
+          "next_interval": 20
+        },
+        {
+          "rating": 3,
+          "offset_days": 8,
+          "retrievability_before": 0.9499459295691859,
+          "stability": 48.23479641675114,
+          "difficulty": 2.0905863426205262,
+          "next_interval": 48
+        },
+        {
+          "rating": 3,
+          "offset_days": 21,
+          "retrievability_before": 0.946665527067621,
+          "stability": 111.770868461851,
+          "difficulty": 2.083724125574744,
+          "next_interval": 112
+        }
+      ]
+    },
+    {
+      "label": "again-then-good",
+      "reviews": [
+        {
+          "rating": 1,
+          "offset_days": 0,
+          "retrievability_before": 0,
+          "stability": 0.212,
+          "difficulty": 6.4133,
+          "next_interval": 1
+        },
+        {
+          "rating": 3,
+          "offset_days": 0,
+          "retrievability_before": 1.0,
+          "stability": 0.24668918777567272,
+          "difficulty": 6.402115069296838,
+          "next_interval": 1
+        },
+        {
+          "rating": 3,
+          "offset_days": 1,
+          "retrievability_before": 0.7808502770196439,
+          "stability": 2.021477251638192,
+          "difficulty": 6.3909413235243795,
+          "next_interval": 2
+        },
+        {
+          "rating": 3,
+          "offset_days": 3,
+          "retrievability_before": 0.8706766387290052,
+          "stability": 7.863698841006282,
+          "difficulty": 6.379778751497693,
+          "next_interval": 8
+        },
+        {
+          "rating": 3,
+          "offset_days": 8,
+          "retrievability_before": 0.8988150628247803,
+          "stability": 21.917713153152434,
+          "difficulty": 6.368627342043034,
+          "next_interval": 22
+        },
+        {
+          "rating": 3,
+          "offset_days": 21,
+          "retrievability_before": 0.902911513863123,
+          "stability": 53.626902917141365,
+          "difficulty": 6.357487083997829,
+          "next_interval": 54
+        }
+      ]
+    },
+    {
+      "label": "mixed-long",
+      "reviews": [
+        {
+          "rating": 3,
+          "offset_days": 0,
+          "retrievability_before": 0,
+          "stability": 2.3065,
+          "difficulty": 2.118103970459016,
+          "next_interval": 2
+        },
+        {
+          "rating": 3,
+          "offset_days": 0,
+          "retrievability_before": 1.0,
+          "stability": 2.3065,
+          "difficulty": 2.111214235785395,
+          "next_interval": 2
+        },
+        {
+          "rating": 3,
+          "offset_days": 2,
+          "retrievability_before": 0.9094932559773545,
+          "stability": 10.971048263078135,
+          "difficulty": 2.1043313908464483,
+          "next_interval": 11
+        },
+        {
+          "rating": 3,
+          "offset_days": 11,
+          "retrievability_before": 0.8998188390602377,
+          "stability": 46.316858440073425,
+          "difficulty": 2.0974554287524403,
+          "next_interval": 46
+        },
+        {
+          "rating": 3,
+          "offset_days": 46,
+          "retrievability_before": 0.9004709139017502,
+          "stability": 162.99981577472244,
+          "difficulty": 2.0905863426205262,
+          "next_interval": 163
+        },
+        {
+          "rating": 3,
+          "offset_days": 163,
+          "retrievability_before": 0.899999922352538,
+          "stability": 497.8765551245907,
+          "difficulty": 2.083724125574744,
+          "next_interval": 498
+        },
+        {
+          "rating": 1,
+          "offset_days": 498,
+          "retrievability_before": 0.8999829672046629,
+          "stability": 6.890412507565338,
+          "difficulty": 7.383202320049203,
+          "next_interval": 7
+        },
+        {
+          "rating": 1,
+          "offset_days": 0,
+          "retrievability_before": 1.0,
+          "stability": 2.154598374301973,
+          "difficulty": 9.125104766121234,
+          "next_interval": 2
+        },
+        {
+          "rating": 3,
+          "offset_days": 0,
+          "retrievability_before": 1.0,
+          "stability": 2.154598374301973,
+          "difficulty": 9.11120803065195,
+          "next_interval": 2
+        },
+        {
+          "rating": 3,
+          "offset_days": 2,
+          "retrievability_before": 0.9050332123469057,
+          "stability": 3.9831233795187773,
+          "difficulty": 9.097325191918136,
+          "next_interval": 4
+        },
+        {
+          "rating": 3,
+          "offset_days": 4,
+          "retrievability_before": 0.8997092619987734,
+          "stability": 7.236254476883319,
+          "difficulty": 9.083456236023055,
+          "next_interval": 7
+        },
+        {
+          "rating": 3,
+          "offset_days": 7,
+          "retrievability_before": 0.902264178747978,
+          "stability": 12.483043578674472,
+          "difficulty": 9.06960114908387,
+          "next_interval": 12
+        },
+        {
+          "rating": 3,
+          "offset_days": 12,
+          "retrievability_before": 0.902688265666607,
+          "stability": 20.77035728499242,
+          "difficulty": 9.055759917231622,
+          "next_interval": 21
+        }
+      ]
+    },
+    {
+      "label": "hard-heavy",
+      "reviews": [
+        {
+          "rating": 2,
+          "offset_days": 0,
+          "retrievability_before": 0,
+          "stability": 1.2931,
+          "difficulty": 5.112170705601056,
+          "next_interval": 1
+        },
+        {
+          "rating": 2,
+          "offset_days": 0,
+          "retrievability_before": 1.0,
+          "stability": 1.2931,
+          "difficulty": 6.7404595108297,
+          "next_interval": 1
+        },
+        {
+          "rating": 2,
+          "offset_days": 1,
+          "retrievability_before": 0.9166697187203525,
+          "stability": 2.7083905526720984,
+          "difficulty": 7.821393497998797,
+          "next_interval": 3
+        },
+        {
+          "rating": 2,
+          "offset_days": 2,
+          "retrievability_before": 0.9194509404627658,
+          "stability": 4.596723977674711,
+          "difficulty": 8.538967850205447,
+          "next_interval": 5
+        },
+        {
+          "rating": 2,
+          "offset_days": 4,
+          "retrievability_before": 0.9092653039048171,
+          "stability": 7.166620432267595,
+          "difficulty": 9.015327144165033,
+          "next_interval": 7
+        },
+        {
+          "rating": 2,
+          "offset_days": 7,
+          "retrievability_before": 0.9016079706885012,
+          "stability": 10.430607800819214,
+          "difficulty": 9.331556641838505,
+          "next_interval": 10
+        }
+      ]
+    },
+    {
+      "label": "easy-heavy",
+      "reviews": [
+        {
+          "rating": 4,
+          "offset_days": 0,
+          "retrievability_before": 0,
+          "stability": 8.2956,
+          "difficulty": 1.0,
+          "next_interval": 8
+        },
+        {
+          "rating": 4,
+          "offset_days": 1,
+          "retrievability_before": 0.9829234388308534,
+          "stability": 18.014944525024067,
+          "difficulty": 1.0,
+          "next_interval": 18
+        },
+        {
+          "rating": 4,
+          "offset_days": 5,
+          "retrievability_before": 0.9635698760057979,
+          "stability": 57.89273190403661,
+          "difficulty": 1.0,
+          "next_interval": 58
+        },
+        {
+          "rating": 4,
+          "offset_days": 20,
+          "retrievability_before": 0.9560191623261569,
+          "stability": 185.64610986213432,
+          "difficulty": 1.0,
+          "next_interval": 186
+        },
+        {
+          "rating": 4,
+          "offset_days": 90,
+          "retrievability_before": 0.9418033240262376,
+          "stability": 634.6321489258494,
+          "difficulty": 1.0,
+          "next_interval": 635
+        }
+      ]
+    },
+    {
+      "label": "same-day-repeats",
+      "reviews": [
+        {
+          "rating": 3,
+          "offset_days": 0,
+          "retrievability_before": 0,
+          "stability": 2.3065,
+          "difficulty": 2.118103970459016,
+          "next_interval": 2
+        },
+        {
+          "rating": 2,
+          "offset_days": 0,
+          "retrievability_before": 1.0,
+          "stability": 2.3065,
+          "difficulty": 4.752858488532557,
+          "next_interval": 2
+        },
+        {
+          "rating": 4,
+          "offset_days": 0,
+          "retrievability_before": 1.0,
+          "stability": 3.946054067969477,
+          "difficulty": 2.984736681491411,
+          "next_interval": 4
+        },
+        {
+          "rating": 1,
+          "offset_days": 0,
+          "retrievability_before": 1.0,
+          "stability": 1.2800093588060393,
+          "difficulty": 7.679359020293631,
+          "next_interval": 1
+        },
+        {
+          "rating": 3,
+          "offset_days": 0,
+          "retrievability_before": 1.0,
+          "stability": 1.3232614904764382,
+          "difficulty": 7.666908030570175,
+          "next_interval": 1
+        }
+      ]
+    },
+    {
+      "label": "long-gaps",
+      "reviews": [
+        {
+          "rating": 3,
+          "offset_days": 0,
+          "retrievability_before": 0,
+          "stability": 2.3065,
+          "difficulty": 2.118103970459016,
+          "next_interval": 2
+        },
+        {
+          "rating": 3,
+          "offset_days": 30,
+          "retrievability_before": 0.6675263338730357,
+          "stability": 37.42063838925624,
+          "difficulty": 2.111214235785395,
+          "next_interval": 37
+        },
+        {
+          "rating": 3,
+          "offset_days": 180,
+          "retrievability_before": 0.7642941987376786,
+          "stability": 281.55063709144804,
+          "difficulty": 2.1043313908464483,
+          "next_interval": 282
+        },
+        {
+          "rating": 3,
+          "offset_days": 400,
+          "retrievability_before": 0.8741241984693494,
+          "stability": 952.2372343815151,
+          "difficulty": 2.0974554287524403,
+          "next_interval": 952
+        },
+        {
+          "rating": 2,
+          "offset_days": 900,
+          "retrievability_before": 0.9038290171810489,
+          "stability": 1793.508710641946,
+          "difficulty": 4.739151024325689,
+          "next_interval": 1794
+        }
+      ]
+    }
+  ]
+}
