@@ -18,6 +18,8 @@ import '../../../application/diagnostics/diagnostics_query.dart';
 import '../../../application/ports/repositories.dart';
 import '../../../domain/scheduling/element.dart';
 import '../../../domain/scheduling/revlog.dart';
+import '../../../domain/scheduling/schedule_adjustment.dart';
+import '../../../domain/scheduling/scheduler_metrics.dart';
 import '../../../domain/scheduling/topic_scheduler.dart';
 
 /// Opens the panel, optionally focused on one element.
@@ -41,6 +43,12 @@ final FutureProvider<CollectionDiagnostics> collectionDiagnosticsProvider =
         await ref.watch(queueQueryProvider).counters(),
       );
     });
+
+/// Scheduler safety metrics: overload, protection, and future load.
+final FutureProvider<SchedulerMetricsSnapshot> schedulerMetricsProvider =
+    FutureProvider<SchedulerMetricsSnapshot>(
+      (Ref ref) => ref.watch(schedulerMetricsQueryProvider).collect(),
+    );
 
 /// Recent commands, newest first.
 final FutureProvider<List<ActivityRecord>> recentCommandsProvider =
@@ -77,6 +85,7 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
           tooltip: 'Refresh',
           onPressed: () {
             ref.invalidate(collectionDiagnosticsProvider);
+            ref.invalidate(schedulerMetricsProvider);
             ref.invalidate(recentCommandsProvider);
             final ElementRef? focus = _focus;
             if (focus != null) {
@@ -95,6 +104,8 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 60),
           children: <Widget>[
             const _CollectionPanel(),
+            const SizedBox(height: 16),
+            const _SchedulerMetricsPanel(),
             const SizedBox(height: 16),
             _CommandsPanel(
               onSelect: (ElementRef ref_) {
@@ -221,6 +232,218 @@ class _CollectionPanel extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The metrics that expose a slow scheduler failure.
+///
+/// Everything here answers a question a per-element view cannot: is automatic
+/// overflow becoming permanent, is the protected band actually protected, and
+/// is tomorrow's load growing while today still looks manageable.
+class _SchedulerMetricsPanel extends ConsumerWidget {
+  const _SchedulerMetricsPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<SchedulerMetricsSnapshot> state = ref.watch(
+      schedulerMetricsProvider,
+    );
+    return _Panel(
+      title: 'Scheduler metrics',
+      child: state.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: LinearProgressIndicator(),
+        ),
+        error: (Object error, StackTrace _) => Text('$error'),
+        data: _MetricsBody.new,
+      ),
+    );
+  }
+}
+
+class _MetricsBody extends StatelessWidget {
+  const _MetricsBody(this.metrics);
+
+  final SchedulerMetricsSnapshot metrics;
+
+  int _cards(int days) => metrics.next30Days
+      .take(days)
+      .fold(0, (int total, DueLoadMetric day) => total + day.effectiveCards);
+
+  int _topics(int days) => metrics.next30Days
+      .take(days)
+      .fold(0, (int total, DueLoadMetric day) => total + day.effectiveTopics);
+
+  @override
+  Widget build(BuildContext context) {
+    final double? overflow = metrics.automaticOverflowFraction;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (metrics.overloadWarning.active)
+          _Alarm(
+            emphasis: false,
+            message:
+                'Automatic overflow has stayed above '
+                '${(metrics.overloadWarning.threshold * 100).round()}% of due '
+                'work for ${metrics.overloadWarning.latestConsecutiveWeeks} '
+                'consecutive weeks. The collection is asking for more than the '
+                'day can hold: lower some priorities or raise the caps '
+                'deliberately, rather than leaving the valve to decide.',
+          ),
+        if (!metrics.protectionInvariantHolds)
+          _Alarm(
+            emphasis: true,
+            message:
+                '${metrics.protectedElementViolations} protected element'
+                '${metrics.protectedElementViolations == 1 ? ' was' : 's were'}'
+                ' automatically postponed. This has to be zero: it is a bug, '
+                'not a workload signal.',
+          ),
+        Wrap(
+          spacing: 26,
+          runSpacing: 14,
+          children: <Widget>[
+            _Stat(
+              label: 'Overdue now',
+              value:
+                  '${metrics.effectiveOverdueCards} cards, '
+                  '${metrics.effectiveOverdueTopics} topics',
+              hint:
+                  'Effectively due, after adjustments. Algorithmically it is '
+                  '${metrics.algorithmicOverdueCards} cards and '
+                  '${metrics.algorithmicOverdueTopics} topics: the gap is work '
+                  'the calendar is holding back, not work that went away.',
+            ),
+            _Stat(
+              label: 'Next 7 days',
+              value: '${_cards(7)} cards, ${_topics(7)} topics',
+            ),
+            _Stat(
+              label: 'Next 30 days',
+              value: '${_cards(30)} cards, ${_topics(30)} topics',
+            ),
+            _Stat(
+              label: 'Auto-overflow',
+              value: overflow == null
+                  ? 'none'
+                  : '${(overflow * 100).toStringAsFixed(0)}%',
+              hint:
+                  '${metrics.automaticOverflowCount} of ${metrics.dueWorkCount} '
+                  'due elements over the window.',
+            ),
+            _Stat(label: 'Manual Later', value: '${metrics.manualLaterCount}'),
+            _Stat(
+              label: 'Mercy',
+              value: metrics.mercyCount == 0
+                  ? 'none'
+                  : '${metrics.mercyCount} batches',
+              hint: metrics.mercyBatchSizes.isEmpty
+                  ? null
+                  : 'Sizes: ${metrics.mercyBatchSizes.join(', ')}.',
+            ),
+            _Stat(
+              label: 'Reviews / encounters',
+              value:
+                  '${metrics.actualCardReviews} / ${metrics.topicsCompleted}',
+              hint: 'Genuine only: practice and undone events are excluded.',
+            ),
+            _Stat(
+              label: 'New introduced',
+              value: '${metrics.newCardsIntroduced}',
+            ),
+            _Stat(
+              label: 'Card/topic mix',
+              value: metrics.cardTopicOpportunityRatio.value == null
+                  ? 'none'
+                  : '${metrics.cardTopicOpportunityRatio.value!.toStringAsFixed(1)} to 1',
+              hint:
+                  'Opportunities actually taken, not slots offered. The target '
+                  'is four to one.',
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        const _MetricHeading('Deferred load by reason'),
+        if (metrics.activeAdjustmentLoadByReason.isEmpty)
+          const Text(
+            'Nothing is deferred.',
+            style: TextStyle(fontSize: 12, color: AppColors.muted),
+          )
+        else
+          for (final MapEntry<ScheduleAdjustmentReason, AdjustmentLoadMetric>
+              entry in metrics.activeAdjustmentLoadByReason.entries)
+            Text(
+              '${entry.key.wireName}: ${entry.value.adjustmentCount} on '
+              '${entry.value.distinctElementCount} elements',
+              style: const TextStyle(fontSize: 12),
+            ),
+        const SizedBox(height: 14),
+        const _MetricHeading('Lateness and retention by priority decile'),
+        for (final PriorityDecileMetric decile in metrics.priorityDeciles)
+          if (decile.allLateness.count > 0)
+            Text(
+              'D${decile.decile}: median '
+              '${_days(decile.allLateness.median)} late, p95 '
+              '${_days(decile.allLateness.p95)}'
+              '${_retention(decile)}',
+              style: const TextStyle(fontSize: 12),
+            ),
+        const SizedBox(height: 14),
+        const _MetricHeading('Topic policies in use'),
+        for (final TopicPolicyMetric policy in metrics.topicPolicies)
+          Text(
+            '${policy.policyVersion}: ${policy.intervals.count} topics, median '
+            'interval ${_days(policy.intervals.median)}, median A '
+            '${policy.aFactors.median?.toStringAsFixed(2) ?? 'none'}',
+            style: const TextStyle(fontSize: 12),
+          ),
+      ],
+    );
+  }
+
+  String _days(double? value) =>
+      value == null ? 'none' : '${value.toStringAsFixed(1)}d';
+
+  String _retention(PriorityDecileMetric decile) {
+    final double? retention = decile.measuredCardRetention;
+    if (retention == null) return '';
+    return ', retention ${(retention * 100).toStringAsFixed(0)}%';
+  }
+}
+
+class _MetricHeading extends StatelessWidget {
+  const _MetricHeading(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+    ),
+  );
+}
+
+class _Alarm extends StatelessWidget {
+  const _Alarm({required this.message, required this.emphasis});
+
+  final String message;
+  final bool emphasis;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: const Color(0xFFB3261E).withValues(alpha: emphasis ? 0.16 : 0.09),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Text(message, style: const TextStyle(fontSize: 12)),
+  );
 }
 
 class _CommandsPanel extends ConsumerWidget {
@@ -354,7 +577,13 @@ class _ElementPanel extends ConsumerWidget {
                   ),
                   _Stat(
                     label: 'Due',
-                    value: data.schedule.effectiveDueDay.toString(),
+                    value:
+                        (data.effectiveDueDay ??
+                                data.schedule.algorithmicDueDay)
+                            .toString(),
+                    hint:
+                        'Effective: the canonical date plus every adjustment '
+                        'currently in force.',
                   ),
                   _Stat(
                     label: 'Original due',

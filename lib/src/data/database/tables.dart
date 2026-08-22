@@ -506,6 +506,11 @@ class MercyBatches extends Table {
   TextColumn get policyVersion => text()();
   TextColumn get previewJson => text()();
   TextColumn get priorAdjustmentsJson => text().nullable()();
+
+  /// Serialized applied-batch snapshot: the exact prior and applied adjustment
+  /// sets plus per-item canonical state. Undo restores from this and nothing
+  /// else, which is what makes it exact rather than a recomputation.
+  TextColumn get appliedSnapshotJson => text().nullable()();
   IntColumn get createdAtUtc => integer()();
   IntColumn get appliedAtUtc => integer().nullable()();
   IntColumn get undoneAtUtc => integer().nullable()();

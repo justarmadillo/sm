@@ -26,6 +26,7 @@ import '../../domain/scheduling/scheduler_event.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../../domain/transfer/dataset_lineage.dart';
+import '../scheduling/mercy_workflow.dart';
 
 /// One appended entry in the activity log.
 ///
@@ -220,14 +221,6 @@ abstract interface class LearningRepository {
   /// Replaces a schedule wholesale.
   Future<void> saveSchedule(ElementSchedule schedule);
 
-  /// Every schedule eligible on [day], of the given [types].
-  ///
-  /// Ordering is left to the queue policy; this returns the candidate set.
-  Future<List<ElementSchedule>> listEligible({
-    required StudyDay day,
-    required Set<ElementType> types,
-  });
-
   /// Every schedule, ordered by priority, for the priority browser.
   Future<List<ElementSchedule>> listByPriority({int? limit, int? offset});
 
@@ -305,6 +298,29 @@ abstract interface class LearningRepository {
   Future<void> saveAdjustment(ScheduleAdjustment adjustment);
 
   Future<void> saveAdjustments(List<ScheduleAdjustment> adjustments);
+
+  /// Durable Mercy batches. Preview, apply, and undo are three separate
+  /// transactions that may be separated by minutes or by a restart, so the
+  /// proposal and its exact prior adjustment set have to survive in storage
+  /// rather than in a view model.
+  Future<void> saveMercyBatch(StoredMercyBatch batch);
+
+  Future<StoredMercyBatch?> findMercyBatch(String batchId);
+
+  /// Makes a repeated preview command idempotent.
+  Future<StoredMercyBatch?> findMercyBatchByPreviewOperation(
+    String operationId,
+  );
+
+  /// Applied, not-yet-undone batches on or after [day], newest first.
+  Future<List<StoredMercyBatch>> listAppliedMercyBatchesSince(StudyDay day);
+
+  /// The most recent applied, not-yet-undone batch.
+  Future<StoredMercyBatch?> findLastAppliedMercyBatch();
+
+  /// How many batches were applied on or after [day]. Drives the warning that
+  /// repeated Mercy is hiding a structural overload rather than curing one.
+  Future<int> countAppliedMercyBatchesSince(StudyDay day);
 
   Future<StoredPresentationPlan?> findPresentationPlan(StudyDay day);
 

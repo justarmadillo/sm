@@ -15,6 +15,7 @@ import 'package:incremental_reader/src/domain/content/source.dart';
 import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
+import 'package:incremental_reader/src/domain/scheduling/schedule_adjustment.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:incremental_reader/src/domain/settings/app_settings.dart';
@@ -86,12 +87,6 @@ void main() {
         id: source.id,
         type: ElementType.source,
       );
-      await harness.tuneSettings(
-        (AppSettings s) => s.copyWith(
-          topics: s.topics.copyWith(pacing: TopicPacingMode.intervalProfile),
-        ),
-      );
-
       // Three days on, straight over the boundary.
       final Result<TopicState> done = await harness.reader.reschedule(
         RescheduleTopic(
@@ -102,18 +97,34 @@ void main() {
         ),
       );
       expect(done.isOk, isTrue, reason: '${done.failureOrNull}');
-      expect(done.unwrap().schedule.dueDay.toString(), '2026-03-31');
+      // A manual reschedule is an exact presentation override: the date the
+      // user picked is honoured without rewriting what the scheduler decided.
+      Future<StudyDay> effectiveDue() async => const EffectiveDueService()
+          .topicDueStudyDay(
+            topic: ref,
+            algorithmicDueStudyDay: (await harness.learning.findTopic(ref))!
+                .schedule
+                .algorithmicDueDay,
+            adjustments: ScheduleAdjustmentSet(
+              await harness.learning.listActiveAdjustments(
+                elements: <ElementRef>{ref},
+              ),
+            ),
+          );
+      expect((await effectiveDue()).toString(), '2026-03-31');
+
+      final StudyDay due = await effectiveDue();
 
       // On the day itself, and not an hour early or late.
       clock.setTo(DateTime.utc(2026, 3, 31, 1, 30));
       expect(
-        done.unwrap().schedule.isEligibleOn(await harness.today()),
+        due <= await harness.today(),
         isFalse,
         reason: '03:30 local is still the previous study day',
       );
       clock.setTo(DateTime.utc(2026, 3, 31, 2, 30));
       expect(
-        done.unwrap().schedule.isEligibleOn(await harness.today()),
+        due <= await harness.today(),
         isTrue,
       );
     });
@@ -249,7 +260,11 @@ void main() {
       final Result<TopicState> retry = await harness.reader.completeEncounter(
         command,
       );
-      expect(retry.failureOrNull, isA<ConflictFailure>());
+      // A retry returns the first attempt's result rather than an error: the
+      // caller cannot know whether its first send reached the database, and
+      // the guarantee it needs is that the work happened exactly once.
+      expect(retry.isOk, isTrue, reason: '${retry.failureOrNull}');
+      expect(retry.unwrap().schedule.dueDay, due);
 
       final TopicState after = (await harness.learning.findTopic(ref))!;
       expect(after.schedule.dueDay, due);

@@ -6393,7 +6393,7 @@ class $ReviewEventsTable extends ReviewEvents
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES cards (id) ON DELETE CASCADE',
+      'REFERENCES cards (id) ON DELETE RESTRICT',
     ),
   );
   static const VerificationMeta _reviewedAtUtcMeta = const VerificationMeta(
@@ -12027,6 +12027,17 @@ class $MercyBatchesTable extends MercyBatches
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _appliedSnapshotJsonMeta =
+      const VerificationMeta('appliedSnapshotJson');
+  @override
+  late final GeneratedColumn<String> appliedSnapshotJson =
+      GeneratedColumn<String>(
+        'applied_snapshot_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
     'createdAtUtc',
   );
@@ -12069,6 +12080,7 @@ class $MercyBatchesTable extends MercyBatches
     policyVersion,
     previewJson,
     priorAdjustmentsJson,
+    appliedSnapshotJson,
     createdAtUtc,
     appliedAtUtc,
     undoneAtUtc,
@@ -12153,6 +12165,15 @@ class $MercyBatchesTable extends MercyBatches
         ),
       );
     }
+    if (data.containsKey('applied_snapshot_json')) {
+      context.handle(
+        _appliedSnapshotJsonMeta,
+        appliedSnapshotJson.isAcceptableOrUnknown(
+          data['applied_snapshot_json']!,
+          _appliedSnapshotJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at_utc')) {
       context.handle(
         _createdAtUtcMeta,
@@ -12219,6 +12240,10 @@ class $MercyBatchesTable extends MercyBatches
         DriftSqlType.string,
         data['${effectivePrefix}prior_adjustments_json'],
       ),
+      appliedSnapshotJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}applied_snapshot_json'],
+      ),
       createdAtUtc: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at_utc'],
@@ -12248,6 +12273,11 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
   final String policyVersion;
   final String previewJson;
   final String? priorAdjustmentsJson;
+
+  /// Serialized applied-batch snapshot: the exact prior and applied adjustment
+  /// sets plus per-item canonical state. Undo restores from this and nothing
+  /// else, which is what makes it exact rather than a recomputation.
+  final String? appliedSnapshotJson;
   final int createdAtUtc;
   final int? appliedAtUtc;
   final int? undoneAtUtc;
@@ -12259,6 +12289,7 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
     required this.policyVersion,
     required this.previewJson,
     this.priorAdjustmentsJson,
+    this.appliedSnapshotJson,
     required this.createdAtUtc,
     this.appliedAtUtc,
     this.undoneAtUtc,
@@ -12278,6 +12309,9 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
     map['preview_json'] = Variable<String>(previewJson);
     if (!nullToAbsent || priorAdjustmentsJson != null) {
       map['prior_adjustments_json'] = Variable<String>(priorAdjustmentsJson);
+    }
+    if (!nullToAbsent || appliedSnapshotJson != null) {
+      map['applied_snapshot_json'] = Variable<String>(appliedSnapshotJson);
     }
     map['created_at_utc'] = Variable<int>(createdAtUtc);
     if (!nullToAbsent || appliedAtUtc != null) {
@@ -12304,6 +12338,9 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
       priorAdjustmentsJson: priorAdjustmentsJson == null && nullToAbsent
           ? const Value.absent()
           : Value(priorAdjustmentsJson),
+      appliedSnapshotJson: appliedSnapshotJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(appliedSnapshotJson),
       createdAtUtc: Value(createdAtUtc),
       appliedAtUtc: appliedAtUtc == null && nullToAbsent
           ? const Value.absent()
@@ -12331,6 +12368,9 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
       priorAdjustmentsJson: serializer.fromJson<String?>(
         json['priorAdjustmentsJson'],
       ),
+      appliedSnapshotJson: serializer.fromJson<String?>(
+        json['appliedSnapshotJson'],
+      ),
       createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
       appliedAtUtc: serializer.fromJson<int?>(json['appliedAtUtc']),
       undoneAtUtc: serializer.fromJson<int?>(json['undoneAtUtc']),
@@ -12347,6 +12387,7 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
       'policyVersion': serializer.toJson<String>(policyVersion),
       'previewJson': serializer.toJson<String>(previewJson),
       'priorAdjustmentsJson': serializer.toJson<String?>(priorAdjustmentsJson),
+      'appliedSnapshotJson': serializer.toJson<String?>(appliedSnapshotJson),
       'createdAtUtc': serializer.toJson<int>(createdAtUtc),
       'appliedAtUtc': serializer.toJson<int?>(appliedAtUtc),
       'undoneAtUtc': serializer.toJson<int?>(undoneAtUtc),
@@ -12361,6 +12402,7 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
     String? policyVersion,
     String? previewJson,
     Value<String?> priorAdjustmentsJson = const Value.absent(),
+    Value<String?> appliedSnapshotJson = const Value.absent(),
     int? createdAtUtc,
     Value<int?> appliedAtUtc = const Value.absent(),
     Value<int?> undoneAtUtc = const Value.absent(),
@@ -12378,6 +12420,9 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
     priorAdjustmentsJson: priorAdjustmentsJson.present
         ? priorAdjustmentsJson.value
         : this.priorAdjustmentsJson,
+    appliedSnapshotJson: appliedSnapshotJson.present
+        ? appliedSnapshotJson.value
+        : this.appliedSnapshotJson,
     createdAtUtc: createdAtUtc ?? this.createdAtUtc,
     appliedAtUtc: appliedAtUtc.present ? appliedAtUtc.value : this.appliedAtUtc,
     undoneAtUtc: undoneAtUtc.present ? undoneAtUtc.value : this.undoneAtUtc,
@@ -12403,6 +12448,9 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
       priorAdjustmentsJson: data.priorAdjustmentsJson.present
           ? data.priorAdjustmentsJson.value
           : this.priorAdjustmentsJson,
+      appliedSnapshotJson: data.appliedSnapshotJson.present
+          ? data.appliedSnapshotJson.value
+          : this.appliedSnapshotJson,
       createdAtUtc: data.createdAtUtc.present
           ? data.createdAtUtc.value
           : this.createdAtUtc,
@@ -12425,6 +12473,7 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
           ..write('policyVersion: $policyVersion, ')
           ..write('previewJson: $previewJson, ')
           ..write('priorAdjustmentsJson: $priorAdjustmentsJson, ')
+          ..write('appliedSnapshotJson: $appliedSnapshotJson, ')
           ..write('createdAtUtc: $createdAtUtc, ')
           ..write('appliedAtUtc: $appliedAtUtc, ')
           ..write('undoneAtUtc: $undoneAtUtc')
@@ -12441,6 +12490,7 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
     policyVersion,
     previewJson,
     priorAdjustmentsJson,
+    appliedSnapshotJson,
     createdAtUtc,
     appliedAtUtc,
     undoneAtUtc,
@@ -12456,6 +12506,7 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
           other.policyVersion == this.policyVersion &&
           other.previewJson == this.previewJson &&
           other.priorAdjustmentsJson == this.priorAdjustmentsJson &&
+          other.appliedSnapshotJson == this.appliedSnapshotJson &&
           other.createdAtUtc == this.createdAtUtc &&
           other.appliedAtUtc == this.appliedAtUtc &&
           other.undoneAtUtc == this.undoneAtUtc);
@@ -12469,6 +12520,7 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
   final Value<String> policyVersion;
   final Value<String> previewJson;
   final Value<String?> priorAdjustmentsJson;
+  final Value<String?> appliedSnapshotJson;
   final Value<int> createdAtUtc;
   final Value<int?> appliedAtUtc;
   final Value<int?> undoneAtUtc;
@@ -12481,6 +12533,7 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
     this.policyVersion = const Value.absent(),
     this.previewJson = const Value.absent(),
     this.priorAdjustmentsJson = const Value.absent(),
+    this.appliedSnapshotJson = const Value.absent(),
     this.createdAtUtc = const Value.absent(),
     this.appliedAtUtc = const Value.absent(),
     this.undoneAtUtc = const Value.absent(),
@@ -12494,6 +12547,7 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
     required String policyVersion,
     required String previewJson,
     this.priorAdjustmentsJson = const Value.absent(),
+    this.appliedSnapshotJson = const Value.absent(),
     required int createdAtUtc,
     this.appliedAtUtc = const Value.absent(),
     this.undoneAtUtc = const Value.absent(),
@@ -12511,6 +12565,7 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
     Expression<String>? policyVersion,
     Expression<String>? previewJson,
     Expression<String>? priorAdjustmentsJson,
+    Expression<String>? appliedSnapshotJson,
     Expression<int>? createdAtUtc,
     Expression<int>? appliedAtUtc,
     Expression<int>? undoneAtUtc,
@@ -12526,6 +12581,8 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
       if (previewJson != null) 'preview_json': previewJson,
       if (priorAdjustmentsJson != null)
         'prior_adjustments_json': priorAdjustmentsJson,
+      if (appliedSnapshotJson != null)
+        'applied_snapshot_json': appliedSnapshotJson,
       if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
       if (appliedAtUtc != null) 'applied_at_utc': appliedAtUtc,
       if (undoneAtUtc != null) 'undone_at_utc': undoneAtUtc,
@@ -12541,6 +12598,7 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
     Value<String>? policyVersion,
     Value<String>? previewJson,
     Value<String?>? priorAdjustmentsJson,
+    Value<String?>? appliedSnapshotJson,
     Value<int>? createdAtUtc,
     Value<int?>? appliedAtUtc,
     Value<int?>? undoneAtUtc,
@@ -12554,6 +12612,7 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
       policyVersion: policyVersion ?? this.policyVersion,
       previewJson: previewJson ?? this.previewJson,
       priorAdjustmentsJson: priorAdjustmentsJson ?? this.priorAdjustmentsJson,
+      appliedSnapshotJson: appliedSnapshotJson ?? this.appliedSnapshotJson,
       createdAtUtc: createdAtUtc ?? this.createdAtUtc,
       appliedAtUtc: appliedAtUtc ?? this.appliedAtUtc,
       undoneAtUtc: undoneAtUtc ?? this.undoneAtUtc,
@@ -12587,6 +12646,11 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
         priorAdjustmentsJson.value,
       );
     }
+    if (appliedSnapshotJson.present) {
+      map['applied_snapshot_json'] = Variable<String>(
+        appliedSnapshotJson.value,
+      );
+    }
     if (createdAtUtc.present) {
       map['created_at_utc'] = Variable<int>(createdAtUtc.value);
     }
@@ -12612,6 +12676,7 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
           ..write('policyVersion: $policyVersion, ')
           ..write('previewJson: $previewJson, ')
           ..write('priorAdjustmentsJson: $priorAdjustmentsJson, ')
+          ..write('appliedSnapshotJson: $appliedSnapshotJson, ')
           ..write('createdAtUtc: $createdAtUtc, ')
           ..write('appliedAtUtc: $appliedAtUtc, ')
           ..write('undoneAtUtc: $undoneAtUtc, ')
@@ -14221,13 +14286,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('blocks', kind: UpdateKind.delete)],
-    ),
-    WritePropagation(
-      on: TableUpdateQuery.onTableName(
-        'cards',
-        limitUpdateKind: UpdateKind.delete,
-      ),
-      result: [TableUpdate('review_events', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -20666,6 +20724,7 @@ typedef $$MercyBatchesTableCreateCompanionBuilder =
       required String policyVersion,
       required String previewJson,
       Value<String?> priorAdjustmentsJson,
+      Value<String?> appliedSnapshotJson,
       required int createdAtUtc,
       Value<int?> appliedAtUtc,
       Value<int?> undoneAtUtc,
@@ -20680,6 +20739,7 @@ typedef $$MercyBatchesTableUpdateCompanionBuilder =
       Value<String> policyVersion,
       Value<String> previewJson,
       Value<String?> priorAdjustmentsJson,
+      Value<String?> appliedSnapshotJson,
       Value<int> createdAtUtc,
       Value<int?> appliedAtUtc,
       Value<int?> undoneAtUtc,
@@ -20727,6 +20787,11 @@ class $$MercyBatchesTableFilterComposer
 
   ColumnFilters<String> get priorAdjustmentsJson => $composableBuilder(
     column: $table.priorAdjustmentsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get appliedSnapshotJson => $composableBuilder(
+    column: $table.appliedSnapshotJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -20790,6 +20855,11 @@ class $$MercyBatchesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get appliedSnapshotJson => $composableBuilder(
+    column: $table.appliedSnapshotJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAtUtc => $composableBuilder(
     column: $table.createdAtUtc,
     builder: (column) => ColumnOrderings(column),
@@ -20848,6 +20918,11 @@ class $$MercyBatchesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get appliedSnapshotJson => $composableBuilder(
+    column: $table.appliedSnapshotJson,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get createdAtUtc => $composableBuilder(
     column: $table.createdAtUtc,
     builder: (column) => column,
@@ -20902,6 +20977,7 @@ class $$MercyBatchesTableTableManager
                 Value<String> policyVersion = const Value.absent(),
                 Value<String> previewJson = const Value.absent(),
                 Value<String?> priorAdjustmentsJson = const Value.absent(),
+                Value<String?> appliedSnapshotJson = const Value.absent(),
                 Value<int> createdAtUtc = const Value.absent(),
                 Value<int?> appliedAtUtc = const Value.absent(),
                 Value<int?> undoneAtUtc = const Value.absent(),
@@ -20914,6 +20990,7 @@ class $$MercyBatchesTableTableManager
                 policyVersion: policyVersion,
                 previewJson: previewJson,
                 priorAdjustmentsJson: priorAdjustmentsJson,
+                appliedSnapshotJson: appliedSnapshotJson,
                 createdAtUtc: createdAtUtc,
                 appliedAtUtc: appliedAtUtc,
                 undoneAtUtc: undoneAtUtc,
@@ -20928,6 +21005,7 @@ class $$MercyBatchesTableTableManager
                 required String policyVersion,
                 required String previewJson,
                 Value<String?> priorAdjustmentsJson = const Value.absent(),
+                Value<String?> appliedSnapshotJson = const Value.absent(),
                 required int createdAtUtc,
                 Value<int?> appliedAtUtc = const Value.absent(),
                 Value<int?> undoneAtUtc = const Value.absent(),
@@ -20940,6 +21018,7 @@ class $$MercyBatchesTableTableManager
                 policyVersion: policyVersion,
                 previewJson: previewJson,
                 priorAdjustmentsJson: priorAdjustmentsJson,
+                appliedSnapshotJson: appliedSnapshotJson,
                 createdAtUtc: createdAtUtc,
                 appliedAtUtc: appliedAtUtc,
                 undoneAtUtc: undoneAtUtc,

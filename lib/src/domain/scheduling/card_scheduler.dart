@@ -630,6 +630,13 @@ final class CardScheduler implements FsrsAdapter {
     if (lastReview != null && reviewedAtUtc.isBefore(lastReview)) {
       throw ArgumentError('a review cannot predate the previous review');
     }
+    if (lastReview != null && !reviewedAtUtc.isAfter(lastReview)) {
+      // Zero elapsed time is not a repetition: FSRS would be told that a
+      // memory survived an interval that never elapsed. A duplicate grade is
+      // the application's to absorb by operation id, not the adapter's to
+      // average into stability.
+      throw StateError('a review must advance beyond the previous review');
+    }
     // Presentation eligibility is evaluated by the application against the
     // canonical due plus typed adjustments. An exact manual/Mercy override
     // may intentionally present a card before its algorithmic due, so the
@@ -692,11 +699,16 @@ final class CardScheduler implements FsrsAdapter {
 
   /// Pushes a card's eligibility to [untilUtc] without reviewing it.
   ///
-  /// Used by a manual Later, by the daily overload valve, and by sibling
-  /// burying. All three write only [CardMemory.deferredUntilUtc] and the
-  /// common schedule's deferral fields; the algorithmic due instant and every
-  /// memory value survive intact, so overdue ranking and audit stay honest
-  /// and no fake review is ever created.
+  /// **Legacy.** Deferral is a typed `ScheduleAdjustment` now, written by
+  /// `ScheduleAdjustmentService`, because Mercy has to be able to move work
+  /// earlier as well as later and one nullable column cannot express that.
+  /// The schema v7 migration retired the columns this writes, so it survives
+  /// only to keep proving the invariant it always protected: a postponement
+  /// never touches the algorithmic due, the memory values, or the last-review
+  /// instant. Marked visible-for-testing so that wiring it back into the
+  /// application fails analysis rather than quietly creating a second,
+  /// invisible deferral mechanism.
+  @visibleForTesting
   CardState postpone(
     CardState state, {
     required DateTime untilUtc,

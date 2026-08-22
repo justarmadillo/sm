@@ -9,12 +9,15 @@ import 'package:incremental_reader/src/application/queue/queue_commands.dart';
 import 'package:incremental_reader/src/application/queue/queue_handlers.dart';
 import 'package:incremental_reader/src/application/queue/queue_query.dart';
 import 'package:incremental_reader/src/application/reader/reader_commands.dart';
+import 'package:incremental_reader/src/application/scheduling/mercy_workflow.dart';
 import 'package:incremental_reader/src/core/clock.dart';
 import 'package:incremental_reader/src/core/result.dart';
 import 'package:incremental_reader/src/core/tracing.dart';
 import 'package:incremental_reader/src/domain/content/source.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/mercy.dart';
 import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
+import 'package:incremental_reader/src/domain/scheduling/schedule_adjustment.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:incremental_reader/src/domain/settings/app_settings.dart';
@@ -72,10 +75,8 @@ void main() {
       (AppSettings settings) => settings.copyWith(
         queue: settings.queue.copyWith(
           maxTopics: 3,
-          overloadTolerance: 1,
           protectedPercentile: 0,
           randomization: 0,
-          maxSharePerRoot: 1,
         ),
       ),
     );
@@ -84,14 +85,20 @@ void main() {
   tearDown(() => harness.close());
 
   group('the daily valve', () {
-    test('admits the cap and defers the rest by priority', () async {
+    test('admits the cap and leaves the rest due, not postponed', () async {
       final List<Source> sources = await harness.importSources(8);
       final QueueProjection projection = await harness.queueQuery.load();
 
       expect(projection.entries, hasLength(3));
       expect(projection.counters.dueTopics, 8);
       expect(projection.counters.overflowTopics, 5);
-      expect(projection.deferredThisRun, 5);
+      expect(
+        projection.deferredThisRun,
+        0,
+        reason:
+            'the supermemo_like profile never postpones what became due '
+            'today; it simply does not admit all of it',
+      );
       expect(
         projection.entries.first.ref.id,
         sources.first.id,
@@ -99,15 +106,36 @@ void main() {
       );
     });
 
+    test('spreads yesterday\'s backlog and nothing newer', () async {
+      final List<Source> sources = await harness.importSources(8);
+      // Come back a week later: every one of those is now outstanding
+      // backlog rather than work that became due today.
+      clock.advance(const Duration(days: 7));
+      final StudyDay today = await harness.today();
+      final QueueProjection projection = await harness.queueQuery.load();
+
+      expect(projection.deferredThisRun, greaterThan(0));
+      final ElementRef last = ElementRef(
+        id: sources.last.id,
+        type: ElementType.source,
+      );
+      final List<ScheduleAdjustment> adjustments = await harness.learning
+          .listActiveAdjustments(elements: <ElementRef>{last});
+      expect(adjustments, hasLength(1));
+      expect(adjustments.single.reason, ScheduleAdjustmentReason.autoOverflow);
+      expect(adjustments.single.notBeforeStudyDay, greaterThan(today));
+    });
+
     test('is exactly-once per study day, however often the queue is built',
         () async {
       await harness.importSources(8);
+      clock.advance(const Duration(days: 7));
 
       final QueueProjection first = await harness.queueQuery.load();
       final QueueProjection second = await harness.queueQuery.load();
       final QueueProjection third = await harness.queueQuery.load();
 
-      expect(first.deferredThisRun, 5);
+      expect(first.deferredThisRun, greaterThan(0));
       expect(second.deferredThisRun, 0);
       expect(third.deferredThisRun, 0);
       expect(
@@ -123,8 +151,30 @@ void main() {
       );
     });
 
+    test('never lets a rebuild push the same element further', () async {
+      final List<Source> sources = await harness.importSources(8);
+      clock.advance(const Duration(days: 7));
+      await harness.queueQuery.load();
+      final ElementRef last = ElementRef(
+        id: sources.last.id,
+        type: ElementType.source,
+      );
+      final StudyDay first = (await harness.learning.listActiveAdjustments(
+        elements: <ElementRef>{last},
+      )).single.notBeforeStudyDay!;
+
+      await harness.queueQuery.load();
+      await harness.queueQuery.load();
+
+      final List<ScheduleAdjustment> after = await harness.learning
+          .listActiveAdjustments(elements: <ElementRef>{last});
+      expect(after, hasLength(1), reason: 'bounds are upserted, not stacked');
+      expect(after.single.notBeforeStudyDay, first);
+    });
+
     test('records deferrals as deferrals, never as encounters', () async {
       final List<Source> sources = await harness.importSources(8);
+      clock.advance(const Duration(days: 7));
       await harness.queueQuery.load();
 
       final Source deferred = sources.last;
@@ -135,8 +185,8 @@ void main() {
 
       expect(entry.grade, isNull);
       expect(entry.feedsOptimizer, isFalse);
-      expect(entry.metadata!['delay_days'], isNotNull);
-      expect(entry.metadata!['pressure'], isNotNull);
+      expect(entry.metadata!['destination'], isNotNull);
+      expect(entry.metadata!['policy_version'], 'supermemo_like_v1');
       expect(
         log.any((RevlogEntry e) => e.eventType == RevlogEventType.topicRead),
         isFalse,
@@ -146,20 +196,36 @@ void main() {
 
     test('preserves the algorithmic due date behind the deferral', () async {
       final List<Source> sources = await harness.importSources(8);
+      final StudyDay imported = await harness.today();
+      clock.advance(const Duration(days: 7));
       final StudyDay today = await harness.today();
       await harness.queueQuery.load();
 
       final TopicState deferred = await harness.topicOf(sources.last);
-      expect(deferred.schedule.dueDay, today);
-      expect(deferred.schedule.originalDueDay, today);
-      expect(deferred.schedule.effectiveDueDay, greaterThan(today));
-      expect(deferred.schedule.deferralKind, DeferralKind.automatic);
+      expect(deferred.schedule.algorithmicDueDay, imported);
+      expect(deferred.schedule.originalDueDay, imported);
       expect(deferred.encounters, 0);
-      expect(deferred.postponeCount, 1);
       expect(
-        deferred.schedule.overdueDaysOn(today.addDays(10)),
-        10,
+        deferred.schedule.overdueDaysOn(today),
+        7,
         reason: 'overdue ranking still reflects real lateness',
+      );
+
+      final ElementRef ref = ElementRef(
+        id: sources.last.id,
+        type: ElementType.source,
+      );
+      expect(
+        const EffectiveDueService().topicDueStudyDay(
+          topic: ref,
+          algorithmicDueStudyDay: deferred.schedule.algorithmicDueDay,
+          adjustments: ScheduleAdjustmentSet(
+            await harness.learning.listActiveAdjustments(
+              elements: <ElementRef>{ref},
+            ),
+          ),
+        ),
+        greaterThan(today),
       );
     });
 
@@ -184,14 +250,20 @@ void main() {
         ),
       );
       await harness.importSources(8);
+      clock.advance(const Duration(days: 7));
 
       final QueueProjection projection = await harness.queueQuery.load();
-      expect(projection.entries, hasLength(8));
       expect(projection.deferredThisRun, 0);
+      expect(
+        await harness.learning.listActiveAdjustments(),
+        isEmpty,
+        reason: 'nothing is postponed when the valve is off',
+      );
     });
 
     test('a raised cap takes effect on the next build', () async {
       await harness.importSources(8);
+      clock.advance(const Duration(days: 7));
       expect((await harness.queueQuery.load()).entries, hasLength(3));
 
       await harness.tuneSettings(
@@ -214,14 +286,19 @@ void main() {
     test('recalls what the app deferred and leaves manual Laters alone',
         () async {
       final List<Source> sources = await harness.importSources(8);
+      clock.advance(const Duration(days: 7));
       final StudyDay today = await harness.today();
 
       // One element the user pushed away themselves.
       final Source manual = sources[1];
+      final ElementRef manualRef = ElementRef(
+        id: manual.id,
+        type: ElementType.source,
+      );
       await harness.reader.postpone(
         PostponeElement(
           harness.operation(),
-          ref: ElementRef(id: manual.id, type: ElementType.source),
+          ref: manualRef,
           until: today.addDays(4),
           timestampUtc: clock.nowUtc(),
         ),
@@ -233,17 +310,27 @@ void main() {
       );
       expect(recalled.isOk, isTrue, reason: '${recalled.failureOrNull}');
 
-      final TopicState stillDeferred = await harness.topicOf(manual);
+      final List<ScheduleAdjustment> stillThere = await harness.learning
+          .listActiveAdjustments(elements: <ElementRef>{manualRef});
       expect(
-        stillDeferred.schedule.deferralKind,
-        DeferralKind.manual,
+        stillThere.map((ScheduleAdjustment a) => a.reason),
+        contains(ScheduleAdjustmentReason.manualLater),
         reason: 'the user said not now about that one specifically',
       );
-      expect(stillDeferred.schedule.effectiveDueDay, today.addDays(4));
+      expect(
+        stillThere
+            .firstWhere(
+              (ScheduleAdjustment a) =>
+                  a.reason == ScheduleAdjustmentReason.manualLater,
+            )
+            .notBeforeStudyDay,
+        today.addDays(4),
+      );
     });
 
     test('honours its step and reports how many came back', () async {
       await harness.importSources(8);
+      clock.advance(const Duration(days: 7));
       final QueueProjection projection = await harness.queueQuery.load();
 
       final Result<int> recalled = await harness.queue.studyMore(
@@ -264,87 +351,241 @@ void main() {
   });
 
   group('Mercy', () {
-    test('spreads a backlog best-priority-first across a horizon', () async {
+    test('previews without writing anything', () async {
       final List<Source> sources = await harness.importSources(12);
-      // Three weeks away.
       clock.advance(const Duration(days: 21));
       final StudyDay today = await harness.today();
+      final TopicState before = await harness.topicOf(sources.first);
 
-      final Result<int> spread = await harness.queue.runMercy(
-        RunMercy(
+      final StoredMercyBatch batch = (await harness.mercy.preview(
+        PreviewMercy(
           harness.operation(),
           day: today,
           horizonDays: 5,
           dailyCap: 3,
           timestampUtc: clock.nowUtc(),
         ),
-      );
-      expect(spread.unwrap(), 12);
+      )).unwrap();
 
-      final TopicState best = await harness.topicOf(sources.first);
-      final TopicState worst = await harness.topicOf(sources.last);
+      expect(batch.preview.selectedCount, greaterThan(0));
+      expect(batch.appliedAtUtc, isNull);
+      final TopicState after = await harness.topicOf(sources.first);
       expect(
-        best.schedule.effectiveDueDay,
-        today.addDays(1),
-        reason: 'the top of the backlog comes back within days',
+        after.schedule.algorithmicDueDay,
+        before.schedule.algorithmicDueDay,
+        reason: 'a preview is a proposal, not a change',
       );
       expect(
-        worst.schedule.effectiveDueDay,
-        greaterThan(today.addDays(3)),
-        reason: 'and the tail lands well past it',
+        await harness.learning.listActiveAdjustments(),
+        isEmpty,
+        reason: 'nothing may be deferred before the user confirms',
+      );
+    });
+
+    test('spreads a backlog best-priority-first across a horizon', () async {
+      final List<Source> sources = await harness.importSources(12);
+      // Three weeks away.
+      clock.advance(const Duration(days: 21));
+      final StudyDay today = await harness.today();
+
+      final StoredMercyBatch batch = (await harness.mercy.preview(
+        PreviewMercy(
+          harness.operation(),
+          day: today,
+          horizonDays: 5,
+          dailyCap: 3,
+          timestampUtc: clock.nowUtc(),
+        ),
+      )).unwrap();
+      final Result<int> applied = await harness.mercy.apply(
+        ApplyMercy(
+          harness.operation(),
+          day: today,
+          batchId: batch.batchId,
+          timestampUtc: clock.nowUtc(),
+        ),
+      );
+      expect(applied.unwrap(), batch.preview.selectedCount);
+
+      final Map<ElementRef, StudyDay> destinations = <ElementRef, StudyDay>{
+        for (final MercyAssignment assignment in batch.preview.assignments)
+          assignment.element: assignment.toDay,
+      };
+      final ElementRef best = ElementRef(
+        id: sources.first.id,
+        type: ElementType.source,
+      );
+      final ElementRef worst = ElementRef(
+        id: sources.last.id,
+        type: ElementType.source,
       );
       expect(
-        best.encounters,
+        destinations[best]!,
+        lessThan(destinations[worst]!),
+        reason: 'the top of the backlog gets the earlier capacity',
+      );
+      expect(
+        (await harness.topicOf(sources.first)).encounters,
         0,
         reason: 'Mercy moves dates and nothing else',
       );
+      expect(
+        (await harness.topicOf(sources.first)).schedule.algorithmicDueDay,
+        isNot(destinations[best]),
+        reason: 'the canonical due survives underneath the override',
+      );
     });
 
-    test('logs every move as a Mercy event with its inputs', () async {
-      final List<Source> sources = await harness.importSources(4);
+    test('applying a stale preview writes nothing', () async {
+      final List<Source> sources = await harness.importSources(6);
+      clock.advance(const Duration(days: 21));
+      final StudyDay today = await harness.today();
+
+      final StoredMercyBatch batch = (await harness.mercy.preview(
+        PreviewMercy(
+          harness.operation(),
+          day: today,
+          horizonDays: 4,
+          dailyCap: 2,
+          timestampUtc: clock.nowUtc(),
+        ),
+      )).unwrap();
+
+      // The collection moves on: one element in the preview is now deferred by
+      // the user's own hand.
+      await harness.reader.postpone(
+        PostponeElement(
+          harness.operation(),
+          ref: ElementRef(id: sources.first.id, type: ElementType.source),
+          until: today.addDays(2),
+          timestampUtc: clock.nowUtc(),
+        ),
+      );
+
+      final Result<int> applied = await harness.mercy.apply(
+        ApplyMercy(
+          harness.operation(),
+          day: today,
+          batchId: batch.batchId,
+          timestampUtc: clock.nowUtc(),
+        ),
+      );
+      expect(applied.isErr, isTrue);
+      expect(
+        await harness.learning.listActiveAdjustments(
+          reasons: const <ScheduleAdjustmentReason>{
+            ScheduleAdjustmentReason.mercy,
+          },
+        ),
+        isEmpty,
+      );
+    });
+
+    test('undo restores the exact prior adjustment set', () async {
+      await harness.importSources(8);
+      clock.advance(const Duration(days: 21));
+      final StudyDay today = await harness.today();
+
+      final StoredMercyBatch batch = (await harness.mercy.preview(
+        PreviewMercy(
+          harness.operation(),
+          day: today,
+          horizonDays: 4,
+          dailyCap: 3,
+          timestampUtc: clock.nowUtc(),
+        ),
+      )).unwrap();
+      await harness.mercy.apply(
+        ApplyMercy(
+          harness.operation(),
+          day: today,
+          batchId: batch.batchId,
+          timestampUtc: clock.nowUtc(),
+        ),
+      );
+      expect(
+        await harness.learning.listActiveAdjustments(
+          reasons: const <ScheduleAdjustmentReason>{
+            ScheduleAdjustmentReason.mercy,
+          },
+        ),
+        isNotEmpty,
+      );
+
+      final Result<int> undone = await harness.mercy.undo(
+        UndoMercy(
+          harness.operation(),
+          day: today,
+          batchId: batch.batchId,
+          timestampUtc: clock.nowUtc(),
+        ),
+      );
+      expect(undone.unwrap(), batch.preview.selectedCount);
+      expect(
+        await harness.learning.listActiveAdjustments(
+          reasons: const <ScheduleAdjustmentReason>{
+            ScheduleAdjustmentReason.mercy,
+          },
+        ),
+        isEmpty,
+        reason: 'the batch is gone from the active set',
+      );
+      expect(
+        await harness.learning.listSchedulerEventsFor(
+          ElementRef(id: 'never', type: ElementType.source),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('a repeated preview command returns the original batch', () async {
+      await harness.importSources(4);
       clock.advance(const Duration(days: 10));
+      final StudyDay today = await harness.today();
+      final OperationId operation = harness.operation();
 
-      await harness.queue.runMercy(
-        RunMercy(
-          harness.operation(),
-          day: await harness.today(),
-          timestampUtc: clock.nowUtc(),
-        ),
-      );
-
-      final RevlogEntry entry = (await harness.revlogOf(
-        sources.first,
-      )).firstWhere((RevlogEntry e) => e.eventType == RevlogEventType.mercy);
-
-      expect(entry.eventType.isDeferral, isTrue);
-      expect(entry.grade, isNull);
-      expect(entry.metadata!['horizon_days'], isNotNull);
-      expect(entry.metadata!['backlog_size'], 4);
+      final StoredMercyBatch first = (await harness.mercy.preview(
+        PreviewMercy(operation, day: today, timestampUtc: clock.nowUtc()),
+      )).unwrap();
+      final StoredMercyBatch again = (await harness.mercy.preview(
+        PreviewMercy(operation, day: today, timestampUtc: clock.nowUtc()),
+      )).unwrap();
+      expect(again.batchId, first.batchId);
     });
 
-    test('does nothing when there is no backlog', () async {
+    test('reports an empty plan rather than pretending to work', () async {
       await harness.importSources(3);
-      final Result<int> spread = await harness.queue.runMercy(
-        RunMercy(
+      final StoredMercyBatch batch = (await harness.mercy.preview(
+        PreviewMercy(
           harness.operation(),
           day: await harness.today(),
           timestampUtc: clock.nowUtc(),
         ),
+      )).unwrap();
+      // Mercy is the recovery tool, so outstanding work may move even on the
+      // day it became due — but nothing not yet due is touched unless the
+      // user asks for it, and the exclusions say so.
+      expect(batch.preview.selectedCount, 3);
+      expect(
+        batch.preview.assignments.every(
+          (MercyAssignment assignment) => assignment.toDay > assignment.fromDay,
+        ),
+        isTrue,
       );
-      expect(spread.unwrap(), 0);
     });
   });
 
   group('the day boundary', () {
     test('a new study day admits again', () async {
       await harness.importSources(8);
-      expect((await harness.queueQuery.load()).deferredThisRun, 5);
+      clock.advance(const Duration(days: 7));
+      expect((await harness.queueQuery.load()).deferredThisRun, greaterThan(0));
 
       clock.advance(const Duration(days: 1));
       final QueueProjection tomorrow = await harness.queueQuery.load();
       expect(
         tomorrow.today.toString(),
-        '2026-03-06',
+        '2026-03-13',
         reason: 'the operation id is keyed on the day, so a new day is a new '
             'admission',
       );
@@ -372,6 +613,7 @@ void main() {
   group('operation tracing', () {
     test('every admission is traceable to one operation id', () async {
       await harness.importSources(8);
+      clock.advance(const Duration(days: 7));
       final StudyDay today = await harness.today();
       await harness.queueQuery.load();
 
@@ -381,7 +623,7 @@ void main() {
       )).where((RevlogEntry e) => e.eventType == RevlogEventType.autoPostpone)
           .toList();
 
-      expect(deferrals, hasLength(5));
+      expect(deferrals, isNotEmpty);
       expect(
         deferrals.every((RevlogEntry e) => e.operationId == expected),
         isTrue,

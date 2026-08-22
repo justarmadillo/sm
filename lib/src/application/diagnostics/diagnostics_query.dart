@@ -21,6 +21,7 @@ import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../../domain/settings/app_settings.dart';
 import '../ports/repositories.dart';
+import '../scheduling/effective_due_query.dart';
 import '../scheduling/scheduling_context.dart';
 
 /// Everything known about one element's scheduling.
@@ -35,6 +36,7 @@ final class ElementDiagnostics {
     this.card,
     this.title,
     this.nextIntervalPreview,
+    this.effectiveDueDay,
   });
 
   final ElementRef ref;
@@ -57,6 +59,11 @@ final class ElementDiagnostics {
 
   /// What the next encounter would schedule, without committing to it.
   final AFactorComputation? nextIntervalPreview;
+
+  /// The day it may next be presented, after every active adjustment. The
+  /// panel shows this beside the canonical due precisely so the difference
+  /// between "the scheduler said" and "the calendar allows" stays visible.
+  final StudyDay? effectiveDueDay;
 }
 
 /// A snapshot of how the collection as a whole is doing.
@@ -110,15 +117,18 @@ final class DiagnosticsQuery {
     required ContentRepository content,
     required SearchRepository search,
     required SchedulingContext context,
+    required EffectiveDueQuery effectiveDue,
   }) : _learning = learning,
        _content = content,
        _search = search,
-       _context = context;
+       _context = context,
+       _effectiveDue = effectiveDue;
 
   final LearningRepository _learning;
   final ContentRepository _content;
   final SearchRepository _search;
   final SchedulingContext _context;
+  final EffectiveDueQuery _effectiveDue;
 
   /// Everything about [ref].
   Future<ElementDiagnostics?> forElement(ElementRef ref) async {
@@ -163,6 +173,7 @@ final class DiagnosticsQuery {
           ? await _titleOf(ref)
           : null,
       nextIntervalPreview: preview,
+      effectiveDueDay: await _effectiveDue.forElement(ref),
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/schedule_adjustment.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:test/test.dart';
 
@@ -144,7 +145,6 @@ void main() {
     final today = StudyDay.parse('2026-03-05', zoneId: 'UTC');
     ElementSchedule scheduleOn(
       String due, {
-      String? deferred,
       String? original,
       ElementLifecycle lifecycle = ElementLifecycle.active,
     }) => ElementSchedule(
@@ -153,36 +153,63 @@ void main() {
       lifecycle: lifecycle,
       dueDay: StudyDay.parse(due, zoneId: 'UTC'),
       originalDueDay: StudyDay.parse(original ?? due, zoneId: 'UTC'),
-      deferredUntil: deferred == null
-          ? null
-          : StudyDay.parse(deferred, zoneId: 'UTC'),
     );
 
+
+    ScheduleAdjustmentSet lowerBound(ElementRef ref, String day) =>
+        ScheduleAdjustmentSet(<ScheduleAdjustment>[
+          ScheduleAdjustment(
+            id: 'a1',
+            element: ref,
+            mode: ScheduleAdjustmentMode.lowerBound,
+            reason: ScheduleAdjustmentReason.manualLater,
+            notBeforeStudyDay: StudyDay.parse(day, zoneId: 'UTC'),
+            operationId: 'op',
+            policyVersion: 'test',
+            createdAtUtc: DateTime.utc(2026, 3, 5),
+            createdStudyDay: today,
+          ),
+        ]);
+
+    StudyDay effectiveDue(
+      ElementSchedule schedule, [
+      ScheduleAdjustmentSet? adjustments,
+    ]) => const EffectiveDueService().topicDueStudyDay(
+      topic: schedule.ref,
+      algorithmicDueStudyDay: schedule.algorithmicDueDay,
+      adjustments: adjustments ?? ScheduleAdjustmentSet.empty,
+    );
+
+    bool isEligible(
+      ElementSchedule schedule, [
+      ScheduleAdjustmentSet? adjustments,
+    ]) =>
+        schedule.lifecycle.isSchedulable &&
+        effectiveDue(schedule, adjustments) <= today;
+
     test('a due element is eligible today', () {
-      expect(scheduleOn('2026-03-05').isEligibleOn(today), isTrue);
-      expect(scheduleOn('2026-03-01').isEligibleOn(today), isTrue);
-      expect(scheduleOn('2026-03-06').isEligibleOn(today), isFalse);
+      expect(isEligible(scheduleOn('2026-03-05')), isTrue);
+      expect(isEligible(scheduleOn('2026-03-01')), isTrue);
+      expect(isEligible(scheduleOn('2026-03-06')), isFalse);
     });
 
-    test('deferral delays eligibility without rewriting the due day', () {
-      final schedule = scheduleOn('2026-03-01', deferred: '2026-03-08');
-      expect(schedule.isEligibleOn(today), isFalse);
-      expect(schedule.dueDay.toString(), '2026-03-01');
-      expect(schedule.effectiveDueDay.toString(), '2026-03-08');
+    test('a lower bound delays eligibility without rewriting the due day', () {
+      final schedule = scheduleOn('2026-03-01');
+      final adjustments = lowerBound(schedule.ref, '2026-03-08');
+      expect(isEligible(schedule, adjustments), isFalse);
+      expect(schedule.algorithmicDueDay.toString(), '2026-03-01');
+      expect(effectiveDue(schedule, adjustments).toString(), '2026-03-08');
     });
 
-    test('a deferral in the past never pulls an element forward', () {
-      final schedule = scheduleOn('2026-03-10', deferred: '2026-03-02');
-      expect(schedule.effectiveDueDay.toString(), '2026-03-10');
-      expect(schedule.isEligibleOn(today), isFalse);
+    test('a lower bound in the past never pulls an element forward', () {
+      final schedule = scheduleOn('2026-03-10');
+      final adjustments = lowerBound(schedule.ref, '2026-03-02');
+      expect(effectiveDue(schedule, adjustments).toString(), '2026-03-10');
+      expect(isEligible(schedule, adjustments), isFalse);
     });
 
     test('overdue days are measured against the original due day', () {
-      final schedule = scheduleOn(
-        '2026-03-05',
-        original: '2026-03-01',
-        deferred: '2026-03-05',
-      );
+      final schedule = scheduleOn('2026-03-05', original: '2026-03-01');
       expect(schedule.overdueDaysOn(today), 4);
       expect(scheduleOn('2026-03-09').overdueDaysOn(today), 0);
     });
@@ -195,17 +222,11 @@ void main() {
         ElementLifecycle.deleted,
       ]) {
         expect(
-          scheduleOn('2026-03-01', lifecycle: lifecycle).isEligibleOn(today),
+          isEligible(scheduleOn('2026-03-01', lifecycle: lifecycle)),
           isFalse,
           reason: '${lifecycle.name} must not be eligible',
         );
       }
-    });
-
-    test('clearing a deferral is explicit, not a null default', () {
-      final schedule = scheduleOn('2026-03-01', deferred: '2026-03-08');
-      expect(schedule.copyWith().deferredUntil, isNotNull);
-      expect(schedule.copyWith(clearDeferral: true).deferredUntil, isNull);
     });
 
     test('sources and extracts are topics, cards are not', () {

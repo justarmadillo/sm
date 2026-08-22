@@ -8,6 +8,7 @@
 library;
 
 import 'package:incremental_reader/src/application/diagnostics/diagnostics_query.dart';
+import 'package:incremental_reader/src/application/diagnostics/scheduler_metrics_query.dart';
 import 'package:incremental_reader/src/application/extraction/extraction_handlers.dart';
 import 'package:incremental_reader/src/application/formulation/formulation_handlers.dart';
 import 'package:incremental_reader/src/application/priority/priority_handlers.dart';
@@ -16,6 +17,9 @@ import 'package:incremental_reader/src/application/queue/queue_handlers.dart';
 import 'package:incremental_reader/src/application/queue/queue_query.dart';
 import 'package:incremental_reader/src/application/reader/reader_handlers.dart';
 import 'package:incremental_reader/src/application/review/review_handlers.dart';
+import 'package:incremental_reader/src/application/scheduling/effective_due_query.dart';
+import 'package:incremental_reader/src/application/scheduling/mercy_handlers.dart';
+import 'package:incremental_reader/src/application/scheduling/schedule_adjustment_service.dart';
 import 'package:incremental_reader/src/application/scheduling/scheduling_context.dart';
 import 'package:incremental_reader/src/application/search/search_query.dart';
 import 'package:incremental_reader/src/application/settings/settings_store.dart';
@@ -144,6 +148,25 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
+  late final MercyHandlers mercy = MercyHandlers(
+    learning: learning,
+    transfer: transfer,
+    transactions: transactions,
+    context: context,
+    adjustments: ScheduleAdjustmentService(
+      learning: learning,
+      ids: FakeIdGenerator(prefix: 'adjust-$operationPrefix'),
+    ),
+    queue: queue,
+    ids: FakeIdGenerator(prefix: 'mercy-$operationPrefix'),
+  );
+
+  late final SchedulerMetricsQuery metrics = SchedulerMetricsQuery(
+    learning: learning,
+    context: context,
+    queue: queue,
+  );
+
   late final QueueQuery queueQuery = QueueQuery(
     content: content,
     learning: learning,
@@ -158,9 +181,15 @@ final class AppHarness {
     context: context,
   );
 
+  late final EffectiveDueQuery effectiveDue = EffectiveDueQuery(
+    learning: learning,
+    context: context,
+  );
+
   late final SearchQuery searchQuery = SearchQuery(
     search: search,
     learning: learning,
+    effectiveDue: effectiveDue,
   );
 
   late final DiagnosticsQuery diagnosticsQuery = DiagnosticsQuery(
@@ -168,6 +197,7 @@ final class AppHarness {
     content: content,
     search: search,
     context: context,
+    effectiveDue: effectiveDue,
   );
 
   int _operations = 0;

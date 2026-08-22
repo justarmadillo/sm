@@ -604,7 +604,7 @@ class _StatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final due = state.topic.schedule.effectiveDueDay;
+    final due = state.effectiveDueDay ?? state.topic.schedule.algorithmicDueDay;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),

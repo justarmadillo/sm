@@ -12,7 +12,9 @@ library;
 import 'package:meta/meta.dart';
 
 import '../../domain/scheduling/element.dart';
+import '../../domain/scheduling/study_day.dart';
 import '../ports/repositories.dart';
+import '../scheduling/effective_due_query.dart';
 
 /// One result row, ready to render.
 @immutable
@@ -21,6 +23,7 @@ final class SearchResult {
     required this.hit,
     required this.typeLabel,
     this.schedule,
+    this.effectiveDueDay,
   });
 
   final SearchHit hit;
@@ -31,6 +34,10 @@ final class SearchResult {
   /// The element's schedule, so a result can show when it is next due and
   /// whether it is still in learning at all.
   final ElementSchedule? schedule;
+
+  /// When it may next be presented, after every active adjustment. A result
+  /// that showed the canonical date would contradict the queue itself.
+  final StudyDay? effectiveDueDay;
 
   ElementRef get ref => hit.ref;
 
@@ -44,11 +51,14 @@ final class SearchQuery {
   const SearchQuery({
     required SearchRepository search,
     required LearningRepository learning,
+    required EffectiveDueQuery effectiveDue,
   }) : _search = search,
-       _learning = learning;
+       _learning = learning,
+       _effectiveDue = effectiveDue;
 
   final SearchRepository _search;
   final LearningRepository _learning;
+  final EffectiveDueQuery _effectiveDue;
 
   /// Matches [query] against the index.
   ///
@@ -70,6 +80,7 @@ final class SearchQuery {
     );
     final results = <SearchResult>[];
     for (final SearchHit hit in hits) {
+      final ElementSchedule? schedule = await _learning.findSchedule(hit.ref);
       results.add(
         SearchResult(
           hit: hit,
@@ -78,7 +89,10 @@ final class SearchQuery {
             ElementType.extract => 'Extract',
             ElementType.card => 'Card',
           },
-          schedule: await _learning.findSchedule(hit.ref),
+          schedule: schedule,
+          effectiveDueDay: schedule == null
+              ? null
+              : await _effectiveDue.forElement(hit.ref),
         ),
       );
     }

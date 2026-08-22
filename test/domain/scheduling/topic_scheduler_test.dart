@@ -3,19 +3,15 @@ import 'package:incremental_reader/src/domain/scheduling/interval_profile.dart';
 import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
-import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:test/test.dart';
 
 void main() {
-  // This suite pins the fixed-sequence model. The A-factor model has its own
-  // suite; keeping them apart means a change to one cannot quietly rewrite
-  // the other's expectations.
-  final scheduler = TopicScheduler(
-    IntervalProfiles.defaults(),
-    settings: const TopicSchedulerSettings(
-      pacing: TopicPacingMode.intervalProfile,
-    ),
-  );
+  // This suite pins the legacy fixed-sequence family, which is a property of
+  // the topic row rather than of a setting: collections built before the
+  // scheduler contract keep it until their owner explicitly migrates them.
+  // The A-factor model has its own suite, so a change to one cannot quietly
+  // rewrite the other's expectations.
+  final scheduler = TopicScheduler(IntervalProfiles.defaults());
   final today = StudyDay.parse('2026-03-05', zoneId: 'UTC');
 
   TopicState topic({
@@ -40,6 +36,8 @@ void main() {
     ),
     profileId: profileId,
     stepIndex: stepIndex,
+    schedulerKind: TopicSchedulerKind.legacySequence,
+    schedulerVersion: 'legacy_sequence/1',
   );
 
   group('interval profiles', () {
@@ -221,8 +219,9 @@ void main() {
       expect(transition.state.stepIndex, 3);
       expect(transition.state.schedule.dueDay.toString(), '2026-03-05');
       expect(
-        transition.state.schedule.effectiveDueDay.toString(),
+        transition.state.schedule.deferredUntil.toString(),
         '2026-03-09',
+        reason: 'the legacy transition moves eligibility and nothing else',
       );
       expect(transition.state.schedule.originalDueDay.toString(), '2026-03-05');
     });
@@ -278,7 +277,7 @@ void main() {
     test('finish keeps the content but stops scheduling', () {
       final transition = scheduler.finish(topic());
       expect(transition.state.schedule.lifecycle, ElementLifecycle.finished);
-      expect(transition.state.schedule.isEligibleOn(today), isFalse);
+      expect(transition.state.schedule.lifecycle.isSchedulable, isFalse);
       expect(transition.state.stepIndex, 0);
     });
 

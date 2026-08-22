@@ -39,6 +39,20 @@ final class PresentationPlanIdentity {
   final String candidateRevision;
   final String deterministicSeedVersion;
 
+  /// Whether [other] was planned under the same rules as this identity.
+  ///
+  /// Deliberately narrower than equality. `candidateRevision` and
+  /// `datasetGeneration` change on every review, so requiring full equality to
+  /// resume would rebuild the plan after each answer and reshuffle the rest of
+  /// the session. The rules that decide *which* work belongs to the day —
+  /// the day itself, the policy, its seed, and the settings — are what must
+  /// hold for a remaining plan to still be the same plan.
+  bool sharesBasisWith(PresentationPlanIdentity other) =>
+      studyDay == other.studyDay &&
+      policyVersion == other.policyVersion &&
+      settingsRevision == other.settingsRevision &&
+      deterministicSeedVersion == other.deterministicSeedVersion;
+
   Map<String, Object?> toMap() => <String, Object?>{
     'study_day': studyDay.epochDay,
     'zone_id': studyDay.zoneId,

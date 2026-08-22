@@ -54,6 +54,7 @@ final class ExtractUiState {
     required this.mode,
     required this.children,
     required this.cards,
+    this.effectiveDueDay,
     this.lastExtractId,
     this.message,
     this.isBusy = false,
@@ -66,6 +67,10 @@ final class ExtractUiState {
   final ExtractMode mode;
   final List<Extract> children;
   final List<Card> cards;
+
+  /// When this extract may next be presented, adjustments included. Showing
+  /// the canonical date instead would report a Later as if it never happened.
+  final StudyDay? effectiveDueDay;
   final String? lastExtractId;
   final UiMessage? message;
   final bool isBusy;
@@ -95,6 +100,7 @@ final class ExtractUiState {
     ExtractMode? mode,
     List<Extract>? children,
     List<Card>? cards,
+    StudyDay? effectiveDueDay,
     String? lastExtractId,
     bool clearLastExtract = false,
     UiMessage? message,
@@ -108,6 +114,7 @@ final class ExtractUiState {
     mode: mode ?? this.mode,
     children: children ?? this.children,
     cards: cards ?? this.cards,
+    effectiveDueDay: effectiveDueDay ?? this.effectiveDueDay,
     lastExtractId: clearLastExtract
         ? null
         : (lastExtractId ?? this.lastExtractId),
@@ -149,6 +156,9 @@ final class ExtractViewModel
       mode: mode,
       children: await content.listExtractsOfParent(extract.id),
       cards: await content.listCardsOfExtract(extract.id),
+      effectiveDueDay: await ref
+          .read(effectiveDueQueryProvider)
+          .forTopic(topic),
     );
   }
 

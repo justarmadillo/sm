@@ -228,7 +228,7 @@ class _ResultTile extends ConsumerWidget {
                         if (result.schedule case final schedule?)
                           Text(
                             schedule.lifecycle.isSchedulable
-                                ? 'due ${schedule.effectiveDueDay}'
+                                ? 'due ${result.effectiveDueDay ?? schedule.algorithmicDueDay}'
                                 : schedule.lifecycle.name,
                             style: const TextStyle(
                               fontSize: 11,

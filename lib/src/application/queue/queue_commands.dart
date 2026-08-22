@@ -49,19 +49,24 @@ final class StudyMore extends AppCommand {
   final int? count;
 }
 
-/// Spread an accumulated backlog across a horizon in one operation.
+/// Compute a Mercy redistribution without writing anything.
 ///
-/// Auto-postpone handles daily drift but chews a three-week absence one day at
-/// a time, which leaves the user staring at an impossible queue every morning.
-/// Mercy resolves the whole backlog at once: the top of it lands within days,
-/// the tail lands months out. That distribution is the correct outcome, not
-/// damage control.
-final class RunMercy extends AppCommand {
-  RunMercy(
+/// Mercy is exceptional bulk recovery, not the daily valve, so it is a
+/// three-step conversation: preview, confirm, apply. The preview is pure —
+/// it reads schedules, scores candidates, and returns the proposed calendar
+/// plus every exclusion, so the user can refuse a plan they do not like
+/// before a single row moves.
+final class PreviewMercy extends AppCommand {
+  PreviewMercy(
     super.operationId, {
     required this.day,
     this.horizonDays,
     this.dailyCap,
+    this.branchRootId,
+    this.collectingPeriodDays,
+    this.includeFutureRepetitions = false,
+    this.includeProtected = false,
+    this.overrideManualLater = false,
     super.timestampUtc,
   });
 
@@ -70,8 +75,58 @@ final class RunMercy extends AppCommand {
   /// Days to spread across. Null uses the configured horizon.
   final int? horizonDays;
 
-  /// Elements to place on each day. Null uses the configured cap.
+  /// Most elements Mercy may place on one day. Null uses the configured cap.
   final int? dailyCap;
+
+  /// Restricts the scope to one source subtree. Null means the collection.
+  final String? branchRootId;
+
+  /// How far back the backlog is collected from. Null collects everything
+  /// outstanding.
+  final int? collectingPeriodDays;
+
+  /// Whether work already scheduled beyond today may also be moved.
+  final bool includeFutureRepetitions;
+
+  /// Opt in to redistributing protected top-priority material.
+  final bool includeProtected;
+
+  /// Opt in to clearing manual Later bounds, which are otherwise preserved.
+  final bool overrideManualLater;
+}
+
+/// Commit a previewed Mercy batch.
+///
+/// Fails rather than writing if any candidate revision or active adjustment
+/// changed since the preview: a stale plan would move the wrong material.
+final class ApplyMercy extends AppCommand {
+  ApplyMercy(
+    super.operationId, {
+    required this.day,
+    required this.batchId,
+    super.timestampUtc,
+  });
+
+  final StudyDay day;
+
+  /// The previewed batch the user confirmed.
+  final String batchId;
+}
+
+/// Reverse an applied Mercy batch exactly.
+///
+/// Restores the adjustment set that existed before the batch and appends an
+/// inverse event. Nothing is deleted, and canonical schedules never move.
+final class UndoMercy extends AppCommand {
+  UndoMercy(
+    super.operationId, {
+    required this.day,
+    required this.batchId,
+    super.timestampUtc,
+  });
+
+  final StudyDay day;
+  final String batchId;
 }
 
 /// Rebuild the full-text index from the materialized documents.

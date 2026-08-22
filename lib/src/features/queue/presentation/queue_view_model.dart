@@ -12,6 +12,8 @@ import '../../../app/providers.dart';
 import '../../../application/queue/queue_commands.dart';
 import '../../../application/queue/queue_query.dart';
 import '../../../application/review/review_commands.dart';
+import '../../../application/scheduling/mercy_handlers.dart';
+import '../../../application/scheduling/mercy_workflow.dart';
 import '../../../core/result.dart';
 import '../../../core/tracing.dart';
 import '../../../domain/scheduling/card_scheduler.dart';
@@ -120,20 +122,59 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
     );
   }
 
-  /// Spreads an accumulated backlog across a horizon in one operation.
-  Future<void> runMercy({int? horizonDays, int? dailyCap}) async {
+  /// Computes a Mercy proposal without writing anything.
+  ///
+  /// Returned rather than stored on the state so the screen can show the exact
+  /// calendar and let the user walk away from it. Nothing has moved until
+  /// [applyMercy] is called with the returned batch.
+  Future<StoredMercyBatch?> previewMercy({
+    int? horizonDays,
+    int? dailyCap,
+    bool includeFutureRepetitions = false,
+  }) async {
+    final QueueUiState? current = state.valueOrNull;
+    if (current == null || current.isBusy) return null;
+    state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: true));
+
+    final Result<StoredMercyBatch> result = await ref
+        .read(mercyHandlersProvider)
+        .preview(
+          PreviewMercy(
+            OperationId(ref.read(idGeneratorProvider).newId()),
+            day: current.projection.today,
+            horizonDays: horizonDays,
+            dailyCap: dailyCap,
+            includeFutureRepetitions: includeFutureRepetitions,
+          ),
+        );
+
+    return result.fold((StoredMercyBatch batch) {
+      state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: false));
+      return batch;
+    }, (AppFailure failure) {
+      state = AsyncValue<QueueUiState>.data(
+        current.copyWith(
+          isBusy: false,
+          message: UiMessage(failure.message, isError: true),
+        ),
+      );
+      return null;
+    });
+  }
+
+  /// Commits a previewed batch the user confirmed.
+  Future<void> applyMercy(StoredMercyBatch batch) async {
     final QueueUiState? current = state.valueOrNull;
     if (current == null || current.isBusy) return;
     state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: true));
 
     final Result<int> result = await ref
-        .read(queueHandlersProvider)
-        .runMercy(
-          RunMercy(
+        .read(mercyHandlersProvider)
+        .apply(
+          ApplyMercy(
             OperationId(ref.read(idGeneratorProvider).newId()),
             day: current.projection.today,
-            horizonDays: horizonDays,
-            dailyCap: dailyCap,
+            batchId: batch.batchId,
           ),
         );
     final QueueProjection projection = await ref
@@ -145,10 +186,50 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
         projection: projection,
         isBusy: false,
         message: result.fold(
-          (int spread) => UiMessage(
-            spread == 0
+          (int moved) => UiMessage(
+            moved == 0
                 ? 'No backlog to spread'
-                : 'Spread $spread overdue element${spread == 1 ? '' : 's'}',
+                : 'Mercy moved $moved element${moved == 1 ? '' : 's'}',
+          ),
+          (AppFailure failure) => UiMessage(failure.message, isError: true),
+        ),
+      ),
+    );
+  }
+
+  /// Reverses the last applied Mercy batch exactly.
+  Future<void> undoMercy() async {
+    final QueueUiState? current = state.valueOrNull;
+    if (current == null || current.isBusy) return;
+    final MercyHandlers handlers = ref.read(mercyHandlersProvider);
+    final StoredMercyBatch? batch = await handlers.lastAppliedBatch();
+    if (batch == null) {
+      state = AsyncValue<QueueUiState>.data(
+        current.copyWith(message: const UiMessage('No Mercy batch to undo')),
+      );
+      return;
+    }
+    state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: true));
+
+    final Result<int> result = await handlers.undo(
+      UndoMercy(
+        OperationId(ref.read(idGeneratorProvider).newId()),
+        day: current.projection.today,
+        batchId: batch.batchId,
+      ),
+    );
+    final QueueProjection projection = await ref
+        .read(queueQueryProvider)
+        .load();
+
+    state = AsyncValue<QueueUiState>.data(
+      current.copyWith(
+        projection: projection,
+        isBusy: false,
+        message: result.fold(
+          (int restored) => UiMessage(
+            'Mercy undone; $restored element'
+            '${restored == 1 ? '' : 's'} restored',
           ),
           (AppFailure failure) => UiMessage(failure.message, isError: true),
         ),

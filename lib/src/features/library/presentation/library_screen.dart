@@ -161,11 +161,21 @@ class _LibraryBody extends StatelessWidget {
               const _Hint('Nothing scheduled for today.')
             else
               for (final entry in due)
-                _SourceTile(entry: entry, today: state.today, isDue: true),
+                _SourceTile(
+                  entry: entry,
+                  today: state.today,
+                  dueDay: state.dueDayOf(entry),
+                  isDue: true,
+                ),
             const SizedBox(height: 28),
             _SectionHeading(title: 'Everything else', count: later.length),
             for (final entry in later)
-              _SourceTile(entry: entry, today: state.today, isDue: false),
+              _SourceTile(
+                entry: entry,
+                today: state.today,
+                dueDay: state.dueDayOf(entry),
+                isDue: false,
+              ),
           ],
         ),
       ),
@@ -219,11 +229,15 @@ class _SourceTile extends ConsumerWidget {
   const _SourceTile({
     required this.entry,
     required this.today,
+    required this.dueDay,
     required this.isDue,
   });
 
   final LibraryEntry entry;
   final StudyDay today;
+
+  /// Effective due, adjustments included.
+  final StudyDay dueDay;
   final bool isDue;
 
   @override
@@ -266,7 +280,7 @@ class _SourceTile extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _subtitleFor(entry, today),
+                      _subtitleFor(entry, today, dueDay),
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.muted,
@@ -286,7 +300,7 @@ class _SourceTile extends ConsumerWidget {
     );
   }
 
-  String _subtitleFor(LibraryEntry entry, StudyDay today) {
+  String _subtitleFor(LibraryEntry entry, StudyDay today, StudyDay dueDay) {
     final parts = <String>['${entry.source.wordCount} words'];
     if (entry.extractCount > 0) {
       parts.add(
@@ -298,8 +312,7 @@ class _SourceTile extends ConsumerWidget {
       entry.source.resume.marker == null ? 'not started' : 'position kept',
     );
     if (entry.schedule.lifecycle.isSchedulable) {
-      final due = entry.schedule.effectiveDueDay;
-      final days = today.daysUntil(due);
+      final days = today.daysUntil(dueDay);
       parts.add(switch (days) {
         <= 0 => 'due now',
         1 => 'due tomorrow',

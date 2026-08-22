@@ -13,7 +13,7 @@ import 'tables.dart';
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 6;
+const int kSchemaVersion = 7;
 
 /// Name of the external-content FTS5 index over [SearchDocuments].
 const String kSearchIndexTable = 'search_index';
@@ -176,13 +176,31 @@ class AppDatabase extends _$AppDatabase {
           'SELECT e.source_id FROM extracts e WHERE e.id = element_id) '
           'WHERE element_type = 1',
         );
-        await customStatement(
-          'UPDATE element_schedules SET root_id = ('
-          'SELECT COALESCE(c.source_id, ('
-          'SELECT e.source_id FROM extracts e WHERE e.id = c.extract_id)) '
-          'FROM cards c WHERE c.id = element_id) '
-          'WHERE element_type = 2',
-        );
+        // A card's article is reached through whichever parentage the file on
+        // disk actually has. A collection upgraded step by step still has the
+        // v3 pair of columns here; one restored from a later build, or opened
+        // by a build that already ran the v6 rebuild, has the single typed
+        // parent instead. Naming a column that is not there aborts the whole
+        // upgrade, so ask first.
+        if (await _hasColumn('cards', 'extract_id')) {
+          await customStatement(
+            'UPDATE element_schedules SET root_id = ('
+            'SELECT COALESCE(c.source_id, ('
+            'SELECT e.source_id FROM extracts e WHERE e.id = c.extract_id)) '
+            'FROM cards c WHERE c.id = element_id) '
+            'WHERE element_type = 2',
+          );
+        } else {
+          await customStatement(
+            'UPDATE element_schedules SET root_id = ('
+            'SELECT CASE c.parent_element_type '
+            'WHEN 0 THEN c.parent_element_id '
+            'WHEN 1 THEN (SELECT e.source_id FROM extracts e '
+            'WHERE e.id = c.parent_element_id) END '
+            'FROM cards c WHERE c.id = element_id) '
+            'WHERE element_type = 2',
+          );
+        }
 
         await _createIndexes(m);
         await _createSearchIndex();
@@ -190,26 +208,42 @@ class AppDatabase extends _$AppDatabase {
       if (from < 6) {
         // Scheduler contract migration: add typed/versioned scheduling state
         // without deleting legacy schedule or history columns.
-        await m.alterTable(
-          TableMigration(
-            cards,
-            newColumns: <GeneratedColumn<Object>>[
-              cards.parentElementId,
-              cards.parentElementType,
-            ],
-            columnTransformer: <GeneratedColumn<Object>, Expression<Object>>{
-              cards.parentElementId: const CustomExpression<String>(
-                'COALESCE(extract_id, source_id)',
-              ),
-              cards.parentElementType: const CustomExpression<int>(
-                'CASE WHEN extract_id IS NOT NULL THEN 1 '
-                'WHEN source_id IS NOT NULL THEN 0 ELSE NULL END',
-              ),
-            },
-          ),
-        );
-        // History must outlive content-level cleanup. Rebuild the legacy
-        // CASCADE foreign key as RESTRICT before importing scheduler events.
+        // Drop the indexes that name the columns this step retires. Drift's
+        // table rebuild replays every index it finds attached to the old
+        // table, so an index over `extract_id` would be recreated against the
+        // new shape and abort the whole upgrade. `_createIndexes` puts the
+        // replacement (`idx_cards_parent`) back at the end of the block.
+        await customStatement('DROP INDEX IF EXISTS idx_cards_extract');
+        await customStatement('DROP INDEX IF EXISTS idx_cards_source');
+
+        // Re-runnable: an interrupted upgrade, or a file that already carries
+        // the typed parent, must not try to read the retired pair again.
+        if (await _hasColumn('cards', 'extract_id')) {
+          await m.alterTable(
+            TableMigration(
+              cards,
+              newColumns: <GeneratedColumn<Object>>[
+                cards.parentElementId,
+                cards.parentElementType,
+              ],
+              columnTransformer: <GeneratedColumn<Object>, Expression<Object>>{
+                cards.parentElementId: const CustomExpression<String>(
+                  'COALESCE(extract_id, source_id)',
+                ),
+                cards.parentElementType: const CustomExpression<int>(
+                  'CASE WHEN extract_id IS NOT NULL THEN 1 '
+                  'WHEN source_id IS NOT NULL THEN 0 ELSE NULL END',
+                ),
+              },
+            ),
+          );
+        }
+        // History and canonical memory must outlive content-level cleanup.
+        // Both tables were created with CASCADE before the contract, which
+        // meant deleting a card silently erased the evidence of every review
+        // it had ever had. Rebuild them with the RESTRICT the current schema
+        // declares, so an upgraded collection has the same integrity as a
+        // fresh one.
         await m.alterTable(TableMigration(reviewEvents));
 
         for (final GeneratedColumn<Object> column in <GeneratedColumn<Object>>[
@@ -237,6 +271,10 @@ class AppDatabase extends _$AppDatabase {
           };
           await _addColumnIfMissing(m, table, column);
         }
+
+        // Rebuilt after the new columns exist, or the copy would name a
+        // column the old table does not have yet.
+        await m.alterTable(TableMigration(cardMemories));
 
         await m.createTable(scheduleAdjustments);
         await m.createTable(schedulerEvents);
@@ -277,6 +315,17 @@ class AppDatabase extends _$AppDatabase {
           'algorithm_due_day = (SELECT due_day FROM element_schedules e '
           'WHERE e.element_id = topic_states.element_id '
           'AND e.element_type = topic_states.element_type), revision = 1',
+        );
+
+        // Where a legacy row's visible due date contradicts the original due
+        // it claims to have come from, the provenance is unknowable: some
+        // earlier build overwrote the canonical date to implement a
+        // postponement. Keep the date the user can see, and mark it as
+        // unknown rather than presenting a fabricated history as fact.
+        await customStatement(
+          'UPDATE element_schedules SET legacy_due_provenance = 1 '
+          'WHERE element_type IN (0, 1) AND due_day <> original_due_day '
+          'AND deferred_until IS NULL',
         );
 
         // Recover common element audit/provenance from immutable content rows.
@@ -327,6 +376,82 @@ class AppDatabase extends _$AppDatabase {
           'WHERE r.element_id = element_schedules.element_id '
           'AND r.element_type = element_schedules.element_type)',
         );
+
+        await _createIndexes(m);
+      }
+
+      if (from < 7) {
+        // The v6 contract made typed adjustments canonical but left the v4/v5
+        // deferral columns populated. A row deferred by an older build would
+        // therefore have become eligible again the moment its owner upgraded,
+        // silently returning work the user had pushed away. Convert every
+        // surviving legacy deferral into the lower bound it always meant, then
+        // clear the columns so exactly one mechanism can defer an element.
+        //
+        // Cards keep an exact UTC instant when one was stored; the day-only
+        // fallback uses UTC midnight, which is the honest bound the legacy
+        // column could express, and says so in its policy version.
+        await customStatement(
+          'INSERT OR IGNORE INTO schedule_adjustments ('
+          'id, element_id, element_type, mode, reason, '
+          'not_before_at_utc, not_before_study_day, '
+          'scheduled_for_at_utc, scheduled_for_study_day, zone_id, '
+          'operation_id, batch_id, policy_version, created_at_utc, '
+          'created_study_day, created_zone_id, cleared_at_utc, '
+          'cleared_by_operation_id) '
+          "SELECT 'legacy-deferral:' || e.element_id || ':' || e.element_type, "
+          'e.element_id, e.element_type, 0, '
+          'CASE WHEN e.deferral_kind = 2 THEN 1 ELSE 0 END, '
+          'CASE WHEN e.element_type = 2 THEN COALESCE('
+          '(SELECT m.deferred_until_utc FROM card_memories m '
+          'WHERE m.card_id = e.element_id), e.deferred_until * 86400000) '
+          'END, '
+          'CASE WHEN e.element_type = 2 THEN NULL ELSE e.deferred_until END, '
+          'NULL, NULL, e.zone_id, '
+          "'migration:v7:legacy_deferral:' || e.element_id, NULL, "
+          "'legacy_deferral_import_v1', "
+          'COALESCE(e.updated_at_utc, e.created_at_utc, 0), '
+          'CAST((COALESCE(e.updated_at_utc, e.created_at_utc, 0) - 14400000) '
+          '/ 86400000 AS INTEGER), e.zone_id, NULL, NULL '
+          'FROM element_schedules e WHERE e.deferred_until IS NOT NULL',
+        );
+
+        // A card could also carry an exact deferral with no day-level twin.
+        await customStatement(
+          'INSERT OR IGNORE INTO schedule_adjustments ('
+          'id, element_id, element_type, mode, reason, '
+          'not_before_at_utc, not_before_study_day, '
+          'scheduled_for_at_utc, scheduled_for_study_day, zone_id, '
+          'operation_id, batch_id, policy_version, created_at_utc, '
+          'created_study_day, created_zone_id, cleared_at_utc, '
+          'cleared_by_operation_id) '
+          "SELECT 'legacy-deferral:' || m.card_id || ':2', m.card_id, 2, 0, "
+          'CASE WHEN e.deferral_kind = 2 THEN 1 ELSE 0 END, '
+          'm.deferred_until_utc, NULL, NULL, NULL, e.zone_id, '
+          "'migration:v7:legacy_deferral:' || m.card_id, NULL, "
+          "'legacy_deferral_import_v1', "
+          'COALESCE(e.updated_at_utc, e.created_at_utc, 0), '
+          'CAST((COALESCE(e.updated_at_utc, e.created_at_utc, 0) - 14400000) '
+          '/ 86400000 AS INTEGER), e.zone_id, NULL, NULL '
+          'FROM card_memories m JOIN element_schedules e '
+          'ON e.element_id = m.card_id AND e.element_type = 2 '
+          'WHERE m.deferred_until_utc IS NOT NULL',
+        );
+
+        // Retire the legacy coordinate. The paired CHECK constraint means the
+        // kind has to fall back to `none` in the same statement.
+        await customStatement(
+          'UPDATE element_schedules SET deferred_until = NULL, '
+          'deferral_kind = 0 WHERE deferred_until IS NOT NULL',
+        );
+        await customStatement(
+          'UPDATE card_memories SET deferred_until_utc = NULL '
+          'WHERE deferred_until_utc IS NOT NULL',
+        );
+
+        // Mercy undo restores from a stored snapshot rather than recomputing,
+        // so the column has to exist before the first batch can be applied.
+        await _addColumnIfMissing(m, mercyBatches, mercyBatches.appliedSnapshotJson);
 
         await _createIndexes(m);
       }

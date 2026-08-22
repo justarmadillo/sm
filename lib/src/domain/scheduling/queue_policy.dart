@@ -146,13 +146,20 @@ final class QueueCandidate {
     if (!nowUtc.isUtc) {
       throw ArgumentError.value(nowUtc, 'nowUtc', 'must be UTC');
     }
+    if (!schedule.lifecycle.isSchedulable) return false;
+    // Defence in depth for the pre-v7 deferral columns. Typed adjustments are
+    // canonical and the v7 migration converts every legacy value into one, so
+    // this can only fire for a row written by an older build. Honouring it
+    // costs nothing and stops a stale lower bound from silently releasing
+    // work the user had already pushed away.
+    final StudyDay? legacyDeferral = schedule.deferredUntil;
+    if (legacyDeferral != null && legacyDeferral > today) return false;
     final CardState? cardState = card;
     if (cardState != null) {
-      return schedule.lifecycle.isSchedulable &&
-          !(effectiveCardDueAtUtc ?? cardState.memory.dueAtUtc).isAfter(nowUtc);
+      return !(effectiveCardDueAtUtc ?? cardState.memory.dueAtUtc)
+          .isAfter(nowUtc);
     }
-    return schedule.lifecycle.isSchedulable &&
-        (effectiveTopicDueDay ?? schedule.algorithmicDueDay) <= today;
+    return (effectiveTopicDueDay ?? schedule.algorithmicDueDay) <= today;
   }
 
   int get _originalDueOrder => card == null

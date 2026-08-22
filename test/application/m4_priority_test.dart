@@ -420,14 +420,43 @@ void main() {
         harness.refOf(background.unwrap()),
       ))!;
 
-      expect(urgentTopic.intervalDays, lessThan(backgroundTopic.intervalDays));
       final StudyDay today = await harness.today();
+      // Creation is introduction eligibility, not a repetition: neither has an
+      // interval yet, and a low priority may not hide a new article for weeks
+      // before it has ever been opened.
+      expect(urgentTopic.intervalDays, 0);
+      expect(backgroundTopic.intervalDays, 0);
       expect(
         urgentTopic.schedule.dueDay,
         today,
         reason: 'both are due today; priority decides how far they then go',
       );
       expect(backgroundTopic.schedule.dueDay, today);
+
+      // The first genuine encounter is what writes the first interval, and
+      // priority is what decides its size.
+      for (final Source source in <Source>[
+        urgent.unwrap(),
+        background.unwrap(),
+      ]) {
+        final Result<TopicState> done = await harness.reader.completeEncounter(
+          CompleteTopicEncounter(
+            harness.operation(),
+            ref: harness.refOf(source),
+            timestampUtc: clock.nowUtc(),
+          ),
+        );
+        expect(done.isOk, isTrue, reason: '${done.failureOrNull}');
+      }
+
+      final TopicState urgentAfter = (await harness.learning.findTopic(
+        harness.refOf(urgent.unwrap()),
+      ))!;
+      final TopicState backgroundAfter = (await harness.learning.findTopic(
+        harness.refOf(background.unwrap()),
+      ))!;
+      expect(urgentAfter.intervalDays, lessThan(backgroundAfter.intervalDays));
+      expect(urgentAfter.schedule.dueDay, today.addDays(1));
     });
   });
 }

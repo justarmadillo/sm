@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:collection/collection.dart';
 import 'package:incremental_reader/src/application/ports/repositories.dart';
 import 'package:incremental_reader/src/application/reader/reader_commands.dart';
 import 'package:incremental_reader/src/application/reader/reader_handlers.dart';
@@ -11,8 +12,10 @@ import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
 import 'package:incremental_reader/src/domain/content/source.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/queue_policy.dart';
+import 'package:incremental_reader/src/domain/scheduling/schedule_adjustment.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
-import 'package:incremental_reader/src/domain/settings/app_settings.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:test/test.dart';
 
 import '../support/app_harness.dart';
@@ -40,16 +43,50 @@ extension _Fixtures on AppHarness {
   }
 
   Future<TopicStateSnapshot> topicOf(String sourceId) async {
-    final topic = await learning.findTopic(
-      ElementRef(id: sourceId, type: ElementType.source),
+    final ElementRef ref = ElementRef(
+      id: sourceId,
+      type: ElementType.source,
     );
+    final topic = await learning.findTopic(ref);
+    final List<ScheduleAdjustment> adjustments = await learning
+        .listActiveAdjustments(elements: <ElementRef>{ref});
     return TopicStateSnapshot(
-      dueDay: topic!.schedule.dueDay.toString(),
-      effectiveDueDay: topic.schedule.effectiveDueDay.toString(),
+      dueDay: topic!.schedule.algorithmicDueDay.toString(),
+      effectiveDueDay: const EffectiveDueService()
+          .topicDueStudyDay(
+            topic: ref,
+            algorithmicDueStudyDay: topic.schedule.algorithmicDueDay,
+            adjustments: ScheduleAdjustmentSet(adjustments),
+          )
+          .toString(),
       stepIndex: topic.stepIndex,
       lifecycle: topic.schedule.lifecycle,
-      deferralKind: topic.schedule.deferralKind,
+      adjustmentReasons: <ScheduleAdjustmentReason>{
+        for (final ScheduleAdjustment adjustment in adjustments)
+          adjustment.reason,
+      },
     );
+  }
+
+  /// Whether [ref] may be presented on [day], through the one eligibility
+  /// path the queue itself uses.
+  Future<bool> isEligibleOn(ElementRef ref, String day) async {
+    final StudyDay studyDay = StudyDay.parse(day, zoneId: 'UTC');
+    for (final QueueCandidate candidate in await queue.loadCandidates(
+      studyDay,
+    )) {
+      if (candidate.ref != ref) continue;
+      return candidate.isEligible(
+        nowUtc: DateTime.utc(
+          studyDay.year,
+          studyDay.month,
+          studyDay.day,
+          23,
+        ),
+        today: studyDay,
+      );
+    }
+    return false;
   }
 }
 
@@ -60,14 +97,14 @@ final class TopicStateSnapshot {
     required this.effectiveDueDay,
     required this.stepIndex,
     required this.lifecycle,
-    required this.deferralKind,
+    required this.adjustmentReasons,
   });
 
   final String dueDay;
   final String effectiveDueDay;
   final int stepIndex;
   final ElementLifecycle lifecycle;
-  final DeferralKind deferralKind;
+  final Set<ScheduleAdjustmentReason> adjustmentReasons;
 
   @override
   bool operator ==(Object other) =>
@@ -76,31 +113,26 @@ final class TopicStateSnapshot {
       other.effectiveDueDay == effectiveDueDay &&
       other.stepIndex == stepIndex &&
       other.lifecycle == lifecycle &&
-      other.deferralKind == deferralKind;
+      const SetEquality<ScheduleAdjustmentReason>().equals(
+        other.adjustmentReasons,
+        adjustmentReasons,
+      );
 
   @override
-  int get hashCode =>
-      Object.hash(dueDay, effectiveDueDay, stepIndex, lifecycle, deferralKind);
+  int get hashCode => Object.hash(
+    dueDay,
+    effectiveDueDay,
+    stepIndex,
+    lifecycle,
+    const SetEquality<ScheduleAdjustmentReason>().hash(adjustmentReasons),
+  );
 
   @override
   String toString() =>
       'due=$dueDay effective=$effectiveDueDay '
-      'step=$stepIndex ${lifecycle.name} ${deferralKind.name}';
+      'step=$stepIndex ${lifecycle.name} '
+      '${adjustmentReasons.map((ScheduleAdjustmentReason r) => r.wireName)}';
 }
-
-/// Pins the fixed-sequence pacing model.
-///
-/// These suites are about handler behaviour — exactly-once terminal commands,
-/// interruption never counting as progress, lifecycle transitions — and the
-/// A-factor's arithmetic is exercised in its own domain tests. Fixing the
-/// model here keeps the dates in these assertions readable.
-Future<void> _useFixedSequences(AppHarness harness) => harness.tuneSettings(
-  (AppSettings settings) => settings.copyWith(
-    topics: settings.topics.copyWith(
-      pacing: TopicPacingMode.intervalProfile,
-    ),
-  ),
-);
 
 void main() {
   late AppHarness harness;
@@ -109,7 +141,6 @@ void main() {
   setUp(() async {
     clock = FakeClock(DateTime.utc(2026, 3, 5, 10));
     harness = AppHarness(database: openInMemoryDatabase(), clock: clock);
-    await _useFixedSequences(harness);
   });
 
   tearDown(() => harness.database.close());
@@ -305,11 +336,15 @@ void main() {
       );
 
       expect(first.isOk, isTrue);
-      expect(retry.failureOrNull, isA<ConflictFailure>());
+      // A repeated operation id returns the result the first attempt produced
+      // rather than an error: a retried command is the same command, and the
+      // caller cannot tell whether its first attempt reached the database.
+      expect(retry.isOk, isTrue, reason: '${retry.failureOrNull}');
+      expect(retry.unwrap().schedule.dueDay, first.unwrap().schedule.dueDay);
 
       final snapshot = await harness.topicOf(source.id);
       expect(snapshot.stepIndex, 1, reason: 'the retry must not advance again');
-      expect(snapshot.dueDay, '2026-03-06');
+      expect(snapshot.dueDay, first.unwrap().schedule.dueDay.toString());
       expect(
         (await harness.learning.recentActivity()).where(
           (ActivityRecord r) => r.kind == 'topic.encounter_completed',
@@ -332,7 +367,7 @@ void main() {
 
       final snapshot = await harness.topicOf(source.id);
       expect(snapshot.stepIndex, 2);
-      expect(snapshot.dueDay, '2026-03-09');
+      expect(snapshot.dueDay, '2026-03-08');
     });
 
     test('advances the dataset generation', () async {
@@ -370,9 +405,15 @@ void main() {
         0,
         reason: 'Later moves eligibility and nothing else',
       );
-      expect(snapshot.dueDay, '2026-03-05');
+      expect(
+        snapshot.dueDay,
+        '2026-03-05',
+        reason: 'the canonical due is what Later must leave alone',
+      );
       expect(snapshot.effectiveDueDay, '2026-03-08');
-      expect(snapshot.deferralKind, DeferralKind.manual);
+      expect(snapshot.adjustmentReasons, <ScheduleAdjustmentReason>{
+        ScheduleAdjustmentReason.manualLater,
+      });
     });
 
     test('a postponed source drops out of today and returns later', () async {
@@ -385,15 +426,13 @@ void main() {
         ),
       );
 
-      Future<int> eligibleOn(String day) async =>
-          (await harness.learning.listEligible(
-            day: StudyDay.parse(day, zoneId: 'UTC'),
-            types: <ElementType>{ElementType.source},
-          )).length;
-
-      expect(await eligibleOn('2026-03-05'), 0);
-      expect(await eligibleOn('2026-03-07'), 0);
-      expect(await eligibleOn('2026-03-08'), 1);
+      final ElementRef ref = ElementRef(
+        id: source.id,
+        type: ElementType.source,
+      );
+      expect(await harness.isEligibleOn(ref, '2026-03-05'), isFalse);
+      expect(await harness.isEligibleOn(ref, '2026-03-07'), isFalse);
+      expect(await harness.isEligibleOn(ref, '2026-03-08'), isTrue);
     });
   });
 
@@ -411,11 +450,11 @@ void main() {
           ElementLifecycle.finished,
         );
         expect(
-          await harness.learning.listEligible(
-            day: StudyDay.parse('2026-03-05', zoneId: 'UTC'),
-            types: <ElementType>{ElementType.source},
+          await harness.isEligibleOn(
+            ElementRef(id: source.id, type: ElementType.source),
+            '2026-03-05',
           ),
-          isEmpty,
+          isFalse,
         );
         expect(await harness.content.findSource(source.id), isNotNull);
       },
@@ -440,12 +479,16 @@ void main() {
 
         final snapshot = await harness.topicOf(source.id);
         expect(snapshot.lifecycle, ElementLifecycle.active);
-        expect(snapshot.dueDay, '2026-03-15');
+        expect(
+          snapshot.dueDay,
+          '2026-03-06',
+          reason: 'reactivation restores the schedule; it does not rewrite it',
+        );
         expect(snapshot.stepIndex, 1, reason: 'a pause is not a reset');
       },
     );
 
-    test('changing pace keeps the position and the interval step', () async {
+    test('changing pace is content metadata and reschedules nothing', () async {
       final source = await harness.importFixture();
       final ref = ElementRef(id: source.id, type: ElementType.source);
       await harness.reader.completeEncounter(
@@ -461,7 +504,11 @@ void main() {
       );
 
       final topic = await harness.learning.findTopic(ref);
-      expect(topic!.profileId, 'slow');
+      expect(
+        topic!.schedulerKind,
+        TopicSchedulerKind.topicAFactorV1,
+        reason: 'a legacy pace control must not migrate a scheduler family',
+      );
       expect(topic.stepIndex, 1);
       expect(
         (await harness.content.findSource(source.id))!.pace,
@@ -511,7 +558,6 @@ void main() {
         ),
         clock: FakeClock(DateTime.utc(2026, 3, 5, 10)),
       );
-      await _useFixedSequences(opened);
       return opened;
     }
 

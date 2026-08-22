@@ -4,7 +4,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:incremental_reader/src/data/database/app_database.dart';
 import 'package:incremental_reader/src/data/database/connection.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
@@ -69,10 +69,11 @@ void main() {
       final AppDatabase database = await open();
       addTearDown(database.close);
 
+      // Auto-indexes created by UNIQUE constraints have no SQL of their own.
       final Map<String, String> indexes = <String, String>{
         for (final QueryRow row in await database.customSelect(
           "SELECT name, sql FROM sqlite_master WHERE type = 'index' "
-          "AND tbl_name = 'schedule_adjustments'",
+          "AND tbl_name = 'schedule_adjustments' AND sql IS NOT NULL",
         ).get())
           row.read<String>('name'): row.read<String>('sql'),
       };
@@ -139,7 +140,7 @@ void main() {
         reason: 'an element may have at most one active exact override',
       );
       await database.customStatement(
-        "UPDATE schedule_adjustments SET cleared_at_utc = 1500, "
+        'UPDATE schedule_adjustments SET cleared_at_utc = 1500, '
         "cleared_by_operation_id = 'clear-op' WHERE id = 'exact-1'",
       );
       await insert(
@@ -337,11 +338,48 @@ void main() {
         'practice_reviewed',
       );
 
+      // Dropping a legacy deferral would silently release work the user had
+      // pushed away, so v7 converts each one into the lower bound it always
+      // meant and labels its provenance rather than claiming it was typed all
+      // along. The retired columns are cleared so only one mechanism defers.
+      final List<QueryRow> adjustments = await migrated
+          .customSelect('SELECT * FROM schedule_adjustments ORDER BY id')
+          .get();
+      expect(adjustments, hasLength(2));
+      for (final QueryRow row in adjustments) {
+        expect(row.read<int>('mode'), 0);
+        expect(row.read<String>('policy_version'), 'legacy_deferral_import_v1');
+        expect(row.read<int?>('cleared_at_utc'), isNull);
+      }
+      final QueryRow topicBound = adjustments.singleWhere(
+        (QueryRow row) => row.read<String>('element_id') == 'x1',
+      );
+      expect(topicBound.read<int>('reason'), 0, reason: 'manual Later');
+      expect(topicBound.read<int>('not_before_study_day'), 20010);
+      expect(topicBound.read<int?>('not_before_at_utc'), isNull);
+
+      final QueryRow cardBound = adjustments.singleWhere(
+        (QueryRow row) => row.read<String>('element_id') == 'c-extract',
+      );
+      expect(cardBound.read<int>('not_before_at_utc'), 1702000000000);
+      expect(cardBound.read<int?>('not_before_study_day'), isNull);
+
       expect(
-        await migrated.customSelect('SELECT * FROM schedule_adjustments').get(),
+        await migrated
+            .customSelect(
+              'SELECT * FROM element_schedules '
+              'WHERE deferred_until IS NOT NULL OR deferral_kind <> 0',
+            )
+            .get(),
         isEmpty,
-        reason: 'legacy deferral fields alone are not enough history to invent '
-            'typed adjustment audit records',
+      );
+      expect(
+        await migrated
+            .customSelect(
+              'SELECT * FROM card_memories WHERE deferred_until_utc IS NOT NULL',
+            )
+            .get(),
+        isEmpty,
       );
     });
 
@@ -454,6 +492,13 @@ Future<void> _createV5Fixture(File file) async {
       }
 
       legacy.execute(_v5CardsSql);
+      // The indexes a v5 collection really carries. A table rebuild replays
+      // every index attached to the table, so a fixture without them cannot
+      // reproduce what upgrading a real file does.
+      legacy.execute(
+        'CREATE INDEX idx_cards_extract ON cards (extract_id)',
+      );
+      legacy.execute('CREATE INDEX idx_cards_source ON cards (source_id)');
       legacy.execute(_v5SchedulesSql);
       legacy.execute(_v5TopicStatesSql);
       legacy.execute(_v5CardMemoriesSql);

@@ -42,7 +42,7 @@ final class SchedulingJournal {
     double? pressure,
     double? readFraction,
   }) => RevlogSnapshot(
-    dueAtUtc: calendar.startOfDayUtc(state.schedule.effectiveDueDay),
+    dueAtUtc: calendar.startOfDayUtc(state.schedule.algorithmicDueDay),
     intervalDays: state.intervalDays,
     aFactor: state.aFactor,
     priorityKey: state.schedule.priority.orderKey,

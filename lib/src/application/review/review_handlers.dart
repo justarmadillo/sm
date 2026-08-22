@@ -50,6 +50,12 @@ const String kCardEditedKind = 'card.edited';
 /// Activity kind recorded when a card's eligibility is moved.
 const String kCardPostponedKind = 'card.postponed';
 
+/// `[Product decision]` How far a Snooze moves a card that is mid-learning.
+///
+/// Short on purpose: the point is to step past one card without losing the
+/// learning step it is in the middle of.
+const Duration kIntradaySnooze = Duration(minutes: 10);
+
 /// Activity kind recorded when siblings are pushed off the day.
 const String kSiblingsBuriedKind = 'card.siblings_buried';
 
@@ -571,19 +577,23 @@ final class ReviewHandlers {
         final StudyDayCalendar calendar = await _context.calendar();
         final StudyDay today = calendar.dayOf(command.timestampUtc);
 
-        if (state.memory.isIntradayStep) {
-          return const Err<CardState>(
-            ValidationFailure(
-              'Later is unavailable during learning/relearning; use a short '
-              'exact-UTC Snooze once its adjustment reason is configured',
-            ),
-          );
-        }
+        // A card mid-learning is not a candidate for a day-scale Later: its
+        // next step is minutes away and pushing it to tomorrow abandons a
+        // repetition the user has already started. Unless they name a date
+        // themselves, the answer is a short Snooze — an exact-UTC lower bound
+        // that moves eligibility by minutes and reviews nothing.
+        final bool snoozing =
+            state.memory.isIntradayStep && command.until == null;
 
-        StudyDay until;
+        StudyDay until = today;
         PostponeDecision? decision;
-        if (command.until != null) {
+        DateTime notBeforeAtUtc;
+        if (snoozing) {
+          notBeforeAtUtc = command.timestampUtc.add(kIntradaySnooze);
+          until = calendar.dayOf(notBeforeAtUtc);
+        } else if (command.until != null) {
           until = command.until!;
+          notBeforeAtUtc = calendar.startOfDayUtc(until);
         } else {
           final OverloadValve valve = await _context.overloadValve();
           decision = valve.later(
@@ -591,6 +601,7 @@ final class ReviewHandlers {
             seed: '${command.operationId.value}:${command.cardId}',
           );
           until = today.addDays(decision.delayDays);
+          notBeforeAtUtc = calendar.startOfDayUtc(until);
         }
 
         final ScheduleAdjustmentReason reason =
@@ -603,7 +614,7 @@ final class ReviewHandlers {
           operationId: command.operationId.value,
           atUtc: command.timestampUtc,
           studyDay: today,
-          notBeforeAtUtc: calendar.startOfDayUtc(until),
+          notBeforeAtUtc: notBeforeAtUtc,
           replaceSameReason: true,
         );
         await _journal.append(
@@ -619,7 +630,9 @@ final class ReviewHandlers {
           postponeCount: state.memory.postponeCount,
           metadata: <String, Object?>{
             'until': until.toString(),
+            'not_before_at_utc': notBeforeAtUtc.millisecondsSinceEpoch,
             'adjustment_reason': reason.wireName,
+            if (snoozing) 'snooze_minutes': kIntradaySnooze.inMinutes,
             if (applied.alreadyApplied) 'idempotent_replay': true,
             if (decision != null) ...decision.toMetadata(),
           },
@@ -634,6 +647,7 @@ final class ReviewHandlers {
             metadata: <String, Object?>{
               'until': until.toString(),
               'kind': command.kind.name,
+              if (snoozing) 'snooze_minutes': kIntradaySnooze.inMinutes,
             },
           ),
         );

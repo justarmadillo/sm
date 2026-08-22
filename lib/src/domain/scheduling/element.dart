@@ -172,16 +172,12 @@ final class ElementSchedule {
   /// compatibility.
   StudyDay get algorithmicDueDay => dueDay;
 
-  /// The day the element actually becomes eligible.
-  StudyDay get effectiveDueDay {
-    final deferred = deferredUntil;
-    if (deferred == null) return dueDay;
-    return deferred > dueDay ? deferred : dueDay;
-  }
-
-  /// Whether the element may appear in the queue on [today].
-  bool isEligibleOn(StudyDay today) =>
-      lifecycle.isSchedulable && effectiveDueDay <= today;
+  // There is deliberately no `effectiveDueDay` here. Presentation eligibility
+  // is the canonical due plus the typed adjustments that currently apply, and
+  // those live in their own table: a getter on this row could only ever see
+  // the retired v4 deferral columns and would quietly report a Later, a bury,
+  // or a Mercy override as if it had never happened. Ask `EffectiveDueQuery`
+  // (screens) or `EffectiveDueService` (domain) instead.
 
   /// How many days late the element is on [today], per its original due day.
   int overdueDaysOn(StudyDay today) {
@@ -234,6 +230,6 @@ final class ElementSchedule {
 
   @override
   String toString() =>
-      'ElementSchedule($ref ${lifecycle.name} due=$effectiveDueDay '
+      'ElementSchedule($ref ${lifecycle.name} due=$dueDay '
       'priority=${priority.orderKey})';
 }

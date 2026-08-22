@@ -12,6 +12,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/diagnostics/diagnostics_query.dart';
+import '../application/diagnostics/scheduler_metrics_query.dart';
 import '../application/extraction/extraction_handlers.dart';
 import '../application/formulation/formulation_handlers.dart';
 import '../application/ports/repositories.dart';
@@ -22,6 +23,9 @@ import '../application/queue/queue_handlers.dart';
 import '../application/queue/queue_query.dart';
 import '../application/reader/reader_handlers.dart';
 import '../application/review/review_handlers.dart';
+import '../application/scheduling/effective_due_query.dart';
+import '../application/scheduling/mercy_handlers.dart';
+import '../application/scheduling/schedule_adjustment_service.dart';
 import '../application/scheduling/scheduling_context.dart';
 import '../application/search/search_query.dart';
 import '../application/settings/settings_store.dart';
@@ -289,6 +293,41 @@ final Provider<QueueHandlers> queueHandlersProvider = Provider<QueueHandlers>(
   ),
 );
 
+/// The one adjustment-aware "when does this come back?" for screens.
+final Provider<EffectiveDueQuery> effectiveDueQueryProvider =
+    Provider<EffectiveDueQuery>(
+      (Ref ref) => EffectiveDueQuery(
+        learning: ref.watch(learningRepositoryProvider),
+        context: ref.watch(schedulingContextProvider),
+      ),
+    );
+
+/// Scheduler safety metrics for the diagnostics panel.
+final Provider<SchedulerMetricsQuery> schedulerMetricsQueryProvider =
+    Provider<SchedulerMetricsQuery>(
+      (Ref ref) => SchedulerMetricsQuery(
+        learning: ref.watch(learningRepositoryProvider),
+        context: ref.watch(schedulingContextProvider),
+        queue: ref.watch(queueHandlersProvider),
+      ),
+    );
+
+/// Mercy: preview, apply, and exact batch undo.
+final Provider<MercyHandlers> mercyHandlersProvider = Provider<MercyHandlers>(
+  (Ref ref) => MercyHandlers(
+    learning: ref.watch(learningRepositoryProvider),
+    transfer: ref.watch(transferRepositoryProvider),
+    transactions: ref.watch(transactionRunnerProvider),
+    context: ref.watch(schedulingContextProvider),
+    adjustments: ScheduleAdjustmentService(
+      learning: ref.watch(learningRepositoryProvider),
+      ids: ref.watch(idGeneratorProvider),
+    ),
+    queue: ref.watch(queueHandlersProvider),
+    ids: ref.watch(idGeneratorProvider),
+  ),
+);
+
 /// Today's admitted, mixed, and randomized queue.
 final Provider<QueueQuery> queueQueryProvider = Provider<QueueQuery>(
   (Ref ref) => QueueQuery(
@@ -314,6 +353,7 @@ final Provider<SearchQuery> searchQueryProvider = Provider<SearchQuery>(
   (Ref ref) => SearchQuery(
     search: ref.watch(searchRepositoryProvider),
     learning: ref.watch(learningRepositoryProvider),
+    effectiveDue: ref.watch(effectiveDueQueryProvider),
   ),
 );
 
@@ -325,6 +365,7 @@ final Provider<DiagnosticsQuery> diagnosticsQueryProvider =
         content: ref.watch(contentRepositoryProvider),
         search: ref.watch(searchRepositoryProvider),
         context: ref.watch(schedulingContextProvider),
+        effectiveDue: ref.watch(effectiveDueQueryProvider),
       ),
     );
 

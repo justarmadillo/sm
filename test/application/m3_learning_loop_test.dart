@@ -166,11 +166,11 @@ void main() {
       card.id,
     );
     final state = (await harness.learning.findCardState(card.id))!;
-    expect(
-      state.schedule.priority,
-      inherited,
-      reason: 'a card inherits the priority of whatever element made it',
-    );
+    // Inheritance places the card next to whatever made it; it does not copy
+    // the key, because two elements sharing one key collapse the percentile
+    // scale they are both ranked on.
+    expect(state.schedule.priority, isNot(inherited));
+    expect(state.schedule.priority.compareTo(inherited), greaterThan(0));
     expect(
       state.schedule.rootId,
       source.id,
@@ -257,7 +257,8 @@ void main() {
 
     for (final Card card in cards) {
       final state = (await harness.learning.findCardState(card.id))!;
-      expect(state.schedule.priority, inherited);
+      expect(state.schedule.priority, isNot(inherited));
+      expect(state.schedule.priority.compareTo(inherited), greaterThan(0));
       expect(state.memory.isNew, isTrue);
       expect(state.memory.state, CardLearningState.learning);
       expect(state.memory.step, 0);
@@ -268,11 +269,17 @@ void main() {
       expect(state.memory.parametersVersion, kCardParametersVersion);
     }
 
+    final Map<String, PriorityRank> cardRanks = <String, PriorityRank>{
+      for (final Card card in cards)
+        card.id: (await harness.learning.findCardState(
+          card.id,
+        ))!.schedule.priority,
+    };
     await harness.setRank(extractRef, PriorityRank.below(PriorityRank.middle));
     for (final Card card in cards) {
       expect(
         (await harness.learning.findCardState(card.id))!.schedule.priority,
-        inherited,
+        cardRanks[card.id],
         reason: 'priority is inherited once, not linked to the extract',
       );
     }
@@ -328,8 +335,11 @@ void main() {
       expect(record.schedulerVersion, kCardSchedulerVersion);
       expect(record.parametersVersion, kCardParametersVersion);
 
+      // The retry replays the recorded outcome instead of grading again: a
+      // resent command must be the same command, not a second repetition.
       final retry = await harness.review.review(command);
-      expect(retry.failureOrNull, isA<ConflictFailure>());
+      expect(retry.isOk, isTrue, reason: '${retry.failureOrNull}');
+      expect(retry.unwrap().state.memory, first.memory);
       expect(await harness.learning.listReviewsForCard(card.id), hasLength(1));
       expect(
         (await harness.learning.findCardState(card.id))!.memory,

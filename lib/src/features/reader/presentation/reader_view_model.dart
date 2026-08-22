@@ -72,6 +72,7 @@ final class ReaderUiState {
     required this.topic,
     required this.mode,
     required this.openedAt,
+    this.effectiveDueDay,
     this.extracts = const <Extract>[],
     this.cardsFromSource = 0,
     this.lastExtractId,
@@ -88,6 +89,11 @@ final class ReaderUiState {
   final Document document;
   final TopicState topic;
   final ReaderMode mode;
+
+  /// When this article may next be presented, adjustments included. Null only
+  /// before the first load resolves it. Never the canonical due: showing that
+  /// would report a Later the user just made as if it had not happened.
+  final StudyDay? effectiveDueDay;
 
   /// Where this session started, for the reminder line.
   final ReaderAnchor? openedAt;
@@ -190,6 +196,7 @@ final class ReaderUiState {
     int? wordsThisSession,
     bool? reminderDismissed,
     bool? softBannerDismissed,
+    StudyDay? effectiveDueDay,
     UiMessage? message,
     bool clearMessage = false,
     bool? isBusy,
@@ -200,6 +207,7 @@ final class ReaderUiState {
     topic: topic ?? this.topic,
     mode: mode ?? this.mode,
     openedAt: openedAt ?? this.openedAt,
+    effectiveDueDay: effectiveDueDay ?? this.effectiveDueDay,
     extracts: extracts ?? this.extracts,
     cardsFromSource: cardsFromSource ?? this.cardsFromSource,
     lastExtractId: clearLastExtract
@@ -246,6 +254,9 @@ final class ReaderViewModel
       document: document,
       topic: topic,
       mode: mode,
+      effectiveDueDay: await ref
+          .read(effectiveDueQueryProvider)
+          .forTopic(topic),
       reminderTarget: (await ref.read(schedulingContextProvider).settings())
           .reader
           .reminderWords,
@@ -405,8 +416,8 @@ final class ReaderViewModel
           ),
       apply: (ReaderUiState s, TopicState topic) =>
           s.copyWith(topic: topic, isDone: true),
-      success: (TopicState topic) =>
-          'Next on ${topic.schedule.effectiveDueDay}',
+      successAsync: (TopicState topic) async =>
+          'Next on ${await _refreshEffectiveDue(topic)}',
     );
   }
 
@@ -429,9 +440,24 @@ final class ReaderViewModel
           ),
       apply: (ReaderUiState s, TopicState topic) =>
           s.copyWith(topic: topic, isDone: true),
-      success: (TopicState topic) =>
-          'Back on ${topic.schedule.effectiveDueDay}',
+      successAsync: (TopicState topic) async =>
+          'Back on ${await _refreshEffectiveDue(topic)}',
     );
+  }
+
+  /// Reads the adjustment-aware due back and stores it on the state, so the
+  /// status bar and the toast cannot disagree about when this comes back.
+  Future<StudyDay> _refreshEffectiveDue(TopicState topic) async {
+    final StudyDay due = await ref
+        .read(effectiveDueQueryProvider)
+        .forTopic(topic);
+    final ReaderUiState? current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue<ReaderUiState>.data(
+        current.copyWith(effectiveDueDay: due),
+      );
+    }
+    return due;
   }
 
   /// Declares the source finished. Never happens automatically at the end.
@@ -609,6 +635,7 @@ final class ReaderViewModel
     Future<Result<T>> Function(OperationId operation) run, {
     required ReaderUiState Function(ReaderUiState state, T value) apply,
     String Function(T value)? success,
+    Future<String> Function(T value)? successAsync,
   }) async {
     final current = state.valueOrNull;
     if (current == null || current.isBusy) return;
@@ -617,13 +644,23 @@ final class ReaderViewModel
     final result = await run(
       OperationId(ref.read(idGeneratorProvider).newId()),
     );
+    // The async message builder may itself refresh the state (the effective
+    // due is read back from storage), so the base to apply onto is taken
+    // after it has run, not before.
+    String? asyncMessage;
+    final Future<String> Function(T value)? buildAsync = successAsync;
+    if (buildAsync != null && result is Ok<T>) {
+      asyncMessage = await buildAsync(result.value);
+    }
     final latest = state.valueOrNull ?? current;
 
     state = AsyncValue<ReaderUiState>.data(
       result.fold(
         (T value) => apply(latest, value).copyWith(
           isBusy: false,
-          message: success == null ? null : UiMessage(success(value)),
+          message: asyncMessage != null
+              ? UiMessage(asyncMessage)
+              : (success == null ? null : UiMessage(success(value))),
         ),
         (AppFailure failure) => latest.copyWith(
           isBusy: false,

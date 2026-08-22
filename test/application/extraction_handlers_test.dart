@@ -15,7 +15,6 @@ import 'package:incremental_reader/src/domain/content/source.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/domain/scheduling/interval_profile.dart';
 import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
-import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:test/test.dart';
 
 import '../support/app_harness.dart';
@@ -61,13 +60,6 @@ extension _Fixtures on AppHarness {
 /// interruption never counting as progress, lifecycle transitions — and the
 /// A-factor's arithmetic is exercised in its own domain tests. Fixing the
 /// model here keeps the dates in these assertions readable.
-Future<void> _useFixedSequences(AppHarness harness) => harness.tuneSettings(
-  (AppSettings settings) => settings.copyWith(
-    topics: settings.topics.copyWith(
-      pacing: TopicPacingMode.intervalProfile,
-    ),
-  ),
-);
 
 void main() {
   late AppHarness harness;
@@ -78,7 +70,6 @@ void main() {
   setUp(() async {
     clock = FakeClock(DateTime.utc(2026, 3, 5, 10));
     harness = AppHarness(database: openInMemoryDatabase(), clock: clock);
-    await _useFixedSequences(harness);
     source = await harness.importFixture();
     document = (await harness.content.findDocument(source.id))!;
   });
@@ -258,12 +249,26 @@ void main() {
           id: created.id,
           type: ElementType.extract,
         );
+        // Adjacent to the parent, never equal to it: shared keys collapse
+        // every percentile onto one value and make the protected band shield
+        // the whole collection.
+        final PriorityRank childRank =
+            (await harness.learning.findSchedule(extractRef))!.priority;
+        expect(childRank, isNot(raised));
+        expect(childRank.compareTo(raised), greaterThan(0));
+        final List<ElementSchedule> ordered = await harness.learning
+            .listByPriority();
+        final int parentIndex = ordered.indexWhere(
+          (ElementSchedule s) => s.ref == sourceRef,
+        );
         expect(
-          (await harness.learning.findSchedule(extractRef))!.priority,
-          raised,
+          ordered[parentIndex + 1].ref,
+          extractRef,
+          reason: 'a new child starts immediately below its parent',
         );
 
         // Re-ranking the parent afterwards must not cascade.
+        final PriorityRank childBefore = childRank;
         await harness.priority.setRank(
           SetPriority(
             harness.nextOperation(),
@@ -273,7 +278,8 @@ void main() {
         );
         expect(
           (await harness.learning.findSchedule(extractRef))!.priority,
-          raised,
+          childBefore,
+          reason: 'a later parent move does not drag its descendants',
         );
       },
     );

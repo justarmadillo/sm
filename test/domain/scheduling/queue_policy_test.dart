@@ -642,12 +642,11 @@ void main() {
       },
     );
 
-    test('caps remain maxima; legacy overload tolerance cannot overshoot', () {
+    test('caps are maxima, never a target the valve may overshoot', () {
       const QueuePolicy policy = QueuePolicy(
         settings: QueueSettings(
           randomization: 0,
           maxTopics: 10,
-          overloadTolerance: 1.2,
           protectedPercentile: 0,
         ),
       );
@@ -663,13 +662,12 @@ void main() {
       expect(plan.counters.overflowTopics, 2);
     });
 
-    test('legacy root-share setting does not invent an admission rule', () {
+    test('one article cannot be throttled by an unstated share rule', () {
       const QueuePolicy policy = QueuePolicy(
         settings: QueueSettings(
           randomization: 0,
           maxTopics: 100,
           protectedPercentile: 0,
-          maxSharePerRoot: 0.5,
         ),
       );
       final QueuePlan plan = policy.build(

@@ -6,6 +6,7 @@ import 'dart:convert';
 import '../../core/ids.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
+import '../../domain/scheduling/mercy.dart';
 import '../../domain/scheduling/schedule_adjustment.dart';
 import '../../domain/scheduling/scheduler_event.dart';
 import '../../domain/scheduling/study_day.dart';
@@ -278,6 +279,20 @@ final class ScheduleAdjustmentService {
     );
     await _persist(mutation);
     return mutation;
+  }
+
+  /// The canonical scheduler state of [element], for audit envelopes.
+  ///
+  /// Read-only by construction: Mercy and every other adjustment records what
+  /// the canonical schedule was so that history can prove it did not move.
+  Future<MercyCanonicalSnapshot> canonicalSnapshotOf(ElementRef element) async {
+    final _CanonicalEnvelope envelope = await _canonical(element);
+    return MercyCanonicalSnapshot(
+      serializedState: envelope.state,
+      algorithmicDue: envelope.algorithmicDue,
+      schedulerName: envelope.schedulerName,
+      schedulerVersion: envelope.schedulerVersion,
+    );
   }
 
   Future<ScheduleAdjustmentSet> _loadSet(ElementRef element) async =>

@@ -16,29 +16,6 @@ library;
 
 import 'package:meta/meta.dart';
 
-/// How a topic's next interval is computed.
-enum TopicPacingMode {
-  /// `next = interval × A`, with A modulated by priority, completion, and
-  /// conversion status. This is the SuperMemo model.
-  aFactor,
-
-  /// A fixed, user-edited sequence of day intervals whose last value repeats.
-  /// Simpler and fully predictable; the behaviour shipped in M0–M3.
-  intervalProfile;
-
-  /// Decodes the stored name, falling back to [aFactor].
-  static TopicPacingMode parse(String? value) => switch (value) {
-    'interval_profile' => TopicPacingMode.intervalProfile,
-    _ => TopicPacingMode.aFactor,
-  };
-
-  /// Stable stored name. Never persist [index].
-  String get storageName => switch (this) {
-    TopicPacingMode.aFactor => 'a_factor',
-    TopicPacingMode.intervalProfile => 'interval_profile',
-  };
-}
-
 /// Which study day an instant belongs to.
 @immutable
 final class StudyDaySettings {
@@ -76,13 +53,8 @@ final class QueueSettings {
     this.cardsPerTopic = 4,
     this.minTopicEvery = 8,
     this.randomization = 0.05,
-    this.priorityWeight = 0.75,
-    this.overdueWeight = 0.20,
     this.protectedPercentile = 0.01,
-    this.overloadTolerance = 1.2,
-    this.maxSharePerRoot = 0.5,
     this.autoPostpone = true,
-    this.autoSort = true,
     this.studyMoreStep = 20,
   });
 
@@ -105,26 +77,11 @@ final class QueueSettings {
   /// Degree of deterministic daily shuffle. `0` gives strict priority order.
   final double randomization;
 
-  /// Weight of relative priority in the within-stream sort key.
-  final double priorityWeight;
-
-  /// Weight of capped overdue-ness in the within-stream sort key.
-  final double overdueWeight;
-
   /// Top fraction of the collection that auto-postpone must never touch.
   final double protectedPercentile;
 
-  /// Overshoot allowed before the valve engages, as a multiple of the cap.
-  final double overloadTolerance;
-
-  /// Largest share of one session a single source's subtree may occupy.
-  final double maxSharePerRoot;
-
   /// Whether excess due material is deferred automatically at all.
   final bool autoPostpone;
-
-  /// Whether the queue re-sorts by priority at the start of each study day.
-  final bool autoSort;
 
   /// How many extra elements one Study More press admits.
   final int studyMoreStep;
@@ -136,13 +93,8 @@ final class QueueSettings {
     int? cardsPerTopic,
     int? minTopicEvery,
     double? randomization,
-    double? priorityWeight,
-    double? overdueWeight,
     double? protectedPercentile,
-    double? overloadTolerance,
-    double? maxSharePerRoot,
     bool? autoPostpone,
-    bool? autoSort,
     int? studyMoreStep,
   }) => QueueSettings(
     maxCards: maxCards ?? this.maxCards,
@@ -151,13 +103,8 @@ final class QueueSettings {
     cardsPerTopic: cardsPerTopic ?? this.cardsPerTopic,
     minTopicEvery: minTopicEvery ?? this.minTopicEvery,
     randomization: randomization ?? this.randomization,
-    priorityWeight: priorityWeight ?? this.priorityWeight,
-    overdueWeight: overdueWeight ?? this.overdueWeight,
     protectedPercentile: protectedPercentile ?? this.protectedPercentile,
-    overloadTolerance: overloadTolerance ?? this.overloadTolerance,
-    maxSharePerRoot: maxSharePerRoot ?? this.maxSharePerRoot,
     autoPostpone: autoPostpone ?? this.autoPostpone,
-    autoSort: autoSort ?? this.autoSort,
     studyMoreStep: studyMoreStep ?? this.studyMoreStep,
   );
 
@@ -170,13 +117,8 @@ final class QueueSettings {
       other.cardsPerTopic == cardsPerTopic &&
       other.minTopicEvery == minTopicEvery &&
       other.randomization == randomization &&
-      other.priorityWeight == priorityWeight &&
-      other.overdueWeight == overdueWeight &&
       other.protectedPercentile == protectedPercentile &&
-      other.overloadTolerance == overloadTolerance &&
-      other.maxSharePerRoot == maxSharePerRoot &&
       other.autoPostpone == autoPostpone &&
-      other.autoSort == autoSort &&
       other.studyMoreStep == studyMoreStep;
 
   @override
@@ -187,13 +129,8 @@ final class QueueSettings {
     cardsPerTopic,
     minTopicEvery,
     randomization,
-    priorityWeight,
-    overdueWeight,
     protectedPercentile,
-    overloadTolerance,
-    maxSharePerRoot,
     autoPostpone,
-    autoSort,
     studyMoreStep,
   ]);
 }
@@ -206,30 +143,17 @@ final class QueueSettings {
 @immutable
 final class TopicSchedulerSettings {
   const TopicSchedulerSettings({
-    this.pacing = TopicPacingMode.aFactor,
     this.baseAFactor = 2.0,
     this.priorityFloor = 0.7,
     this.prioritySpan = 0.8,
-    this.completionFloor = 0.7,
-    this.completionSpan = 0.6,
-    this.unconvertedExtractFactor = 0.75,
-    this.convertedExtractFactor = 1.25,
-    this.yieldEnabled = false,
-    this.yieldWeight = 0.6,
-    this.yieldSmoothing = 0.3,
-    this.yieldReferenceDensity = 4.0,
     this.minAFactor = 1.01,
     this.maxAFactor = 6.0,
     this.sourceFirstIntervalSpan = 20,
     this.sourceFirstIntervalMax = 30,
     this.extractFirstIntervalSpan = 10,
     this.extractFirstIntervalMax = 14,
-    this.autoFinishSources = false,
     this.extractFinishPromptAfter = 3,
   });
-
-  /// Which interval model applies to topics.
-  final TopicPacingMode pacing;
 
   /// A before any modulation.
   final double baseAFactor;
@@ -240,30 +164,6 @@ final class TopicSchedulerSettings {
 
   /// Width of the priority modulation band. See [priorityFloor].
   final double prioritySpan;
-
-  /// `A × (completionFloor + completionSpan × fractionRead)`, sources only.
-  final double completionFloor;
-
-  /// Width of the completion modulation band. See [completionFloor].
-  final double completionSpan;
-
-  /// An extract that still owes a card comes back sooner.
-  final double unconvertedExtractFactor;
-
-  /// An extract that has produced cards has done its job and recedes.
-  final double convertedExtractFactor;
-
-  /// Whether extraction density modulates A at all. Experimental by design.
-  final bool yieldEnabled;
-
-  /// `A × (1 − yieldWeight × normalizedYield)`.
-  final double yieldWeight;
-
-  /// Exponential smoothing applied to the newest density sample.
-  final double yieldSmoothing;
-
-  /// Extracts per thousand words treated as a fully productive session.
-  final double yieldReferenceDensity;
 
   /// Lower clamp on A. A floor of 1.0 means a repetition never shortens an
   /// interval by itself; only the user can do that.
@@ -284,48 +184,24 @@ final class TopicSchedulerSettings {
   /// Upper clamp on an extract's first interval, in days.
   final int extractFirstIntervalMax;
 
-  /// Whether a fully read source with nothing left to mine finishes itself.
-  final bool autoFinishSources;
-
   /// Encounters since the last card before an extract is offered Finish.
   final int extractFinishPromptAfter;
 
   TopicSchedulerSettings copyWith({
-    TopicPacingMode? pacing,
     double? baseAFactor,
     double? priorityFloor,
     double? prioritySpan,
-    double? completionFloor,
-    double? completionSpan,
-    double? unconvertedExtractFactor,
-    double? convertedExtractFactor,
-    bool? yieldEnabled,
-    double? yieldWeight,
-    double? yieldSmoothing,
-    double? yieldReferenceDensity,
     double? minAFactor,
     double? maxAFactor,
     int? sourceFirstIntervalSpan,
     int? sourceFirstIntervalMax,
     int? extractFirstIntervalSpan,
     int? extractFirstIntervalMax,
-    bool? autoFinishSources,
     int? extractFinishPromptAfter,
   }) => TopicSchedulerSettings(
-    pacing: pacing ?? this.pacing,
     baseAFactor: baseAFactor ?? this.baseAFactor,
     priorityFloor: priorityFloor ?? this.priorityFloor,
     prioritySpan: prioritySpan ?? this.prioritySpan,
-    completionFloor: completionFloor ?? this.completionFloor,
-    completionSpan: completionSpan ?? this.completionSpan,
-    unconvertedExtractFactor:
-        unconvertedExtractFactor ?? this.unconvertedExtractFactor,
-    convertedExtractFactor:
-        convertedExtractFactor ?? this.convertedExtractFactor,
-    yieldEnabled: yieldEnabled ?? this.yieldEnabled,
-    yieldWeight: yieldWeight ?? this.yieldWeight,
-    yieldSmoothing: yieldSmoothing ?? this.yieldSmoothing,
-    yieldReferenceDensity: yieldReferenceDensity ?? this.yieldReferenceDensity,
     minAFactor: minAFactor ?? this.minAFactor,
     maxAFactor: maxAFactor ?? this.maxAFactor,
     sourceFirstIntervalSpan:
@@ -336,7 +212,6 @@ final class TopicSchedulerSettings {
         extractFirstIntervalSpan ?? this.extractFirstIntervalSpan,
     extractFirstIntervalMax:
         extractFirstIntervalMax ?? this.extractFirstIntervalMax,
-    autoFinishSources: autoFinishSources ?? this.autoFinishSources,
     extractFinishPromptAfter:
         extractFinishPromptAfter ?? this.extractFinishPromptAfter,
   );
@@ -344,48 +219,28 @@ final class TopicSchedulerSettings {
   @override
   bool operator ==(Object other) =>
       other is TopicSchedulerSettings &&
-      other.pacing == pacing &&
       other.baseAFactor == baseAFactor &&
       other.priorityFloor == priorityFloor &&
       other.prioritySpan == prioritySpan &&
-      other.completionFloor == completionFloor &&
-      other.completionSpan == completionSpan &&
-      other.unconvertedExtractFactor == unconvertedExtractFactor &&
-      other.convertedExtractFactor == convertedExtractFactor &&
-      other.yieldEnabled == yieldEnabled &&
-      other.yieldWeight == yieldWeight &&
-      other.yieldSmoothing == yieldSmoothing &&
-      other.yieldReferenceDensity == yieldReferenceDensity &&
       other.minAFactor == minAFactor &&
       other.maxAFactor == maxAFactor &&
       other.sourceFirstIntervalSpan == sourceFirstIntervalSpan &&
       other.sourceFirstIntervalMax == sourceFirstIntervalMax &&
       other.extractFirstIntervalSpan == extractFirstIntervalSpan &&
       other.extractFirstIntervalMax == extractFirstIntervalMax &&
-      other.autoFinishSources == autoFinishSources &&
       other.extractFinishPromptAfter == extractFinishPromptAfter;
 
   @override
   int get hashCode => Object.hashAll(<Object>[
-    pacing,
     baseAFactor,
     priorityFloor,
     prioritySpan,
-    completionFloor,
-    completionSpan,
-    unconvertedExtractFactor,
-    convertedExtractFactor,
-    yieldEnabled,
-    yieldWeight,
-    yieldSmoothing,
-    yieldReferenceDensity,
     minAFactor,
     maxAFactor,
     sourceFirstIntervalSpan,
     sourceFirstIntervalMax,
     extractFirstIntervalSpan,
     extractFirstIntervalMax,
-    autoFinishSources,
     extractFinishPromptAfter,
   ]);
 }
@@ -400,7 +255,7 @@ final class CardSettings {
     this.maximumIntervalDays = 36500,
     this.enableFuzzing = true,
     this.leechLapses = 8,
-    this.burySiblings = false,
+    this.burySiblings = true,
   });
 
   /// Probability of recall FSRS aims for at the scheduled instant.
@@ -717,41 +572,16 @@ final class AppSettings {
           min: 0,
           max: 1,
         ),
-        priorityWeight: _double(
-          stored['queue.priority_weight'],
-          fallback.queue.priorityWeight,
-          min: 0,
-          max: 1,
-        ),
-        overdueWeight: _double(
-          stored['queue.overdue_weight'],
-          fallback.queue.overdueWeight,
-          min: 0,
-          max: 1,
-        ),
         protectedPercentile: _double(
           stored['queue.protected_percentile'],
           fallback.queue.protectedPercentile,
           min: 0,
           max: 0.5,
         ),
-        overloadTolerance: _double(
-          stored['queue.overload_tolerance'],
-          fallback.queue.overloadTolerance,
-          min: 1,
-          max: 10,
-        ),
-        maxSharePerRoot: _double(
-          stored['queue.max_share_per_root'],
-          fallback.queue.maxSharePerRoot,
-          min: 0.05,
-          max: 1,
-        ),
         autoPostpone: _bool(
           stored['queue.auto_postpone'],
           fallback.queue.autoPostpone,
         ),
-        autoSort: _bool(stored['queue.auto_sort'], fallback.queue.autoSort),
         studyMoreStep: _int(
           stored['queue.study_more_step'],
           fallback.queue.studyMoreStep,
@@ -760,7 +590,6 @@ final class AppSettings {
         ),
       ),
       topics: TopicSchedulerSettings(
-        pacing: TopicPacingMode.parse(stored['topic.pacing_mode']),
         baseAFactor: _double(
           stored['topic.base_a_factor'],
           fallback.topics.baseAFactor,
@@ -778,52 +607,6 @@ final class AppSettings {
           fallback.topics.prioritySpan,
           min: 0,
           max: 3,
-        ),
-        completionFloor: _double(
-          stored['topic.completion_floor'],
-          fallback.topics.completionFloor,
-          min: 0.1,
-          max: 3,
-        ),
-        completionSpan: _double(
-          stored['topic.completion_span'],
-          fallback.topics.completionSpan,
-          min: 0,
-          max: 3,
-        ),
-        unconvertedExtractFactor: _double(
-          stored['topic.unconverted_extract_factor'],
-          fallback.topics.unconvertedExtractFactor,
-          min: 0.1,
-          max: 3,
-        ),
-        convertedExtractFactor: _double(
-          stored['topic.converted_extract_factor'],
-          fallback.topics.convertedExtractFactor,
-          min: 0.1,
-          max: 3,
-        ),
-        yieldEnabled: _bool(
-          stored['topic.yield_enabled'],
-          fallback.topics.yieldEnabled,
-        ),
-        yieldWeight: _double(
-          stored['topic.yield_weight'],
-          fallback.topics.yieldWeight,
-          min: 0,
-          max: 1,
-        ),
-        yieldSmoothing: _double(
-          stored['topic.yield_smoothing'],
-          fallback.topics.yieldSmoothing,
-          min: 0,
-          max: 1,
-        ),
-        yieldReferenceDensity: _double(
-          stored['topic.yield_reference_density'],
-          fallback.topics.yieldReferenceDensity,
-          min: 0.1,
-          max: 100,
         ),
         minAFactor: _double(
           stored['topic.min_a_factor'],
@@ -860,10 +643,6 @@ final class AppSettings {
           fallback.topics.extractFirstIntervalMax,
           min: 1,
           max: 3650,
-        ),
-        autoFinishSources: _bool(
-          stored['topic.auto_finish_sources'],
-          fallback.topics.autoFinishSources,
         ),
         extractFinishPromptAfter: _int(
           stored['topic.extract_finish_prompt_after'],
@@ -1047,33 +826,18 @@ final class AppSettings {
     'queue.cards_per_topic': '${queue.cardsPerTopic}',
     'queue.min_topic_every': '${queue.minTopicEvery}',
     'queue.randomization': '${queue.randomization}',
-    'queue.priority_weight': '${queue.priorityWeight}',
-    'queue.overdue_weight': '${queue.overdueWeight}',
     'queue.protected_percentile': '${queue.protectedPercentile}',
-    'queue.overload_tolerance': '${queue.overloadTolerance}',
-    'queue.max_share_per_root': '${queue.maxSharePerRoot}',
     'queue.auto_postpone': '${queue.autoPostpone}',
-    'queue.auto_sort': '${queue.autoSort}',
     'queue.study_more_step': '${queue.studyMoreStep}',
-    'topic.pacing_mode': topics.pacing.storageName,
     'topic.base_a_factor': '${topics.baseAFactor}',
     'topic.priority_floor': '${topics.priorityFloor}',
     'topic.priority_span': '${topics.prioritySpan}',
-    'topic.completion_floor': '${topics.completionFloor}',
-    'topic.completion_span': '${topics.completionSpan}',
-    'topic.unconverted_extract_factor': '${topics.unconvertedExtractFactor}',
-    'topic.converted_extract_factor': '${topics.convertedExtractFactor}',
-    'topic.yield_enabled': '${topics.yieldEnabled}',
-    'topic.yield_weight': '${topics.yieldWeight}',
-    'topic.yield_smoothing': '${topics.yieldSmoothing}',
-    'topic.yield_reference_density': '${topics.yieldReferenceDensity}',
     'topic.min_a_factor': '${topics.minAFactor}',
     'topic.max_a_factor': '${topics.maxAFactor}',
     'topic.source_first_span': '${topics.sourceFirstIntervalSpan}',
     'topic.source_first_max': '${topics.sourceFirstIntervalMax}',
     'topic.extract_first_span': '${topics.extractFirstIntervalSpan}',
     'topic.extract_first_max': '${topics.extractFirstIntervalMax}',
-    'topic.auto_finish_sources': '${topics.autoFinishSources}',
     'topic.extract_finish_prompt_after': '${topics.extractFinishPromptAfter}',
     'card.desired_retention': '${cards.desiredRetention}',
     'card.learning_steps': cards.learningStepMinutes.join(','),

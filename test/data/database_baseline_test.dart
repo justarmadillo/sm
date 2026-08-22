@@ -61,12 +61,16 @@ void main() {
         'blocks',
         'card_memories',
         'cards',
+        'daily_presentation_plans',
         'dataset_meta',
         'element_schedules',
         'extracts',
         'folders',
+        'mercy_batches',
         'review_events',
         'revlog_entries',
+        'schedule_adjustments',
+        'scheduler_events',
         'search_documents',
         'settings',
         'sources',
@@ -193,18 +197,20 @@ void main() {
 
       await expectLater(
         db.customStatement(
-          'INSERT INTO cards (id, extract_id, kind, front, back, '
-          'cloze_ordinal, created_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          <Object?>['c1', 'e1', 0, 'q', 'a', 1, 0],
+          'INSERT INTO cards (id, parent_element_id, parent_element_type, '
+          'kind, front, back, cloze_ordinal, created_at_utc) '
+          'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          <Object?>['c1', 'e1', 1, 0, 'q', 'a', 1, 0],
         ),
         throwsA(isA<Object>()),
       );
 
       // The cloze form is accepted.
       await db.customStatement(
-        'INSERT INTO cards (id, extract_id, kind, front, back, '
-        'cloze_ordinal, created_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        <Object?>['c2', 'e1', 1, '{{c1::x}}', '', 1, 0],
+        'INSERT INTO cards (id, parent_element_id, parent_element_type, '
+        'kind, front, back, cloze_ordinal, created_at_utc) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        <Object?>['c2', 'e1', 1, 1, '{{c1::x}}', '', 1, 0],
       );
     });
 

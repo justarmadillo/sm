@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:drift/drift.dart' show QueryRow;
 import 'package:incremental_reader/src/data/database/app_database.dart';
 import 'package:incremental_reader/src/data/database/connection.dart';
 import 'package:incremental_reader/src/data/repositories/drift_repositories.dart';
@@ -295,16 +296,27 @@ void main() {
       );
     });
 
-    test('a card cannot claim two parents at once', () async {
+    test('a card names exactly one parent, or none at all', () async {
       final database = await open();
       addTearDown(database.close);
       await _seedCardParents(database, count: 0);
 
+      // The old pair of nullable foreign keys could express "both parents at
+      // once"; one typed coordinate cannot. What remains to enforce is that
+      // the id and its type travel together.
       await expectLater(
         database.customStatement(
-          'INSERT INTO cards (id, extract_id, source_id, kind, front, back, '
-          'created_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          <Object?>['both', 'e1', 's1', 0, 'q', 'a', 0],
+          'INSERT INTO cards (id, parent_element_id, kind, front, back, '
+          'created_at_utc) VALUES (?, ?, ?, ?, ?, ?)',
+          <Object?>['halfParent', 'e1', 0, 'q', 'a', 0],
+        ),
+        throwsA(isA<Object>()),
+      );
+      await expectLater(
+        database.customStatement(
+          'INSERT INTO cards (id, parent_element_type, kind, front, back, '
+          'created_at_utc) VALUES (?, ?, ?, ?, ?, ?)',
+          <Object?>['halfType', 1, 0, 'q', 'a', 0],
         ),
         throwsA(isA<Object>()),
       );
@@ -332,10 +344,39 @@ void main() {
   });
 }
 
+/// Restores the retired `extract_id`/`source_id` pair so a suite can seed the
+/// pre-v6 shape these migrations were written against. The v6 step rebuilds
+/// the table and drops them again, which is exactly what is under test.
+Future<void> _addLegacyCardParentColumns(AppDatabase database) async {
+  for (final String column in <String>['extract_id', 'source_id']) {
+    final List<QueryRow> info = await database
+        .customSelect('PRAGMA table_info(cards)')
+        .get();
+    final bool present = info.any(
+      (QueryRow row) => row.read<String>('name') == column,
+    );
+    if (!present) {
+      await database.customStatement(
+        'ALTER TABLE cards ADD COLUMN $column TEXT NULL',
+      );
+    }
+  }
+  // The indexes the old schema carried over those columns. A rebuild replays
+  // every index attached to the table, so leaving them out of the fixture
+  // hides the exact failure that upgrading a real collection produces.
+  await database.customStatement(
+    'CREATE INDEX IF NOT EXISTS idx_cards_extract ON cards (extract_id)',
+  );
+  await database.customStatement(
+    'CREATE INDEX IF NOT EXISTS idx_cards_source ON cards (source_id)',
+  );
+}
+
 Future<void> _seedCardParents(
   AppDatabase database, {
   required int count,
 }) async {
+  await _addLegacyCardParentColumns(database);
   await database.customStatement(
     'INSERT INTO sources (id, title, markdown, content_hash, word_count, '
     'imported_at_utc, pace, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',

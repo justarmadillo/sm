@@ -17,6 +17,7 @@ import '../../../core/tracing.dart';
 import '../../../domain/content/source.dart';
 import '../../../domain/scheduling/element.dart';
 import '../../../domain/scheduling/study_day.dart';
+import '../../../domain/scheduling/topic_scheduler.dart';
 
 /// A one-shot thing for the view to do, not durable state.
 @immutable
@@ -33,6 +34,7 @@ final class LibraryUiState {
   const LibraryUiState({
     required this.entries,
     required this.today,
+    this.effectiveDue = const <ElementRef, StudyDay>{},
     this.message,
     this.isBusy = false,
   });
@@ -40,32 +42,46 @@ final class LibraryUiState {
   final List<LibraryEntry> entries;
   final StudyDay today;
 
+  /// When each source may next be read, after Later, automatic overflow, and
+  /// any Mercy override. Never the canonical date: showing that would tell the
+  /// user their own postponement did not take.
+  final Map<ElementRef, StudyDay> effectiveDue;
+
+  /// The day [entry] may next be presented on.
+  StudyDay dueDayOf(LibraryEntry entry) =>
+      effectiveDue[entry.schedule.ref] ?? entry.schedule.algorithmicDueDay;
+
   /// Ephemeral: shown once, then cleared.
   final UiMessage? message;
 
   final bool isBusy;
 
+  bool _isDue(LibraryEntry entry) =>
+      entry.schedule.lifecycle.isSchedulable && dueDayOf(entry) <= today;
+
   /// Sources eligible to be read today.
   List<LibraryEntry> get dueToday => <LibraryEntry>[
     for (final entry in entries)
-      if (entry.schedule.isEligibleOn(today)) entry,
+      if (_isDue(entry)) entry,
   ];
 
   /// Everything else, including finished and dismissed sources.
   List<LibraryEntry> get later => <LibraryEntry>[
     for (final entry in entries)
-      if (!entry.schedule.isEligibleOn(today)) entry,
+      if (!_isDue(entry)) entry,
   ];
 
   LibraryUiState copyWith({
     List<LibraryEntry>? entries,
     StudyDay? today,
     UiMessage? message,
+    Map<ElementRef, StudyDay>? effectiveDue,
     bool clearMessage = false,
     bool? isBusy,
   }) => LibraryUiState(
     entries: entries ?? this.entries,
     today: today ?? this.today,
+    effectiveDue: effectiveDue ?? this.effectiveDue,
     message: clearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
   );
@@ -79,7 +95,14 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
   Future<LibraryUiState> _load() async {
     final entries = await ref.read(libraryQueryProvider).listEntries();
     final today = await ref.read(readerHandlersProvider).today();
-    return LibraryUiState(entries: entries, today: today);
+    final effectiveDue = await ref
+        .read(effectiveDueQueryProvider)
+        .forTopics(<TopicState>[for (final entry in entries) entry.topic]);
+    return LibraryUiState(
+      entries: entries,
+      today: today,
+      effectiveDue: effectiveDue,
+    );
   }
 
   /// Imports pasted or opened markdown as a new source.

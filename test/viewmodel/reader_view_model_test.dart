@@ -269,8 +269,12 @@ void main() {
           )
           .requireValue;
       expect(state.topic.stepIndex, 0);
-      expect(state.topic.schedule.dueDay.toString(), '2026-03-05');
-      expect(state.topic.schedule.effectiveDueDay.toString(), '2026-03-08');
+      expect(
+        state.topic.schedule.algorithmicDueDay.toString(),
+        '2026-03-05',
+        reason: 'Later leaves the canonical due exactly where it was',
+      );
+      expect(state.effectiveDueDay.toString(), '2026-03-08');
     });
 
     test('the reminder line appears only after enough reading', () async {

@@ -258,38 +258,6 @@ class _Body extends StatelessWidget {
         ),
       ),
       SettingsRow(
-        label: 'Priority weight',
-        hint: 'How much relative priority counts in the session order.',
-        control: DoubleSliderField(
-          value: draft.queue.priorityWeight,
-          min: 0,
-          max: 1,
-          divisions: 20,
-          onChanged: (double value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(priorityWeight: value)),
-          ),
-        ),
-      ),
-      SettingsRow(
-        label: 'Overdue weight',
-        hint:
-            'How much lateness counts. Without it, mid-priority material '
-            'accumulates staleness invisibly: forty days late at the 55th '
-            'percentile deserves to surface before something fresh at the '
-            '60th.',
-        control: DoubleSliderField(
-          value: draft.queue.overdueWeight,
-          min: 0,
-          max: 1,
-          divisions: 20,
-          onChanged: (double value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(overdueWeight: value)),
-          ),
-        ),
-      ),
-      SettingsRow(
         label: 'Protected top percentile',
         hint:
             'This share of the collection is never auto-postponed. Without '
@@ -305,42 +273,6 @@ class _Body extends StatelessWidget {
           onChanged: (double value) => model.edit(
             (AppSettings s) =>
                 s.copyWith(queue: s.queue.copyWith(protectedPercentile: value)),
-          ),
-        ),
-      ),
-      SettingsRow(
-        label: 'Overload tolerance',
-        hint:
-            'How far over the cap the day may run before anything is '
-            'deferred, as a multiple of the cap.',
-        control: DoubleSliderField(
-          value: draft.queue.overloadTolerance,
-          min: 1,
-          max: 3,
-          divisions: 20,
-          format: (double v) => '×${v.toStringAsFixed(2)}',
-          onChanged: (double value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(overloadTolerance: value)),
-          ),
-        ),
-      ),
-      SettingsRow(
-        label: 'Maximum share per article',
-        hint:
-            'Largest fraction of one session a single article’s subtree '
-            'may occupy. Priority is inherited exactly, so one important '
-            'source can otherwise flood the top of the queue with two '
-            'hundred descendants.',
-        control: DoubleSliderField(
-          value: draft.queue.maxSharePerRoot,
-          min: 0.1,
-          max: 1,
-          divisions: 18,
-          format: (double v) => '${(v * 100).toStringAsFixed(0)}%',
-          onChanged: (double value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(maxSharePerRoot: value)),
           ),
         ),
       ),
@@ -382,25 +314,6 @@ class _Body extends StatelessWidget {
         'see it again and do more work on it. The A-factor decides how fast '
         'each one recedes.',
     children: <Widget>[
-      SettingsRow(
-        label: 'Interval model',
-        hint:
-            'The A-factor model grows each interval by a multiplier that '
-            'reacts to priority, to how much of an article is left, and to '
-            'whether an extract has produced any cards. Fixed sequences are '
-            'simpler and completely predictable.',
-        control: ChoiceField<TopicPacingMode>(
-          value: draft.topics.pacing,
-          options: const <TopicPacingMode, String>{
-            TopicPacingMode.aFactor: 'A-factor (SuperMemo)',
-            TopicPacingMode.intervalProfile: 'Fixed sequences',
-          },
-          onChanged: (TopicPacingMode value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(topics: s.topics.copyWith(pacing: value)),
-          ),
-        ),
-      ),
       SettingsRow(
         label: 'Base A-factor',
         hint: 'The multiplier before any modulation.',
@@ -455,81 +368,6 @@ class _Body extends StatelessWidget {
         ),
       ),
       SettingsRow(
-        label: 'Completion floor / span',
-        hint:
-            'Articles only: A × (floor + span × fraction read). Barely '
-            'started comes back sooner because there is a lot left; nearly '
-            'finished recedes.',
-        control: Row(
-          children: <Widget>[
-            Expanded(
-              child: DoubleSliderField(
-                value: draft.topics.completionFloor,
-                min: 0.2,
-                max: 1.5,
-                divisions: 26,
-                onChanged: (double value) => model.edit(
-                  (AppSettings s) => s.copyWith(
-                    topics: s.topics.copyWith(completionFloor: value),
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: DoubleSliderField(
-                value: draft.topics.completionSpan,
-                min: 0,
-                max: 2,
-                divisions: 20,
-                onChanged: (double value) => model.edit(
-                  (AppSettings s) => s.copyWith(
-                    topics: s.topics.copyWith(completionSpan: value),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      SettingsRow(
-        label: 'Extract conversion factors',
-        hint:
-            'Extracts only. An extract that still owes a card comes back '
-            'sooner (first value); one that has produced cards has done its '
-            'job and recedes (second). An extract sitting unconverted for two '
-            'months should keep nagging.',
-        control: Row(
-          children: <Widget>[
-            Expanded(
-              child: DoubleSliderField(
-                value: draft.topics.unconvertedExtractFactor,
-                min: 0.2,
-                max: 1.5,
-                divisions: 26,
-                onChanged: (double value) => model.edit(
-                  (AppSettings s) => s.copyWith(
-                    topics: s.topics.copyWith(unconvertedExtractFactor: value),
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: DoubleSliderField(
-                value: draft.topics.convertedExtractFactor,
-                min: 0.5,
-                max: 2.5,
-                divisions: 20,
-                onChanged: (double value) => model.edit(
-                  (AppSettings s) => s.copyWith(
-                    topics: s.topics.copyWith(convertedExtractFactor: value),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      SettingsRow(
         label: 'A-factor clamps',
         hint:
             'A is clamped between these. A floor of 1.0 means a repetition '
@@ -564,19 +402,6 @@ class _Body extends StatelessWidget {
         ),
       ),
       SettingsRow(
-        label: 'Yield modulation',
-        hint:
-            'Experimental, and off by default. When on, a source that keeps '
-            'producing extracts keeps coming back and a barren one lets go.',
-        control: SwitchField(
-          value: draft.topics.yieldEnabled,
-          onChanged: (bool value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(topics: s.topics.copyWith(yieldEnabled: value)),
-          ),
-        ),
-      ),
-      SettingsRow(
         label: 'First interval span — articles',
         hint:
             'first = 1 + span × pressure², capped. Squared, not linear: it '
@@ -605,21 +430,6 @@ class _Body extends StatelessWidget {
             (AppSettings s) => s.copyWith(
               topics: s.topics.copyWith(extractFirstIntervalSpan: value),
             ),
-          ),
-        ),
-      ),
-      SettingsRow(
-        label: 'Auto-finish exhausted articles',
-        hint:
-            'Closes an article once the marker has reached the end and every '
-            'word of it sits inside an extract. Deliberately strict: closing '
-            'a source you still wanted is worse than leaving a dead one in '
-            'the queue. It stays in the tree either way.',
-        control: SwitchField(
-          value: draft.topics.autoFinishSources,
-          onChanged: (bool value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(topics: s.topics.copyWith(autoFinishSources: value)),
           ),
         ),
       ),

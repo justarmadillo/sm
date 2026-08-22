@@ -8,7 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme.dart';
 import '../../../app/toast.dart';
 import '../../../application/queue/queue_query.dart';
+import '../../../application/scheduling/mercy_workflow.dart';
 import '../../../domain/scheduling/element.dart';
+import '../../../domain/scheduling/mercy.dart';
 import '../../../domain/scheduling/queue_policy.dart';
 import '../../diagnostics/presentation/diagnostics_screen.dart';
 import '../../extract/presentation/extract_screen.dart';
@@ -286,23 +288,35 @@ class _LoadPanel extends StatelessWidget {
             icon: const Icon(Icons.event_repeat, size: 16),
             label: const Text('Mercy'),
           ),
+          // Always offered rather than hidden behind a query: a bulk calendar
+          // move the user cannot find the reverse of is not really reversible.
+          TextButton.icon(
+            onPressed: isRunning || state.isBusy ? null : model.undoMercy,
+            icon: const Icon(Icons.undo, size: 16),
+            label: const Text('Undo Mercy'),
+          ),
         ],
       ),
     );
   }
 
+  /// Mercy is a two-step conversation: propose, then confirm the proposal.
+  ///
+  /// The intermediate dialog exists because a bulk calendar move the user
+  /// cannot inspect first is indistinguishable from data loss. What it shows
+  /// is the plan that will be applied, not an estimate of one.
   Future<void> _confirmMercy(BuildContext context) async {
-    final bool ok =
+    final bool wanted =
         await showDialog<bool>(
           context: context,
           builder: (BuildContext context) => AlertDialog(
             title: const Text('Spread the backlog?'),
             content: const Text(
-              'Everything overdue is redistributed across the next few weeks '
-              'in one operation, best priority first. Nothing is reviewed and '
-              'no interval changes — only the dates you become eligible move.\n\n'
-              'Worth doing after an absence, when auto-postpone would chew '
-              'through the backlog one day at a time.',
+              'Mercy redistributes outstanding work across the next few weeks '
+              'in one operation, best priority first. Nothing is reviewed, no '
+              'interval changes, and no memory state moves — only the dates '
+              'you become eligible. You will see the exact plan before '
+              'anything is written, and it can be undone as one batch.',
             ),
             actions: <Widget>[
               TextButton(
@@ -311,14 +325,115 @@ class _LoadPanel extends StatelessWidget {
               ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Spread'),
+                child: const Text('Preview'),
               ),
             ],
           ),
         ) ??
         false;
-    if (ok) await model.runMercy();
+    if (!wanted) return;
+
+    final StoredMercyBatch? batch = await model.previewMercy();
+    if (batch == null || !context.mounted) return;
+
+    final MercyPreview preview = batch.preview;
+    if (preview.selectedCount == 0) {
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext context) => AlertDialog(
+          title: const Text('Nothing to spread'),
+          content: Text(_exclusionSummary(preview)),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final bool apply =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: const Text('Apply this plan?'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '${preview.selectedCount} element'
+                    '${preview.selectedCount == 1 ? '' : 's'} move: '
+                    '${preview.selectedCardCount} card'
+                    '${preview.selectedCardCount == 1 ? '' : 's'} and '
+                    '${preview.selectedTopicCount} topic'
+                    '${preview.selectedTopicCount == 1 ? '' : 's'}.',
+                  ),
+                  const SizedBox(height: 8),
+                  Text(_exclusionSummary(preview)),
+                  const SizedBox(height: 12),
+                  const Text('Proposed load per day:'),
+                  const SizedBox(height: 4),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          for (final MercyDailyLoad load in preview.afterLoad)
+                            Text(
+                              '${load.day}  —  ${load.cards} cards, '
+                              '${load.topics} topics',
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Discard'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Apply'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (apply) await model.applyMercy(batch);
   }
+
+  String _exclusionSummary(MercyPreview preview) {
+    if (preview.exclusions.isEmpty) {
+      return 'Every candidate considered was eligible.';
+    }
+    final List<String> parts = <String>[
+      for (final MapEntry<MercyExclusionReason, int> entry
+          in preview.exclusionCounts.entries)
+        '${entry.value} ${_exclusionLabel(entry.key)}',
+    ];
+    return 'Left alone: ${parts.join(', ')}.';
+  }
+
+  String _exclusionLabel(MercyExclusionReason reason) => switch (reason) {
+    MercyExclusionReason.outsideScope => 'outside the scope',
+    MercyExclusionReason.lifecycleIneligible => 'not active',
+    MercyExclusionReason.outsideCollectingPeriod => 'outside the period',
+    MercyExclusionReason.futureRepetitionNotSelected => 'not yet due',
+    MercyExclusionReason.dueIntradayStep => 'mid-learning',
+    MercyExclusionReason.protected => 'protected',
+    MercyExclusionReason.preservedLowerBoundBeyondDestination =>
+      'held by your own Later',
+    MercyExclusionReason.noDestinationCapacity => 'no room in the horizon',
+  };
 }
 
 class _Metric extends StatelessWidget {

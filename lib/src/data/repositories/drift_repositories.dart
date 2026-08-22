@@ -12,6 +12,7 @@ import 'package:drift/drift.dart';
 
 import '../../application/ports/repositories.dart';
 import '../../application/ports/transaction_runner.dart';
+import '../../application/scheduling/mercy_workflow.dart';
 import '../../core/clock.dart';
 import '../../core/ids.dart';
 import '../../domain/content/card.dart';
@@ -697,31 +698,6 @@ final class DriftLearningRepository implements LearningRepository {
       .insertOnConflictUpdate(scheduleToCompanion(schedule));
 
   @override
-  Future<List<ElementSchedule>> listEligible({
-    required StudyDay day,
-    required Set<ElementType> types,
-  }) async {
-    if (types.isEmpty) return <ElementSchedule>[];
-    final rows =
-        await (_database.select(_database.elementSchedules)
-              ..where(
-                ($ElementSchedulesTable t) =>
-                    t.lifecycle.equals(ElementLifecycle.active.index) &
-                    t.elementType.isIn(
-                      types.map((ElementType e) => e.index).toList(),
-                    ) &
-                    t.dueDay.isSmallerOrEqualValue(day.epochDay) &
-                    (t.deferredUntil.isNull() |
-                        t.deferredUntil.isSmallerOrEqualValue(day.epochDay)),
-              )
-              ..orderBy(<OrderClauseGenerator<$ElementSchedulesTable>>[
-                ($ElementSchedulesTable t) => OrderingTerm.asc(t.priorityKey),
-              ]))
-            .get();
-    return <ElementSchedule>[for (final row in rows) scheduleFromRow(row)];
-  }
-
-  @override
   Future<List<ElementSchedule>> listByPriority({
     int? limit,
     int? offset,
@@ -1030,6 +1006,122 @@ final class DriftLearningRepository implements LearningRepository {
     if (rows.isEmpty) return null;
     return reviewRecordFromRow(_database.reviewEvents.map(rows.single.data));
   }
+
+  @override
+  Future<void> saveMercyBatch(StoredMercyBatch batch) => _database
+      .into(_database.mercyBatches)
+      .insertOnConflictUpdate(
+        MercyBatchesCompanion.insert(
+          batchId: batch.batchId,
+          previewOperationId: batch.previewOperationId,
+          policyVersion: batch.policyVersion,
+          previewJson: batch.previewJson,
+          createdAtUtc: toEpochMs(batch.createdAtUtc),
+          applyOperationId: Value<String?>(batch.applyOperationId),
+          undoOperationId: Value<String?>(batch.undoOperationId),
+          appliedSnapshotJson: Value<String?>(batch.appliedSnapshotJson),
+          appliedAtUtc: Value<int?>(
+            batch.appliedAtUtc == null ? null : toEpochMs(batch.appliedAtUtc!),
+          ),
+          undoneAtUtc: Value<int?>(
+            batch.undoneAtUtc == null ? null : toEpochMs(batch.undoneAtUtc!),
+          ),
+        ),
+      );
+
+  @override
+  Future<StoredMercyBatch?> findMercyBatch(String batchId) async {
+    final MercyBatchRow? row =
+        await (_database.select(_database.mercyBatches)..where(
+              ($MercyBatchesTable table) => table.batchId.equals(batchId),
+            ))
+            .getSingleOrNull();
+    return row == null ? null : _toMercyBatch(row);
+  }
+
+  @override
+  Future<StoredMercyBatch?> findMercyBatchByPreviewOperation(
+    String operationId,
+  ) async {
+    final MercyBatchRow? row =
+        await (_database.select(_database.mercyBatches)..where(
+              ($MercyBatchesTable table) =>
+                  table.previewOperationId.equals(operationId),
+            ))
+            .getSingleOrNull();
+    return row == null ? null : _toMercyBatch(row);
+  }
+
+  @override
+  Future<List<StoredMercyBatch>> listAppliedMercyBatchesSince(
+    StudyDay day,
+  ) async {
+    final List<MercyBatchRow> rows =
+        await (_database.select(_database.mercyBatches)
+              ..where(
+                ($MercyBatchesTable table) =>
+                    table.appliedAtUtc.isBiggerOrEqualValue(
+                      day.epochDay * Duration.millisecondsPerDay,
+                    ) &
+                    table.undoneAtUtc.isNull(),
+              )
+              ..orderBy(<OrderClauseGenerator<$MercyBatchesTable>>[
+                ($MercyBatchesTable table) => OrderingTerm.desc(
+                  table.appliedAtUtc,
+                ),
+              ]))
+            .get();
+    return <StoredMercyBatch>[for (final row in rows) _toMercyBatch(row)];
+  }
+
+  @override
+  Future<StoredMercyBatch?> findLastAppliedMercyBatch() async {
+    final MercyBatchRow? row =
+        await (_database.select(_database.mercyBatches)
+              ..where(
+                ($MercyBatchesTable table) =>
+                    table.appliedAtUtc.isNotNull() &
+                    table.undoneAtUtc.isNull(),
+              )
+              ..orderBy(<OrderClauseGenerator<$MercyBatchesTable>>[
+                ($MercyBatchesTable table) => OrderingTerm.desc(
+                  table.appliedAtUtc,
+                ),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    return row == null ? null : _toMercyBatch(row);
+  }
+
+  @override
+  Future<int> countAppliedMercyBatchesSince(StudyDay day) async {
+    final QueryRow row = await _database
+        .customSelect(
+          'SELECT COUNT(*) AS total FROM mercy_batches '
+          'WHERE applied_at_utc IS NOT NULL AND undone_at_utc IS NULL '
+          'AND applied_at_utc >= ?',
+          variables: <Variable<Object>>[
+            Variable<int>(day.epochDay * Duration.millisecondsPerDay),
+          ],
+        )
+        .getSingle();
+    return row.read<int>('total');
+  }
+
+  StoredMercyBatch _toMercyBatch(MercyBatchRow row) => StoredMercyBatch(
+    batchId: row.batchId,
+    previewOperationId: row.previewOperationId,
+    policyVersion: row.policyVersion,
+    previewJson: row.previewJson,
+    createdAtUtc: fromEpochMs(row.createdAtUtc),
+    applyOperationId: row.applyOperationId,
+    undoOperationId: row.undoOperationId,
+    appliedSnapshotJson: row.appliedSnapshotJson,
+    appliedAtUtc: row.appliedAtUtc == null
+        ? null
+        : fromEpochMs(row.appliedAtUtc!),
+    undoneAtUtc: row.undoneAtUtc == null ? null : fromEpochMs(row.undoneAtUtc!),
+  );
 
   @override
   Future<StoredPresentationPlan?> findPresentationPlan(StudyDay day) async {

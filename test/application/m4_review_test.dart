@@ -16,6 +16,8 @@ import 'package:incremental_reader/src/domain/content/source.dart';
 import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
+import 'package:incremental_reader/src/domain/scheduling/schedule_adjustment.dart';
+import 'package:incremental_reader/src/domain/scheduling/scheduler_event.dart';
 import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:test/test.dart';
 
@@ -90,7 +92,7 @@ void main() {
   tearDown(() => harness.close());
 
   group('undo the last grade', () {
-    test('restores the exact pre-review FSRS state and removes the event',
+    test('restores the exact pre-review FSRS state without deleting history',
         () async {
       final Source source = await harness.importSource();
       final Card card = (await harness.formulateSiblings(source.id)).first;
@@ -110,15 +112,29 @@ void main() {
 
       final CardState restored = await harness.stateOf(card.id);
       expect(
-        restored.memory,
-        before.memory,
+        restored.memory.canonicalFsrsJson(),
+        before.memory.canonicalFsrsJson(),
         reason: 'FSRS is not invertible, so undo is a snapshot restore',
       );
+      expect(
+        restored.memory.revision,
+        greaterThan(graded.state.memory.revision),
+        reason: 'the concurrency token still advances; it is not memory',
+      );
       expect(restored.schedule.dueDay, before.schedule.dueDay);
-      expect(await harness.learning.listReviewsForCard(card.id), isEmpty);
+      expect(
+        await harness.learning.listReviewsForCard(card.id),
+        hasLength(1),
+        reason: 'history is append-only: the grade happened and still did',
+      );
+      expect(
+        await harness.learning.listOptimizerReviews(),
+        isEmpty,
+        reason: 'but an undone grade may never train a parameter optimizer',
+      );
     });
 
-    test('leaves the log describing only what still happened', () async {
+    test('appends an inverse event rather than erasing the original', () async {
       final Source source = await harness.importSource();
       final Card card = (await harness.formulateSiblings(source.id)).first;
 
@@ -130,14 +146,30 @@ void main() {
       final List<RevlogEntry> log = await harness.revlogOf(card.id);
       expect(
         log.where((RevlogEntry e) => e.eventType == RevlogEventType.review),
-        isEmpty,
-        reason: 'the grade whose effect no longer exists must not linger',
+        hasLength(1),
+        reason: 'the grade is a fact; undo describes what happened next',
       );
       final RevlogEntry undo = log.firstWhere(
         (RevlogEntry e) => e.eventType == RevlogEventType.undo,
       );
       expect(undo.metadata!['undone_grade'], CardRating.good.value);
       expect(undo.feedsOptimizer, isFalse);
+
+      final List<SchedulerEvent> events = await harness.learning
+          .listSchedulerEventsFor(
+            ElementRef(id: card.id, type: ElementType.card),
+          );
+      final SchedulerEvent inverse = events.firstWhere(
+        (SchedulerEvent e) => e.eventType == SchedulerEventType.cardReviewUndone,
+      );
+      expect(inverse.undoesEventId, isNotNull);
+      expect(
+        events.any(
+          (SchedulerEvent e) => e.id == inverse.undoesEventId,
+        ),
+        isTrue,
+        reason: 'the event it reverses is still there to point at',
+      );
     });
 
     test('the card becomes reviewable again immediately', () async {
@@ -149,12 +181,17 @@ void main() {
         UndoLastReview(harness.operation(), timestampUtc: clock.nowUtc()),
       );
 
+      clock.advance(const Duration(minutes: 1));
       final ReviewOutcome regraded = await harness.grade(
         card.id,
         CardRating.again,
       );
       expect(regraded.state.memory.reps, 1);
-      expect(await harness.learning.listReviewsForCard(card.id), hasLength(1));
+      expect(
+        await harness.learning.listOptimizerReviews(),
+        hasLength(1),
+        reason: 'only the grade that still stands may train anything',
+      );
     });
 
     test('undoes whatever was graded last when no card is named', () async {
@@ -173,8 +210,10 @@ void main() {
         UndoLastReview(harness.operation(), timestampUtc: clock.nowUtc()),
       );
       expect(undone.unwrap().ref.id, cards[1].id);
-      expect(await harness.learning.listReviewsForCard(cards[0].id), hasLength(1));
-      expect(await harness.learning.listReviewsForCard(cards[1].id), isEmpty);
+      final List<ReviewRecord> optimizer = await harness.learning
+          .listOptimizerReviews();
+      expect(optimizer, hasLength(1));
+      expect(optimizer.single.cardId, cards[0].id);
     });
 
     test('refuses when there is nothing to take back', () async {
@@ -286,9 +325,32 @@ void main() {
 
       for (final Card sibling in cards.skip(1)) {
         final CardState state = await harness.stateOf(sibling.id);
-        expect(state.memory.isDueAt(clock.nowUtc()), isFalse);
         expect(state.memory.reps, 0, reason: 'burying is not a review');
-        expect(state.schedule.deferralKind, DeferralKind.automatic);
+        final ElementRef ref = ElementRef(
+          id: sibling.id,
+          type: ElementType.card,
+        );
+        final List<ScheduleAdjustment> adjustments = await harness.learning
+            .listActiveAdjustments(elements: <ElementRef>{ref});
+        expect(adjustments, hasLength(1));
+        expect(
+          adjustments.single.reason,
+          ScheduleAdjustmentReason.siblingBury,
+        );
+        expect(
+          const EffectiveDueService().isCardDue(
+            card: ref,
+            algorithmicDueAtUtc: state.memory.dueAtUtc,
+            nowUtc: clock.nowUtc(),
+            adjustments: ScheduleAdjustmentSet(adjustments),
+          ),
+          isFalse,
+        );
+        expect(
+          state.memory.dueAtUtc,
+          isNotNull,
+          reason: 'the canonical due is untouched underneath',
+        );
 
         final RevlogEntry entry = (await harness.revlogOf(
           sibling.id,
@@ -394,11 +456,26 @@ void main() {
         reason: 'overwriting this would destroy the retention signal',
       );
       expect(after.memory.dueAtUtc, before.memory.dueAtUtc);
+      final ElementRef ref = ElementRef(id: card.id, type: ElementType.card);
+      final ScheduleAdjustmentSet adjustments = ScheduleAdjustmentSet(
+        await harness.learning.listActiveAdjustments(
+          elements: <ElementRef>{ref},
+        ),
+      );
       expect(
-        after.memory.effectiveDueAtUtc.isAfter(before.memory.dueAtUtc),
+        adjustments.activeFor(ref).single.reason,
+        ScheduleAdjustmentReason.manualLater,
+      );
+      expect(
+        const EffectiveDueService()
+            .cardDueAtUtc(
+              card: ref,
+              algorithmicDueAtUtc: after.memory.dueAtUtc,
+              adjustments: adjustments,
+            )
+            .isAfter(before.memory.dueAtUtc),
         isTrue,
       );
-      expect(after.memory.postponeCount, 1);
 
       final RevlogEntry entry = (await harness.revlogOf(card.id)).firstWhere(
         (RevlogEntry e) => e.eventType == RevlogEventType.postpone,

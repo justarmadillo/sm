@@ -29,35 +29,20 @@ void main() {
           cardsPerTopic: 6,
           minTopicEvery: 9,
           randomization: 0.12,
-          priorityWeight: 0.6,
-          overdueWeight: 0.35,
           protectedPercentile: 0.08,
-          overloadTolerance: 1.5,
-          maxSharePerRoot: 0.4,
           autoPostpone: false,
-          autoSort: false,
           studyMoreStep: 15,
         ),
         topics: const TopicSchedulerSettings(
-          pacing: TopicPacingMode.intervalProfile,
           baseAFactor: 1.8,
           priorityFloor: 0.6,
           prioritySpan: 0.9,
-          completionFloor: 0.65,
-          completionSpan: 0.7,
-          unconvertedExtractFactor: 0.8,
-          convertedExtractFactor: 1.4,
-          yieldEnabled: true,
-          yieldWeight: 0.5,
-          yieldSmoothing: 0.25,
-          yieldReferenceDensity: 6,
           minAFactor: 0.9,
           maxAFactor: 8,
           sourceFirstIntervalSpan: 25,
           sourceFirstIntervalMax: 40,
           extractFirstIntervalSpan: 12,
           extractFirstIntervalMax: 20,
-          autoFinishSources: false,
           extractFinishPromptAfter: 5,
         ),
         cards: const CardSettings(
@@ -134,11 +119,6 @@ void main() {
         settings.cards.learningStepMinutes,
         defaults.cards.learningStepMinutes,
       );
-      expect(
-        settings.topics.pacing,
-        TopicPacingMode.aFactor,
-        reason: 'an unknown mode degrades to the default, not to a crash',
-      );
       expect(settings.diagnostics.logEnabled, defaults.diagnostics.logEnabled);
       expect(
         settings.intervalProfiles['normal'],
@@ -158,7 +138,6 @@ void main() {
 
       expect(settings.queue.randomization, 1);
       expect(settings.queue.protectedPercentile, 0.5);
-      expect(settings.queue.overloadTolerance, 1);
       expect(settings.cards.desiredRetention, 0.99);
       expect(settings.topics.minAFactor, 0.5);
       expect(settings.studyDay.rolloverMinutes, 1439);

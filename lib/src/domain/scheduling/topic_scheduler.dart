@@ -16,15 +16,18 @@
 /// no Again/Hard/Good/Easy here and no concept of failure, because you do not
 /// fail a paragraph — you see it again and do more work on it.
 ///
-/// Two interval models are supported and chosen in Settings:
+/// Two interval models exist, and which one applies is a property of the topic
+/// row rather than of a global setting — a formula change must never
+/// reinterpret a schedule that was written under the previous one:
 ///
-/// * [TopicPacingMode.aFactor] — `next = interval × A`, where A is modulated
-///   by priority pressure, by how much of a source is left to read, and by
-///   whether an extract has produced any cards yet. This is the SuperMemo
-///   model and the default.
-/// * [TopicPacingMode.intervalProfile] — an explicit user-edited sequence of
-///   day intervals whose last value repeats. Fully predictable, and the model
-///   the collection was built with before M4.
+/// * [TopicSchedulerKind.topicAFactorV1] — `next = max(interval + 1,
+///   round(interval × A))`, where A comes from the versioned
+///   [TopicAFactorPolicy]. Every topic created since the scheduler contract
+///   uses this.
+/// * [TopicSchedulerKind.legacySequence] — an explicit user-edited sequence
+///   of day intervals whose last value repeats. Retained for collections built
+///   before the contract; migrating one to the A-factor model is an explicit,
+///   previewed decision, never a side effect of an update.
 library;
 
 import 'dart:math' as math;
@@ -247,7 +250,7 @@ final class TopicState {
   String toString() =>
       'TopicState(${schedule.ref} $profileId step=$stepIndex '
       'interval=$intervalDays a=$aFactor '
-      'due=${schedule.effectiveDueDay} ${schedule.lifecycle.name})';
+      'due=${schedule.algorithmicDueDay} ${schedule.lifecycle.name})';
 }
 
 /// What the user actually did during one encounter.
@@ -464,7 +467,7 @@ final class TopicScheduler {
     TopicAFactorPolicy? policy,
   }) : _policy = policy;
 
-  /// Editable interval sequences, used in [TopicPacingMode.intervalProfile].
+  /// Editable interval sequences, used by [TopicSchedulerKind.legacySequence].
   final IntervalProfiles profiles;
 
   /// The tunables both models read.
@@ -622,6 +625,13 @@ final class TopicScheduler {
   /// Moves eligibility only. The interval does not grow, and the original due
   /// day is untouched so the element still reads as overdue by the amount it
   /// really is.
+  ///
+  /// **Legacy.** The application defers through a typed `ScheduleAdjustment`
+  /// instead, and schema v7 retired the columns this writes. It is kept as the
+  /// pure statement of the invariant — Later is not a repetition — and marked
+  /// visible-for-testing so re-wiring it into the application fails analysis
+  /// rather than creating a second deferral mechanism the queue cannot see.
+  @visibleForTesting
   TopicTransition postpone(
     TopicState state, {
     required StudyDay until,

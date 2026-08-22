@@ -489,3 +489,144 @@ void _requireText(String value, String name) {
     throw ArgumentError.value(value, name, 'must not be empty');
   }
 }
+
+/// Durable row backing preview → apply → undo across restarts.
+///
+/// Mercy is the one operation whose confirmation may outlive the process that
+/// computed it: the preview is shown, the user thinks about it, and the app
+/// may be closed in between. Persisting the exact preview and, after apply,
+/// the exact prior/applied adjustment sets is what makes both the stale check
+/// and the exact batch undo possible instead of approximate.
+@immutable
+final class StoredMercyBatch {
+  const StoredMercyBatch({
+    required this.batchId,
+    required this.previewOperationId,
+    required this.policyVersion,
+    required this.previewJson,
+    required this.createdAtUtc,
+    this.applyOperationId,
+    this.undoOperationId,
+    this.appliedSnapshotJson,
+    this.appliedAtUtc,
+    this.undoneAtUtc,
+  });
+
+  final String batchId;
+  final String previewOperationId;
+  final String policyVersion;
+  final String previewJson;
+  final DateTime createdAtUtc;
+  final String? applyOperationId;
+  final String? undoOperationId;
+
+  /// Serialized [MercyAppliedBatchSnapshot]; null until the batch is applied.
+  final String? appliedSnapshotJson;
+  final DateTime? appliedAtUtc;
+  final DateTime? undoneAtUtc;
+
+  bool get isApplied => appliedAtUtc != null && undoneAtUtc == null;
+
+  MercyPreview get preview => MercyPreview.fromJson(previewJson);
+
+  MercyAppliedBatchSnapshot get appliedSnapshot =>
+      decodeMercyAppliedBatch(appliedSnapshotJson!);
+
+  StoredMercyBatch copyWith({
+    String? applyOperationId,
+    String? undoOperationId,
+    String? appliedSnapshotJson,
+    DateTime? appliedAtUtc,
+    DateTime? undoneAtUtc,
+  }) => StoredMercyBatch(
+    batchId: batchId,
+    previewOperationId: previewOperationId,
+    policyVersion: policyVersion,
+    previewJson: previewJson,
+    createdAtUtc: createdAtUtc,
+    applyOperationId: applyOperationId ?? this.applyOperationId,
+    undoOperationId: undoOperationId ?? this.undoOperationId,
+    appliedSnapshotJson: appliedSnapshotJson ?? this.appliedSnapshotJson,
+    appliedAtUtc: appliedAtUtc ?? this.appliedAtUtc,
+    undoneAtUtc: undoneAtUtc ?? this.undoneAtUtc,
+  );
+}
+
+/// Serializes everything [MercyWorkflow.planUndo] needs to reverse a batch.
+String encodeMercyAppliedBatch(MercyAppliedBatchSnapshot snapshot) =>
+    jsonEncode(<String, Object?>{
+      'batch_id': snapshot.batchId,
+      'applied_event_id': snapshot.appliedEventId,
+      'policy_version': snapshot.policyVersion,
+      'prior_adjustments': snapshot.priorAdjustmentsJson,
+      'applied_adjustments': encodeAdjustmentSnapshot(
+        snapshot.appliedAdjustments,
+      ),
+      'items': <Map<String, Object?>>[
+        for (final MercyAppliedItemSnapshot item in snapshot.items)
+          <String, Object?>{
+            'element_id': item.element.id,
+            'element_type': item.element.type.index,
+            'serialized_state': item.canonical.serializedState,
+            'algorithmic_due': item.canonical.algorithmicDue,
+            'scheduler_name': item.canonical.schedulerName,
+            'scheduler_version': item.canonical.schedulerVersion,
+            'from_study_day': item.fromDay.epochDay,
+            'to_study_day': item.toDay.epochDay,
+            'zone_id': item.toDay.zoneId,
+            'applied_event_id': item.appliedEventId,
+          },
+      ],
+    });
+
+MercyAppliedBatchSnapshot decodeMercyAppliedBatch(String source) {
+  final Map<String, Object?> map = (jsonDecode(source) as Map<Object?, Object?>)
+      .cast<String, Object?>();
+  return MercyAppliedBatchSnapshot(
+    batchId: map['batch_id']! as String,
+    appliedEventId: map['applied_event_id']! as String,
+    policyVersion: map['policy_version']! as String,
+    priorAdjustments: decodeAdjustmentSnapshot(
+      map['prior_adjustments']! as String,
+    ),
+    appliedAdjustments: decodeAdjustmentSnapshot(
+      map['applied_adjustments']! as String,
+    ),
+    items: <MercyAppliedItemSnapshot>[
+      for (final Object? raw in map['items']! as List<Object?>)
+        (() {
+          final Map<String, Object?> value = (raw! as Map<Object?, Object?>)
+              .cast<String, Object?>();
+          final String zoneId = value['zone_id']! as String;
+          return MercyAppliedItemSnapshot(
+            element: ElementRef(
+              id: value['element_id']! as String,
+              type: ElementType.values[value['element_type']! as int],
+            ),
+            canonical: MercyCanonicalSnapshot(
+              serializedState: value['serialized_state']! as String,
+              algorithmicDue: value['algorithmic_due']! as String,
+              schedulerName: value['scheduler_name']! as String,
+              schedulerVersion: value['scheduler_version']! as String,
+            ),
+            fromDay: _dayFromEpochDay(value['from_study_day']! as int, zoneId),
+            toDay: _dayFromEpochDay(value['to_study_day']! as int, zoneId),
+            appliedEventId: value['applied_event_id']! as String,
+          );
+        })(),
+    ],
+  );
+}
+
+StudyDay _dayFromEpochDay(int epochDay, String zoneId) {
+  final DateTime date = DateTime.fromMillisecondsSinceEpoch(
+    epochDay * Duration.millisecondsPerDay,
+    isUtc: true,
+  );
+  return StudyDay(
+    year: date.year,
+    month: date.month,
+    day: date.day,
+    zoneId: zoneId,
+  );
+}

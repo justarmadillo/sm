@@ -28,8 +28,6 @@ import '../../core/result.dart';
 import '../../core/tracing.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/overload.dart';
-import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/presentation_plan.dart';
 import '../../domain/scheduling/queue_policy.dart';
 import '../../domain/scheduling/revlog.dart';
@@ -41,8 +39,8 @@ import '../../domain/transfer/dataset_lineage.dart';
 import '../app_command.dart';
 import '../ports/repositories.dart';
 import '../ports/transaction_runner.dart';
-import '../scheduling/scheduling_context.dart';
 import '../scheduling/schedule_adjustment_service.dart';
+import '../scheduling/scheduling_context.dart';
 import '../scheduling/scheduling_journal.dart';
 import 'queue_commands.dart';
 
@@ -52,10 +50,7 @@ const String kDailyAdmissionKind = 'queue.admission';
 /// Activity kind recorded when the user asks for more work.
 const String kStudyMoreKind = 'queue.study_more';
 
-/// Activity kind recorded when a backlog is spread.
-const String kMercyKind = 'queue.mercy';
-
-/// [Derived] Versioned capacity planner. The headroom value is exposed here
+/// `[Derived]` Versioned capacity planner. The headroom value is exposed here
 /// pending calibration rather than being presented as a SuperMemo constant.
 const String kOverflowPolicyVersion = 'supermemo_like_v1';
 const double kOverflowHeadroomFraction = 0.10;
@@ -133,19 +128,6 @@ final class QueueHandlers {
           if (settings.queue.autoPostpone) {
             deferred = await _applyRolloverOverflow(command, settings);
           }
-          await _learning.appendActivity(
-            ActivityRecord(
-              id: _ids.newId(),
-              operationId: command.operationId.value,
-              kind: kDailyAdmissionKind,
-              atUtc: command.timestampUtc,
-              metadata: <String, Object?>{
-                'day': command.day.toString(),
-                'deferred': deferred,
-                'overflow_profile': 'supermemo_like_v1',
-              },
-            ),
-          );
           await _transfer.advanceGeneration();
         }
 
@@ -184,6 +166,26 @@ final class QueueHandlers {
           forceRebuild: command.extraAdmissions > 0,
           atUtc: command.timestampUtc,
         );
+        if (!applied) {
+          // Written after the plan exists, not before: the counters are the
+          // whole point of the row. A later rebuild sees only the survivors,
+          // so this is the only moment at which what was due, what was
+          // admitted, and what did not fit are all known.
+          await _learning.appendActivity(
+            ActivityRecord(
+              id: _ids.newId(),
+              operationId: command.operationId.value,
+              kind: kDailyAdmissionKind,
+              atUtc: command.timestampUtc,
+              metadata: <String, Object?>{
+                'day': command.day.toString(),
+                'deferred': deferred,
+                'overflow_profile': kOverflowPolicyVersion,
+                ...plan.counters.toMetadata(),
+              },
+            ),
+          );
+        }
         _diagnostics.record(
           DiagnosticEvent(
             level: DiagnosticLevel.info,
@@ -258,8 +260,9 @@ final class QueueHandlers {
             );
             return byPriority != 0 ? byPriority : left.compareTo(right);
           });
-        if (selected.length > limit)
+        if (selected.length > limit) {
           selected.removeRange(limit, selected.length);
+        }
         final ScheduleAdjustmentMutation mutation = await _adjustments
             .clearAutoOverflow(
               elements: selected,
@@ -292,19 +295,6 @@ final class QueueHandlers {
     } on Object catch (error, stackTrace) {
       return Err<int>(_fail(command, kStudyMoreKind, error, stackTrace));
     }
-  }
-
-  /// Legacy one-step Mercy is intentionally rejected.
-  ///
-  /// Mercy may move work earlier, requires a dry-run confirmation token and
-  /// stale-revision validation, and must support exact batch undo. Applying a
-  /// lower-bound spread here would violate all four guarantees.
-  Future<Result<int>> runMercy(RunMercy command) async {
-    return const Err<int>(
-      ValidationFailure(
-        'Mercy requires PreviewMercy followed by confirmed ApplyMercy',
-      ),
-    );
   }
 
   /// The counters this day's admission recorded, or null if it has not run.
@@ -552,7 +542,16 @@ final class QueueHandlers {
       for (final scored in fresh.scored) scored.ref: scored.lane,
     };
 
-    if (stored != null && !forceRebuild) {
+    // A stored plan is resumed only while it was planned under the same
+    // rules. A different study day, policy, or settings revision is a
+    // different day's plan, and quietly resuming the old one would ignore the
+    // change the user just made.
+    final bool resumable =
+        stored != null &&
+        !forceRebuild &&
+        identity.sharesBasisWith(stored.identity);
+
+    if (stored != null && resumable) {
       final List<PresentationPlanEntry> remaining = <PresentationPlanEntry>[
         for (final entry in stored.remainingEntries)
           if (byRef[entry.ref] case final QueueCandidate candidate)
@@ -576,7 +575,22 @@ final class QueueHandlers {
           (PresentationPlanEntry entry) => entry.ref.type == ElementType.card,
         );
         remaining.insertAll(nextCard < 0 ? 0 : nextCard, mandatory);
+        present.addAll(
+          mandatory.map((PresentationPlanEntry entry) => entry.ref),
+        );
       }
+      // Work admitted since the plan was written — recalled by Study More, or
+      // newly created — joins the tail rather than waiting for tomorrow. The
+      // caps already decided this set, so appending it cannot exceed them, and
+      // appending keeps the user's current place instead of reshuffling it.
+      remaining.addAll(<PresentationPlanEntry>[
+        for (final QueueCandidate candidate in fresh.entries)
+          if (!present.contains(candidate.ref))
+            PresentationPlanEntry(
+              ref: candidate.ref,
+              lane: freshLanes[candidate.ref] ?? QueueLane.regularDueTopic,
+            ),
+      ]);
       final StoredPresentationPlan resumed = StoredPresentationPlan(
         identity: identity,
         remainingEntries: List<PresentationPlanEntry>.unmodifiable(remaining),
