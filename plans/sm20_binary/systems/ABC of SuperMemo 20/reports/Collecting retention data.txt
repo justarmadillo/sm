@@ -1,0 +1,13 @@
+SuperMemo Report
+   Activity: Collecting retention data
+   Collection: d:\claude\incremental reader\plans\sm20_binary\systems\abc of supermemo 20
+   Date: Tuesday, August 25, 2026, 4:52:42 PM
+   SuperMemo 20 (Build 20.00.33, Aug 7, 2026)
+
+Retention data errors can be ignored
+
+Process completed at 4:52:42 PM in 00:00:00 sec (Tuesday, August 25, 2026)
+
+NO ERRORS (Collecting retention data)
+
+____________________________________________________________
