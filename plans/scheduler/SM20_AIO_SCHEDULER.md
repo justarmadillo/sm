@@ -6,7 +6,7 @@ This document describes the scheduling behavior recovered from this exact local
 executable:
 
 ```text
-File:    sm20.exe
+File:    sm20.exe (found in /plans/sm20_binary)
 SHA-256: 72A9D5FA6AD7D05D0478B7F8C77007B2001DE93D26F963DF4923E0BAA462A9AE
 Image base: 0x00400000
 ```
