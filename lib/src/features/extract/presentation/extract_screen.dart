@@ -383,7 +383,7 @@ class _ExtractStatusBar extends StatelessWidget {
         ),
         const Spacer(),
         Text(
-          'Step ${state.topic.stepIndex} · '
+          'Repetitions ${state.topic.repetitionCount} · '
           '${state.effectiveDueDay ?? state.topic.schedule.algorithmicDueDay}',
           style: const TextStyle(fontSize: 12, color: AppColors.muted),
         ),

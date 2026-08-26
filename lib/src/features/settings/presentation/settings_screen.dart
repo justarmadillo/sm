@@ -1,11 +1,4 @@
-/// Settings: every constant the schedulers run on.
-///
-/// The scheduling design's numbers are admitted starting points, not derived
-/// values, so all of them are here rather than compiled in. That is also what
-/// makes this a SuperMemo-shaped tool rather than an imitation of one: the
-/// proportion of topics, the degree of randomization, the caps, the A-factor's
-/// modulation, and the postponement formulas are exactly the knobs SuperMemo
-/// exposes, and none of them can be tuned honestly without being visible.
+/// Settings for the SM20 scheduler and application-local preferences.
 library;
 
 import 'package:flutter/material.dart';
@@ -90,20 +83,24 @@ class _Body extends StatelessWidget {
   final SettingsViewModel model;
 
   AppSettings get draft => state.draft;
+  SmartPostponeSettings get smart => draft.postpone.defaultProfile;
 
   @override
   Widget build(BuildContext context) => Center(
     child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 880),
+      constraints: const BoxConstraints(maxWidth: 920),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
         children: <Widget>[
           _studyDay(),
           _queue(),
-          _topics(),
-          _profiles(),
+          _remember(),
           _cards(),
-          _postpone(),
+          _smartPostponeScope(),
+          _smartPostponeParameters(),
+          _smartPostponeAdjust(),
+          _ProfileRegistry(draft: draft, model: model),
+          _mercy(),
           _reader(),
           _diagnostics(),
         ],
@@ -111,19 +108,27 @@ class _Body extends StatelessWidget {
     ),
   );
 
-  // ---------------------------------------------------------------- study day
+  void _editSmart(
+    SmartPostponeSettings Function(SmartPostponeSettings current) change,
+  ) {
+    model.edit(
+      (AppSettings settings) => settings.copyWith(
+        postpone: settings.postpone.copyWith(
+          defaultProfile: change(settings.postpone.defaultProfile),
+        ),
+      ),
+    );
+  }
 
   Widget _studyDay() => SettingsSection(
     title: 'Study day',
     description:
-        'A study day ends at the rollover, not at midnight, so a session that '
-        'runs past 1am still counts as the same day.',
+        'The scheduler works in collection-relative days. The local rollover '
+        'keeps a late-night session on one study day.',
     children: <Widget>[
       SettingsRow(
         label: 'Home timezone',
-        hint:
-            'A named home timezone keeps the StudyDay stable while travelling '
-            'and applies its daylight-saving rules automatically.',
+        hint: 'Used to translate instants into stable study-day numbers.',
         control: ChoiceField<String>(
           value: _displayZoneId(draft.studyDay.zoneId),
           options: <String, String>{
@@ -135,20 +140,23 @@ class _Body extends StatelessWidget {
             for (final String id in selectableZoneIds) id: id,
           },
           onChanged: (String value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(studyDay: s.studyDay.copyWith(zoneId: value)),
+            (AppSettings settings) => settings.copyWith(
+              studyDay: settings.studyDay.copyWith(zoneId: value),
+            ),
           ),
         ),
       ),
       SettingsRow(
         label: 'Day rollover',
-        hint: 'Minutes after local midnight at which a new study day begins.',
+        hint: 'Minutes after local midnight at which Today advances.',
         control: IntField(
           value: draft.studyDay.rolloverMinutes,
+          min: 0,
+          max: 1439,
           suffix: 'min',
           onChanged: (int value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              studyDay: s.studyDay.copyWith(rolloverMinutes: value),
+            (AppSettings settings) => settings.copyWith(
+              studyDay: settings.studyDay.copyWith(rolloverMinutes: value),
             ),
           ),
         ),
@@ -160,648 +168,1133 @@ class _Body extends StatelessWidget {
     try {
       return canonicalTimeZoneId(storedId);
     } on UnknownTimeZoneException {
-      // Keep malformed legacy data visible. Scheduling fails closed until the
-      // user explicitly replaces it with a supported named zone.
       return storedId;
     }
   }
 
-  // -------------------------------------------------------------------- queue
-
   Widget _queue() => SettingsSection(
-    title: 'Daily queue',
+    title: 'Daily Outstanding queue',
     description:
-        'Caps are maxima, not quotas: the queue is worked until you stop. '
-        'What does not fit is deferred by priority rather than left to rot, '
-        'which is what keeps an oversubscribed collection survivable.',
+        'SM20 priority-sorts items and topics independently, applies each '
+        'randomization curve, then merges the two outputs at the selected '
+        'topic percentage. There are no capacity caps or Study More overlay.',
     children: <Widget>[
       SettingsRow(
-        label: 'Maximum cards',
-        hint: 'Most unique cards admitted in one study day.',
-        control: IntField(
-          value: draft.queue.maxCards,
-          onChanged: (int value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(maxCards: value)),
-          ),
-        ),
-      ),
-      SettingsRow(
-        label: 'Maximum new cards',
+        label: 'Topics in merged queue',
         hint:
-            'A subset of the card cap. New cards are cheap to make and '
-            'expensive to keep, so they get their own limit.',
-        control: IntField(
-          value: draft.queue.maxNewCards,
-          onChanged: (int value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(maxNewCards: value)),
-          ),
-        ),
-      ),
-      SettingsRow(
-        label: 'Maximum topics',
-        hint: 'Sources and extracts together.',
-        control: IntField(
-          value: draft.queue.maxTopics,
-          onChanged: (int value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(maxTopics: value)),
-          ),
-        ),
-      ),
-      SettingsRow(
-        label: 'Cards per topic',
-        hint:
-            'The proportion of topics in learning. Too few and you gain no '
-            'new knowledge; too many and you forget what you already '
-            'invested in. Four or more items per topic is the healthy range.',
-        control: IntField(
-          value: draft.queue.cardsPerTopic,
-          onChanged: (int value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(cardsPerTopic: value)),
-          ),
-        ),
-      ),
-      SettingsRow(
-        label: 'Topic interleave floor',
-        hint:
-            'A hard guard: never more than this many elements in a row '
-            'without a topic while topics are due. Items outnumber topics '
-            'within months, and reading is what generates future items.',
-        control: IntField(
-          value: draft.queue.minTopicEvery,
-          onChanged: (int value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(minTopicEvery: value)),
-          ),
-        ),
-      ),
-      SettingsRow(
-        label: 'Randomization',
-        hint:
-            'Zero gives strict priority order. A little shuffle fights the '
-            'priority bias — today’s imports always feel more important '
-            'than last year’s investment — and lets displaced material '
-            'resurface. Too much and prioritization unravels entirely.',
+            'Target topic-family share. When one family runs out, SM20 uses '
+            'the other while preserving its exact merge counters.',
         control: DoubleSliderField(
-          value: draft.queue.randomization,
+          value: draft.queue.topicPercent.toDouble(),
           min: 0,
-          max: 0.5,
-          divisions: 50,
-          format: (double v) => '${(v * 100).toStringAsFixed(0)}%',
+          max: 100,
+          divisions: 100,
+          format: (double value) => '${value.round()}%',
           onChanged: (double value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(randomization: value)),
+            (AppSettings settings) => settings.copyWith(
+              queue: settings.queue.copyWith(topicPercent: value.round()),
+            ),
           ),
         ),
       ),
       SettingsRow(
-        label: 'Protected top percentile',
+        label: 'Item randomization',
         hint:
-            'This share of the collection is never auto-postponed. Without '
-            'the floor the valve eventually pushes everything out and the '
-            'collection schedules nothing. Protected elements stay due and '
-            'force a decision: do it, or demote it by hand.',
+            'The item-family slider value used by SM20’s nonlinear '
+            'randomization curve (0–100).',
         control: DoubleSliderField(
-          value: draft.queue.protectedPercentile,
+          value: draft.queue.itemRandomization.toDouble(),
           min: 0,
-          max: 0.25,
-          divisions: 25,
-          format: (double v) => '${(v * 100).toStringAsFixed(0)}%',
+          max: 100,
+          divisions: 100,
+          format: (double value) => '${value.round()}',
           onChanged: (double value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(protectedPercentile: value)),
+            (AppSettings settings) => settings.copyWith(
+              queue: settings.queue.copyWith(itemRandomization: value.round()),
+            ),
           ),
         ),
       ),
       SettingsRow(
-        label: 'Auto-postpone overflow',
+        label: 'Topic randomization',
         hint:
-            'Off means the whole backlog stays due every day. Overload is '
-            'normal in incremental reading; deferring the lowest-priority '
-            'excess is how it stays workable.',
+            'The topic-family slider value. Topic extraction starts only '
+            'after every item extraction has consumed its random draws.',
+        control: DoubleSliderField(
+          value: draft.queue.topicRandomization.toDouble(),
+          min: 0,
+          max: 100,
+          divisions: 100,
+          format: (double value) => '${value.round()}',
+          onChanged: (double value) => model.edit(
+            (AppSettings settings) => settings.copyWith(
+              queue: settings.queue.copyWith(topicRandomization: value.round()),
+            ),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Automatic daily sort',
+        hint:
+            'Sort once when Today changes and Outstanding is nonempty. '
+            'Sorting does not reseed the collection PRNG.',
         control: SwitchField(
-          value: draft.queue.autoPostpone,
+          value: draft.queue.autoSort,
           onChanged: (bool value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(autoPostpone: value)),
+            (AppSettings settings) => settings.copyWith(
+              queue: settings.queue.copyWith(autoSort: value),
+            ),
           ),
         ),
       ),
       SettingsRow(
-        label: 'Study More step',
-        hint: 'How many deferred elements one Study More press takes back.',
-        control: IntField(
-          value: draft.queue.studyMoreStep,
-          onChanged: (int value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(queue: s.queue.copyWith(studyMoreStep: value)),
+        label: 'Randomize Final Drill',
+        hint:
+            'Use SM20’s fixed-size full-range swap routine before the Final '
+            'Drill stage. It consumes one global PRNG value per entry.',
+        control: SwitchField(
+          value: draft.queue.randomizeFinalDrill,
+          onChanged: (bool value) => model.edit(
+            (AppSettings settings) => settings.copyWith(
+              queue: settings.queue.copyWith(randomizeFinalDrill: value),
+            ),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Confirm stage transitions',
+        hint:
+            'When enabled, collections over 100 elements ask before moving '
+            'from Outstanding into Final Drill or Pending.',
+        control: SwitchField(
+          value: draft.queue.confirmStageTransitions,
+          onChanged: (bool value) => model.edit(
+            (AppSettings settings) => settings.copyWith(
+              queue: settings.queue.copyWith(confirmStageTransitions: value),
+            ),
           ),
         ),
       ),
     ],
   );
 
-  // ------------------------------------------------------------------- topics
-
-  Widget _topics() => SettingsSection(
-    title: 'Topic scheduling',
+  Widget _remember() => SettingsSection(
+    title: 'Remember',
     description:
-        'Topics — articles and extracts — are never graded and never go '
-        'through FSRS. There is no concept of failing a paragraph; you simply '
-        'see it again and do more work on it. The A-factor decides how fast '
-        'each one recedes.',
+        'The browser Remember command chooses the first interval from these '
+        'collection words. Equal endpoints are explicit and consume no '
+        'random draw; a high endpoint of zero uses the generated path.',
     children: <Widget>[
       SettingsRow(
-        label: 'Base A-factor',
-        hint: 'The multiplier before any modulation.',
-        control: DoubleSliderField(
-          value: draft.topics.baseAFactor,
+        label: 'First interval — low',
+        hint: 'Inclusive lower endpoint for a randomized first interval.',
+        control: IntField(
+          value: draft.remember.firstIntervalLowDays,
           min: 1,
-          max: 5,
-          divisions: 40,
-          onChanged: (double value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(topics: s.topics.copyWith(baseAFactor: value)),
-          ),
-        ),
-      ),
-      SettingsRow(
-        label: 'Priority floor / span',
-        hint:
-            'A is multiplied by (floor + span × pressure). Top-priority '
-            'material grows slowly and returns often; the bottom recedes '
-            'fast. Note that low priority is penalised twice — pushed '
-            'further by the valve and grown faster here — which is intended, '
-            'but worth watching if material vanishes sooner than you expect.',
-        control: Row(
-          children: <Widget>[
-            Expanded(
-              child: DoubleSliderField(
-                value: draft.topics.priorityFloor,
-                min: 0.2,
-                max: 1.5,
-                divisions: 26,
-                onChanged: (double value) => model.edit(
-                  (AppSettings s) => s.copyWith(
-                    topics: s.topics.copyWith(priorityFloor: value),
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: DoubleSliderField(
-                value: draft.topics.prioritySpan,
-                min: 0,
-                max: 2,
-                divisions: 20,
-                onChanged: (double value) => model.edit(
-                  (AppSettings s) => s.copyWith(
-                    topics: s.topics.copyWith(prioritySpan: value),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      SettingsRow(
-        label: 'A-factor clamps',
-        hint:
-            'A is clamped between these. A floor of 1.0 means a repetition '
-            'never shortens an interval by itself — only you can do that.',
-        control: Row(
-          children: <Widget>[
-            Expanded(
-              child: DoubleSliderField(
-                value: draft.topics.minAFactor,
-                min: 0.5,
-                max: 2,
-                divisions: 15,
-                onChanged: (double value) => model.edit(
-                  (AppSettings s) =>
-                      s.copyWith(topics: s.topics.copyWith(minAFactor: value)),
-                ),
-              ),
-            ),
-            Expanded(
-              child: DoubleSliderField(
-                value: draft.topics.maxAFactor,
-                min: 2,
-                max: 12,
-                divisions: 20,
-                onChanged: (double value) => model.edit(
-                  (AppSettings s) =>
-                      s.copyWith(topics: s.topics.copyWith(maxAFactor: value)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      SettingsRow(
-        label: 'First interval span — articles',
-        hint:
-            'first = 1 + span × pressure², capped. Squared, not linear: it '
-            'keeps the top of the collection tight and lets the bottom '
-            'spread out fast.',
-        control: IntField(
-          value: draft.topics.sourceFirstIntervalSpan,
+          max: 365,
           suffix: 'd',
           onChanged: (int value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              topics: s.topics.copyWith(sourceFirstIntervalSpan: value),
+            (AppSettings settings) => settings.copyWith(
+              remember: settings.remember.copyWith(firstIntervalLowDays: value),
             ),
           ),
         ),
       ),
       SettingsRow(
-        label: 'First interval span — extracts',
+        label: 'First interval — high',
         hint:
-            'Extracts start shorter than articles: an unconverted extract is '
-            'a debt, material you have committed to but not yet turned into '
-            'anything durable.',
+            'Inclusive upper endpoint (1–365). Set to 0 to ask the topic '
+            'scheduler to generate the first interval.',
         control: IntField(
-          value: draft.topics.extractFirstIntervalSpan,
+          value: draft.remember.firstIntervalHighDays,
+          min: 0,
+          max: 365,
           suffix: 'd',
           onChanged: (int value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              topics: s.topics.copyWith(extractFirstIntervalSpan: value),
-            ),
-          ),
-        ),
-      ),
-      SettingsRow(
-        label: 'Offer to finish an extract after',
-        hint:
-            'Encounters since its last card before the extract is offered '
-            'Finish. Without a nudge, a collection fills with extracts you '
-            'mentally finished months ago but never closed.',
-        control: IntField(
-          value: draft.topics.extractFinishPromptAfter,
-          onChanged: (int value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              topics: s.topics.copyWith(extractFinishPromptAfter: value),
+            (AppSettings settings) => settings.copyWith(
+              remember: settings.remember.copyWith(
+                firstIntervalHighDays: value,
+              ),
             ),
           ),
         ),
       ),
     ],
   );
-
-  // ----------------------------------------------------------------- profiles
-
-  Widget _profiles() => SettingsSection(
-    title: 'Interval sequences',
-    description:
-        'Used when the interval model is set to fixed sequences. Days between '
-        'encounters; the final value repeats forever, so a long-lived topic '
-        'settles into a steady rhythm instead of disappearing for years.',
-    children: <Widget>[
-      for (final MapEntry<String, List<int>> entry
-          in draft.intervalProfiles.entries)
-        SettingsRow(
-          label: entry.key,
-          hint: switch (entry.key) {
-            'focused' => 'Material being worked through now.',
-            'normal' => 'The default pace for an article.',
-            'slow' => 'Background material.',
-            'extract' => 'Extracts, which start shorter than articles.',
-            _ => 'A custom sequence.',
-          },
-          control: IntListField(
-            values: entry.value,
-            onChanged: (List<int> values) => model.edit(
-              (AppSettings s) => s.copyWith(
-                intervalProfiles: <String, List<int>>{
-                  ...s.intervalProfiles,
-                  entry.key: values,
-                },
-              ),
-            ),
-          ),
-        ),
-    ],
-  );
-
-  // -------------------------------------------------------------------- cards
 
   Widget _cards() => SettingsSection(
-    title: 'Cards (FSRS)',
+    title: 'Card memory',
     description:
-        'The parameter vector itself stays pinned and versioned: a hand-edited '
-        'weight would silently reinterpret every review already in the log. '
-        'Retention, steps, and the interval cap are safe to change at any time.',
+        'The supplied SM20 source does not reconstruct item memory. Cards '
+        'retain FSRS memory while still participating in SM20 priority, '
+        'Outstanding, Smart Postpone, and Mercy.',
     children: <Widget>[
       SettingsRow(
         label: 'Desired retention',
-        hint: 'Probability of recall FSRS aims for at the scheduled instant.',
+        hint: 'Target recall probability used by the card scheduler.',
         control: DoubleSliderField(
           value: draft.cards.desiredRetention,
           min: 0.70,
           max: 0.99,
           divisions: 29,
-          format: (double v) => '${(v * 100).toStringAsFixed(0)}%',
           onChanged: (double value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(cards: s.cards.copyWith(desiredRetention: value)),
+            (AppSettings settings) => settings.copyWith(
+              cards: settings.cards.copyWith(desiredRetention: value),
+            ),
           ),
         ),
       ),
       SettingsRow(
         label: 'Learning steps',
-        hint: 'Minutes, comma separated.',
+        hint: 'Comma-separated minute steps used only by card memory.',
         control: IntListField(
           values: draft.cards.learningStepMinutes,
-          onChanged: (List<int> values) => model.edit(
-            (AppSettings s) => s.copyWith(
-              cards: s.cards.copyWith(learningStepMinutes: values),
+          onChanged: (List<int> value) => model.edit(
+            (AppSettings settings) => settings.copyWith(
+              cards: settings.cards.copyWith(learningStepMinutes: value),
             ),
           ),
         ),
       ),
       SettingsRow(
         label: 'Relearning steps',
-        hint: 'Minutes, comma separated.',
+        hint: 'Minute steps after a card lapse.',
         control: IntListField(
           values: draft.cards.relearningStepMinutes,
-          onChanged: (List<int> values) => model.edit(
-            (AppSettings s) => s.copyWith(
-              cards: s.cards.copyWith(relearningStepMinutes: values),
+          onChanged: (List<int> value) => model.edit(
+            (AppSettings settings) => settings.copyWith(
+              cards: settings.cards.copyWith(relearningStepMinutes: value),
             ),
           ),
         ),
       ),
       SettingsRow(
-        label: 'Maximum interval',
-        hint: 'Upper clamp on any scheduled interval.',
+        label: 'Maximum card interval',
+        hint: 'Upper bound used by FSRS card scheduling.',
         control: IntField(
           value: draft.cards.maximumIntervalDays,
+          min: 1,
+          max: 36500,
           suffix: 'd',
           onChanged: (int value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(cards: s.cards.copyWith(maximumIntervalDays: value)),
+            (AppSettings settings) => settings.copyWith(
+              cards: settings.cards.copyWith(maximumIntervalDays: value),
+            ),
           ),
         ),
       ),
       SettingsRow(
-        label: 'Fuzzing',
-        hint: 'Spreads due dates so reviews do not clump on one day.',
+        label: 'Fuzz card intervals',
+        hint: 'Apply the card scheduler’s interval fuzzing.',
         control: SwitchField(
           value: draft.cards.enableFuzzing,
           onChanged: (bool value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(cards: s.cards.copyWith(enableFuzzing: value)),
+            (AppSettings settings) => settings.copyWith(
+              cards: settings.cards.copyWith(enableFuzzing: value),
+            ),
           ),
         ),
       ),
       SettingsRow(
-        label: 'Leech threshold',
-        hint:
-            'Lapses after which a card is flagged and its source passage '
-            'offered. Flagged, never auto-suspended: most repeated failures '
-            'are badly written cards rather than hard facts, and suspending '
-            'hides the evidence instead of fixing the cause.',
+        label: 'Leech lapse threshold',
+        hint: 'Number of card lapses before the card is marked as a leech.',
         control: IntField(
           value: draft.cards.leechLapses,
+          min: 1,
+          max: 999,
           onChanged: (int value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(cards: s.cards.copyWith(leechLapses: value)),
+            (AppSettings settings) => settings.copyWith(
+              cards: settings.cards.copyWith(leechLapses: value),
+            ),
           ),
         ),
       ),
       SettingsRow(
-        label: 'Bury siblings',
-        hint:
-            'Answering a card pushes same-parent cards to tomorrow. Three '
-            'clozes cut from one sentence give each other away, so seeing '
-            'them together measures almost nothing.',
+        label: 'Bury card siblings',
+        hint: 'Keep related cards from appearing in the same study day.',
         control: SwitchField(
           value: draft.cards.burySiblings,
           onChanged: (bool value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(cards: s.cards.copyWith(burySiblings: value)),
+            (AppSettings settings) => settings.copyWith(
+              cards: settings.cards.copyWith(burySiblings: value),
+            ),
           ),
         ),
       ),
     ],
   );
 
-  // ----------------------------------------------------------------- postpone
-
-  Widget _postpone() => SettingsSection(
-    title: 'Postponement',
+  Widget _smartPostponeScope() => SettingsSection(
+    title: 'Smart Postpone — scope',
     description:
-        'Three separate mechanisms. A manual Later is you saying "wrong task '
-        'right now"; auto-postpone is the day’s capacity valve; Mercy '
-        'resolves a backlog after an absence. None of them is a review, and '
-        'none touches memory state or the algorithmic due date.',
+        'These are the actual profile-record controls used by Smart Postpone. '
+        'Automatic postponement runs the Default profile at most once per day '
+        'and only after SM20’s strict Outstanding and overdue count gates.',
     children: <Widget>[
       SettingsRow(
-        label: 'Later delay range',
-        hint:
-            'A fraction of the element’s own interval. A fixed +1 day is '
-            'useless — the element returns tomorrow into an equally full '
-            'queue.',
-        control: Row(
-          children: <Widget>[
-            Expanded(
-              child: DoubleSliderField(
-                value: draft.postpone.laterMinFraction,
-                min: 0,
-                max: 1,
-                divisions: 20,
-                onChanged: (double value) => model.edit(
-                  (AppSettings s) => s.copyWith(
-                    postpone: s.postpone.copyWith(laterMinFraction: value),
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: DoubleSliderField(
-                value: draft.postpone.laterMaxFraction,
-                min: 0,
-                max: 1.5,
-                divisions: 30,
-                onChanged: (double value) => model.edit(
-                  (AppSettings s) => s.copyWith(
-                    postpone: s.postpone.copyWith(laterMaxFraction: value),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      SettingsRow(
-        label: 'Auto-postpone base',
-        hint:
-            'Fraction of the interval used as the base delay. Proportional, '
-            'so young elements are not lost to the void while mature ones '
-            'recede far.',
-        control: DoubleSliderField(
-          value: draft.postpone.autoBaseFraction,
-          min: 0,
-          max: 1,
-          divisions: 20,
-          onChanged: (double value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              postpone: s.postpone.copyWith(autoBaseFraction: value),
+        label: 'Automatic postponement',
+        hint: 'Allow the once-per-day Default-profile automatic path.',
+        control: SwitchField(
+          value: draft.postpone.autoEnabled,
+          onChanged: (bool value) => model.edit(
+            (AppSettings settings) => settings.copyWith(
+              postpone: settings.postpone.copyWith(autoEnabled: value),
             ),
           ),
         ),
       ),
       SettingsRow(
-        label: 'Priority multiplier',
-        hint:
-            'How much further bottom-priority material is pushed than top. '
-            'At 4, the bottom of the collection goes roughly five times as '
-            'far as the top.',
-        control: DoubleSliderField(
-          value: draft.postpone.autoPriorityMultiplier,
-          min: 0,
-          max: 12,
-          divisions: 24,
-          format: (double v) => '×${v.toStringAsFixed(1)}',
-          onChanged: (double value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              postpone: s.postpone.copyWith(autoPriorityMultiplier: value),
-            ),
+        label: 'Profile name',
+        hint: 'Managed profile name. The automatic path loads “Default”.',
+        control: StringField(
+          value: smart.profileName,
+          onChanged: (String value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(profileName: value),
           ),
         ),
       ),
       SettingsRow(
-        label: 'Dispersal',
+        label: 'Scope',
         hint:
-            'Random ± spread on each delay, so a day’s overflow does not '
-            'land together on one future day and recreate the same overload.',
-        control: DoubleSliderField(
-          value: draft.postpone.autoDispersal,
-          min: 0,
-          max: 0.6,
-          divisions: 24,
-          format: (double v) => '±${(v * 100).toStringAsFixed(0)}%',
-          onChanged: (double value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(postpone: s.postpone.copyWith(autoDispersal: value)),
-          ),
+            'All Outstanding, a selected branch/concept, or the current '
+            'browser population.',
+        control: ChoiceField<SmartPostponeScope>(
+          value: smart.scope,
+          options: const <SmartPostponeScope, String>{
+            SmartPostponeScope.global: 'All Outstanding',
+            SmartPostponeScope.branch: 'Branch or concept',
+            SmartPostponeScope.browser: 'Current browser',
+          },
+          onChanged: (SmartPostponeScope value) =>
+              _editSmart((SmartPostponeSettings s) => s.copyWith(scope: value)),
         ),
       ),
       SettingsRow(
-        label: 'Mercy horizon',
-        hint:
-            'Days a backlog is spread across. The top of it lands within '
-            'days and the tail lands months out — that distribution is the '
-            'correct outcome, not damage control.',
+        label: 'Branch root element',
+        hint: 'Unsigned element ID used when scope is Branch or concept.',
         control: IntField(
-          value: draft.postpone.mercyHorizonDays,
-          suffix: 'd',
-          onChanged: (int value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              postpone: s.postpone.copyWith(mercyHorizonDays: value),
-            ),
+          value: smart.rootElementId,
+          min: 0,
+          max: 0xFFFFFFFF,
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(rootElementId: value),
           ),
         ),
       ),
       SettingsRow(
-        label: 'Mercy daily cap',
-        hint: 'How many elements Mercy places on each day of the horizon.',
+        label: 'Selection method',
+        hint:
+            'Protect a fixed top-priority count, including the forced second '
+            'pass, or rely only on the parameter eligibility gates.',
+        control: ChoiceField<SmartPostponeMethod>(
+          value: smart.method,
+          options: const <SmartPostponeMethod, String>{
+            SmartPostponeMethod.topCount: 'Protect top count',
+            SmartPostponeMethod.parameters: 'Parameters only',
+          },
+          onChanged: (SmartPostponeMethod value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(method: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Protected top count',
+        hint:
+            'Number of highest-importance source entries left unpostponed '
+            'when the top-count method is active.',
         control: IntField(
-          value: draft.postpone.mercyDailyCap,
-          onChanged: (int value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(postpone: s.postpone.copyWith(mercyDailyCap: value)),
+          value: smart.protectedCount,
+          min: 1,
+          max: 20000,
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(protectedCount: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Simulate',
+        hint:
+            'Calculate and report candidates without dispersion, record '
+            'writes, or PRNG consumption.',
+        control: SwitchField(
+          value: smart.simulate,
+          onChanged: (bool value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(simulate: value),
           ),
         ),
       ),
     ],
   );
 
-  // ------------------------------------------------------------------- reader
+  Widget _smartPostponeParameters() => SettingsSection(
+    title: 'Smart Postpone — parameters',
+    description:
+        'Delay percentages are stored behind the displayed factor '
+        '(factor = 1 + percent/100). Minimum and maximum values clamp days '
+        'added before random dispersion, not the final interval.',
+    children: <Widget>[
+      SettingsRow(
+        label: 'Item delay factor',
+        hint: 'Stored 1–400%; 20% is displayed by SM20 as factor 1.20.',
+        control: IntField(
+          value: smart.itemDelayPercent,
+          min: 1,
+          max: 400,
+          suffix: '%',
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(itemDelayPercent: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Topic delay factor',
+        hint: 'Stored 1–1900%; 50% is displayed as factor 1.50.',
+        control: IntField(
+          value: smart.topicDelayPercent,
+          min: 1,
+          max: 1900,
+          suffix: '%',
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(topicDelayPercent: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Item maximum added delay',
+        hint: 'Pre-dispersion clamp for item delay days.',
+        control: IntField(
+          value: smart.itemMaximumDelayDays,
+          min: 1,
+          max: 300,
+          suffix: 'd',
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) =>
+                s.copyWith(itemMaximumDelayDays: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Topic maximum added delay',
+        hint: 'Pre-dispersion clamp for topic-family delay days.',
+        control: IntField(
+          value: smart.topicMaximumDelayDays,
+          min: 1,
+          max: 500,
+          suffix: 'd',
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) =>
+                s.copyWith(topicMaximumDelayDays: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Item minimum added delay',
+        hint: 'Pre-dispersion minimum, and forced-pass item minimum.',
+        control: IntField(
+          value: smart.itemMinimumDelayDays,
+          min: 1,
+          max: 30,
+          suffix: 'd',
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) =>
+                s.copyWith(itemMinimumDelayDays: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Topic minimum added delay',
+        hint: 'Pre-dispersion minimum, and forced-pass topic minimum.',
+        control: IntField(
+          value: smart.topicMinimumDelayDays,
+          min: 1,
+          max: 100,
+          suffix: 'd',
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) =>
+                s.copyWith(topicMinimumDelayDays: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Skip all items',
+        hint: 'Reject the item family in a normal parameter pass.',
+        control: SwitchField(
+          value: smart.skipItems,
+          onChanged: (bool value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(skipItems: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Skip all topics',
+        hint: 'Reject topics and extracts in a normal parameter pass.',
+        control: SwitchField(
+          value: smart.skipTopics,
+          onChanged: (bool value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(skipTopics: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Item interval cutoff',
+        hint: 'Reject an item when age is greater than or equal to this.',
+        control: IntField(
+          value: smart.itemAgeCutoffDays,
+          min: 2,
+          max: 4000,
+          suffix: 'd',
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(itemAgeCutoffDays: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Topic interval cutoff',
+        hint: 'Reject a topic-family element when age reaches this value.',
+        control: IntField(
+          value: smart.topicAgeCutoffDays,
+          min: 2,
+          max: 4000,
+          suffix: 'd',
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(topicAgeCutoffDays: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Item forgetting-index floor',
+        hint: 'Reject an item when FI is strictly below this value.',
+        control: IntField(
+          value: smart.itemForgettingIndexCutoff,
+          min: 3,
+          max: 20,
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) =>
+                s.copyWith(itemForgettingIndexCutoff: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Topic A-factor floor',
+        hint: 'Reject when A is less than or equal to this strict cutoff.',
+        control: DoubleField(
+          value: smart.topicAFactorCutoff,
+          min: 1.01,
+          max: 6,
+          onChanged: (double value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(topicAFactorCutoff: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Item postponement-count cutoff',
+        hint: 'Reject when total item postponements reach this count.',
+        control: IntField(
+          value: smart.itemPostponeCountCutoff,
+          min: 1,
+          max: 255,
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) =>
+                s.copyWith(itemPostponeCountCutoff: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Topic postponement-count cutoff',
+        hint: 'Reject when total topic postponements reach this count.',
+        control: IntField(
+          value: smart.topicPostponeCountCutoff,
+          min: 1,
+          max: 255,
+          onChanged: (int value) => _editSmart(
+            (SmartPostponeSettings s) =>
+                s.copyWith(topicPostponeCountCutoff: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Item priority threshold',
+        hint: 'Reject an item when rank-derived priority P is below this.',
+        control: DoubleField(
+          value: smart.itemPriorityThreshold,
+          min: 0.01,
+          max: 100,
+          suffix: '%',
+          onChanged: (double value) => _editSmart(
+            (SmartPostponeSettings s) =>
+                s.copyWith(itemPriorityThreshold: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Topic priority threshold',
+        hint: 'Reject a topic when rank-derived P is below this.',
+        control: DoubleField(
+          value: smart.topicPriorityThreshold,
+          min: 0.0001,
+          max: 100,
+          suffix: '%',
+          onChanged: (double value) => _editSmart(
+            (SmartPostponeSettings s) =>
+                s.copyWith(topicPriorityThreshold: value),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  Widget _smartPostponeAdjust() => SettingsSection(
+    title: 'Smart Postpone — adjust',
+    description:
+        'Nested branch profiles can be copied or merged. The two modifier '
+        'flags below are preserved exactly as profile data even though the '
+        'SM20 evaluator never reads them.',
+    children: <Widget>[
+      SettingsRow(
+        label: 'Sub-branch profiles',
+        hint:
+            'Respect the exact nested profile, ignore it, or merge profiles '
+            'using SM20’s conservative/liberal field directions.',
+        control: ChoiceField<SmartPostponeSubbranchMode>(
+          value: smart.subbranchMode,
+          options: const <SmartPostponeSubbranchMode, String>{
+            SmartPostponeSubbranchMode.respect: 'Respect',
+            SmartPostponeSubbranchMode.ignore: 'Ignore',
+            SmartPostponeSubbranchMode.conservative: 'Most conservative',
+            SmartPostponeSubbranchMode.liberal: 'Most liberal',
+          },
+          onChanged: (SmartPostponeSubbranchMode value) => _editSmart(
+            (SmartPostponeSettings s) => s.copyWith(subbranchMode: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Include non-Outstanding elements',
+        hint:
+            'Bypass only the Outstanding-membership exclusion. Pending '
+            'elements can consequently be admitted by a manual run.',
+        control: SwitchField(
+          value: smart.includeNonOutstanding,
+          onChanged: (bool value) => _editSmart(
+            (SmartPostponeSettings s) =>
+                s.copyWith(includeNonOutstanding: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Modify item delay by FI',
+        hint:
+            'Preserved inert SM20 checkbox. Changing it does not alter the '
+            'evaluator’s delay calculation.',
+        control: SwitchField(
+          value: smart.modifyItemByForgettingIndex,
+          onChanged: (bool value) => _editSmart(
+            (SmartPostponeSettings s) =>
+                s.copyWith(modifyItemByForgettingIndex: value),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Modify topic delay by A-factor',
+        hint: 'Preserved inert SM20 checkbox. The evaluator does not read it.',
+        control: SwitchField(
+          value: smart.modifyTopicByAFactor,
+          onChanged: (bool value) => _editSmart(
+            (SmartPostponeSettings s) =>
+                s.copyWith(modifyTopicByAFactor: value),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  Widget _mercy() => SettingsSection(
+    title: 'Mercy',
+    description:
+        'Mercy scores scheduled items and topic-family elements, orders them, '
+        'then redistributes actual due dates. Its investment estimate uses '
+        'the live collection-specific 20×20 interval-factor matrix.',
+    children: <Widget>[
+      SettingsRow(
+        label: 'Candidate order',
+        hint: 'Select one of SM20’s four exact Mercy ordering modes.',
+        control: ChoiceField<MercyMode>(
+          value: draft.mercy.mode,
+          options: const <MercyMode, String>{
+            MercyMode.highScoreFirst: 'High score first',
+            MercyMode.lowScoreFirst: 'Low score first',
+            MercyMode.sourceOrder: 'Source order',
+            MercyMode.random: 'Fixed-size random',
+          },
+          onChanged: (MercyMode value) => model.edit(
+            (AppSettings settings) =>
+                settings.copyWith(mercy: settings.mercy.copyWith(mode: value)),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Rescheduling horizon',
+        hint: 'R: days across which selected candidates are assigned.',
+        control: IntField(
+          value: draft.mercy.reschedulingDays,
+          min: 1,
+          max: 3650,
+          suffix: 'd',
+          onChanged: (int value) => model.edit((AppSettings settings) {
+            final MercySettings mercy = settings.mercy;
+            return settings.copyWith(
+              mercy: mercy.copyWith(
+                reschedulingDays: value,
+                gatheringDays: mercy.includeFuture
+                    ? mercy.gatheringDays.clamp(value, 3650)
+                    : value,
+              ),
+            );
+          }),
+        ),
+      ),
+      SettingsRow(
+        label: 'Gathering horizon',
+        hint:
+            'G: scheduled candidates are gathered through Today + G − 1. '
+            'Future mode keeps G at least as large as R.',
+        control: IntField(
+          value: draft.mercy.gatheringDays,
+          min: 1,
+          max: 3650,
+          suffix: 'd',
+          onChanged: (int value) => model.edit((AppSettings settings) {
+            final MercySettings mercy = settings.mercy;
+            return settings.copyWith(
+              mercy: mercy.copyWith(
+                gatheringDays: mercy.includeFuture
+                    ? value.clamp(mercy.reschedulingDays, 3650)
+                    : mercy.reschedulingDays,
+              ),
+            );
+          }),
+        ),
+      ),
+      SettingsRow(
+        label: 'Elements per day',
+        hint: 'C: planner cap, from 1 through the executable maximum 5,000.',
+        control: IntField(
+          value: draft.mercy.dailyCap,
+          min: 1,
+          max: 5000,
+          onChanged: (int value) => model.edit(
+            (AppSettings settings) => settings.copyWith(
+              mercy: settings.mercy.copyWith(dailyCap: value),
+            ),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Include future schedule',
+        hint:
+            'Use future-mode horizon behavior. Turning this off makes G '
+            'equal R, matching SM20’s nonfuture planner.',
+        control: SwitchField(
+          value: draft.mercy.includeFuture,
+          onChanged: (bool value) => model.edit(
+            (AppSettings settings) => settings.copyWith(
+              mercy: settings.mercy.copyWith(
+                includeFuture: value,
+                gatheringDays: value
+                    ? settings.mercy.gatheringDays.clamp(
+                        settings.mercy.reschedulingDays,
+                        3650,
+                      )
+                    : settings.mercy.reschedulingDays,
+              ),
+            ),
+          ),
+        ),
+      ),
+      _mercyWeight(
+        label: 'Importance weight',
+        hint: 'Default 10; uses 1 − rank-derived priority/100.',
+        value: draft.mercy.importanceWeight,
+        change: (MercySettings mercy, double value) =>
+            mercy.copyWith(importanceWeight: value),
+      ),
+      _mercyWeight(
+        label: 'Lateness weight',
+        hint: 'Default 3; combines interval ratio and age.',
+        value: draft.mercy.latenessWeight,
+        change: (MercySettings mercy, double value) =>
+            mercy.copyWith(latenessWeight: value),
+      ),
+      _mercyWeight(
+        label: 'Investment weight',
+        hint: 'Default 4; uses repetition count and matrix investment.',
+        value: draft.mercy.investmentWeight,
+        change: (MercySettings mercy, double value) =>
+            mercy.copyWith(investmentWeight: value),
+      ),
+      _mercyWeight(
+        label: 'Easiness weight',
+        hint: 'Default 1; combines lapse order and lateness.',
+        value: draft.mercy.easinessWeight,
+        change: (MercySettings mercy, double value) =>
+            mercy.copyWith(easinessWeight: value),
+      ),
+      _mercyWeight(
+        label: 'Recency weight',
+        hint: 'Default 1; combines inverse age and inverse lapse order.',
+        value: draft.mercy.recencyWeight,
+        change: (MercySettings mercy, double value) =>
+            mercy.copyWith(recencyWeight: value),
+      ),
+      SettingsRow(
+        label: 'Interval-factor matrix',
+        hint:
+            'Optional row-major 20×20 UInt16 matrix scaled by 1,000. Empty '
+            'means this collection has no imported live matrix.',
+        controlWidth: 390,
+        control: UInt16MatrixField(
+          value: draft.mercy.intervalFactorMatrix,
+          onChanged: (List<int>? value) => model.edit(
+            (AppSettings settings) => settings.copyWith(
+              mercy: settings.mercy.copyWith(intervalFactorMatrix: value),
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  Widget _mercyWeight({
+    required String label,
+    required String hint,
+    required double value,
+    required MercySettings Function(MercySettings mercy, double value) change,
+  }) => SettingsRow(
+    label: label,
+    hint: hint,
+    control: DoubleField(
+      value: value,
+      min: 0,
+      max: 1000000,
+      onChanged: (double next) => model.edit(
+        (AppSettings settings) =>
+            settings.copyWith(mercy: change(settings.mercy, next)),
+      ),
+    ),
+  );
 
   Widget _reader() => SettingsSection(
     title: 'Reader',
-    description: 'Preferences rather than scheduling rules.',
+    description: 'Reader-only preferences; these do not alter SM20 records.',
     children: <Widget>[
       SettingsRow(
         label: 'Reminder after',
         hint:
-            'Words past the session’s opening position before the '
-            'nonblocking reminder line appears.',
+            'Words past the opening position before the nonblocking reader '
+            'reminder appears.',
         control: IntField(
           value: draft.reader.reminderWords,
+          min: 0,
+          max: 100000,
           suffix: 'words',
           onChanged: (int value) => model.edit(
-            (AppSettings s) =>
-                s.copyWith(reader: s.reader.copyWith(reminderWords: value)),
+            (AppSettings settings) => settings.copyWith(
+              reader: settings.reader.copyWith(reminderWords: value),
+            ),
           ),
         ),
       ),
     ],
   );
 
-  // -------------------------------------------------------------- diagnostics
-
   Widget _diagnostics() => SettingsSection(
     title: 'Diagnostics',
     description:
-        'A local rotating log of operation metadata, failures, and versions. '
-        'It never records what you are studying.',
+        'Local scheduler diagnostics. Content remains hidden unless explicitly '
+        'enabled for the developer panel.',
     children: <Widget>[
       SettingsRow(
         label: 'Write a log file',
-        hint: 'Kept beside the database, never in a synced folder.',
+        hint: 'Enable the local rotating diagnostic log.',
         control: SwitchField(
           value: draft.diagnostics.logEnabled,
           onChanged: (bool value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              diagnostics: s.diagnostics.copyWith(logEnabled: value),
+            (AppSettings settings) => settings.copyWith(
+              diagnostics: settings.diagnostics.copyWith(logEnabled: value),
             ),
           ),
         ),
       ),
       SettingsRow(
         label: 'Rotate at',
-        hint: 'Size at which the active log file rolls over.',
+        hint: 'Maximum active log size before rotation.',
         control: IntField(
           value: draft.diagnostics.logMaxBytes ~/ 1024,
+          min: 4,
+          max: 524288,
           suffix: 'KB',
           onChanged: (int value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              diagnostics: s.diagnostics.copyWith(logMaxBytes: value * 1024),
+            (AppSettings settings) => settings.copyWith(
+              diagnostics: settings.diagnostics.copyWith(
+                logMaxBytes: value * 1024,
+              ),
             ),
           ),
         ),
       ),
       SettingsRow(
         label: 'Files kept',
-        hint: 'How many rotated logs to retain.',
+        hint: 'Number of rotated log files retained.',
         control: IntField(
           value: draft.diagnostics.logRetainedFiles,
+          min: 1,
+          max: 100,
           onChanged: (int value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              diagnostics: s.diagnostics.copyWith(logRetainedFiles: value),
+            (AppSettings settings) => settings.copyWith(
+              diagnostics: settings.diagnostics.copyWith(
+                logRetainedFiles: value,
+              ),
             ),
           ),
         ),
       ),
       SettingsRow(
-        label: 'Show element text in the panel',
+        label: 'Show element text in panel',
         hint:
-            'Off by default. A panel meant for scheduling bugs should not '
-            'spill your collection into a screenshot.',
+            'Off by default so diagnostics screenshots do not reveal study content.',
         control: SwitchField(
           value: draft.diagnostics.showContentInPanel,
           onChanged: (bool value) => model.edit(
-            (AppSettings s) => s.copyWith(
-              diagnostics: s.diagnostics.copyWith(showContentInPanel: value),
+            (AppSettings settings) => settings.copyWith(
+              diagnostics: settings.diagnostics.copyWith(
+                showContentInPanel: value,
+              ),
             ),
           ),
         ),
       ),
     ],
   );
+}
+
+/// Save/List/Delete/Assign controls for SM20's managed profile registry.
+///
+/// The fields edited above are one working record. This section is what gives
+/// that record a name, hands it to a branch, or promotes it back into the
+/// permanent Default slot the automatic run loads.
+class _ProfileRegistry extends StatefulWidget {
+  const _ProfileRegistry({required this.draft, required this.model});
+
+  final AppSettings draft;
+  final SettingsViewModel model;
+
+  @override
+  State<_ProfileRegistry> createState() => _ProfileRegistryState();
+}
+
+class _ProfileRegistryState extends State<_ProfileRegistry> {
+  String _name = '';
+  String _selected = PostponeSettings.defaultProfileName;
+  int _branchRoot = 0;
+  String _branchProfile = PostponeSettings.defaultProfileName;
+
+  PostponeSettings get _postpone => widget.draft.postpone;
+
+  /// Keeps the two selectors on a profile that still exists after a delete or
+  /// a revert, so an assignment can never name a profile that is gone.
+  String _liveName(String candidate) =>
+      _postpone.profileNamed(candidate) == null
+      ? PostponeSettings.defaultProfileName
+      : candidate;
+
+  void _editPostpone(
+    PostponeSettings Function(PostponeSettings current) change,
+  ) {
+    widget.model.edit(
+      (AppSettings settings) =>
+          settings.copyWith(postpone: change(settings.postpone)),
+    );
+  }
+
+  void _save() {
+    final String name = _name.trim();
+    if (name.isEmpty || name == PostponeSettings.defaultProfileName) return;
+    _editPostpone(
+      (PostponeSettings current) =>
+          current.saveNamedProfile(name, current.defaultProfile),
+    );
+    setState(() => _selected = name);
+  }
+
+  void _load() {
+    final SmartPostponeSettings? profile = _postpone.profileNamed(_selected);
+    if (profile == null) return;
+    _editPostpone(
+      (PostponeSettings current) => current.replaceDefault(profile),
+    );
+  }
+
+  void _delete() {
+    if (_selected == PostponeSettings.defaultProfileName) return;
+    final String removed = _selected;
+    _editPostpone(
+      (PostponeSettings current) => current.deleteNamedProfile(removed),
+    );
+    setState(() {
+      _selected = PostponeSettings.defaultProfileName;
+      if (_branchProfile == removed) {
+        _branchProfile = PostponeSettings.defaultProfileName;
+      }
+    });
+  }
+
+  void _assign() {
+    final String profile = _liveName(_branchProfile);
+    if (_branchRoot < 0 || _branchRoot > 0xFFFFFFFF) return;
+    _editPostpone(
+      (PostponeSettings current) =>
+          current.assignBranchProfile(_branchRoot, profile),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String selected = _liveName(_selected);
+    final String branchProfile = _liveName(_branchProfile);
+    final Map<String, String> options = <String, String>{
+      for (final String name in _postpone.profileNames) name: name,
+    };
+    final List<int> roots = _postpone.branchProfileAssignments.keys.toList()
+      ..sort();
+
+    return SettingsSection(
+      title: 'Smart Postpone — profiles',
+      description:
+          'Default is permanent: it is the record automatic postponement '
+          'runs and the one the fields above edit. Saving under another name '
+          'stores a copy that a branch can use instead.',
+      children: <Widget>[
+        SettingsRow(
+          label: 'Save the edited record as',
+          hint:
+              'Stores every field above, including the two inert modifier '
+              'flags. Saving over an existing name replaces it.',
+          controlWidth: 260,
+          control: Row(
+            children: <Widget>[
+              Expanded(
+                child: StringField(
+                  value: _name,
+                  onChanged: (String value) => setState(() => _name = value),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed:
+                    _name.trim().isEmpty ||
+                        _name.trim() == PostponeSettings.defaultProfileName
+                    ? null
+                    : _save,
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        ),
+        SettingsRow(
+          label: 'Managed profile',
+          hint:
+              'Load copies the stored record into Default, which is what the '
+              'automatic run and the fields above use. Delete also removes '
+              'every branch assignment that named it.',
+          controlWidth: 300,
+          control: Row(
+            children: <Widget>[
+              Expanded(
+                child: ChoiceField<String>(
+                  value: selected,
+                  options: options,
+                  onChanged: (String value) =>
+                      setState(() => _selected = value),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(onPressed: _load, child: const Text('Load')),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: selected == PostponeSettings.defaultProfileName
+                    ? null
+                    : _delete,
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ),
+        SettingsRow(
+          label: 'Reset Default to the shipped record',
+          hint:
+              'Restores the binary-derived Default profile without touching '
+              'any other setting or saved profile.',
+          control: OutlinedButton(
+            onPressed: () => _editPostpone(
+              (PostponeSettings current) =>
+                  current.replaceDefault(const SmartPostponeSettings()),
+            ),
+            child: const Text('Reset Default'),
+          ),
+        ),
+        SettingsRow(
+          label: 'Assign a profile to a branch',
+          hint:
+              'Branch runs merge the profiles of every enclosing branch, '
+              'outer to inner, using the sub-branch mode above.',
+          controlWidth: 320,
+          control: Row(
+            children: <Widget>[
+              SizedBox(
+                width: 96,
+                child: IntField(
+                  value: _branchRoot,
+                  min: 0,
+                  max: 0xFFFFFFFF,
+                  onChanged: (int value) => setState(() => _branchRoot = value),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ChoiceField<String>(
+                  value: branchProfile,
+                  options: options,
+                  onChanged: (String value) =>
+                      setState(() => _branchProfile = value),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(onPressed: _assign, child: const Text('Assign')),
+            ],
+          ),
+        ),
+        if (roots.isEmpty)
+          const SettingsRow(
+            label: 'Branch assignments',
+            hint: 'No branch overrides the Default profile.',
+            control: SizedBox.shrink(),
+          )
+        else
+          for (final int root in roots)
+            SettingsRow(
+              label: 'Branch $root',
+              hint:
+                  'Uses ${_postpone.branchProfileAssignments[root]} when a '
+                  'run reaches this branch.',
+              control: OutlinedButton(
+                onPressed: () => _editPostpone(
+                  (PostponeSettings current) =>
+                      current.unassignBranchProfile(root),
+                ),
+                child: const Text('Unassign'),
+              ),
+            ),
+      ],
+    );
+  }
 }

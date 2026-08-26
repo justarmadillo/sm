@@ -48,7 +48,6 @@ void main() {
         lastReviewAtUtc: start,
         dueAtUtc: start.add(const Duration(minutes: 10)),
         originalDueAtUtc: start.add(const Duration(minutes: 10)),
-        deferredUntilUtc: start.add(const Duration(days: 1)),
         schedulerVersion: kCardSchedulerVersion,
         parametersVersion: kCardParametersVersion,
       );
@@ -76,7 +75,6 @@ void main() {
           lastReviewAtUtc: start,
           dueAtUtc: start,
           originalDueAtUtc: start,
-          deferredUntilUtc: null,
           schedulerVersion: kCardSchedulerVersion,
           parametersVersion: kCardParametersVersion,
         ),
@@ -216,48 +214,30 @@ void main() {
       expect(a.record.postStateJson, b.record.postStateJson);
     });
 
-    test('review synchronizes the generic due day and clears deferral', () {
+    test('review synchronizes the generic due day with the exact due', () {
       const CardScheduler scheduler = CardScheduler(
         calendar: calendar,
         settings: CardSchedulerSettings(enableFuzzing: false),
       );
-      final CardState base = newCard();
-      final CardState deferred = CardState(
-        schedule: base.schedule.copyWith(
-          deferredUntil: base.schedule.dueDay.addDays(4),
-          deferralKind: DeferralKind.manual,
-        ),
-        memory: CardMemory(
-          cardId: base.memory.cardId,
-          state: base.memory.state,
-          step: base.memory.step,
-          stability: base.memory.stability,
-          difficulty: base.memory.difficulty,
-          reps: base.memory.reps,
-          lapses: base.memory.lapses,
-          lastReviewAtUtc: base.memory.lastReviewAtUtc,
-          dueAtUtc: base.memory.dueAtUtc,
-          originalDueAtUtc: base.memory.originalDueAtUtc,
-          deferredUntilUtc: start.add(const Duration(days: 4)),
-          schedulerVersion: base.memory.schedulerVersion,
-          parametersVersion: base.memory.parametersVersion,
-        ),
-      );
+      // There is no deferral overlay to clear: a card carries one due instant,
+      // and the day on the shared schedule row is its projection. They must
+      // never disagree, or the queue and the browser would show two dates.
       final CardState reviewed = scheduler
           .review(
-            deferred,
+            newCard(),
             rating: CardRating.easy,
             reviewedAtUtc: start.add(const Duration(days: 4)),
-            operationId: 'clear-deferral',
+            operationId: 'sync-due-day',
           )
           .state;
 
-      expect(reviewed.memory.deferredUntilUtc, isNull);
-      expect(reviewed.schedule.deferredUntil, isNull);
-      expect(reviewed.schedule.deferralKind, DeferralKind.none);
       expect(
         reviewed.schedule.dueDay,
         calendar.dayOf(reviewed.memory.dueAtUtc),
+      );
+      expect(
+        reviewed.schedule.originalDueDay,
+        calendar.dayOf(reviewed.memory.originalDueAtUtc),
       );
     });
 

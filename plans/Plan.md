@@ -1,5 +1,29 @@
 # Incremental Reader v1 — Reader-First MVVM Implementation Plan (Final, discussion outcome incorporated)
 
+> **Superseded on scheduling.** This plan was written before the exact SM20
+> algorithm was available. Wherever it disagrees with
+> `plans/scheduler/SM20_AIO_SCHEDULER.md`, the SM20 document wins and this
+> one is discarded — the executable at `plans/sm20_binary/sm20.exe` is the
+> tiebreaker for anything the document leaves open. This plan remains the
+> record for the reader, extraction, formulation, content model, storage
+> layout, and milestone structure.
+>
+> Already discarded from this document:
+>
+> * **Suspend / resume** and **Finish source / finish nudge** — SM20 has only
+>   pending, memorized, dismissed, and deleted. Both meant "stop scheduling
+>   this, keep the content", which is Dismiss; Undismiss restores the status
+>   byte and nothing else.
+> * **Schedule adjustments, effective due, and the deferral overlay** — a
+>   postponement is a low-level reschedule of the canonical due date.
+> * **The admission valve, the protected percentile, overload tolerance, and
+>   Study More** — SM20 admits the whole Outstanding queue and sheds load
+>   through Smart Postpone and Mercy instead.
+> * **`topic_afactor_v1`** and every completion/yield modifier — the topic
+>   scheduler is the exact SM20 A-factor machine.
+> * `SuspendBranch` in the knowledge-tree operations, which becomes
+>   Dismiss branch.
+
 ## Context
 
 Personal SuperMemo-style incremental reading tool. The core SuperMemo algorithm is closed, but its behavior (topic/item distinction, priority queue, dismissal, mixing, overload handling) is replicated with transparent, configurable mechanisms. This document is the user's original draft plan with the design-review decisions merged in. Decisions incorporated: Windows-only v1 with Android and device handoff deferred to v1.1; dogfooding begins at M3; hybrid resume marker; priority-setting UI (slider + priority browser); undo last grade and edit-card-during-review; virtualized rendering for 10–50k-word sources proven in M0; rolling backups from M1; Markdown-only ingestion; count-based queue with auto-postpone (matches actual SuperMemo behavior — no time budgeting); FSRS with pinned defaults (optimizer post-v1); SuperMemo-style knowledge tree with branch operations and practice-mode subset review (v1, built after dogfooding starts); no RTL, no Anki interop, no statistics in v1. (Sibling burying was originally excluded and now ships as a setting — see Card scheduling.)

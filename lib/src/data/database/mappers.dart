@@ -20,8 +20,8 @@ import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/schedule_adjustment.dart';
 import '../../domain/scheduling/scheduler_event.dart';
+import '../../domain/scheduling/sm20_numeric.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import 'app_database.dart';
@@ -47,85 +47,11 @@ StudyDay studyDayFromEpochDay(int epochDay, String zoneId) {
   );
 }
 
-/// Domain presentation adjustment from its audit-preserving row.
-ScheduleAdjustment scheduleAdjustmentFromRow(ScheduleAdjustmentRow row) =>
-    ScheduleAdjustment(
-      id: row.id,
-      element: ElementRef(
-        id: row.elementId,
-        type: ElementType.values[row.elementType],
-      ),
-      mode: ScheduleAdjustmentMode.values[row.mode],
-      reason: ScheduleAdjustmentReason.values[row.reason],
-      notBeforeAtUtc: row.notBeforeAtUtc == null
-          ? null
-          : fromEpochMs(row.notBeforeAtUtc!),
-      notBeforeStudyDay: row.notBeforeStudyDay == null
-          ? null
-          : studyDayFromEpochDay(
-              row.notBeforeStudyDay!,
-              row.zoneId ?? row.createdZoneId,
-            ),
-      scheduledForAtUtc: row.scheduledForAtUtc == null
-          ? null
-          : fromEpochMs(row.scheduledForAtUtc!),
-      scheduledForStudyDay: row.scheduledForStudyDay == null
-          ? null
-          : studyDayFromEpochDay(
-              row.scheduledForStudyDay!,
-              row.zoneId ?? row.createdZoneId,
-            ),
-      operationId: row.operationId,
-      batchId: row.batchId,
-      policyVersion: row.policyVersion,
-      createdAtUtc: fromEpochMs(row.createdAtUtc),
-      createdStudyDay: studyDayFromEpochDay(
-        row.createdStudyDay,
-        row.createdZoneId,
-      ),
-      clearedAtUtc: row.clearedAtUtc == null
-          ? null
-          : fromEpochMs(row.clearedAtUtc!),
-      clearedByOperationId: row.clearedByOperationId,
-    );
-
-ScheduleAdjustmentsCompanion scheduleAdjustmentToCompanion(
-  ScheduleAdjustment adjustment,
-) => ScheduleAdjustmentsCompanion.insert(
-  id: adjustment.id,
-  elementId: adjustment.element.id,
-  elementType: adjustment.element.type.index,
-  mode: adjustment.mode.index,
-  reason: adjustment.reason.index,
-  notBeforeAtUtc: Value<int?>(
-    adjustment.notBeforeAtUtc == null
-        ? null
-        : toEpochMs(adjustment.notBeforeAtUtc!),
-  ),
-  notBeforeStudyDay: Value<int?>(adjustment.notBeforeStudyDay?.epochDay),
-  scheduledForAtUtc: Value<int?>(
-    adjustment.scheduledForAtUtc == null
-        ? null
-        : toEpochMs(adjustment.scheduledForAtUtc!),
-  ),
-  scheduledForStudyDay: Value<int?>(adjustment.scheduledForStudyDay?.epochDay),
-  zoneId: Value<String?>(
-    adjustment.notBeforeStudyDay?.zoneId ??
-        adjustment.scheduledForStudyDay?.zoneId,
-  ),
-  operationId: adjustment.operationId,
-  batchId: Value<String?>(adjustment.batchId),
-  policyVersion: adjustment.policyVersion,
-  createdAtUtc: toEpochMs(adjustment.createdAtUtc),
-  createdStudyDay: adjustment.createdStudyDay.epochDay,
-  createdZoneId: adjustment.createdStudyDay.zoneId,
-  clearedAtUtc: Value<int?>(
-    adjustment.clearedAtUtc == null
-        ? null
-        : toEpochMs(adjustment.clearedAtUtc!),
-  ),
-  clearedByOperationId: Value<String?>(adjustment.clearedByOperationId),
-);
+/// Restores the six Real48 bytes stored as a compact hexadecimal string.
+DelphiReal48 real48FromHex(String value) => DelphiReal48.fromBytes(<int>[
+  for (var offset = 0; offset < value.length; offset += 2)
+    int.parse(value.substring(offset, offset + 2), radix: 16),
+]);
 
 SchedulerEvent schedulerEventFromRow(SchedulerEventRow row) => SchedulerEvent(
   id: row.id,
@@ -146,8 +72,6 @@ SchedulerEvent schedulerEventFromRow(SchedulerEventRow row) => SchedulerEvent(
   stateAfter: row.stateAfter,
   algorithmicDueBefore: row.algorithmicDueBefore,
   algorithmicDueAfter: row.algorithmicDueAfter,
-  adjustmentsBefore: row.adjustmentsBefore,
-  adjustmentsAfter: row.adjustmentsAfter,
   undoesEventId: row.undoesEventId,
   batchId: row.batchId,
   metadata: row.metadataJson == null
@@ -172,8 +96,6 @@ SchedulerEventsCompanion schedulerEventToCompanion(SchedulerEvent event) =>
       stateAfter: Value<String?>(event.stateAfter),
       algorithmicDueBefore: Value<String?>(event.algorithmicDueBefore),
       algorithmicDueAfter: Value<String?>(event.algorithmicDueAfter),
-      adjustmentsBefore: Value<String?>(event.adjustmentsBefore),
-      adjustmentsAfter: Value<String?>(event.adjustmentsAfter),
       undoesEventId: Value<String?>(event.undoesEventId),
       batchId: Value<String?>(event.batchId),
       metadataJson: Value<String?>(
@@ -370,10 +292,6 @@ ElementSchedule scheduleFromRow(ScheduleRow row) => ElementSchedule(
   lifecycle: ElementLifecycle.values[row.lifecycle],
   dueDay: studyDayFromEpochDay(row.dueDay, row.zoneId),
   originalDueDay: studyDayFromEpochDay(row.originalDueDay, row.zoneId),
-  deferredUntil: row.deferredUntil == null
-      ? null
-      : studyDayFromEpochDay(row.deferredUntil!, row.zoneId),
-  deferralKind: DeferralKind.values[row.deferralKind],
   rootId: row.rootId,
   parentElementId: row.parentElementId,
   ordinal: row.ordinal,
@@ -396,8 +314,6 @@ ElementSchedulesCompanion scheduleToCompanion(ElementSchedule schedule) =>
       lifecycle: schedule.lifecycle.index,
       dueDay: schedule.dueDay.epochDay,
       originalDueDay: schedule.originalDueDay.epochDay,
-      deferredUntil: Value<int?>(schedule.deferredUntil?.epochDay),
-      deferralKind: Value<int>(schedule.deferralKind.index),
       rootId: Value<String?>(schedule.rootId),
       parentElementId: Value<String?>(schedule.parentElementId),
       ordinal: Value<int?>(schedule.ordinal),
@@ -412,22 +328,20 @@ ElementSchedulesCompanion scheduleToCompanion(ElementSchedule schedule) =>
 TopicState topicStateFromRows(TopicStateRow row, ElementSchedule schedule) =>
     TopicState(
       schedule: schedule,
-      profileId: row.profileId,
-      stepIndex: row.stepIndex,
-      schedulerKind: TopicSchedulerKind.parse(row.schedulerKind),
-      schedulerVersion: row.schedulerVersion,
-      intervalDays: row.intervalDays,
-      aFactor: row.aFactor,
-      yieldEwma: row.yieldEwma,
-      encounters: row.encounters,
-      postponeCount: row.postponeCount,
+      status: Sm20ElementStatus.values[row.status],
+      repetitionCount: row.repetitionCount,
+      lapseCount: row.lapseCount,
+      storedInterval: row.storedInterval,
+      lastReviewDay: row.lastReviewDay == null
+          ? null
+          : studyDayFromEpochDay(row.lastReviewDay!, schedule.dueDay.zoneId),
+      aFactorRaw: real48FromHex(row.aFactorRaw),
+      lastIntervalRatioRaw: real48FromHex(row.lastIntervalRatioRaw),
+      historyBlockId: row.historyBlockId,
+      recentPostponementCount: row.recentPostponementCount,
+      totalPostponementCount: row.totalPostponementCount,
+      learningControl: row.learningControl,
       encountersSinceLastCard: row.encountersSinceLastCard,
-      lastEncounterDay: row.lastEncounterDay == null
-          ? null
-          : studyDayFromEpochDay(row.lastEncounterDay!, schedule.dueDay.zoneId),
-      policyInputSnapshot: row.policyInputSnapshot == null
-          ? null
-          : (jsonDecode(row.policyInputSnapshot!) as Map<String, Object?>),
       revision: row.revision,
     );
 
@@ -436,23 +350,20 @@ TopicStatesCompanion topicStateToCompanion(TopicState topic) =>
     TopicStatesCompanion.insert(
       elementId: topic.ref.id,
       elementType: topic.ref.type.index,
-      profileId: topic.profileId,
-      stepIndex: topic.stepIndex,
-      intervalDays: Value<double>(topic.intervalDays),
-      aFactor: Value<double>(topic.aFactor),
-      yieldEwma: Value<double>(topic.yieldEwma),
-      encounters: Value<int>(topic.encounters),
-      postponeCount: Value<int>(topic.postponeCount),
-      encountersSinceLastCard: Value<int>(topic.encountersSinceLastCard),
-      lastEncounterDay: Value<int?>(topic.lastEncounterDay?.epochDay),
-      algorithmDueDay: Value<int>(topic.schedule.algorithmicDueDay.epochDay),
-      schedulerKind: Value<String>(topic.schedulerKind.storageName),
-      schedulerVersion: Value<String>(topic.schedulerVersion),
-      policyInputSnapshot: Value<String?>(
-        topic.policyInputSnapshot == null
-            ? null
-            : jsonEncode(topic.policyInputSnapshot),
+      status: topic.status.index,
+      repetitionCount: Value<int>(topic.repetitionCount),
+      lapseCount: Value<int>(topic.lapseCount),
+      storedInterval: Value<int>(topic.storedInterval),
+      lastReviewDay: Value<int?>(topic.lastReviewDay?.epochDay),
+      aFactorRaw: Value<String>(topic.aFactorRaw.toString()),
+      lastIntervalRatioRaw: Value<String>(
+        topic.lastIntervalRatioRaw.toString(),
       ),
+      historyBlockId: Value<int>(topic.historyBlockId),
+      recentPostponementCount: Value<int>(topic.recentPostponementCount),
+      totalPostponementCount: Value<int>(topic.totalPostponementCount),
+      learningControl: Value<int>(topic.learningControl),
+      encountersSinceLastCard: Value<int>(topic.encountersSinceLastCard),
       revision: Value<int>(topic.revision),
     );
 
@@ -564,9 +475,6 @@ CardMemory cardMemoryFromRow(CardMemoryRow row) => CardMemory(
       : fromEpochMs(row.lastReviewUtc!),
   dueAtUtc: fromEpochMs(row.dueAtUtc),
   originalDueAtUtc: fromEpochMs(row.originalDueAtUtc),
-  deferredUntilUtc: row.deferredUntilUtc == null
-      ? null
-      : fromEpochMs(row.deferredUntilUtc!),
   schedulerVersion: row.schedulerVersion,
   parametersVersion: row.parametersVersion,
   postponeCount: row.postponeCount,
@@ -592,11 +500,6 @@ CardMemoriesCompanion cardMemoryToCompanion(CardMemory memory) =>
       ),
       dueAtUtc: toEpochMs(memory.dueAtUtc),
       originalDueAtUtc: toEpochMs(memory.originalDueAtUtc),
-      deferredUntilUtc: Value<int?>(
-        memory.deferredUntilUtc == null
-            ? null
-            : toEpochMs(memory.deferredUntilUtc!),
-      ),
       postponeCount: Value<int>(memory.postponeCount),
       schedulerVersion: memory.schedulerVersion,
       parametersVersion: memory.parametersVersion,

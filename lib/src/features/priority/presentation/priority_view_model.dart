@@ -10,11 +10,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../application/browser/browser_commands.dart';
+import '../../../application/browser/browser_handlers.dart';
 import '../../../application/priority/priority_commands.dart';
 import '../../../application/priority/priority_query.dart';
+import '../../../application/queue/queue_commands.dart';
 import '../../../core/result.dart';
 import '../../../core/tracing.dart';
 import '../../../domain/scheduling/element.dart';
+import '../../../domain/scheduling/sm20_advance.dart';
+import '../../../domain/scheduling/study_day.dart';
+import '../../../domain/settings/app_settings.dart';
 import '../../library/presentation/library_view_model.dart';
 
 /// State of the Alt+P dialog for one element.
@@ -268,15 +274,14 @@ final class PriorityBrowserViewModel
     }
   }
 
-  /// Spreads a percent range across every element under one article.
-  ///
-  /// The operation that makes exact inheritance survivable: an article given a
-  /// high priority hands it to every extract and card it produces, which is
-  /// right at creation and wrong once the reading is done.
-  Future<void> spreadBranch({
+  /// Applies an executable browser priority operation to one branch.
+  Future<void> batchBranch({
     required String sourceId,
-    required double fromPercent,
-    required double toPercent,
+    required Sm20BatchPriorityMode mode,
+    required double lowPercent,
+    required double highPercent,
+    required double changePercent,
+    required bool limitChanges,
   }) async {
     final PriorityBrowserState? current = state.valueOrNull;
     if (current == null || current.isBusy) return;
@@ -289,14 +294,17 @@ final class PriorityBrowserViewModel
         .branchOf(sourceId);
     final Result<int> result = await ref
         .read(priorityHandlersProvider)
-        .spread(
-          SpreadPriority(
+        .batch(
+          BatchPriority(
             OperationId(ref.read(idGeneratorProvider).newId()),
             refs: <ElementRef>[
               for (final PriorityEntry entry in branch) entry.ref,
             ],
-            fromPercent: fromPercent,
-            toPercent: toPercent,
+            mode: mode,
+            lowPercent: lowPercent,
+            highPercent: highPercent,
+            changePercent: changePercent,
+            limitChanges: limitChanges,
             timestampUtc: ref.read(clockProvider).nowUtc(),
           ),
         );
@@ -305,7 +313,343 @@ final class PriorityBrowserViewModel
     state = AsyncValue<PriorityBrowserState>.data(
       latest.copyWith(
         message: result.fold(
-          (int count) => UiMessage('Spread $count elements'),
+          (int count) => UiMessage(
+            '${mode.name[0].toUpperCase()}${mode.name.substring(1)} changed '
+            '$count elements',
+          ),
+          (AppFailure failure) => UiMessage(failure.message, isError: true),
+        ),
+      ),
+    );
+  }
+
+  /// Runs Smart Postpone over a branch, or over what the browser is showing.
+  ///
+  /// The browser population is the visible, filtered order rather than the
+  /// Outstanding queue, which is the whole reason SM20 offers a browser scope:
+  /// it can reach elements that are not due at all.
+  Future<AppliedSmartPostpone?> smartPostpone({
+    required bool simulate,
+    String? branchSourceId,
+  }) async {
+    final PriorityBrowserState? current = state.valueOrNull;
+    if (current == null || current.isBusy) return null;
+    state = AsyncValue<PriorityBrowserState>.data(
+      current.copyWith(isBusy: true),
+    );
+
+    final AppSettings settings = await ref
+        .read(schedulingContextProvider)
+        .settings();
+    final List<PriorityEntry> population = branchSourceId == null
+        ? current.entries
+        : await ref.read(priorityQueryProvider).branchOf(branchSourceId);
+    final SmartPostponeSettings profile = settings.postpone.defaultProfile
+        .copyWith(
+          scope: branchSourceId == null
+              ? SmartPostponeScope.browser
+              : SmartPostponeScope.branch,
+          rootElementId: int.tryParse(branchSourceId ?? '') ?? 0,
+          simulate: simulate,
+        );
+
+    final Result<AppliedSmartPostpone> result = await ref
+        .read(queueHandlersProvider)
+        .runSmartPostpone(
+          RunSmartPostpone(
+            OperationId(ref.read(idGeneratorProvider).newId()),
+            day: await ref.read(schedulingContextProvider).today(),
+            profile: profile,
+            sourcePopulation: <ElementRef>[
+              for (final PriorityEntry entry in population) entry.ref,
+            ],
+            applicableSubbranchProfiles: _applicableBranchProfiles(
+              settings.postpone,
+              population,
+            ),
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        );
+
+    // A simulation wrote nothing, so the rows on screen are still accurate.
+    if (!simulate && result.isOk) {
+      await refresh();
+    } else {
+      state = AsyncValue<PriorityBrowserState>.data(
+        (state.valueOrNull ?? current).copyWith(isBusy: false),
+      );
+    }
+    final PriorityBrowserState latest = state.valueOrNull ?? current;
+    return result.fold(
+      (AppliedSmartPostpone applied) {
+        if (!simulate) {
+          state = AsyncValue<PriorityBrowserState>.data(
+            latest.copyWith(
+              message: UiMessage(
+                applied.written == 0
+                    ? 'Nothing was eligible for postponement'
+                    : 'Smart Postpone moved ${applied.written} element'
+                          '${applied.written == 1 ? '' : 's'}',
+              ),
+            ),
+          );
+        }
+        return applied;
+      },
+      (AppFailure failure) {
+        state = AsyncValue<PriorityBrowserState>.data(
+          latest.copyWith(message: UiMessage(failure.message, isError: true)),
+        );
+        return null;
+      },
+    );
+  }
+
+  /// Branch profiles that apply to [population], outermost first.
+  ///
+  /// The merge SM20 performs is order-sensitive, so roots are contributed
+  /// before parents and parents before the elements themselves; the innermost
+  /// assignment is therefore the last word under Respect.
+  List<SmartPostponeSettings> _applicableBranchProfiles(
+    PostponeSettings postpone,
+    Iterable<PriorityEntry> population,
+  ) {
+    if (postpone.branchProfileAssignments.isEmpty) {
+      return const <SmartPostponeSettings>[];
+    }
+    final List<String> ordered = <String>[];
+    void add(String? id) {
+      if (id != null && !ordered.contains(id)) ordered.add(id);
+    }
+
+    for (final PriorityEntry entry in population) {
+      add(entry.schedule.rootId);
+    }
+    for (final PriorityEntry entry in population) {
+      add(entry.schedule.parentElementId);
+    }
+    for (final PriorityEntry entry in population) {
+      add(entry.ref.id);
+    }
+    final List<SmartPostponeSettings> profiles = <SmartPostponeSettings>[];
+    for (final String id in ordered) {
+      final int? root = int.tryParse(id);
+      if (root == null) continue;
+      final String? name = postpone.branchProfileAssignments[root];
+      if (name == null) continue;
+      final SmartPostponeSettings? profile = postpone.profileNamed(name);
+      if (profile != null) profiles.add(profile);
+    }
+    return profiles;
+  }
+
+  /// Remember: memorize pending or dismissed topics.
+  Future<void> remember(List<ElementRef> refs) => _browserCommand(
+    'Remembered',
+    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
+        handlers.remember(
+          RememberElements(
+            operation,
+            refs: refs,
+            day: day,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        ),
+  );
+
+  /// Forget: return memorized records to the pending store.
+  Future<void> forget(List<ElementRef> refs) => _browserCommand(
+    'Forgotten',
+    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
+        handlers.forget(
+          ForgetElements(
+            operation,
+            refs: refs,
+            day: day,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        ),
+  );
+
+  /// Dismiss: stop scheduling and send priority to the bottom.
+  Future<void> dismiss(List<ElementRef> refs) => _browserCommand(
+    'Dismissed',
+    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
+        handlers.dismiss(
+          DismissElements(
+            operation,
+            refs: refs,
+            day: day,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        ),
+  );
+
+  /// Undismiss: restore the status only.
+  Future<void> undismiss(List<ElementRef> refs) => _browserCommand(
+    'Undismissed',
+    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
+        handlers.undismiss(
+          UndismissElements(
+            operation,
+            refs: refs,
+            day: day,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        ),
+  );
+
+  /// Done: remove from scheduling entirely.
+  Future<void> done(List<ElementRef> refs) => _browserCommand(
+    'Done',
+    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
+        handlers.done(
+          DoneElements(
+            operation,
+            refs: refs,
+            day: day,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        ),
+  );
+
+  /// Add to drill: Final Drill membership only.
+  Future<void> addToFinalDrill(List<ElementRef> refs) => _browserCommand(
+    'Added to Final Drill',
+    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
+        handlers.addToFinalDrill(
+          AddToFinalDrill(
+            operation,
+            refs: refs,
+            day: day,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        ),
+  );
+
+  /// Add to outstanding, or Add all.
+  Future<void> addToOutstanding(
+    List<ElementRef> refs, {
+    int everyWhich = 5,
+    bool rescheduleSameDay = false,
+  }) => _browserCommand(
+    'Added to Outstanding',
+    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
+        handlers.addToOutstanding(
+          AddToOutstanding(
+            operation,
+            refs: refs,
+            day: day,
+            everyWhich: everyWhich,
+            rescheduleSameDay: rescheduleSameDay,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        ),
+  );
+
+  /// Reset history: drop the external history block and nothing else.
+  Future<void> resetHistory(List<ElementRef> refs) => _browserCommand(
+    'History reset',
+    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
+        handlers.resetHistory(
+          ResetElementHistory(
+            operation,
+            refs: refs,
+            day: day,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        ),
+  );
+
+  /// Set A directly, for normal topics.
+  Future<void> setAFactor(List<ElementRef> refs, double value) =>
+      _browserCommand(
+        'A-factor set',
+        (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
+            handlers.setAFactor(
+              SetTopicAFactor(
+                operation,
+                refs: refs,
+                day: day,
+                value: value,
+                timestampUtc: ref.read(clockProvider).nowUtc(),
+              ),
+            ),
+      );
+
+  /// Modify A by a multiplier, for normal topics.
+  Future<void> modifyAFactor(List<ElementRef> refs, double multiplier) =>
+      _browserCommand(
+        'A-factor modified',
+        (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
+            handlers.modifyAFactor(
+              ModifyTopicAFactor(
+                operation,
+                refs: refs,
+                day: day,
+                multiplier: multiplier,
+                timestampUtc: ref.read(clockProvider).nowUtc(),
+              ),
+            ),
+      );
+
+  /// Advance: pull future work closer to today across a horizon.
+  Future<void> advance(
+    List<ElementRef> refs, {
+    required Sm20AdvanceScope scope,
+    required int horizonDays,
+  }) => _browserCommand(
+    'Advanced',
+    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
+        handlers.advance(
+          AdvanceElements(
+            operation,
+            refs: refs,
+            day: day,
+            scope: scope,
+            horizonDays: horizonDays,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        ),
+  );
+
+  /// Runs one browser command and reports what it actually changed.
+  ///
+  /// SM20's commands are filters as much as actions, so the skipped count is
+  /// surfaced: a command that legitimately refused the whole selection must
+  /// not look like one that silently failed.
+  Future<void> _browserCommand(
+    String verb,
+    Future<Result<BrowserCommandOutcome>> Function(
+      BrowserHandlers handlers,
+      OperationId operation,
+      StudyDay day,
+    )
+    run,
+  ) async {
+    final PriorityBrowserState? current = state.valueOrNull;
+    if (current == null || current.isBusy) return;
+    state = AsyncValue<PriorityBrowserState>.data(
+      current.copyWith(isBusy: true),
+    );
+
+    final Result<BrowserCommandOutcome> result = await run(
+      ref.read(browserHandlersProvider),
+      OperationId(ref.read(idGeneratorProvider).newId()),
+      await ref.read(schedulingContextProvider).today(),
+    );
+    await refresh();
+    final PriorityBrowserState latest = state.valueOrNull ?? current;
+    state = AsyncValue<PriorityBrowserState>.data(
+      latest.copyWith(
+        message: result.fold(
+          (BrowserCommandOutcome outcome) => UiMessage(
+            outcome.changedCount == 0
+                ? 'Nothing was eligible'
+                : '$verb ${outcome.changedCount} element'
+                      '${outcome.changedCount == 1 ? '' : 's'}'
+                      '${outcome.skipped == 0 ? '' : ', ${outcome.skipped} skipped'}',
+          ),
           (AppFailure failure) => UiMessage(failure.message, isError: true),
         ),
       ),

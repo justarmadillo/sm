@@ -2,9 +2,8 @@
 ///
 /// The invariants this file enforces, in order of how easy they are to break:
 ///
-/// * **The parent is never modified.** Not its text, not its blocks, not its
-///   reading position, not its schedule. An extract references where it came
-///   from; it does not cut anything out.
+/// * **The parent content and reading position are never modified.** SM20 does
+///   intentionally adapt the source A and priority when an extract is made.
 /// * **The selection is verified before it is stored.** The command carries a
 ///   hash of exactly what the user selected, and it is checked against the
 ///   parent's own markdown. A mismatch is refused rather than silently
@@ -21,7 +20,6 @@ import '../../core/tracing.dart';
 import '../../domain/content/document.dart';
 import '../../domain/content/extract.dart';
 import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/interval_profile.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/revlog.dart';
 import '../../domain/scheduling/study_day.dart';
@@ -155,21 +153,42 @@ final class ExtractionHandlers {
       final StudyDay day = await today();
       final TopicScheduler scheduler = await _context.topicScheduler();
       final PriorityScale scale = await _context.priorityScale();
-      // New children start adjacent to their parent in the one global order;
-      // they do not share the parent's key and do not invent a decay score.
-      final PriorityRank rank = PriorityRank.between(
-        parentSchedule.priority,
-        scale.neighbourBelow(parentSchedule.priority),
+      final TopicState? sourceTopic = await _learning.findTopic(parent.ref);
+      if (sourceTopic == null) {
+        return _missingSchedule<Extract>(command.parentId);
+      }
+      final double sourcePercent = scale.percentageOf(parentSchedule.priority);
+      final Sm20TextExtraction extraction = scheduler.extractText(
+        sourceTopic,
+        utf16CodeUnits: markdown.length,
+        sourcePriorityPercent: sourcePercent,
       );
-      final double pressure = scale.including(rank).pressureOf(rank);
-      final topic = scheduler.createFor(
+      final PriorityRank sourceRank = scale.rankForSetPriority(
+        parentSchedule.priority,
+        extraction.sourcePriorityTarget,
+      );
+      final TopicState updatedSource = extraction.source.copyWith(
+        schedule: sourceTopic.schedule.copyWith(
+          priority: sourceRank,
+          revision: sourceTopic.schedule.revision + 1,
+          updatedAtUtc: extract.createdAtUtc,
+        ),
+      );
+      final PriorityScale afterSource = scale.replacing(
+        parentSchedule.priority,
+        sourceRank,
+      );
+      final PriorityRank firstChildRank = afterSource.rankAtPercent(
+        extraction.childPriorityTarget,
+      );
+      TopicState topic = scheduler.createFor(
         ref: ref,
-        profileId: kExtractProfileId,
         today: day,
-        pressure: pressure,
+        initialAFactor: extraction.childAFactor,
+        memorized: true,
         buildSchedule: (StudyDay due) => ElementSchedule(
           ref: ref,
-          priority: rank,
+          priority: firstChildRank,
           lifecycle: ElementLifecycle.active,
           dueDay: due,
           originalDueDay: due,
@@ -179,9 +198,27 @@ final class ExtractionHandlers {
           updatedAtUtc: extract.createdAtUtc,
         ),
       );
+      final PriorityScale withChild = afterSource.including(firstChildRank);
+      topic = topic.copyWith(
+        schedule: topic.schedule.copyWith(
+          priority: withChild.rankForSetPriority(
+            firstChildRank,
+            extraction.childPriorityTarget,
+          ),
+        ),
+      );
 
       await _content.insertExtract(extract);
+      if (!await _learning.compareAndSwapTopic(
+        expected: sourceTopic,
+        replacement: updatedSource,
+      )) {
+        return const Err<Extract>(
+          ConflictFailure('the extraction source changed before commit'),
+        );
+      }
       await _learning.insertTopic(topic);
+      await _context.savePrngState(extraction.prngState);
       await _search.upsertDocument(
         SearchDocument(
           ref: ref,
@@ -201,13 +238,16 @@ final class ExtractionHandlers {
         after: _journal.topicSnapshot(
           topic,
           calendar: await _context.calendar(),
-          pressure: pressure,
+          pressure: withChild.pressureOf(topic.schedule.priority),
         ),
         scheduledDays: topic.intervalDays,
         metadata: <String, Object?>{
           'parent': command.parentId,
           'first_interval_days': topic.intervalDays,
-          'pressure': pressure,
+          'child_a_raw': topic.aFactorRaw.toString(),
+          'source_a_raw': updatedSource.aFactorRaw.toString(),
+          'source_priority_target': extraction.sourcePriorityTarget,
+          'child_priority_target': extraction.childPriorityTarget,
         },
       );
       await _log(

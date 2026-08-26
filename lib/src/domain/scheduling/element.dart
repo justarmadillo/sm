@@ -30,38 +30,13 @@ enum ElementType {
   bool get isTopic => this != ElementType.card;
 }
 
-/// Why an element was pushed past its due day.
-///
-/// The distinction matters at recall time: raising a daily limit or choosing
-/// Study More takes back the day's *automatic* deferrals, because those were
-/// the app's overload decision, not the user's. A manual Later means "wrong
-/// task right now" and is never undone behind the user's back.
-enum DeferralKind {
-  /// Not deferred.
-  none,
-
-  /// The user chose Later.
-  manual,
-
-  /// Auto-postponed because the day was over its limit.
-  automatic,
-}
-
 /// Where an element stands in its lifecycle.
 enum ElementLifecycle {
   /// Scheduled and eligible to appear in the queue.
   active,
 
-  /// Temporarily removed. Resuming makes it due today without resetting the
-  /// interval step.
-  suspended,
-
   /// Content and provenance retained, scheduling removed for good.
   dismissed,
-
-  /// A source the user explicitly declared finished. Descendants are
-  /// unaffected.
-  finished,
 
   /// Soft-deleted, retained only for restore.
   deleted;
@@ -101,10 +76,10 @@ final class ElementRef implements Comparable<ElementRef> {
 
 /// The scheduling facts every element carries.
 ///
-/// [dueDay] is what the element's own scheduler decided. [deferredUntil] is
-/// separate and holds auto-postponement: overload must never be recorded as if
-/// the algorithm had chosen a later date, or overdue ranking and audit both
-/// become lies.
+/// [dueDay] is what the element's own scheduler decided, and it is the only
+/// due date there is: SM20 has no deferral overlay, so a postponement is a
+/// low-level reschedule that rewrites this value rather than shadowing it.
+/// [originalDueDay] is kept beside it so lateness stays measurable.
 @immutable
 final class ElementSchedule {
   const ElementSchedule({
@@ -113,8 +88,6 @@ final class ElementSchedule {
     required this.lifecycle,
     required this.dueDay,
     required this.originalDueDay,
-    this.deferredUntil,
-    this.deferralKind = DeferralKind.none,
     this.rootId,
     this.parentElementId,
     this.ordinal,
@@ -134,12 +107,6 @@ final class ElementSchedule {
   /// Day the scheduler originally chose, preserved across postponement so
   /// overdue ranking still reflects real lateness.
   final StudyDay originalDueDay;
-
-  /// Day the element was pushed to by postponement, if any.
-  final StudyDay? deferredUntil;
-
-  /// Whether the deferral came from the user or from overload handling.
-  final DeferralKind deferralKind;
 
   /// The source at the root of this element's provenance, denormalized.
   ///
@@ -168,16 +135,8 @@ final class ElementSchedule {
   final LegacyDueProvenance legacyDueProvenance;
 
   /// Canonical topic date. For cards, the exact canonical due lives only in
-  /// CardMemory; this day is a legacy projection retained for migration/UI
-  /// compatibility.
+  /// CardMemory; this day is the day-granular projection of it.
   StudyDay get algorithmicDueDay => dueDay;
-
-  // There is deliberately no `effectiveDueDay` here. Presentation eligibility
-  // is the canonical due plus the typed adjustments that currently apply, and
-  // those live in their own table: a getter on this row could only ever see
-  // the retired v4 deferral columns and would quietly report a Later, a bury,
-  // or a Mercy override as if it had never happened. Ask `EffectiveDueQuery`
-  // (screens) or `EffectiveDueService` (domain) instead.
 
   /// How many days late the element is on [today], per its original due day.
   int overdueDaysOn(StudyDay today) {
@@ -190,8 +149,6 @@ final class ElementSchedule {
     ElementLifecycle? lifecycle,
     StudyDay? dueDay,
     StudyDay? originalDueDay,
-    StudyDay? deferredUntil,
-    DeferralKind? deferralKind,
     String? rootId,
     String? parentElementId,
     int? ordinal,
@@ -199,17 +156,12 @@ final class ElementSchedule {
     DateTime? updatedAtUtc,
     int? revision,
     LegacyDueProvenance? legacyDueProvenance,
-    bool clearDeferral = false,
   }) => ElementSchedule(
     ref: ref,
     priority: priority ?? this.priority,
     lifecycle: lifecycle ?? this.lifecycle,
     dueDay: dueDay ?? this.dueDay,
     originalDueDay: originalDueDay ?? this.originalDueDay,
-    deferredUntil: clearDeferral ? null : (deferredUntil ?? this.deferredUntil),
-    deferralKind: clearDeferral
-        ? DeferralKind.none
-        : (deferralKind ?? this.deferralKind),
     rootId: rootId ?? this.rootId,
     parentElementId: parentElementId ?? this.parentElementId,
     ordinal: ordinal ?? this.ordinal,
@@ -218,15 +170,6 @@ final class ElementSchedule {
     revision: revision ?? this.revision,
     legacyDueProvenance: legacyDueProvenance ?? this.legacyDueProvenance,
   );
-
-  /// The same schedule with any automatic deferral taken back.
-  ///
-  /// Manual postponements survive: the user said "not now", and raising a
-  /// limit is not them changing their mind.
-  ElementSchedule withAutomaticDeferralRecalled() =>
-      deferralKind == DeferralKind.automatic
-      ? copyWith(clearDeferral: true)
-      : this;
 
   @override
   String toString() =>

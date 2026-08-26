@@ -27,6 +27,7 @@ import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:test/test.dart';
 
 import '../support/app_harness.dart';
@@ -103,6 +104,36 @@ extension _Fixtures on AppHarness {
       ),
     );
     expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
+  }
+
+  /// Reviews a card once, then pulls its due instant back to now.
+  ///
+  /// SM20 keeps a never-reviewed card in Pending, so a test about the mixed
+  /// Outstanding queue has to give the card a real repetition first. The
+  /// review runs through the production handler; only the due instant is
+  /// moved afterwards, by the same low-level reschedule the schedulers use.
+  Future<void> memorizeAndMakeDue(String cardId) async {
+    final result = await review.review(
+      ReviewCard(
+        operation(),
+        cardId: cardId,
+        rating: CardRating.good,
+        elapsedMs: 1200,
+        timestampUtc: clock.nowUtc(),
+      ),
+    );
+    expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
+    final CardState state = (await learning.findCardState(cardId))!;
+    await learning.saveCardState(
+      state.copyWith(
+        memory: state.memory.lowLevelRescheduled(
+          targetDueAtUtc: clock.nowUtc(),
+          actualIntervalDays: 1,
+          adjustedLastReviewAtUtc: state.memory.lastReviewAtUtc,
+          intervalGrew: false,
+        ),
+      ),
+    );
   }
 
   /// Makes [ref] due today without pretending anything was processed.
@@ -246,7 +277,6 @@ void main() {
     expect(after.schedule.dueDay, before.schedule.dueDay);
     expect(after.schedule.originalDueDay, before.schedule.originalDueDay);
     expect(after.schedule.lifecycle, before.schedule.lifecycle);
-    expect(after.schedule.deferredUntil, before.schedule.deferredUntil);
     expect(
       after.encountersSinceLastCard,
       0,
@@ -404,21 +434,45 @@ void main() {
           cards: settings.cards.copyWith(burySiblings: false),
         ),
       );
+      // Outstanding is a queue of memorized elements. A freshly formulated
+      // card has no repetition yet and belongs to Pending, so it has to be
+      // learned before it can take part in the mix at all.
+      for (final Card card in cards) {
+        await harness.memorizeAndMakeDue(card.id);
+      }
 
       final QueueProjection projection = await harness.queueQuery.load();
       final List<QueueEntry> entries = projection.entries;
 
+      // Section 9.4: with the default 20 percent topic share the merge takes
+      // items while (1 - 0.2) > ni / (ni + nt + 1), which first fails at
+      // ni = 4. The three cards here are exhausted before that, so every card
+      // precedes every topic.
       expect(
-        entries.take(4).map((QueueEntry entry) => entry.ref.type),
+        entries.take(cards.length).map((QueueEntry entry) => entry.ref.type),
         everyElement(ElementType.card),
-        reason: 'four cards then a topic is the default proportion',
+        reason: 'the merge takes items until the item side runs out',
+      );
+      // The extract has been through extraction, which memorizes it, so it
+      // reaches Outstanding. The imported source has had no repetition and
+      // is still Pending, and Pending is a fallback stage that is never
+      // injected into the mixed queue.
+      final ElementRef sourceRef = ElementRef(
+        id: source.id,
+        type: ElementType.source,
       );
       expect(
         entries.map((QueueEntry entry) => entry.ref),
-        containsAll(<ElementRef>[
-          extractRef,
-          ElementRef(id: source.id, type: ElementType.source),
-        ]),
+        contains(extractRef),
+      );
+      expect(
+        (await harness.learning.findTopic(sourceRef))!.status,
+        Sm20ElementStatus.pending,
+      );
+      expect(
+        entries.map((QueueEntry entry) => entry.ref),
+        isNot(contains(sourceRef)),
+        reason: 'a Pending source does not join Outstanding',
       );
       expect(
         entries.where((QueueEntry e) => e.ref.type == ElementType.card),
@@ -426,7 +480,10 @@ void main() {
       );
       expect(
         entries.map((QueueEntry entry) => entry.actionLabel).toSet(),
-        <String>{'Review', 'Process', 'Read'},
+        <String>{'Review', 'Process'},
+        reason:
+            'cards are reviewed and the extract is processed; the only '
+            'Read row would have been the still-Pending source',
       );
       expect(
         entries.every((QueueEntry entry) => entry.priorityPercent != null),

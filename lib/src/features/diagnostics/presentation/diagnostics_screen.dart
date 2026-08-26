@@ -2,7 +2,7 @@
 ///
 /// Built to answer one question — *why did the scheduler do that?* — and
 /// deliberately not built to browse a collection. It shows the day's admission
-/// numbers, the most recent commands, and, for one element, its schedule and
+/// queue counts, the most recent commands, and, for one element, its schedule and
 /// the before-and-after of every transition it has been through.
 ///
 /// Element text is withheld unless Settings turns it on, so the panel stays
@@ -18,7 +18,6 @@ import '../../../application/diagnostics/diagnostics_query.dart';
 import '../../../application/ports/repositories.dart';
 import '../../../domain/scheduling/element.dart';
 import '../../../domain/scheduling/revlog.dart';
-import '../../../domain/scheduling/schedule_adjustment.dart';
 import '../../../domain/scheduling/scheduler_metrics.dart';
 import '../../../domain/scheduling/topic_scheduler.dart';
 
@@ -44,7 +43,7 @@ final FutureProvider<CollectionDiagnostics> collectionDiagnosticsProvider =
       );
     });
 
-/// Scheduler safety metrics: overload, protection, and future load.
+/// Scheduler pacing, retention, and future-load metrics.
 final FutureProvider<SchedulerMetricsSnapshot> schedulerMetricsProvider =
     FutureProvider<SchedulerMetricsSnapshot>(
       (Ref ref) => ref.watch(schedulerMetricsQueryProvider).collect(),
@@ -148,26 +147,13 @@ class _CollectionPanel extends ConsumerWidget {
               children: <Widget>[
                 _Stat(label: 'Study day', value: data.today.toString()),
                 _Stat(label: 'Elements', value: '${data.totalElements}'),
-                _Stat(label: 'Due', value: '${data.counters.dueTotal}'),
                 _Stat(
-                  label: 'Admitted',
-                  value: '${data.counters.admittedTotal}',
+                  label: 'Outstanding items',
+                  value: '${data.counters.dueCards}',
                 ),
                 _Stat(
-                  label: 'New cards',
-                  value: '${data.counters.admittedNewCards}',
-                ),
-                _Stat(
-                  label: 'Deferred',
-                  value: '${data.counters.overflowTotal}',
-                ),
-                _Stat(
-                  label: 'Protection',
-                  value:
-                      '${data.counters.protectionPercent.toStringAsFixed(0)}%',
-                  hint:
-                      'How deep into the collection today reached. If this '
-                      'sits low, nothing below it is safe.',
+                  label: 'Outstanding topics',
+                  value: '${data.counters.dueTopics}',
                 ),
                 _Stat(
                   label: 'Indexed',
@@ -178,27 +164,6 @@ class _CollectionPanel extends ConsumerWidget {
                 ),
               ],
             ),
-            if (data.overflowRatio > 0.3) ...<Widget>[
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.softMarker.withValues(alpha: 0.10),
-                  border: Border.all(
-                    color: AppColors.softMarker.withValues(alpha: 0.4),
-                  ),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'The valve deferred '
-                  '${(data.overflowRatio * 100).toStringAsFixed(0)}% of '
-                  'today’s due volume. Sustained above 30% for a few weeks '
-                  'means the collection is oversubscribed — the fix is bulk '
-                  'demotion in the priority browser, not a bigger cap.',
-                  style: const TextStyle(fontSize: 12, height: 1.5),
-                ),
-              ),
-            ],
             const SizedBox(height: 16),
             const Text(
               'Repetition log today',
@@ -234,11 +199,7 @@ class _CollectionPanel extends ConsumerWidget {
   }
 }
 
-/// The metrics that expose a slow scheduler failure.
-///
-/// Everything here answers a question a per-element view cannot: is automatic
-/// overflow becoming permanent, is the protected band actually protected, and
-/// is tomorrow's load growing while today still looks manageable.
+/// Collection-level pacing and retention metrics.
 class _SchedulerMetricsPanel extends ConsumerWidget {
   const _SchedulerMetricsPanel();
 
@@ -268,38 +229,17 @@ class _MetricsBody extends StatelessWidget {
 
   int _cards(int days) => metrics.next30Days
       .take(days)
-      .fold(0, (int total, DueLoadMetric day) => total + day.effectiveCards);
+      .fold(0, (int total, DueLoadMetric day) => total + day.cards);
 
   int _topics(int days) => metrics.next30Days
       .take(days)
-      .fold(0, (int total, DueLoadMetric day) => total + day.effectiveTopics);
+      .fold(0, (int total, DueLoadMetric day) => total + day.topics);
 
   @override
   Widget build(BuildContext context) {
-    final double? overflow = metrics.automaticOverflowFraction;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        if (metrics.overloadWarning.active)
-          _Alarm(
-            emphasis: false,
-            message:
-                'Automatic overflow has stayed above '
-                '${(metrics.overloadWarning.threshold * 100).round()}% of due '
-                'work for ${metrics.overloadWarning.latestConsecutiveWeeks} '
-                'consecutive weeks. The collection is asking for more than the '
-                'day can hold: lower some priorities or raise the caps '
-                'deliberately, rather than leaving the valve to decide.',
-          ),
-        if (!metrics.protectionInvariantHolds)
-          _Alarm(
-            emphasis: true,
-            message:
-                '${metrics.protectedElementViolations} protected element'
-                '${metrics.protectedElementViolations == 1 ? ' was' : 's were'}'
-                ' automatically postponed. This has to be zero: it is a bug, '
-                'not a workload signal.',
-          ),
         Wrap(
           spacing: 26,
           runSpacing: 14,
@@ -307,13 +247,8 @@ class _MetricsBody extends StatelessWidget {
             _Stat(
               label: 'Overdue now',
               value:
-                  '${metrics.effectiveOverdueCards} cards, '
-                  '${metrics.effectiveOverdueTopics} topics',
-              hint:
-                  'Effectively due, after adjustments. Algorithmically it is '
-                  '${metrics.algorithmicOverdueCards} cards and '
-                  '${metrics.algorithmicOverdueTopics} topics: the gap is work '
-                  'the calendar is holding back, not work that went away.',
+                  '${metrics.overdueCards} cards, '
+                  '${metrics.overdueTopics} topics',
             ),
             _Stat(
               label: 'Next 7 days',
@@ -322,15 +257,6 @@ class _MetricsBody extends StatelessWidget {
             _Stat(
               label: 'Next 30 days',
               value: '${_cards(30)} cards, ${_topics(30)} topics',
-            ),
-            _Stat(
-              label: 'Auto-overflow',
-              value: overflow == null
-                  ? 'none'
-                  : '${(overflow * 100).toStringAsFixed(0)}%',
-              hint:
-                  '${metrics.automaticOverflowCount} of ${metrics.dueWorkCount} '
-                  'due elements over the window.',
             ),
             _Stat(label: 'Manual Later', value: '${metrics.manualLaterCount}'),
             _Stat(
@@ -349,10 +275,6 @@ class _MetricsBody extends StatelessWidget {
               hint: 'Genuine only: practice and undone events are excluded.',
             ),
             _Stat(
-              label: 'New introduced',
-              value: '${metrics.newCardsIntroduced}',
-            ),
-            _Stat(
               label: 'Card/topic mix',
               value: metrics.cardTopicOpportunityRatio.value == null
                   ? 'none'
@@ -363,21 +285,6 @@ class _MetricsBody extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 14),
-        const _MetricHeading('Deferred load by reason'),
-        if (metrics.activeAdjustmentLoadByReason.isEmpty)
-          const Text(
-            'Nothing is deferred.',
-            style: TextStyle(fontSize: 12, color: AppColors.muted),
-          )
-        else
-          for (final MapEntry<ScheduleAdjustmentReason, AdjustmentLoadMetric>
-              entry in metrics.activeAdjustmentLoadByReason.entries)
-            Text(
-              '${entry.key.wireName}: ${entry.value.adjustmentCount} on '
-              '${entry.value.distinctElementCount} elements',
-              style: const TextStyle(fontSize: 12),
-            ),
         const SizedBox(height: 14),
         const _MetricHeading('Lateness and retention by priority decile'),
         for (final PriorityDecileMetric decile in metrics.priorityDeciles)
@@ -424,25 +331,6 @@ class _MetricHeading extends StatelessWidget {
       text,
       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
     ),
-  );
-}
-
-class _Alarm extends StatelessWidget {
-  const _Alarm({required this.message, required this.emphasis});
-
-  final String message;
-  final bool emphasis;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(
-      color: const Color(0xFFB3261E).withValues(alpha: emphasis ? 0.16 : 0.09),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Text(message, style: const TextStyle(fontSize: 12)),
   );
 }
 
@@ -577,21 +465,11 @@ class _ElementPanel extends ConsumerWidget {
                   ),
                   _Stat(
                     label: 'Due',
-                    value:
-                        (data.effectiveDueDay ??
-                                data.schedule.algorithmicDueDay)
-                            .toString(),
-                    hint:
-                        'Effective: the canonical date plus every adjustment '
-                        'currently in force.',
+                    value: data.schedule.algorithmicDueDay.toString(),
                   ),
                   _Stat(
                     label: 'Original due',
                     value: data.schedule.originalDueDay.toString(),
-                  ),
-                  _Stat(
-                    label: 'Deferral',
-                    value: data.schedule.deferralKind.name,
                   ),
                   if (topic != null) ...<Widget>[
                     _Stat(
@@ -630,12 +508,9 @@ class _ElementPanel extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    'Next A = base ${preview.base.toStringAsFixed(2)} '
-                    '× priority ${preview.priorityTerm.toStringAsFixed(2)} '
-                    '× completion ${preview.completionTerm.toStringAsFixed(2)} '
-                    '× conversion ${preview.conversionTerm.toStringAsFixed(2)} '
-                    '× yield ${preview.yieldTerm.toStringAsFixed(2)} '
-                    '= ${preview.value.toStringAsFixed(3)}',
+                    'Next SM20 topic interval: $preview days. '
+                    'The preview uses a copy of the persisted Delphi PRNG; '
+                    'it does not advance collection state.',
                     style: const TextStyle(
                       fontFamily: 'Consolas',
                       fontSize: 11,

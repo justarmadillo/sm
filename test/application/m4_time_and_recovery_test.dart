@@ -15,7 +15,6 @@ import 'package:incremental_reader/src/domain/content/source.dart';
 import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
-import 'package:incremental_reader/src/domain/scheduling/schedule_adjustment.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:incremental_reader/src/domain/settings/app_settings.dart';
@@ -73,61 +72,51 @@ void main() {
       expect((await harness.today()).toString(), '2026-03-28');
     });
 
-    test('an interval scheduled across the transition lands on the right day',
-        () async {
-      final Source source = (await harness.reader.importSource(
-        ImportSource(
-          harness.operation(),
-          title: 'Chapter',
-          markdown: _markdown,
-          timestampUtc: clock.nowUtc(),
-        ),
-      )).unwrap();
-      final ElementRef ref = ElementRef(
-        id: source.id,
-        type: ElementType.source,
-      );
-      // Three days on, straight over the boundary.
-      final Result<TopicState> done = await harness.reader.reschedule(
-        RescheduleTopic(
-          harness.operation(),
-          ref: ref,
-          intervalDays: 3,
-          timestampUtc: clock.nowUtc(),
-        ),
-      );
-      expect(done.isOk, isTrue, reason: '${done.failureOrNull}');
-      // A manual reschedule is an exact presentation override: the date the
-      // user picked is honoured without rewriting what the scheduler decided.
-      Future<StudyDay> effectiveDue() async => const EffectiveDueService()
-          .topicDueStudyDay(
-            topic: ref,
-            algorithmicDueStudyDay: (await harness.learning.findTopic(ref))!
-                .schedule
-                .algorithmicDueDay,
-            adjustments: ScheduleAdjustmentSet(
-              await harness.learning.listActiveAdjustments(
-                elements: <ElementRef>{ref},
-              ),
-            ),
-          );
-      expect((await effectiveDue()).toString(), '2026-03-31');
+    test(
+      'an interval scheduled across the transition lands on the right day',
+      () async {
+        final Source source = (await harness.reader.importSource(
+          ImportSource(
+            harness.operation(),
+            title: 'Chapter',
+            markdown: _markdown,
+            timestampUtc: clock.nowUtc(),
+          ),
+        )).unwrap();
+        final ElementRef ref = ElementRef(
+          id: source.id,
+          type: ElementType.source,
+        );
+        // Three days on, straight over the boundary.
+        final Result<TopicState> done = await harness.reader.reschedule(
+          RescheduleTopic(
+            harness.operation(),
+            ref: ref,
+            intervalDays: 3,
+            timestampUtc: clock.nowUtc(),
+          ),
+        );
+        expect(done.isOk, isTrue, reason: '${done.failureOrNull}');
+        // SM20 has no presentation overlay: a manual reschedule replaces the
+        // canonical due date itself, so the stored schedule is the answer and
+        // there is nothing to resolve on top of it.
+        Future<StudyDay> canonicalDue() async =>
+            (await harness.learning.findTopic(ref))!.schedule.algorithmicDueDay;
+        expect((await canonicalDue()).toString(), '2026-03-31');
 
-      final StudyDay due = await effectiveDue();
+        final StudyDay due = await canonicalDue();
 
-      // On the day itself, and not an hour early or late.
-      clock.setTo(DateTime.utc(2026, 3, 31, 1, 30));
-      expect(
-        due <= await harness.today(),
-        isFalse,
-        reason: '03:30 local is still the previous study day',
-      );
-      clock.setTo(DateTime.utc(2026, 3, 31, 2, 30));
-      expect(
-        due <= await harness.today(),
-        isTrue,
-      );
-    });
+        // On the day itself, and not an hour early or late.
+        clock.setTo(DateTime.utc(2026, 3, 31, 1, 30));
+        expect(
+          due <= await harness.today(),
+          isFalse,
+          reason: '03:30 local is still the previous study day',
+        );
+        clock.setTo(DateTime.utc(2026, 3, 31, 2, 30));
+        expect(due <= await harness.today(), isTrue);
+      },
+    );
 
     test('day boundaries stay contiguous across the jump', () async {
       final StudyDayCalendar calendar = await harness.context.calendar();
@@ -151,26 +140,25 @@ void main() {
           reason: 'the next day begins exactly where $day ends',
         );
         expect(
-          calendar.contains(
-            studyDay,
-            end.subtract(const Duration(seconds: 1)),
-          ),
+          calendar.contains(studyDay, end.subtract(const Duration(seconds: 1))),
           isTrue,
         );
       }
     });
 
-    test('a changed rollover takes effect without reopening anything',
-        () async {
-      expect((await harness.today()).toString(), '2026-03-28');
+    test(
+      'a changed rollover takes effect without reopening anything',
+      () async {
+        expect((await harness.today()).toString(), '2026-03-28');
 
-      // Move the rollover to 23:00 local: 22:00 local is now still the 27th.
-      await harness.tuneSettings(
-        (AppSettings s) =>
-            s.copyWith(studyDay: s.studyDay.copyWith(rolloverMinutes: 1380)),
-      );
-      expect((await harness.today()).toString(), '2026-03-27');
-    });
+        // Move the rollover to 23:00 local: 22:00 local is now still the 27th.
+        await harness.tuneSettings(
+          (AppSettings s) =>
+              s.copyWith(studyDay: s.studyDay.copyWith(rolloverMinutes: 1380)),
+        );
+        expect((await harness.today()).toString(), '2026-03-27');
+      },
+    );
   });
 
   group('failure recovery', () {
@@ -184,15 +172,14 @@ void main() {
 
     tearDown(() => harness.close());
 
-    Future<Source> importFixture() async =>
-        (await harness.reader.importSource(
-          ImportSource(
-            harness.operation(),
-            title: 'Chapter',
-            markdown: _markdown,
-            timestampUtc: clock.nowUtc(),
-          ),
-        )).unwrap();
+    Future<Source> importFixture() async => (await harness.reader.importSource(
+      ImportSource(
+        harness.operation(),
+        title: 'Chapter',
+        markdown: _markdown,
+        timestampUtc: clock.nowUtc(),
+      ),
+    )).unwrap();
 
     test('a rejected command writes nothing at all', () async {
       final Source source = await importFixture();
@@ -221,8 +208,7 @@ void main() {
       );
     });
 
-    test('a command against a missing element fails without a trace',
-        () async {
+    test('a command against a missing element fails without a trace', () async {
       final Result<TopicState> missing = await harness.reader.completeEncounter(
         CompleteTopicEncounter(
           harness.operation(),
@@ -277,44 +263,49 @@ void main() {
       );
     });
 
-    test('a failure is reported to diagnostics with its operation id',
-        () async {
-      final Result<CardState> undone = await harness.review.undoLastReview(
-        UndoLastReview(harness.operation(), timestampUtc: clock.nowUtc()),
-      );
-      expect(undone.failureOrNull, isA<ConflictFailure>());
+    test(
+      'a failure is reported to diagnostics with its operation id',
+      () async {
+        final Result<CardState> undone = await harness.review.undoLastReview(
+          UndoLastReview(harness.operation(), timestampUtc: clock.nowUtc()),
+        );
+        expect(undone.failureOrNull, isA<ConflictFailure>());
 
-      // The conflict is an expected outcome rather than a crash, so the
-      // command returns it instead of throwing — the log stays for the
-      // unexpected ones.
-      expect(
-        harness.diagnostics.events.where(
-          (e) => e.failure is UnexpectedFailure,
-        ),
-        isEmpty,
-      );
-    });
+        // The conflict is an expected outcome rather than a crash, so the
+        // command returns it instead of throwing — the log stays for the
+        // unexpected ones.
+        expect(
+          harness.diagnostics.events.where(
+            (e) => e.failure is UnexpectedFailure,
+          ),
+          isEmpty,
+        );
+      },
+    );
 
-    test('an unexpected error is wrapped, logged, and does not escape',
-        () async {
-      final Source source = await importFixture();
-      // Removing the pacing row leaves a schedule with no topic behind it,
-      // which is the shape a partially-restored backup can have.
-      await harness.database.customStatement(
-        'DELETE FROM topic_states WHERE element_id = ?',
-        <Object?>[source.id],
-      );
+    test(
+      'an unexpected error is wrapped, logged, and does not escape',
+      () async {
+        final Source source = await importFixture();
+        // Removing the pacing row leaves a schedule with no topic behind it,
+        // which is the shape a partially-restored backup can have.
+        await harness.database.customStatement(
+          'DELETE FROM topic_states WHERE element_id = ?',
+          <Object?>[source.id],
+        );
 
-      final Result<TopicState> result = await harness.reader.completeEncounter(
-        CompleteTopicEncounter(
-          harness.operation(),
-          ref: ElementRef(id: source.id, type: ElementType.source),
-          timestampUtc: clock.nowUtc(),
-        ),
-      );
+        final Result<TopicState> result = await harness.reader
+            .completeEncounter(
+              CompleteTopicEncounter(
+                harness.operation(),
+                ref: ElementRef(id: source.id, type: ElementType.source),
+                timestampUtc: clock.nowUtc(),
+              ),
+            );
 
-      expect(result.isErr, isTrue);
-      expect(result.failureOrNull, isA<NotFoundFailure>());
-    });
+        expect(result.isErr, isTrue);
+        expect(result.failureOrNull, isA<NotFoundFailure>());
+      },
+    );
   });
 }

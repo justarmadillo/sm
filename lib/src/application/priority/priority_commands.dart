@@ -89,28 +89,27 @@ final class StepPriority extends AppCommand {
   final int places;
 }
 
-/// Spread a percent range across a set of elements, in their current order.
-///
-/// The bulk-reprioritization operation. It exists because inheritance is
-/// exact: an article given a high priority hands that priority to every
-/// extract and card it produces, which is right at creation time and wrong
-/// once reading is finished. Spreading afterwards is how the few genuinely
-/// important children keep the rank and the rest fall to where they belong.
-final class SpreadPriority extends AppCommand {
-  SpreadPriority(
+/// The four executable browser/subset priority operations.
+enum Sm20BatchPriorityMode { increase, decrease, spread, adjust }
+
+/// Applies one SM20 browser operation in the supplied subset queue order.
+final class BatchPriority extends AppCommand {
+  BatchPriority(
     super.operationId, {
     required this.refs,
-    required this.fromPercent,
-    required this.toPercent,
+    required this.mode,
+    required this.lowPercent,
+    required this.highPercent,
+    required this.changePercent,
+    this.limitChanges = true,
     super.timestampUtc,
   });
 
-  /// The elements to spread, in the order they should end up.
+  /// Stored subset order. Sequential reinsertion makes this order observable.
   final List<ElementRef> refs;
-
-  /// Most important end of the range.
-  final double fromPercent;
-
-  /// Least important end of the range.
-  final double toPercent;
+  final Sm20BatchPriorityMode mode;
+  final double lowPercent;
+  final double highPercent;
+  final double changePercent;
+  final bool limitChanges;
 }

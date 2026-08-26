@@ -155,14 +155,14 @@ void main() {
       );
     });
 
-    test('Done, Later, and Finish are refused', () async {
+    test('Done, Later, and Dismiss are refused', () async {
       final sourceId = await importFixture();
       await readerFor(sourceId, ReaderMode.browse);
       final model = modelFor(sourceId, ReaderMode.browse);
 
       await model.done();
       await model.later();
-      await model.finish();
+      await model.dismiss();
 
       final topic = await container
           .read(learningRepositoryProvider)
@@ -175,9 +175,8 @@ void main() {
                 .schedule
                 .ref,
           );
-      expect(topic!.stepIndex, 0);
+      expect(topic!.storedInterval, 0);
       expect(topic.schedule.dueDay.toString(), '2026-03-05');
-      expect(topic.schedule.deferredUntil, isNull);
     });
 
     test('continuing scheduled makes the same session mutable', () async {
@@ -254,7 +253,7 @@ void main() {
       expect(encounter.durationMs, 240000);
     });
 
-    test('Later defers without advancing the sequence', () async {
+    test('Later reschedules without counting as a repetition', () async {
       final sourceId = await importFixture();
       await readerFor(sourceId, ReaderMode.scheduled);
       final model = modelFor(sourceId, ReaderMode.scheduled);
@@ -268,13 +267,15 @@ void main() {
             ),
           )
           .requireValue;
-      expect(state.topic.stepIndex, 0);
-      expect(
-        state.topic.schedule.algorithmicDueDay.toString(),
-        '2026-03-05',
-        reason: 'Later leaves the canonical due exactly where it was',
-      );
+      // Section 8.1: Later is the low-level rescheduler, so it rewrites the
+      // canonical due and the stored interval, and there is no second
+      // "effective" date that could disagree with them.
+      expect(state.topic.schedule.algorithmicDueDay.toString(), '2026-03-08');
       expect(state.effectiveDueDay.toString(), '2026-03-08');
+      expect(state.topic.storedInterval, 3);
+      // What it is not is a repetition: A and the counters stay put.
+      expect(state.topic.repetitionCount, 1);
+      expect(state.topic.aFactor, closeTo(1.2, 1e-9));
     });
 
     test('the reminder line appears only after enough reading', () async {

@@ -102,8 +102,9 @@ void main() {
         reason: 'ordering changed, and only ordering',
       );
 
-      final PriorityContext context =
-          (await harness.priorityQuery.contextFor(ref))!;
+      final PriorityContext context = (await harness.priorityQuery.contextFor(
+        ref,
+      ))!;
       expect(context.percent, 0);
     });
 
@@ -113,10 +114,7 @@ void main() {
       final ElementRef promoted = harness.refOf(sources.last);
       final ElementRef wasFirst = harness.refOf(sources.first);
 
-      expect(
-        (await harness.priorityQuery.contextFor(wasFirst))!.percent,
-        0,
-      );
+      expect((await harness.priorityQuery.contextFor(wasFirst))!.percent, 0);
       await harness.priority.setPercent(
         SetPriorityPercent(
           harness.operation(),
@@ -156,11 +154,10 @@ void main() {
         ),
       );
 
-      final RevlogEntry entry = (await harness.learning.listRevlogFor(
-        ref,
-      )).firstWhere(
-        (RevlogEntry e) => e.eventType == RevlogEventType.priorityChange,
-      );
+      final RevlogEntry entry = (await harness.learning.listRevlogFor(ref))
+          .firstWhere(
+            (RevlogEntry e) => e.eventType == RevlogEventType.priorityChange,
+          );
       expect(entry.before.priorityKey, isNotNull);
       expect(entry.after.priorityKey, isNotNull);
       expect(entry.before.priorityKey, isNot(entry.after.priorityKey));
@@ -169,13 +166,19 @@ void main() {
   });
 
   group('stepping and dragging', () {
-    test('a step moves the element past its neighbour', () async {
+    test('a step of 0.1 only moves when it crosses a rank', () async {
+      // Section 7: the current-element shortcut sets a numerical target of
+      // -0.1 or +0.1 and is then subject to the same nearest-even conversion
+      // as any other Set Priority. Unlike review-time drift it has no forced
+      // one-rank movement, so in a small collection 0.1 percent quantizes
+      // straight back to the rank it started on.
       final List<Source> sources = await harness.importSources(5);
       final ElementRef ref = harness.refOf(sources[3]);
-      final double before =
-          (await harness.priorityQuery.contextFor(ref))!.percent;
+      final double before = (await harness.priorityQuery.contextFor(
+        ref,
+      ))!.percent;
 
-      await harness.priority.step(
+      final Result<ElementSchedule> stepped = await harness.priority.step(
         StepPriority(
           harness.operation(),
           ref: ref,
@@ -183,35 +186,39 @@ void main() {
           timestampUtc: clock.nowUtc(),
         ),
       );
+      expect(stepped.isOk, isTrue, reason: '${stepped.failureOrNull}');
 
       expect(
         (await harness.priorityQuery.contextFor(ref))!.percent,
-        lessThan(before),
+        before,
+        reason: 'five elements quantize a 0.1 percent target back to itself',
       );
     });
 
-    test('a drag places the element between the two it was dropped on',
-        () async {
-      final List<Source> sources = await harness.importSources(5);
-      final List<PriorityEntry> rows = await harness.priorityQuery.browse();
-      final ElementRef dragged = rows.last.ref;
+    test(
+      'a drag places the element between the two it was dropped on',
+      () async {
+        final List<Source> sources = await harness.importSources(5);
+        final List<PriorityEntry> rows = await harness.priorityQuery.browse();
+        final ElementRef dragged = rows.last.ref;
 
-      final Result<ElementSchedule> result = await harness.priority.reorder(
-        ReorderPriority(
-          harness.operation(),
-          ref: dragged,
-          after: rows[0].schedule.priority,
-          before: rows[1].schedule.priority,
-          timestampUtc: clock.nowUtc(),
-        ),
-      );
-      expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
+        final Result<ElementSchedule> result = await harness.priority.reorder(
+          ReorderPriority(
+            harness.operation(),
+            ref: dragged,
+            after: rows[0].schedule.priority,
+            before: rows[1].schedule.priority,
+            timestampUtc: clock.nowUtc(),
+          ),
+        );
+        expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
 
-      final List<PriorityEntry> reordered = await harness.priorityQuery
-          .browse();
-      expect(reordered[1].ref, dragged);
-      expect(reordered, hasLength(sources.length));
-    });
+        final List<PriorityEntry> reordered = await harness.priorityQuery
+            .browse();
+        expect(reordered[1].ref, dragged);
+        expect(reordered, hasLength(sources.length));
+      },
+    );
 
     test('refuses neighbours that are not in order', () async {
       final List<Source> sources = await harness.importSources(3);
@@ -231,17 +238,21 @@ void main() {
 
   group('Spread', () {
     test('lays a range across a branch in its existing order', () async {
-      final List<Source> sources = await harness.importSources(6);
+      // Section 7.1 rejects a range with fewer slots than selected elements,
+      // so the collection has to be wide enough for the requested band.
+      final List<Source> sources = await harness.importSources(20);
       final List<PriorityEntry> before = await harness.priorityQuery.browse();
 
-      final Result<int> spread = await harness.priority.spread(
-        SpreadPriority(
+      final Result<int> spread = await harness.priority.batch(
+        BatchPriority(
           harness.operation(),
           refs: <ElementRef>[
             for (final PriorityEntry entry in before.take(4)) entry.ref,
           ],
-          fromPercent: 60,
-          toPercent: 95,
+          mode: Sm20BatchPriorityMode.spread,
+          lowPercent: 60,
+          highPercent: 95,
+          changePercent: 0,
           timestampUtc: clock.nowUtc(),
         ),
       );
@@ -263,8 +274,7 @@ void main() {
         final Iterable<double> percents = rows
             .where((PriorityEntry e) => refs.contains(e.ref))
             .map((PriorityEntry e) => e.percent);
-        return percents.reduce((double a, double b) => a + b) /
-            percents.length;
+        return percents.reduce((double a, double b) => a + b) / percents.length;
       }
 
       final List<ElementRef> moved = <ElementRef>[
@@ -275,59 +285,71 @@ void main() {
         greaterThan(meanPercent(before, moved)),
         reason: 'the branch was demoted into the range it was spread across',
       );
-      expect(sources, hasLength(6));
+      expect(sources, hasLength(20));
     });
 
-    test('rejects an inverted range and an empty selection', () async {
+    test('rejects an empty selection but swaps an inverted range', () async {
       expect(
-        (await harness.priority.spread(
-          SpreadPriority(
+        (await harness.priority.batch(
+          BatchPriority(
             harness.operation(),
             refs: const <ElementRef>[],
-            fromPercent: 10,
-            toPercent: 20,
+            mode: Sm20BatchPriorityMode.spread,
+            lowPercent: 10,
+            highPercent: 20,
+            changePercent: 0,
             timestampUtc: clock.nowUtc(),
           ),
         )).failureOrNull,
         isA<ValidationFailure>(),
       );
 
+      // SM20 orders the two endpoints itself rather than refusing the run,
+      // so an inverted range is accepted and behaves as its sorted form.
       final List<Source> sources = await harness.importSources(2);
-      expect(
-        (await harness.priority.spread(
-          SpreadPriority(
-            harness.operation(),
-            refs: <ElementRef>[harness.refOf(sources.first)],
-            fromPercent: 90,
-            toPercent: 10,
-            timestampUtc: clock.nowUtc(),
-          ),
-        )).failureOrNull,
-        isA<ValidationFailure>(),
+      final Result<int> inverted = await harness.priority.batch(
+        BatchPriority(
+          harness.operation(),
+          refs: <ElementRef>[harness.refOf(sources.first)],
+          mode: Sm20BatchPriorityMode.spread,
+          lowPercent: 90,
+          highPercent: 10,
+          changePercent: 0,
+          timestampUtc: clock.nowUtc(),
+        ),
       );
+      expect(inverted.unwrap(), 1);
     });
 
     test('logs one entry per element with its place in the range', () async {
-      final List<Source> sources = await harness.importSources(3);
-      await harness.priority.spread(
-        SpreadPriority(
+      final List<Source> sources = await harness.importSources(12);
+      final List<Source> selected = sources.take(3).toList();
+      await harness.priority.batch(
+        BatchPriority(
           harness.operation(),
-          refs: <ElementRef>[for (final Source s in sources) harness.refOf(s)],
-          fromPercent: 30,
-          toPercent: 70,
+          refs: <ElementRef>[for (final Source s in selected) harness.refOf(s)],
+          mode: Sm20BatchPriorityMode.spread,
+          lowPercent: 30,
+          highPercent: 70,
+          changePercent: 0,
           timestampUtc: clock.nowUtc(),
         ),
       );
 
-      for (var i = 0; i < sources.length; i++) {
-        final RevlogEntry entry = (await harness.learning.listRevlogFor(
-          harness.refOf(sources[i]),
-        )).firstWhere(
-          (RevlogEntry e) => e.eventType == RevlogEventType.priorityChange,
-        );
-        expect(entry.metadata!['position'], i);
+      for (final Source source in selected) {
+        final RevlogEntry entry =
+            (await harness.learning.listRevlogFor(
+              harness.refOf(source),
+            )).firstWhere(
+              (RevlogEntry e) => e.eventType == RevlogEventType.priorityChange,
+            );
+        expect(entry.metadata!['mode'], 'spread');
         expect(entry.metadata!['of'], 3);
-        expect(entry.metadata!['spread_from'], 30);
+        expect(entry.metadata!['low'], 30);
+        expect(entry.metadata!['high'], 70);
+        // Spread reads the live position as it reinserts, so this is the
+        // sequential source position and not a frozen index.
+        expect(entry.metadata!['source_position'], isA<int>());
       }
     });
   });
@@ -376,87 +398,110 @@ void main() {
   });
 
   group('inheritance', () {
-    test('a new article starts in the middle when nothing is claimed about it',
-        () async {
-      final Result<Source> result = await harness.reader.importSource(
-        ImportSource(
-          harness.operation(),
-          title: 'Unranked',
-          markdown: _markdown,
-          timestampUtc: clock.nowUtc(),
-        ),
-      );
-      final ElementSchedule schedule = (await harness.learning.findSchedule(
-        harness.refOf(result.unwrap()),
-      ))!;
-      expect(schedule.priority, PriorityRank.middle);
-    });
-
-    test('the first interval follows from where the article was placed',
-        () async {
-      final Result<Source> urgent = await harness.reader.importSource(
-        ImportSource(
-          harness.operation(),
-          title: 'Urgent',
-          markdown: _markdown,
-          priorityPercent: 0,
-          timestampUtc: clock.nowUtc(),
-        ),
-      );
-      final Result<Source> background = await harness.reader.importSource(
-        ImportSource(
-          harness.operation(),
-          title: 'Background',
-          markdown: _markdown,
-          priorityPercent: 100,
-          timestampUtc: clock.nowUtc(),
-        ),
-      );
-
-      final TopicState urgentTopic = (await harness.learning.findTopic(
-        harness.refOf(urgent.unwrap()),
-      ))!;
-      final TopicState backgroundTopic = (await harness.learning.findTopic(
-        harness.refOf(background.unwrap()),
-      ))!;
-
-      final StudyDay today = await harness.today();
-      // Creation is introduction eligibility, not a repetition: neither has an
-      // interval yet, and a low priority may not hide a new article for weeks
-      // before it has ever been opened.
-      expect(urgentTopic.intervalDays, 0);
-      expect(backgroundTopic.intervalDays, 0);
-      expect(
-        urgentTopic.schedule.dueDay,
-        today,
-        reason: 'both are due today; priority decides how far they then go',
-      );
-      expect(backgroundTopic.schedule.dueDay, today);
-
-      // The first genuine encounter is what writes the first interval, and
-      // priority is what decides its size.
-      for (final Source source in <Source>[
-        urgent.unwrap(),
-        background.unwrap(),
-      ]) {
-        final Result<TopicState> done = await harness.reader.completeEncounter(
-          CompleteTopicEncounter(
+    test(
+      'a new article starts in the middle when nothing is claimed about it',
+      () async {
+        final Result<Source> result = await harness.reader.importSource(
+          ImportSource(
             harness.operation(),
-            ref: harness.refOf(source),
+            title: 'Unranked',
+            markdown: _markdown,
             timestampUtc: clock.nowUtc(),
           ),
         );
-        expect(done.isOk, isTrue, reason: '${done.failureOrNull}');
-      }
+        final ElementSchedule schedule = (await harness.learning.findSchedule(
+          harness.refOf(result.unwrap()),
+        ))!;
+        expect(schedule.priority, PriorityRank.middle);
+      },
+    );
 
-      final TopicState urgentAfter = (await harness.learning.findTopic(
-        harness.refOf(urgent.unwrap()),
-      ))!;
-      final TopicState backgroundAfter = (await harness.learning.findTopic(
-        harness.refOf(background.unwrap()),
-      ))!;
-      expect(urgentAfter.intervalDays, lessThan(backgroundAfter.intervalDays));
-      expect(urgentAfter.schedule.dueDay, today.addDays(1));
-    });
+    test(
+      'the first interval follows A, not where the article was placed',
+      () async {
+        final Result<Source> urgent = await harness.reader.importSource(
+          ImportSource(
+            harness.operation(),
+            title: 'Urgent',
+            markdown: _markdown,
+            priorityPercent: 0,
+            timestampUtc: clock.nowUtc(),
+          ),
+        );
+        final Result<Source> background = await harness.reader.importSource(
+          ImportSource(
+            harness.operation(),
+            title: 'Background',
+            markdown: _markdown,
+            priorityPercent: 100,
+            timestampUtc: clock.nowUtc(),
+          ),
+        );
+
+        final TopicState urgentTopic = (await harness.learning.findTopic(
+          harness.refOf(urgent.unwrap()),
+        ))!;
+        final TopicState backgroundTopic = (await harness.learning.findTopic(
+          harness.refOf(background.unwrap()),
+        ))!;
+
+        final StudyDay today = await harness.today();
+        // Creation is introduction eligibility, not a repetition: neither has an
+        // interval yet, and a low priority may not hide a new article for weeks
+        // before it has ever been opened.
+        expect(urgentTopic.intervalDays, 0);
+        expect(backgroundTopic.intervalDays, 0);
+        expect(
+          urgentTopic.schedule.dueDay,
+          today,
+          reason: 'both are due today; priority decides how far they then go',
+        );
+        expect(backgroundTopic.schedule.dueDay, today);
+
+        // The first genuine encounter is what writes the first interval. In
+        // SM20 its size comes from the section 5.2 formula over A, and A for a
+        // new topic comes from the text-length rule in section 5.1. Priority
+        // is not an input: section 5.4 drifts priority *after* an interval is
+        // chosen, which is the opposite direction.
+        for (final Source source in <Source>[
+          urgent.unwrap(),
+          background.unwrap(),
+        ]) {
+          final Result<TopicState> done = await harness.reader
+              .completeEncounter(
+                CompleteTopicEncounter(
+                  harness.operation(),
+                  ref: harness.refOf(source),
+                  timestampUtc: clock.nowUtc(),
+                ),
+              );
+          expect(done.isOk, isTrue, reason: '${done.failureOrNull}');
+        }
+
+        final TopicState urgentAfter = (await harness.learning.findTopic(
+          harness.refOf(urgent.unwrap()),
+        ))!;
+        final TopicState backgroundAfter = (await harness.learning.findTopic(
+          harness.refOf(background.unwrap()),
+        ))!;
+        expect(
+          urgentAfter.intervalDays,
+          backgroundAfter.intervalDays,
+          reason: 'same text means same A, and A alone sizes the interval',
+        );
+        expect(urgentAfter.schedule.dueDay, today.addDays(1));
+        expect(backgroundAfter.schedule.dueDay, today.addDays(1));
+
+        // Priority did move, but as a consequence of the repetition rather
+        // than as an input to it, and both moved the same way because both
+        // saw the same interval change.
+        final PriorityScale scale = await harness.context.priorityScale();
+        expect(
+          scale.percentageOf(urgentAfter.schedule.priority),
+          lessThan(scale.percentageOf(backgroundAfter.schedule.priority)),
+          reason: 'the urgent article is still ahead of the background one',
+        );
+      },
+    );
   });
 }

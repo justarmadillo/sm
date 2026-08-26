@@ -13,8 +13,8 @@ import 'package:incremental_reader/src/domain/content/extract.dart';
 import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
 import 'package:incremental_reader/src/domain/content/source.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/interval_profile.dart';
 import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:test/test.dart';
 
 import '../support/app_harness.dart';
@@ -204,9 +204,13 @@ void main() {
       await extract(selectRendered(blockOf(BlockType.paragraph), 'capacity'));
       final after = await harness.learning.findTopic(ref);
 
-      expect(after!.stepIndex, before!.stepIndex);
+      // SM20 keeps the source's own repetition state untouched by an
+      // extraction: same stored interval, same canonical due day. There is no
+      // deferral field to check any more, because a postponement rewrites the
+      // due date itself rather than shadowing it.
+      expect(after!.storedInterval, before!.storedInterval);
+      expect(after.repetitionCount, before.repetitionCount);
       expect(after.schedule.dueDay, before.schedule.dueDay);
-      expect(after.schedule.deferredUntil, isNull);
     });
 
     test('the blocks the parent was parsed into are unchanged', () async {
@@ -220,7 +224,7 @@ void main() {
   });
 
   group('the extract is independent', () {
-    test('is due on the next study day, at step zero', () async {
+    test('is memorized at interval one, due the next study day', () async {
       final created = (await extract(
         selectRendered(blockOf(BlockType.paragraph), 'capacity'),
       )).unwrap();
@@ -229,8 +233,12 @@ void main() {
       );
 
       expect(topic!.schedule.dueDay.toString(), '2026-03-06');
-      expect(topic.encounters, 0);
-      expect(topic.profileId, kExtractProfileId);
+      // SM20 has no per-element interval profile and no step ladder. Section
+      // 6.2 memorizes the child at interval one, which both puts it on
+      // tomorrow and counts as its first repetition.
+      expect(topic.status, Sm20ElementStatus.memorized);
+      expect(topic.storedInterval, 1);
+      expect(topic.repetitionCount, 1);
     });
 
     test(
@@ -249,23 +257,16 @@ void main() {
           id: created.id,
           type: ElementType.extract,
         );
-        // Adjacent to the parent, never equal to it: shared keys collapse
-        // every percentile onto one value and make the protected band shield
-        // the whole collection.
-        final PriorityRank childRank =
-            (await harness.learning.findSchedule(extractRef))!.priority;
-        expect(childRank, isNot(raised));
-        expect(childRank.compareTo(raised), greaterThan(0));
+        // Section 6.2 draws the child's priority target from a band around
+        // the parent's own target rather than seating it next to the parent,
+        // so the only structural claim available is that the child joined the
+        // ranked population in its own right.
+        final PriorityRank childRank = (await harness.learning.findSchedule(
+          extractRef,
+        ))!.priority;
         final List<ElementSchedule> ordered = await harness.learning
             .listByPriority();
-        final int parentIndex = ordered.indexWhere(
-          (ElementSchedule s) => s.ref == sourceRef,
-        );
-        expect(
-          ordered[parentIndex + 1].ref,
-          extractRef,
-          reason: 'a new child starts immediately below its parent',
-        );
+        expect(ordered.map((ElementSchedule s) => s.ref), contains(extractRef));
 
         // Re-ranking the parent afterwards must not cascade.
         final PriorityRank childBefore = childRank;
@@ -301,12 +302,17 @@ void main() {
       },
     );
 
-    test('finishing the parent leaves the extract scheduled', () async {
+    test('dismissing the parent leaves the extract scheduled', () async {
       final created = (await extract(
         selectRendered(blockOf(BlockType.paragraph), 'capacity'),
       )).unwrap();
-      await harness.reader.finishSource(
-        FinishSource(harness.nextOperation(), sourceId: source.id),
+      // SM20 has no Finish; Dismiss is what stops scheduling a parent, and
+      // it must not touch descendants.
+      await harness.reader.dismiss(
+        DismissElement(
+          harness.nextOperation(),
+          ref: ElementRef(id: source.id, type: ElementType.source),
+        ),
       );
 
       final topic = await harness.learning.findTopic(
@@ -339,7 +345,7 @@ void main() {
       expect(edited.unwrap().isVerbatim, isFalse);
       final after = await harness.learning.findTopic(ref);
       expect(after!.schedule.dueDay, before!.schedule.dueDay);
-      expect(after.stepIndex, before.stepIndex);
+      expect(after.storedInterval, before.storedInterval);
     });
   });
 
@@ -434,7 +440,7 @@ void main() {
         expect(await harness.content.listExtractsOfParent(source.id), isEmpty);
 
         final afterTopic = await harness.learning.findTopic(sourceRef);
-        expect(afterTopic!.stepIndex, beforeTopic!.stepIndex);
+        expect(afterTopic!.storedInterval, beforeTopic!.storedInterval);
         expect(afterTopic.schedule.dueDay, beforeTopic.schedule.dueDay);
         expect(
           (await harness.content.findSource(source.id))!.markdown,

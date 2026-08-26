@@ -3385,7 +3385,7 @@ class $ElementSchedulesTable extends ElementSchedules
     'lifecycle',
     aliasedName,
     false,
-    check: () => ComparableExpr(lifecycle).isBetweenValues(0, 4),
+    check: () => ComparableExpr(lifecycle).isBetweenValues(0, 2),
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
@@ -3408,30 +3408,6 @@ class $ElementSchedulesTable extends ElementSchedules
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
-  );
-  static const VerificationMeta _deferredUntilMeta = const VerificationMeta(
-    'deferredUntil',
-  );
-  @override
-  late final GeneratedColumn<int> deferredUntil = GeneratedColumn<int>(
-    'deferred_until',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _deferralKindMeta = const VerificationMeta(
-    'deferralKind',
-  );
-  @override
-  late final GeneratedColumn<int> deferralKind = GeneratedColumn<int>(
-    'deferral_kind',
-    aliasedName,
-    false,
-    check: () => ComparableExpr(deferralKind).isBetweenValues(0, 2),
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
   );
   static const VerificationMeta _rootIdMeta = const VerificationMeta('rootId');
   @override
@@ -3528,8 +3504,6 @@ class $ElementSchedulesTable extends ElementSchedules
     lifecycle,
     dueDay,
     originalDueDay,
-    deferredUntil,
-    deferralKind,
     rootId,
     parentElementId,
     ordinal,
@@ -3607,24 +3581,6 @@ class $ElementSchedulesTable extends ElementSchedules
       );
     } else if (isInserting) {
       context.missing(_originalDueDayMeta);
-    }
-    if (data.containsKey('deferred_until')) {
-      context.handle(
-        _deferredUntilMeta,
-        deferredUntil.isAcceptableOrUnknown(
-          data['deferred_until']!,
-          _deferredUntilMeta,
-        ),
-      );
-    }
-    if (data.containsKey('deferral_kind')) {
-      context.handle(
-        _deferralKindMeta,
-        deferralKind.isAcceptableOrUnknown(
-          data['deferral_kind']!,
-          _deferralKindMeta,
-        ),
-      );
     }
     if (data.containsKey('root_id')) {
       context.handle(
@@ -3721,14 +3677,6 @@ class $ElementSchedulesTable extends ElementSchedules
         DriftSqlType.int,
         data['${effectivePrefix}original_due_day'],
       )!,
-      deferredUntil: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}deferred_until'],
-      ),
-      deferralKind: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}deferral_kind'],
-      )!,
       rootId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}root_id'],
@@ -3779,7 +3727,11 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
   /// Sortable relative priority. Lower sorts as more important.
   final String priorityKey;
 
-  /// Index into the lifecycle enum.
+  /// Index into the lifecycle enum: active (0), dismissed (1), deleted (2).
+  ///
+  /// The retired suspended and finished states are gone: SM20 knows only
+  /// pending, memorized, dismissed, and deleted, and both of those states
+  /// meant nothing more than "not scheduled, content kept".
   final int lifecycle;
 
   /// Days since the Unix epoch.
@@ -3787,15 +3739,6 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
 
   /// What the scheduler chose, preserved across postponement.
   final int originalDueDay;
-
-  /// Where auto-postpone or a manual Later moved the element to.
-  final int? deferredUntil;
-
-  /// Index into the deferral-kind enum: none, manual, automatic.
-  ///
-  /// Recalling same-day overload deferrals must not undo what the user
-  /// deliberately pushed away, so the two are distinguishable in storage.
-  final int deferralKind;
 
   /// Source at the root of this element's provenance, denormalized.
   ///
@@ -3824,8 +3767,6 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
     required this.lifecycle,
     required this.dueDay,
     required this.originalDueDay,
-    this.deferredUntil,
-    required this.deferralKind,
     this.rootId,
     this.parentElementId,
     this.ordinal,
@@ -3844,10 +3785,6 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
     map['lifecycle'] = Variable<int>(lifecycle);
     map['due_day'] = Variable<int>(dueDay);
     map['original_due_day'] = Variable<int>(originalDueDay);
-    if (!nullToAbsent || deferredUntil != null) {
-      map['deferred_until'] = Variable<int>(deferredUntil);
-    }
-    map['deferral_kind'] = Variable<int>(deferralKind);
     if (!nullToAbsent || rootId != null) {
       map['root_id'] = Variable<String>(rootId);
     }
@@ -3877,10 +3814,6 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
       lifecycle: Value(lifecycle),
       dueDay: Value(dueDay),
       originalDueDay: Value(originalDueDay),
-      deferredUntil: deferredUntil == null && nullToAbsent
-          ? const Value.absent()
-          : Value(deferredUntil),
-      deferralKind: Value(deferralKind),
       rootId: rootId == null && nullToAbsent
           ? const Value.absent()
           : Value(rootId),
@@ -3914,8 +3847,6 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
       lifecycle: serializer.fromJson<int>(json['lifecycle']),
       dueDay: serializer.fromJson<int>(json['dueDay']),
       originalDueDay: serializer.fromJson<int>(json['originalDueDay']),
-      deferredUntil: serializer.fromJson<int?>(json['deferredUntil']),
-      deferralKind: serializer.fromJson<int>(json['deferralKind']),
       rootId: serializer.fromJson<String?>(json['rootId']),
       parentElementId: serializer.fromJson<String?>(json['parentElementId']),
       ordinal: serializer.fromJson<int?>(json['ordinal']),
@@ -3938,8 +3869,6 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
       'lifecycle': serializer.toJson<int>(lifecycle),
       'dueDay': serializer.toJson<int>(dueDay),
       'originalDueDay': serializer.toJson<int>(originalDueDay),
-      'deferredUntil': serializer.toJson<int?>(deferredUntil),
-      'deferralKind': serializer.toJson<int>(deferralKind),
       'rootId': serializer.toJson<String?>(rootId),
       'parentElementId': serializer.toJson<String?>(parentElementId),
       'ordinal': serializer.toJson<int?>(ordinal),
@@ -3958,8 +3887,6 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
     int? lifecycle,
     int? dueDay,
     int? originalDueDay,
-    Value<int?> deferredUntil = const Value.absent(),
-    int? deferralKind,
     Value<String?> rootId = const Value.absent(),
     Value<String?> parentElementId = const Value.absent(),
     Value<int?> ordinal = const Value.absent(),
@@ -3975,10 +3902,6 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
     lifecycle: lifecycle ?? this.lifecycle,
     dueDay: dueDay ?? this.dueDay,
     originalDueDay: originalDueDay ?? this.originalDueDay,
-    deferredUntil: deferredUntil.present
-        ? deferredUntil.value
-        : this.deferredUntil,
-    deferralKind: deferralKind ?? this.deferralKind,
     rootId: rootId.present ? rootId.value : this.rootId,
     parentElementId: parentElementId.present
         ? parentElementId.value
@@ -4004,12 +3927,6 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
       originalDueDay: data.originalDueDay.present
           ? data.originalDueDay.value
           : this.originalDueDay,
-      deferredUntil: data.deferredUntil.present
-          ? data.deferredUntil.value
-          : this.deferredUntil,
-      deferralKind: data.deferralKind.present
-          ? data.deferralKind.value
-          : this.deferralKind,
       rootId: data.rootId.present ? data.rootId.value : this.rootId,
       parentElementId: data.parentElementId.present
           ? data.parentElementId.value
@@ -4038,8 +3955,6 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
           ..write('lifecycle: $lifecycle, ')
           ..write('dueDay: $dueDay, ')
           ..write('originalDueDay: $originalDueDay, ')
-          ..write('deferredUntil: $deferredUntil, ')
-          ..write('deferralKind: $deferralKind, ')
           ..write('rootId: $rootId, ')
           ..write('parentElementId: $parentElementId, ')
           ..write('ordinal: $ordinal, ')
@@ -4060,8 +3975,6 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
     lifecycle,
     dueDay,
     originalDueDay,
-    deferredUntil,
-    deferralKind,
     rootId,
     parentElementId,
     ordinal,
@@ -4081,8 +3994,6 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
           other.lifecycle == this.lifecycle &&
           other.dueDay == this.dueDay &&
           other.originalDueDay == this.originalDueDay &&
-          other.deferredUntil == this.deferredUntil &&
-          other.deferralKind == this.deferralKind &&
           other.rootId == this.rootId &&
           other.parentElementId == this.parentElementId &&
           other.ordinal == this.ordinal &&
@@ -4100,8 +4011,6 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
   final Value<int> lifecycle;
   final Value<int> dueDay;
   final Value<int> originalDueDay;
-  final Value<int?> deferredUntil;
-  final Value<int> deferralKind;
   final Value<String?> rootId;
   final Value<String?> parentElementId;
   final Value<int?> ordinal;
@@ -4118,8 +4027,6 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     this.lifecycle = const Value.absent(),
     this.dueDay = const Value.absent(),
     this.originalDueDay = const Value.absent(),
-    this.deferredUntil = const Value.absent(),
-    this.deferralKind = const Value.absent(),
     this.rootId = const Value.absent(),
     this.parentElementId = const Value.absent(),
     this.ordinal = const Value.absent(),
@@ -4137,8 +4044,6 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     required int lifecycle,
     required int dueDay,
     required int originalDueDay,
-    this.deferredUntil = const Value.absent(),
-    this.deferralKind = const Value.absent(),
     this.rootId = const Value.absent(),
     this.parentElementId = const Value.absent(),
     this.ordinal = const Value.absent(),
@@ -4162,8 +4067,6 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     Expression<int>? lifecycle,
     Expression<int>? dueDay,
     Expression<int>? originalDueDay,
-    Expression<int>? deferredUntil,
-    Expression<int>? deferralKind,
     Expression<String>? rootId,
     Expression<String>? parentElementId,
     Expression<int>? ordinal,
@@ -4181,8 +4084,6 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
       if (lifecycle != null) 'lifecycle': lifecycle,
       if (dueDay != null) 'due_day': dueDay,
       if (originalDueDay != null) 'original_due_day': originalDueDay,
-      if (deferredUntil != null) 'deferred_until': deferredUntil,
-      if (deferralKind != null) 'deferral_kind': deferralKind,
       if (rootId != null) 'root_id': rootId,
       if (parentElementId != null) 'parent_element_id': parentElementId,
       if (ordinal != null) 'ordinal': ordinal,
@@ -4203,8 +4104,6 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     Value<int>? lifecycle,
     Value<int>? dueDay,
     Value<int>? originalDueDay,
-    Value<int?>? deferredUntil,
-    Value<int>? deferralKind,
     Value<String?>? rootId,
     Value<String?>? parentElementId,
     Value<int?>? ordinal,
@@ -4222,8 +4121,6 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
       lifecycle: lifecycle ?? this.lifecycle,
       dueDay: dueDay ?? this.dueDay,
       originalDueDay: originalDueDay ?? this.originalDueDay,
-      deferredUntil: deferredUntil ?? this.deferredUntil,
-      deferralKind: deferralKind ?? this.deferralKind,
       rootId: rootId ?? this.rootId,
       parentElementId: parentElementId ?? this.parentElementId,
       ordinal: ordinal ?? this.ordinal,
@@ -4256,12 +4153,6 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
     }
     if (originalDueDay.present) {
       map['original_due_day'] = Variable<int>(originalDueDay.value);
-    }
-    if (deferredUntil.present) {
-      map['deferred_until'] = Variable<int>(deferredUntil.value);
-    }
-    if (deferralKind.present) {
-      map['deferral_kind'] = Variable<int>(deferralKind.value);
     }
     if (rootId.present) {
       map['root_id'] = Variable<String>(rootId.value);
@@ -4302,8 +4193,6 @@ class ElementSchedulesCompanion extends UpdateCompanion<ScheduleRow> {
           ..write('lifecycle: $lifecycle, ')
           ..write('dueDay: $dueDay, ')
           ..write('originalDueDay: $originalDueDay, ')
-          ..write('deferredUntil: $deferredUntil, ')
-          ..write('deferralKind: $deferralKind, ')
           ..write('rootId: $rootId, ')
           ..write('parentElementId: $parentElementId, ')
           ..write('ordinal: $ordinal, ')
@@ -4347,90 +4236,138 @@ class $TopicStatesTable extends TopicStates
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _profileIdMeta = const VerificationMeta(
-    'profileId',
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<int> status = GeneratedColumn<int>(
+    'status',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(status).isBetweenValues(0, 3),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _repetitionCountMeta = const VerificationMeta(
+    'repetitionCount',
   );
   @override
-  late final GeneratedColumn<String> profileId = GeneratedColumn<String>(
-    'profile_id',
+  late final GeneratedColumn<int> repetitionCount = GeneratedColumn<int>(
+    'repetition_count',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(repetitionCount).isBetweenValues(0, 65535),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lapseCountMeta = const VerificationMeta(
+    'lapseCount',
+  );
+  @override
+  late final GeneratedColumn<int> lapseCount = GeneratedColumn<int>(
+    'lapse_count',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(lapseCount).isBetweenValues(0, 65535),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _storedIntervalMeta = const VerificationMeta(
+    'storedInterval',
+  );
+  @override
+  late final GeneratedColumn<int> storedInterval = GeneratedColumn<int>(
+    'stored_interval',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(storedInterval).isBetweenValues(0, 44530),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lastReviewDayMeta = const VerificationMeta(
+    'lastReviewDay',
+  );
+  @override
+  late final GeneratedColumn<int> lastReviewDay = GeneratedColumn<int>(
+    'last_review_day',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _aFactorRawMeta = const VerificationMeta(
+    'aFactorRaw',
+  );
+  @override
+  late final GeneratedColumn<String> aFactorRaw = GeneratedColumn<String>(
+    'a_factor_raw',
     aliasedName,
     false,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _stepIndexMeta = const VerificationMeta(
-    'stepIndex',
-  );
-  @override
-  late final GeneratedColumn<int> stepIndex = GeneratedColumn<int>(
-    'step_index',
-    aliasedName,
-    false,
-    check: () => ComparableExpr(stepIndex).isBiggerOrEqualValue(0),
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _intervalDaysMeta = const VerificationMeta(
-    'intervalDays',
-  );
-  @override
-  late final GeneratedColumn<double> intervalDays = GeneratedColumn<double>(
-    'interval_days',
-    aliasedName,
-    false,
-    check: () => ComparableExpr(intervalDays).isBiggerOrEqualValue(0),
-    type: DriftSqlType.double,
     requiredDuringInsert: false,
-    defaultValue: const Constant(0),
+    defaultValue: const Constant('819a99999919'),
   );
-  static const VerificationMeta _aFactorMeta = const VerificationMeta(
-    'aFactor',
+  static const VerificationMeta _lastIntervalRatioRawMeta =
+      const VerificationMeta('lastIntervalRatioRaw');
+  @override
+  late final GeneratedColumn<String> lastIntervalRatioRaw =
+      GeneratedColumn<String>(
+        'last_interval_ratio_raw',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('000000000000'),
+      );
+  static const VerificationMeta _historyBlockIdMeta = const VerificationMeta(
+    'historyBlockId',
   );
   @override
-  late final GeneratedColumn<double> aFactor = GeneratedColumn<double>(
-    'a_factor',
+  late final GeneratedColumn<int> historyBlockId = GeneratedColumn<int>(
+    'history_block_id',
     aliasedName,
     false,
-    check: () => ComparableExpr(aFactor).isBiggerOrEqualValue(0),
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _yieldEwmaMeta = const VerificationMeta(
-    'yieldEwma',
-  );
-  @override
-  late final GeneratedColumn<double> yieldEwma = GeneratedColumn<double>(
-    'yield_ewma',
-    aliasedName,
-    false,
-    check: () => ComparableExpr(yieldEwma).isBiggerOrEqualValue(0),
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _encountersMeta = const VerificationMeta(
-    'encounters',
-  );
-  @override
-  late final GeneratedColumn<int> encounters = GeneratedColumn<int>(
-    'encounters',
-    aliasedName,
-    false,
-    check: () => ComparableExpr(encounters).isBiggerOrEqualValue(0),
+    check: () => ComparableExpr(historyBlockId).isBiggerOrEqualValue(0),
     type: DriftSqlType.int,
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
-  static const VerificationMeta _postponeCountMeta = const VerificationMeta(
-    'postponeCount',
-  );
+  static const VerificationMeta _recentPostponementCountMeta =
+      const VerificationMeta('recentPostponementCount');
   @override
-  late final GeneratedColumn<int> postponeCount = GeneratedColumn<int>(
-    'postpone_count',
+  late final GeneratedColumn<int> recentPostponementCount =
+      GeneratedColumn<int>(
+        'recent_postponement_count',
+        aliasedName,
+        false,
+        check: () =>
+            ComparableExpr(recentPostponementCount).isBiggerOrEqualValue(0),
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(0),
+      );
+  static const VerificationMeta _totalPostponementCountMeta =
+      const VerificationMeta('totalPostponementCount');
+  @override
+  late final GeneratedColumn<int> totalPostponementCount = GeneratedColumn<int>(
+    'total_postponement_count',
     aliasedName,
     false,
-    check: () => ComparableExpr(postponeCount).isBiggerOrEqualValue(0),
+    check: () => ComparableExpr(totalPostponementCount).isBiggerOrEqualValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _learningControlMeta = const VerificationMeta(
+    'learningControl',
+  );
+  @override
+  late final GeneratedColumn<int> learningControl = GeneratedColumn<int>(
+    'learning_control',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(learningControl).isBetweenValues(0, 255),
     type: DriftSqlType.int,
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
@@ -4449,63 +4386,6 @@ class $TopicStatesTable extends TopicStates
         requiredDuringInsert: false,
         defaultValue: const Constant(0),
       );
-  static const VerificationMeta _lastEncounterDayMeta = const VerificationMeta(
-    'lastEncounterDay',
-  );
-  @override
-  late final GeneratedColumn<int> lastEncounterDay = GeneratedColumn<int>(
-    'last_encounter_day',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _algorithmDueDayMeta = const VerificationMeta(
-    'algorithmDueDay',
-  );
-  @override
-  late final GeneratedColumn<int> algorithmDueDay = GeneratedColumn<int>(
-    'algorithm_due_day',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _schedulerKindMeta = const VerificationMeta(
-    'schedulerKind',
-  );
-  @override
-  late final GeneratedColumn<String> schedulerKind = GeneratedColumn<String>(
-    'scheduler_kind',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('topic_afactor_v1'),
-  );
-  static const VerificationMeta _schedulerVersionMeta = const VerificationMeta(
-    'schedulerVersion',
-  );
-  @override
-  late final GeneratedColumn<String> schedulerVersion = GeneratedColumn<String>(
-    'scheduler_version',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('topic_afactor_v1/1'),
-  );
-  static const VerificationMeta _policyInputSnapshotMeta =
-      const VerificationMeta('policyInputSnapshot');
-  @override
-  late final GeneratedColumn<String> policyInputSnapshot =
-      GeneratedColumn<String>(
-        'policy_input_snapshot',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
   static const VerificationMeta _revisionMeta = const VerificationMeta(
     'revision',
   );
@@ -4523,19 +4403,18 @@ class $TopicStatesTable extends TopicStates
   List<GeneratedColumn> get $columns => [
     elementId,
     elementType,
-    profileId,
-    stepIndex,
-    intervalDays,
-    aFactor,
-    yieldEwma,
-    encounters,
-    postponeCount,
+    status,
+    repetitionCount,
+    lapseCount,
+    storedInterval,
+    lastReviewDay,
+    aFactorRaw,
+    lastIntervalRatioRaw,
+    historyBlockId,
+    recentPostponementCount,
+    totalPostponementCount,
+    learningControl,
     encountersSinceLastCard,
-    lastEncounterDay,
-    algorithmDueDay,
-    schedulerKind,
-    schedulerVersion,
-    policyInputSnapshot,
     revision,
   ];
   @override
@@ -4569,55 +4448,98 @@ class $TopicStatesTable extends TopicStates
     } else if (isInserting) {
       context.missing(_elementTypeMeta);
     }
-    if (data.containsKey('profile_id')) {
+    if (data.containsKey('status')) {
       context.handle(
-        _profileIdMeta,
-        profileId.isAcceptableOrUnknown(data['profile_id']!, _profileIdMeta),
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
       );
     } else if (isInserting) {
-      context.missing(_profileIdMeta);
+      context.missing(_statusMeta);
     }
-    if (data.containsKey('step_index')) {
+    if (data.containsKey('repetition_count')) {
       context.handle(
-        _stepIndexMeta,
-        stepIndex.isAcceptableOrUnknown(data['step_index']!, _stepIndexMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_stepIndexMeta);
-    }
-    if (data.containsKey('interval_days')) {
-      context.handle(
-        _intervalDaysMeta,
-        intervalDays.isAcceptableOrUnknown(
-          data['interval_days']!,
-          _intervalDaysMeta,
+        _repetitionCountMeta,
+        repetitionCount.isAcceptableOrUnknown(
+          data['repetition_count']!,
+          _repetitionCountMeta,
         ),
       );
     }
-    if (data.containsKey('a_factor')) {
+    if (data.containsKey('lapse_count')) {
       context.handle(
-        _aFactorMeta,
-        aFactor.isAcceptableOrUnknown(data['a_factor']!, _aFactorMeta),
+        _lapseCountMeta,
+        lapseCount.isAcceptableOrUnknown(data['lapse_count']!, _lapseCountMeta),
       );
     }
-    if (data.containsKey('yield_ewma')) {
+    if (data.containsKey('stored_interval')) {
       context.handle(
-        _yieldEwmaMeta,
-        yieldEwma.isAcceptableOrUnknown(data['yield_ewma']!, _yieldEwmaMeta),
+        _storedIntervalMeta,
+        storedInterval.isAcceptableOrUnknown(
+          data['stored_interval']!,
+          _storedIntervalMeta,
+        ),
       );
     }
-    if (data.containsKey('encounters')) {
+    if (data.containsKey('last_review_day')) {
       context.handle(
-        _encountersMeta,
-        encounters.isAcceptableOrUnknown(data['encounters']!, _encountersMeta),
+        _lastReviewDayMeta,
+        lastReviewDay.isAcceptableOrUnknown(
+          data['last_review_day']!,
+          _lastReviewDayMeta,
+        ),
       );
     }
-    if (data.containsKey('postpone_count')) {
+    if (data.containsKey('a_factor_raw')) {
       context.handle(
-        _postponeCountMeta,
-        postponeCount.isAcceptableOrUnknown(
-          data['postpone_count']!,
-          _postponeCountMeta,
+        _aFactorRawMeta,
+        aFactorRaw.isAcceptableOrUnknown(
+          data['a_factor_raw']!,
+          _aFactorRawMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_interval_ratio_raw')) {
+      context.handle(
+        _lastIntervalRatioRawMeta,
+        lastIntervalRatioRaw.isAcceptableOrUnknown(
+          data['last_interval_ratio_raw']!,
+          _lastIntervalRatioRawMeta,
+        ),
+      );
+    }
+    if (data.containsKey('history_block_id')) {
+      context.handle(
+        _historyBlockIdMeta,
+        historyBlockId.isAcceptableOrUnknown(
+          data['history_block_id']!,
+          _historyBlockIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('recent_postponement_count')) {
+      context.handle(
+        _recentPostponementCountMeta,
+        recentPostponementCount.isAcceptableOrUnknown(
+          data['recent_postponement_count']!,
+          _recentPostponementCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('total_postponement_count')) {
+      context.handle(
+        _totalPostponementCountMeta,
+        totalPostponementCount.isAcceptableOrUnknown(
+          data['total_postponement_count']!,
+          _totalPostponementCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('learning_control')) {
+      context.handle(
+        _learningControlMeta,
+        learningControl.isAcceptableOrUnknown(
+          data['learning_control']!,
+          _learningControlMeta,
         ),
       );
     }
@@ -4627,51 +4549,6 @@ class $TopicStatesTable extends TopicStates
         encountersSinceLastCard.isAcceptableOrUnknown(
           data['encounters_since_last_card']!,
           _encountersSinceLastCardMeta,
-        ),
-      );
-    }
-    if (data.containsKey('last_encounter_day')) {
-      context.handle(
-        _lastEncounterDayMeta,
-        lastEncounterDay.isAcceptableOrUnknown(
-          data['last_encounter_day']!,
-          _lastEncounterDayMeta,
-        ),
-      );
-    }
-    if (data.containsKey('algorithm_due_day')) {
-      context.handle(
-        _algorithmDueDayMeta,
-        algorithmDueDay.isAcceptableOrUnknown(
-          data['algorithm_due_day']!,
-          _algorithmDueDayMeta,
-        ),
-      );
-    }
-    if (data.containsKey('scheduler_kind')) {
-      context.handle(
-        _schedulerKindMeta,
-        schedulerKind.isAcceptableOrUnknown(
-          data['scheduler_kind']!,
-          _schedulerKindMeta,
-        ),
-      );
-    }
-    if (data.containsKey('scheduler_version')) {
-      context.handle(
-        _schedulerVersionMeta,
-        schedulerVersion.isAcceptableOrUnknown(
-          data['scheduler_version']!,
-          _schedulerVersionMeta,
-        ),
-      );
-    }
-    if (data.containsKey('policy_input_snapshot')) {
-      context.handle(
-        _policyInputSnapshotMeta,
-        policyInputSnapshot.isAcceptableOrUnknown(
-          data['policy_input_snapshot']!,
-          _policyInputSnapshotMeta,
         ),
       );
     }
@@ -4698,58 +4575,54 @@ class $TopicStatesTable extends TopicStates
         DriftSqlType.int,
         data['${effectivePrefix}element_type'],
       )!,
-      profileId: attachedDatabase.typeMapping.read(
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}status'],
+      )!,
+      repetitionCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}repetition_count'],
+      )!,
+      lapseCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lapse_count'],
+      )!,
+      storedInterval: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}stored_interval'],
+      )!,
+      lastReviewDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_review_day'],
+      ),
+      aFactorRaw: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}profile_id'],
+        data['${effectivePrefix}a_factor_raw'],
       )!,
-      stepIndex: attachedDatabase.typeMapping.read(
+      lastIntervalRatioRaw: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_interval_ratio_raw'],
+      )!,
+      historyBlockId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}step_index'],
+        data['${effectivePrefix}history_block_id'],
       )!,
-      intervalDays: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}interval_days'],
-      )!,
-      aFactor: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}a_factor'],
-      )!,
-      yieldEwma: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}yield_ewma'],
-      )!,
-      encounters: attachedDatabase.typeMapping.read(
+      recentPostponementCount: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}encounters'],
+        data['${effectivePrefix}recent_postponement_count'],
       )!,
-      postponeCount: attachedDatabase.typeMapping.read(
+      totalPostponementCount: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}postpone_count'],
+        data['${effectivePrefix}total_postponement_count'],
+      )!,
+      learningControl: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}learning_control'],
       )!,
       encountersSinceLastCard: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}encounters_since_last_card'],
       )!,
-      lastEncounterDay: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}last_encounter_day'],
-      ),
-      algorithmDueDay: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}algorithm_due_day'],
-      ),
-      schedulerKind: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}scheduler_kind'],
-      )!,
-      schedulerVersion: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}scheduler_version'],
-      )!,
-      policyInputSnapshot: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}policy_input_snapshot'],
-      ),
       revision: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}revision'],
@@ -4767,60 +4640,43 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
   final String elementId;
   final int elementType;
 
-  /// Which configured interval sequence paces this topic in profile mode.
-  final String profileId;
+  /// SM20 record status: pending, memorized, dismissed, or deleted.
+  final int status;
+  final int repetitionCount;
+  final int lapseCount;
+  final int storedInterval;
 
-  /// Position in that sequence. The final value repeats.
-  final int stepIndex;
+  /// Signed collection day. Null before the first review.
+  final int? lastReviewDay;
 
-  /// Current interval in days, carried unrounded so that an A-factor only
-  /// slightly above 1.0 still accumulates instead of being rounded away on
-  /// every encounter.
-  final double intervalDays;
+  /// Raw little-endian Delphi Real48 bytes, encoded as twelve hex characters.
+  final String aFactorRaw;
 
-  /// The A-factor last applied. Zero until the first encounter computes one.
-  final double aFactor;
-
-  /// Smoothed extraction density, in extracts per thousand words read.
-  final double yieldEwma;
-
-  /// Completed encounters so far.
-  final int encounters;
-
-  /// Deferrals so far, manual and automatic together. Diagnostic only: a high
-  /// count means the element is being avoided and probably wants a lower
-  /// priority rather than another postponement.
-  final int postponeCount;
+  /// Raw little-endian Delphi Real48 interval-ratio bytes.
+  final String lastIntervalRatioRaw;
+  final int historyBlockId;
+  final int recentPostponementCount;
+  final int totalPostponementCount;
+  final int learningControl;
 
   /// Encounters since the last card was formulated from this element.
   final int encountersSinceLastCard;
-
-  /// Day of the last completed encounter, in days since the Unix epoch.
-  final int? lastEncounterDay;
-
-  /// Canonical topic due in its local StudyDay domain. The common due column
-  /// remains only as a compatibility projection for older read models.
-  final int? algorithmDueDay;
-  final String schedulerKind;
-  final String schedulerVersion;
-  final String? policyInputSnapshot;
   final int revision;
   const TopicStateRow({
     required this.elementId,
     required this.elementType,
-    required this.profileId,
-    required this.stepIndex,
-    required this.intervalDays,
-    required this.aFactor,
-    required this.yieldEwma,
-    required this.encounters,
-    required this.postponeCount,
+    required this.status,
+    required this.repetitionCount,
+    required this.lapseCount,
+    required this.storedInterval,
+    this.lastReviewDay,
+    required this.aFactorRaw,
+    required this.lastIntervalRatioRaw,
+    required this.historyBlockId,
+    required this.recentPostponementCount,
+    required this.totalPostponementCount,
+    required this.learningControl,
     required this.encountersSinceLastCard,
-    this.lastEncounterDay,
-    this.algorithmDueDay,
-    required this.schedulerKind,
-    required this.schedulerVersion,
-    this.policyInputSnapshot,
     required this.revision,
   });
   @override
@@ -4828,25 +4684,20 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
     final map = <String, Expression>{};
     map['element_id'] = Variable<String>(elementId);
     map['element_type'] = Variable<int>(elementType);
-    map['profile_id'] = Variable<String>(profileId);
-    map['step_index'] = Variable<int>(stepIndex);
-    map['interval_days'] = Variable<double>(intervalDays);
-    map['a_factor'] = Variable<double>(aFactor);
-    map['yield_ewma'] = Variable<double>(yieldEwma);
-    map['encounters'] = Variable<int>(encounters);
-    map['postpone_count'] = Variable<int>(postponeCount);
+    map['status'] = Variable<int>(status);
+    map['repetition_count'] = Variable<int>(repetitionCount);
+    map['lapse_count'] = Variable<int>(lapseCount);
+    map['stored_interval'] = Variable<int>(storedInterval);
+    if (!nullToAbsent || lastReviewDay != null) {
+      map['last_review_day'] = Variable<int>(lastReviewDay);
+    }
+    map['a_factor_raw'] = Variable<String>(aFactorRaw);
+    map['last_interval_ratio_raw'] = Variable<String>(lastIntervalRatioRaw);
+    map['history_block_id'] = Variable<int>(historyBlockId);
+    map['recent_postponement_count'] = Variable<int>(recentPostponementCount);
+    map['total_postponement_count'] = Variable<int>(totalPostponementCount);
+    map['learning_control'] = Variable<int>(learningControl);
     map['encounters_since_last_card'] = Variable<int>(encountersSinceLastCard);
-    if (!nullToAbsent || lastEncounterDay != null) {
-      map['last_encounter_day'] = Variable<int>(lastEncounterDay);
-    }
-    if (!nullToAbsent || algorithmDueDay != null) {
-      map['algorithm_due_day'] = Variable<int>(algorithmDueDay);
-    }
-    map['scheduler_kind'] = Variable<String>(schedulerKind);
-    map['scheduler_version'] = Variable<String>(schedulerVersion);
-    if (!nullToAbsent || policyInputSnapshot != null) {
-      map['policy_input_snapshot'] = Variable<String>(policyInputSnapshot);
-    }
     map['revision'] = Variable<int>(revision);
     return map;
   }
@@ -4855,25 +4706,20 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
     return TopicStatesCompanion(
       elementId: Value(elementId),
       elementType: Value(elementType),
-      profileId: Value(profileId),
-      stepIndex: Value(stepIndex),
-      intervalDays: Value(intervalDays),
-      aFactor: Value(aFactor),
-      yieldEwma: Value(yieldEwma),
-      encounters: Value(encounters),
-      postponeCount: Value(postponeCount),
+      status: Value(status),
+      repetitionCount: Value(repetitionCount),
+      lapseCount: Value(lapseCount),
+      storedInterval: Value(storedInterval),
+      lastReviewDay: lastReviewDay == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastReviewDay),
+      aFactorRaw: Value(aFactorRaw),
+      lastIntervalRatioRaw: Value(lastIntervalRatioRaw),
+      historyBlockId: Value(historyBlockId),
+      recentPostponementCount: Value(recentPostponementCount),
+      totalPostponementCount: Value(totalPostponementCount),
+      learningControl: Value(learningControl),
       encountersSinceLastCard: Value(encountersSinceLastCard),
-      lastEncounterDay: lastEncounterDay == null && nullToAbsent
-          ? const Value.absent()
-          : Value(lastEncounterDay),
-      algorithmDueDay: algorithmDueDay == null && nullToAbsent
-          ? const Value.absent()
-          : Value(algorithmDueDay),
-      schedulerKind: Value(schedulerKind),
-      schedulerVersion: Value(schedulerVersion),
-      policyInputSnapshot: policyInputSnapshot == null && nullToAbsent
-          ? const Value.absent()
-          : Value(policyInputSnapshot),
       revision: Value(revision),
     );
   }
@@ -4886,22 +4732,25 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
     return TopicStateRow(
       elementId: serializer.fromJson<String>(json['elementId']),
       elementType: serializer.fromJson<int>(json['elementType']),
-      profileId: serializer.fromJson<String>(json['profileId']),
-      stepIndex: serializer.fromJson<int>(json['stepIndex']),
-      intervalDays: serializer.fromJson<double>(json['intervalDays']),
-      aFactor: serializer.fromJson<double>(json['aFactor']),
-      yieldEwma: serializer.fromJson<double>(json['yieldEwma']),
-      encounters: serializer.fromJson<int>(json['encounters']),
-      postponeCount: serializer.fromJson<int>(json['postponeCount']),
+      status: serializer.fromJson<int>(json['status']),
+      repetitionCount: serializer.fromJson<int>(json['repetitionCount']),
+      lapseCount: serializer.fromJson<int>(json['lapseCount']),
+      storedInterval: serializer.fromJson<int>(json['storedInterval']),
+      lastReviewDay: serializer.fromJson<int?>(json['lastReviewDay']),
+      aFactorRaw: serializer.fromJson<String>(json['aFactorRaw']),
+      lastIntervalRatioRaw: serializer.fromJson<String>(
+        json['lastIntervalRatioRaw'],
+      ),
+      historyBlockId: serializer.fromJson<int>(json['historyBlockId']),
+      recentPostponementCount: serializer.fromJson<int>(
+        json['recentPostponementCount'],
+      ),
+      totalPostponementCount: serializer.fromJson<int>(
+        json['totalPostponementCount'],
+      ),
+      learningControl: serializer.fromJson<int>(json['learningControl']),
       encountersSinceLastCard: serializer.fromJson<int>(
         json['encountersSinceLastCard'],
-      ),
-      lastEncounterDay: serializer.fromJson<int?>(json['lastEncounterDay']),
-      algorithmDueDay: serializer.fromJson<int?>(json['algorithmDueDay']),
-      schedulerKind: serializer.fromJson<String>(json['schedulerKind']),
-      schedulerVersion: serializer.fromJson<String>(json['schedulerVersion']),
-      policyInputSnapshot: serializer.fromJson<String?>(
-        json['policyInputSnapshot'],
       ),
       revision: serializer.fromJson<int>(json['revision']),
     );
@@ -4912,21 +4761,22 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
     return <String, dynamic>{
       'elementId': serializer.toJson<String>(elementId),
       'elementType': serializer.toJson<int>(elementType),
-      'profileId': serializer.toJson<String>(profileId),
-      'stepIndex': serializer.toJson<int>(stepIndex),
-      'intervalDays': serializer.toJson<double>(intervalDays),
-      'aFactor': serializer.toJson<double>(aFactor),
-      'yieldEwma': serializer.toJson<double>(yieldEwma),
-      'encounters': serializer.toJson<int>(encounters),
-      'postponeCount': serializer.toJson<int>(postponeCount),
+      'status': serializer.toJson<int>(status),
+      'repetitionCount': serializer.toJson<int>(repetitionCount),
+      'lapseCount': serializer.toJson<int>(lapseCount),
+      'storedInterval': serializer.toJson<int>(storedInterval),
+      'lastReviewDay': serializer.toJson<int?>(lastReviewDay),
+      'aFactorRaw': serializer.toJson<String>(aFactorRaw),
+      'lastIntervalRatioRaw': serializer.toJson<String>(lastIntervalRatioRaw),
+      'historyBlockId': serializer.toJson<int>(historyBlockId),
+      'recentPostponementCount': serializer.toJson<int>(
+        recentPostponementCount,
+      ),
+      'totalPostponementCount': serializer.toJson<int>(totalPostponementCount),
+      'learningControl': serializer.toJson<int>(learningControl),
       'encountersSinceLastCard': serializer.toJson<int>(
         encountersSinceLastCard,
       ),
-      'lastEncounterDay': serializer.toJson<int?>(lastEncounterDay),
-      'algorithmDueDay': serializer.toJson<int?>(algorithmDueDay),
-      'schedulerKind': serializer.toJson<String>(schedulerKind),
-      'schedulerVersion': serializer.toJson<String>(schedulerVersion),
-      'policyInputSnapshot': serializer.toJson<String?>(policyInputSnapshot),
       'revision': serializer.toJson<int>(revision),
     };
   }
@@ -4934,43 +4784,39 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
   TopicStateRow copyWith({
     String? elementId,
     int? elementType,
-    String? profileId,
-    int? stepIndex,
-    double? intervalDays,
-    double? aFactor,
-    double? yieldEwma,
-    int? encounters,
-    int? postponeCount,
+    int? status,
+    int? repetitionCount,
+    int? lapseCount,
+    int? storedInterval,
+    Value<int?> lastReviewDay = const Value.absent(),
+    String? aFactorRaw,
+    String? lastIntervalRatioRaw,
+    int? historyBlockId,
+    int? recentPostponementCount,
+    int? totalPostponementCount,
+    int? learningControl,
     int? encountersSinceLastCard,
-    Value<int?> lastEncounterDay = const Value.absent(),
-    Value<int?> algorithmDueDay = const Value.absent(),
-    String? schedulerKind,
-    String? schedulerVersion,
-    Value<String?> policyInputSnapshot = const Value.absent(),
     int? revision,
   }) => TopicStateRow(
     elementId: elementId ?? this.elementId,
     elementType: elementType ?? this.elementType,
-    profileId: profileId ?? this.profileId,
-    stepIndex: stepIndex ?? this.stepIndex,
-    intervalDays: intervalDays ?? this.intervalDays,
-    aFactor: aFactor ?? this.aFactor,
-    yieldEwma: yieldEwma ?? this.yieldEwma,
-    encounters: encounters ?? this.encounters,
-    postponeCount: postponeCount ?? this.postponeCount,
+    status: status ?? this.status,
+    repetitionCount: repetitionCount ?? this.repetitionCount,
+    lapseCount: lapseCount ?? this.lapseCount,
+    storedInterval: storedInterval ?? this.storedInterval,
+    lastReviewDay: lastReviewDay.present
+        ? lastReviewDay.value
+        : this.lastReviewDay,
+    aFactorRaw: aFactorRaw ?? this.aFactorRaw,
+    lastIntervalRatioRaw: lastIntervalRatioRaw ?? this.lastIntervalRatioRaw,
+    historyBlockId: historyBlockId ?? this.historyBlockId,
+    recentPostponementCount:
+        recentPostponementCount ?? this.recentPostponementCount,
+    totalPostponementCount:
+        totalPostponementCount ?? this.totalPostponementCount,
+    learningControl: learningControl ?? this.learningControl,
     encountersSinceLastCard:
         encountersSinceLastCard ?? this.encountersSinceLastCard,
-    lastEncounterDay: lastEncounterDay.present
-        ? lastEncounterDay.value
-        : this.lastEncounterDay,
-    algorithmDueDay: algorithmDueDay.present
-        ? algorithmDueDay.value
-        : this.algorithmDueDay,
-    schedulerKind: schedulerKind ?? this.schedulerKind,
-    schedulerVersion: schedulerVersion ?? this.schedulerVersion,
-    policyInputSnapshot: policyInputSnapshot.present
-        ? policyInputSnapshot.value
-        : this.policyInputSnapshot,
     revision: revision ?? this.revision,
   );
   TopicStateRow copyWithCompanion(TopicStatesCompanion data) {
@@ -4979,37 +4825,40 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
       elementType: data.elementType.present
           ? data.elementType.value
           : this.elementType,
-      profileId: data.profileId.present ? data.profileId.value : this.profileId,
-      stepIndex: data.stepIndex.present ? data.stepIndex.value : this.stepIndex,
-      intervalDays: data.intervalDays.present
-          ? data.intervalDays.value
-          : this.intervalDays,
-      aFactor: data.aFactor.present ? data.aFactor.value : this.aFactor,
-      yieldEwma: data.yieldEwma.present ? data.yieldEwma.value : this.yieldEwma,
-      encounters: data.encounters.present
-          ? data.encounters.value
-          : this.encounters,
-      postponeCount: data.postponeCount.present
-          ? data.postponeCount.value
-          : this.postponeCount,
+      status: data.status.present ? data.status.value : this.status,
+      repetitionCount: data.repetitionCount.present
+          ? data.repetitionCount.value
+          : this.repetitionCount,
+      lapseCount: data.lapseCount.present
+          ? data.lapseCount.value
+          : this.lapseCount,
+      storedInterval: data.storedInterval.present
+          ? data.storedInterval.value
+          : this.storedInterval,
+      lastReviewDay: data.lastReviewDay.present
+          ? data.lastReviewDay.value
+          : this.lastReviewDay,
+      aFactorRaw: data.aFactorRaw.present
+          ? data.aFactorRaw.value
+          : this.aFactorRaw,
+      lastIntervalRatioRaw: data.lastIntervalRatioRaw.present
+          ? data.lastIntervalRatioRaw.value
+          : this.lastIntervalRatioRaw,
+      historyBlockId: data.historyBlockId.present
+          ? data.historyBlockId.value
+          : this.historyBlockId,
+      recentPostponementCount: data.recentPostponementCount.present
+          ? data.recentPostponementCount.value
+          : this.recentPostponementCount,
+      totalPostponementCount: data.totalPostponementCount.present
+          ? data.totalPostponementCount.value
+          : this.totalPostponementCount,
+      learningControl: data.learningControl.present
+          ? data.learningControl.value
+          : this.learningControl,
       encountersSinceLastCard: data.encountersSinceLastCard.present
           ? data.encountersSinceLastCard.value
           : this.encountersSinceLastCard,
-      lastEncounterDay: data.lastEncounterDay.present
-          ? data.lastEncounterDay.value
-          : this.lastEncounterDay,
-      algorithmDueDay: data.algorithmDueDay.present
-          ? data.algorithmDueDay.value
-          : this.algorithmDueDay,
-      schedulerKind: data.schedulerKind.present
-          ? data.schedulerKind.value
-          : this.schedulerKind,
-      schedulerVersion: data.schedulerVersion.present
-          ? data.schedulerVersion.value
-          : this.schedulerVersion,
-      policyInputSnapshot: data.policyInputSnapshot.present
-          ? data.policyInputSnapshot.value
-          : this.policyInputSnapshot,
       revision: data.revision.present ? data.revision.value : this.revision,
     );
   }
@@ -5019,19 +4868,18 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
     return (StringBuffer('TopicStateRow(')
           ..write('elementId: $elementId, ')
           ..write('elementType: $elementType, ')
-          ..write('profileId: $profileId, ')
-          ..write('stepIndex: $stepIndex, ')
-          ..write('intervalDays: $intervalDays, ')
-          ..write('aFactor: $aFactor, ')
-          ..write('yieldEwma: $yieldEwma, ')
-          ..write('encounters: $encounters, ')
-          ..write('postponeCount: $postponeCount, ')
+          ..write('status: $status, ')
+          ..write('repetitionCount: $repetitionCount, ')
+          ..write('lapseCount: $lapseCount, ')
+          ..write('storedInterval: $storedInterval, ')
+          ..write('lastReviewDay: $lastReviewDay, ')
+          ..write('aFactorRaw: $aFactorRaw, ')
+          ..write('lastIntervalRatioRaw: $lastIntervalRatioRaw, ')
+          ..write('historyBlockId: $historyBlockId, ')
+          ..write('recentPostponementCount: $recentPostponementCount, ')
+          ..write('totalPostponementCount: $totalPostponementCount, ')
+          ..write('learningControl: $learningControl, ')
           ..write('encountersSinceLastCard: $encountersSinceLastCard, ')
-          ..write('lastEncounterDay: $lastEncounterDay, ')
-          ..write('algorithmDueDay: $algorithmDueDay, ')
-          ..write('schedulerKind: $schedulerKind, ')
-          ..write('schedulerVersion: $schedulerVersion, ')
-          ..write('policyInputSnapshot: $policyInputSnapshot, ')
           ..write('revision: $revision')
           ..write(')'))
         .toString();
@@ -5041,19 +4889,18 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
   int get hashCode => Object.hash(
     elementId,
     elementType,
-    profileId,
-    stepIndex,
-    intervalDays,
-    aFactor,
-    yieldEwma,
-    encounters,
-    postponeCount,
+    status,
+    repetitionCount,
+    lapseCount,
+    storedInterval,
+    lastReviewDay,
+    aFactorRaw,
+    lastIntervalRatioRaw,
+    historyBlockId,
+    recentPostponementCount,
+    totalPostponementCount,
+    learningControl,
     encountersSinceLastCard,
-    lastEncounterDay,
-    algorithmDueDay,
-    schedulerKind,
-    schedulerVersion,
-    policyInputSnapshot,
     revision,
   );
   @override
@@ -5062,118 +4909,113 @@ class TopicStateRow extends DataClass implements Insertable<TopicStateRow> {
       (other is TopicStateRow &&
           other.elementId == this.elementId &&
           other.elementType == this.elementType &&
-          other.profileId == this.profileId &&
-          other.stepIndex == this.stepIndex &&
-          other.intervalDays == this.intervalDays &&
-          other.aFactor == this.aFactor &&
-          other.yieldEwma == this.yieldEwma &&
-          other.encounters == this.encounters &&
-          other.postponeCount == this.postponeCount &&
+          other.status == this.status &&
+          other.repetitionCount == this.repetitionCount &&
+          other.lapseCount == this.lapseCount &&
+          other.storedInterval == this.storedInterval &&
+          other.lastReviewDay == this.lastReviewDay &&
+          other.aFactorRaw == this.aFactorRaw &&
+          other.lastIntervalRatioRaw == this.lastIntervalRatioRaw &&
+          other.historyBlockId == this.historyBlockId &&
+          other.recentPostponementCount == this.recentPostponementCount &&
+          other.totalPostponementCount == this.totalPostponementCount &&
+          other.learningControl == this.learningControl &&
           other.encountersSinceLastCard == this.encountersSinceLastCard &&
-          other.lastEncounterDay == this.lastEncounterDay &&
-          other.algorithmDueDay == this.algorithmDueDay &&
-          other.schedulerKind == this.schedulerKind &&
-          other.schedulerVersion == this.schedulerVersion &&
-          other.policyInputSnapshot == this.policyInputSnapshot &&
           other.revision == this.revision);
 }
 
 class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
   final Value<String> elementId;
   final Value<int> elementType;
-  final Value<String> profileId;
-  final Value<int> stepIndex;
-  final Value<double> intervalDays;
-  final Value<double> aFactor;
-  final Value<double> yieldEwma;
-  final Value<int> encounters;
-  final Value<int> postponeCount;
+  final Value<int> status;
+  final Value<int> repetitionCount;
+  final Value<int> lapseCount;
+  final Value<int> storedInterval;
+  final Value<int?> lastReviewDay;
+  final Value<String> aFactorRaw;
+  final Value<String> lastIntervalRatioRaw;
+  final Value<int> historyBlockId;
+  final Value<int> recentPostponementCount;
+  final Value<int> totalPostponementCount;
+  final Value<int> learningControl;
   final Value<int> encountersSinceLastCard;
-  final Value<int?> lastEncounterDay;
-  final Value<int?> algorithmDueDay;
-  final Value<String> schedulerKind;
-  final Value<String> schedulerVersion;
-  final Value<String?> policyInputSnapshot;
   final Value<int> revision;
   final Value<int> rowid;
   const TopicStatesCompanion({
     this.elementId = const Value.absent(),
     this.elementType = const Value.absent(),
-    this.profileId = const Value.absent(),
-    this.stepIndex = const Value.absent(),
-    this.intervalDays = const Value.absent(),
-    this.aFactor = const Value.absent(),
-    this.yieldEwma = const Value.absent(),
-    this.encounters = const Value.absent(),
-    this.postponeCount = const Value.absent(),
+    this.status = const Value.absent(),
+    this.repetitionCount = const Value.absent(),
+    this.lapseCount = const Value.absent(),
+    this.storedInterval = const Value.absent(),
+    this.lastReviewDay = const Value.absent(),
+    this.aFactorRaw = const Value.absent(),
+    this.lastIntervalRatioRaw = const Value.absent(),
+    this.historyBlockId = const Value.absent(),
+    this.recentPostponementCount = const Value.absent(),
+    this.totalPostponementCount = const Value.absent(),
+    this.learningControl = const Value.absent(),
     this.encountersSinceLastCard = const Value.absent(),
-    this.lastEncounterDay = const Value.absent(),
-    this.algorithmDueDay = const Value.absent(),
-    this.schedulerKind = const Value.absent(),
-    this.schedulerVersion = const Value.absent(),
-    this.policyInputSnapshot = const Value.absent(),
     this.revision = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TopicStatesCompanion.insert({
     required String elementId,
     required int elementType,
-    required String profileId,
-    required int stepIndex,
-    this.intervalDays = const Value.absent(),
-    this.aFactor = const Value.absent(),
-    this.yieldEwma = const Value.absent(),
-    this.encounters = const Value.absent(),
-    this.postponeCount = const Value.absent(),
+    required int status,
+    this.repetitionCount = const Value.absent(),
+    this.lapseCount = const Value.absent(),
+    this.storedInterval = const Value.absent(),
+    this.lastReviewDay = const Value.absent(),
+    this.aFactorRaw = const Value.absent(),
+    this.lastIntervalRatioRaw = const Value.absent(),
+    this.historyBlockId = const Value.absent(),
+    this.recentPostponementCount = const Value.absent(),
+    this.totalPostponementCount = const Value.absent(),
+    this.learningControl = const Value.absent(),
     this.encountersSinceLastCard = const Value.absent(),
-    this.lastEncounterDay = const Value.absent(),
-    this.algorithmDueDay = const Value.absent(),
-    this.schedulerKind = const Value.absent(),
-    this.schedulerVersion = const Value.absent(),
-    this.policyInputSnapshot = const Value.absent(),
     this.revision = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : elementId = Value(elementId),
        elementType = Value(elementType),
-       profileId = Value(profileId),
-       stepIndex = Value(stepIndex);
+       status = Value(status);
   static Insertable<TopicStateRow> custom({
     Expression<String>? elementId,
     Expression<int>? elementType,
-    Expression<String>? profileId,
-    Expression<int>? stepIndex,
-    Expression<double>? intervalDays,
-    Expression<double>? aFactor,
-    Expression<double>? yieldEwma,
-    Expression<int>? encounters,
-    Expression<int>? postponeCount,
+    Expression<int>? status,
+    Expression<int>? repetitionCount,
+    Expression<int>? lapseCount,
+    Expression<int>? storedInterval,
+    Expression<int>? lastReviewDay,
+    Expression<String>? aFactorRaw,
+    Expression<String>? lastIntervalRatioRaw,
+    Expression<int>? historyBlockId,
+    Expression<int>? recentPostponementCount,
+    Expression<int>? totalPostponementCount,
+    Expression<int>? learningControl,
     Expression<int>? encountersSinceLastCard,
-    Expression<int>? lastEncounterDay,
-    Expression<int>? algorithmDueDay,
-    Expression<String>? schedulerKind,
-    Expression<String>? schedulerVersion,
-    Expression<String>? policyInputSnapshot,
     Expression<int>? revision,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (elementId != null) 'element_id': elementId,
       if (elementType != null) 'element_type': elementType,
-      if (profileId != null) 'profile_id': profileId,
-      if (stepIndex != null) 'step_index': stepIndex,
-      if (intervalDays != null) 'interval_days': intervalDays,
-      if (aFactor != null) 'a_factor': aFactor,
-      if (yieldEwma != null) 'yield_ewma': yieldEwma,
-      if (encounters != null) 'encounters': encounters,
-      if (postponeCount != null) 'postpone_count': postponeCount,
+      if (status != null) 'status': status,
+      if (repetitionCount != null) 'repetition_count': repetitionCount,
+      if (lapseCount != null) 'lapse_count': lapseCount,
+      if (storedInterval != null) 'stored_interval': storedInterval,
+      if (lastReviewDay != null) 'last_review_day': lastReviewDay,
+      if (aFactorRaw != null) 'a_factor_raw': aFactorRaw,
+      if (lastIntervalRatioRaw != null)
+        'last_interval_ratio_raw': lastIntervalRatioRaw,
+      if (historyBlockId != null) 'history_block_id': historyBlockId,
+      if (recentPostponementCount != null)
+        'recent_postponement_count': recentPostponementCount,
+      if (totalPostponementCount != null)
+        'total_postponement_count': totalPostponementCount,
+      if (learningControl != null) 'learning_control': learningControl,
       if (encountersSinceLastCard != null)
         'encounters_since_last_card': encountersSinceLastCard,
-      if (lastEncounterDay != null) 'last_encounter_day': lastEncounterDay,
-      if (algorithmDueDay != null) 'algorithm_due_day': algorithmDueDay,
-      if (schedulerKind != null) 'scheduler_kind': schedulerKind,
-      if (schedulerVersion != null) 'scheduler_version': schedulerVersion,
-      if (policyInputSnapshot != null)
-        'policy_input_snapshot': policyInputSnapshot,
       if (revision != null) 'revision': revision,
       if (rowid != null) 'rowid': rowid,
     });
@@ -5182,39 +5024,39 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
   TopicStatesCompanion copyWith({
     Value<String>? elementId,
     Value<int>? elementType,
-    Value<String>? profileId,
-    Value<int>? stepIndex,
-    Value<double>? intervalDays,
-    Value<double>? aFactor,
-    Value<double>? yieldEwma,
-    Value<int>? encounters,
-    Value<int>? postponeCount,
+    Value<int>? status,
+    Value<int>? repetitionCount,
+    Value<int>? lapseCount,
+    Value<int>? storedInterval,
+    Value<int?>? lastReviewDay,
+    Value<String>? aFactorRaw,
+    Value<String>? lastIntervalRatioRaw,
+    Value<int>? historyBlockId,
+    Value<int>? recentPostponementCount,
+    Value<int>? totalPostponementCount,
+    Value<int>? learningControl,
     Value<int>? encountersSinceLastCard,
-    Value<int?>? lastEncounterDay,
-    Value<int?>? algorithmDueDay,
-    Value<String>? schedulerKind,
-    Value<String>? schedulerVersion,
-    Value<String?>? policyInputSnapshot,
     Value<int>? revision,
     Value<int>? rowid,
   }) {
     return TopicStatesCompanion(
       elementId: elementId ?? this.elementId,
       elementType: elementType ?? this.elementType,
-      profileId: profileId ?? this.profileId,
-      stepIndex: stepIndex ?? this.stepIndex,
-      intervalDays: intervalDays ?? this.intervalDays,
-      aFactor: aFactor ?? this.aFactor,
-      yieldEwma: yieldEwma ?? this.yieldEwma,
-      encounters: encounters ?? this.encounters,
-      postponeCount: postponeCount ?? this.postponeCount,
+      status: status ?? this.status,
+      repetitionCount: repetitionCount ?? this.repetitionCount,
+      lapseCount: lapseCount ?? this.lapseCount,
+      storedInterval: storedInterval ?? this.storedInterval,
+      lastReviewDay: lastReviewDay ?? this.lastReviewDay,
+      aFactorRaw: aFactorRaw ?? this.aFactorRaw,
+      lastIntervalRatioRaw: lastIntervalRatioRaw ?? this.lastIntervalRatioRaw,
+      historyBlockId: historyBlockId ?? this.historyBlockId,
+      recentPostponementCount:
+          recentPostponementCount ?? this.recentPostponementCount,
+      totalPostponementCount:
+          totalPostponementCount ?? this.totalPostponementCount,
+      learningControl: learningControl ?? this.learningControl,
       encountersSinceLastCard:
           encountersSinceLastCard ?? this.encountersSinceLastCard,
-      lastEncounterDay: lastEncounterDay ?? this.lastEncounterDay,
-      algorithmDueDay: algorithmDueDay ?? this.algorithmDueDay,
-      schedulerKind: schedulerKind ?? this.schedulerKind,
-      schedulerVersion: schedulerVersion ?? this.schedulerVersion,
-      policyInputSnapshot: policyInputSnapshot ?? this.policyInputSnapshot,
       revision: revision ?? this.revision,
       rowid: rowid ?? this.rowid,
     );
@@ -5229,47 +5071,48 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
     if (elementType.present) {
       map['element_type'] = Variable<int>(elementType.value);
     }
-    if (profileId.present) {
-      map['profile_id'] = Variable<String>(profileId.value);
+    if (status.present) {
+      map['status'] = Variable<int>(status.value);
     }
-    if (stepIndex.present) {
-      map['step_index'] = Variable<int>(stepIndex.value);
+    if (repetitionCount.present) {
+      map['repetition_count'] = Variable<int>(repetitionCount.value);
     }
-    if (intervalDays.present) {
-      map['interval_days'] = Variable<double>(intervalDays.value);
+    if (lapseCount.present) {
+      map['lapse_count'] = Variable<int>(lapseCount.value);
     }
-    if (aFactor.present) {
-      map['a_factor'] = Variable<double>(aFactor.value);
+    if (storedInterval.present) {
+      map['stored_interval'] = Variable<int>(storedInterval.value);
     }
-    if (yieldEwma.present) {
-      map['yield_ewma'] = Variable<double>(yieldEwma.value);
+    if (lastReviewDay.present) {
+      map['last_review_day'] = Variable<int>(lastReviewDay.value);
     }
-    if (encounters.present) {
-      map['encounters'] = Variable<int>(encounters.value);
+    if (aFactorRaw.present) {
+      map['a_factor_raw'] = Variable<String>(aFactorRaw.value);
     }
-    if (postponeCount.present) {
-      map['postpone_count'] = Variable<int>(postponeCount.value);
+    if (lastIntervalRatioRaw.present) {
+      map['last_interval_ratio_raw'] = Variable<String>(
+        lastIntervalRatioRaw.value,
+      );
+    }
+    if (historyBlockId.present) {
+      map['history_block_id'] = Variable<int>(historyBlockId.value);
+    }
+    if (recentPostponementCount.present) {
+      map['recent_postponement_count'] = Variable<int>(
+        recentPostponementCount.value,
+      );
+    }
+    if (totalPostponementCount.present) {
+      map['total_postponement_count'] = Variable<int>(
+        totalPostponementCount.value,
+      );
+    }
+    if (learningControl.present) {
+      map['learning_control'] = Variable<int>(learningControl.value);
     }
     if (encountersSinceLastCard.present) {
       map['encounters_since_last_card'] = Variable<int>(
         encountersSinceLastCard.value,
-      );
-    }
-    if (lastEncounterDay.present) {
-      map['last_encounter_day'] = Variable<int>(lastEncounterDay.value);
-    }
-    if (algorithmDueDay.present) {
-      map['algorithm_due_day'] = Variable<int>(algorithmDueDay.value);
-    }
-    if (schedulerKind.present) {
-      map['scheduler_kind'] = Variable<String>(schedulerKind.value);
-    }
-    if (schedulerVersion.present) {
-      map['scheduler_version'] = Variable<String>(schedulerVersion.value);
-    }
-    if (policyInputSnapshot.present) {
-      map['policy_input_snapshot'] = Variable<String>(
-        policyInputSnapshot.value,
       );
     }
     if (revision.present) {
@@ -5286,19 +5129,18 @@ class TopicStatesCompanion extends UpdateCompanion<TopicStateRow> {
     return (StringBuffer('TopicStatesCompanion(')
           ..write('elementId: $elementId, ')
           ..write('elementType: $elementType, ')
-          ..write('profileId: $profileId, ')
-          ..write('stepIndex: $stepIndex, ')
-          ..write('intervalDays: $intervalDays, ')
-          ..write('aFactor: $aFactor, ')
-          ..write('yieldEwma: $yieldEwma, ')
-          ..write('encounters: $encounters, ')
-          ..write('postponeCount: $postponeCount, ')
+          ..write('status: $status, ')
+          ..write('repetitionCount: $repetitionCount, ')
+          ..write('lapseCount: $lapseCount, ')
+          ..write('storedInterval: $storedInterval, ')
+          ..write('lastReviewDay: $lastReviewDay, ')
+          ..write('aFactorRaw: $aFactorRaw, ')
+          ..write('lastIntervalRatioRaw: $lastIntervalRatioRaw, ')
+          ..write('historyBlockId: $historyBlockId, ')
+          ..write('recentPostponementCount: $recentPostponementCount, ')
+          ..write('totalPostponementCount: $totalPostponementCount, ')
+          ..write('learningControl: $learningControl, ')
           ..write('encountersSinceLastCard: $encountersSinceLastCard, ')
-          ..write('lastEncounterDay: $lastEncounterDay, ')
-          ..write('algorithmDueDay: $algorithmDueDay, ')
-          ..write('schedulerKind: $schedulerKind, ')
-          ..write('schedulerVersion: $schedulerVersion, ')
-          ..write('policyInputSnapshot: $policyInputSnapshot, ')
           ..write('revision: $revision, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -5421,17 +5263,6 @@ class $CardMemoriesTable extends CardMemories
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _deferredUntilUtcMeta = const VerificationMeta(
-    'deferredUntilUtc',
-  );
-  @override
-  late final GeneratedColumn<int> deferredUntilUtc = GeneratedColumn<int>(
-    'deferred_until_utc',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
   static const VerificationMeta _postponeCountMeta = const VerificationMeta(
     'postponeCount',
   );
@@ -5527,7 +5358,6 @@ class $CardMemoriesTable extends CardMemories
     lastReviewUtc,
     dueAtUtc,
     originalDueAtUtc,
-    deferredUntilUtc,
     postponeCount,
     schedulerVersion,
     parametersVersion,
@@ -5621,15 +5451,6 @@ class $CardMemoriesTable extends CardMemories
       );
     } else if (isInserting) {
       context.missing(_originalDueAtUtcMeta);
-    }
-    if (data.containsKey('deferred_until_utc')) {
-      context.handle(
-        _deferredUntilUtcMeta,
-        deferredUntilUtc.isAcceptableOrUnknown(
-          data['deferred_until_utc']!,
-          _deferredUntilUtcMeta,
-        ),
-      );
     }
     if (data.containsKey('postpone_count')) {
       context.handle(
@@ -5744,10 +5565,6 @@ class $CardMemoriesTable extends CardMemories
         DriftSqlType.int,
         data['${effectivePrefix}original_due_at_utc'],
       )!,
-      deferredUntilUtc: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}deferred_until_utc'],
-      ),
       postponeCount: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}postpone_count'],
@@ -5804,7 +5621,6 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
   final int? lastReviewUtc;
   final int dueAtUtc;
   final int originalDueAtUtc;
-  final int? deferredUntilUtc;
 
   /// Deferrals so far. Never a review, so it lives apart from [reps].
   final int postponeCount;
@@ -5831,7 +5647,6 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     this.lastReviewUtc,
     required this.dueAtUtc,
     required this.originalDueAtUtc,
-    this.deferredUntilUtc,
     required this.postponeCount,
     required this.schedulerVersion,
     required this.parametersVersion,
@@ -5861,9 +5676,6 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     }
     map['due_at_utc'] = Variable<int>(dueAtUtc);
     map['original_due_at_utc'] = Variable<int>(originalDueAtUtc);
-    if (!nullToAbsent || deferredUntilUtc != null) {
-      map['deferred_until_utc'] = Variable<int>(deferredUntilUtc);
-    }
     map['postpone_count'] = Variable<int>(postponeCount);
     map['scheduler_version'] = Variable<String>(schedulerVersion);
     map['parameters_version'] = Variable<String>(parametersVersion);
@@ -5896,9 +5708,6 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
           : Value(lastReviewUtc),
       dueAtUtc: Value(dueAtUtc),
       originalDueAtUtc: Value(originalDueAtUtc),
-      deferredUntilUtc: deferredUntilUtc == null && nullToAbsent
-          ? const Value.absent()
-          : Value(deferredUntilUtc),
       postponeCount: Value(postponeCount),
       schedulerVersion: Value(schedulerVersion),
       parametersVersion: Value(parametersVersion),
@@ -5929,7 +5738,6 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
       lastReviewUtc: serializer.fromJson<int?>(json['lastReviewUtc']),
       dueAtUtc: serializer.fromJson<int>(json['dueAtUtc']),
       originalDueAtUtc: serializer.fromJson<int>(json['originalDueAtUtc']),
-      deferredUntilUtc: serializer.fromJson<int?>(json['deferredUntilUtc']),
       postponeCount: serializer.fromJson<int>(json['postponeCount']),
       schedulerVersion: serializer.fromJson<String>(json['schedulerVersion']),
       parametersVersion: serializer.fromJson<String>(json['parametersVersion']),
@@ -5953,7 +5761,6 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
       'lastReviewUtc': serializer.toJson<int?>(lastReviewUtc),
       'dueAtUtc': serializer.toJson<int>(dueAtUtc),
       'originalDueAtUtc': serializer.toJson<int>(originalDueAtUtc),
-      'deferredUntilUtc': serializer.toJson<int?>(deferredUntilUtc),
       'postponeCount': serializer.toJson<int>(postponeCount),
       'schedulerVersion': serializer.toJson<String>(schedulerVersion),
       'parametersVersion': serializer.toJson<String>(parametersVersion),
@@ -5975,7 +5782,6 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     Value<int?> lastReviewUtc = const Value.absent(),
     int? dueAtUtc,
     int? originalDueAtUtc,
-    Value<int?> deferredUntilUtc = const Value.absent(),
     int? postponeCount,
     String? schedulerVersion,
     String? parametersVersion,
@@ -5996,9 +5802,6 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
         : this.lastReviewUtc,
     dueAtUtc: dueAtUtc ?? this.dueAtUtc,
     originalDueAtUtc: originalDueAtUtc ?? this.originalDueAtUtc,
-    deferredUntilUtc: deferredUntilUtc.present
-        ? deferredUntilUtc.value
-        : this.deferredUntilUtc,
     postponeCount: postponeCount ?? this.postponeCount,
     schedulerVersion: schedulerVersion ?? this.schedulerVersion,
     parametersVersion: parametersVersion ?? this.parametersVersion,
@@ -6029,9 +5832,6 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
       originalDueAtUtc: data.originalDueAtUtc.present
           ? data.originalDueAtUtc.value
           : this.originalDueAtUtc,
-      deferredUntilUtc: data.deferredUntilUtc.present
-          ? data.deferredUntilUtc.value
-          : this.deferredUntilUtc,
       postponeCount: data.postponeCount.present
           ? data.postponeCount.value
           : this.postponeCount,
@@ -6067,7 +5867,6 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
           ..write('lastReviewUtc: $lastReviewUtc, ')
           ..write('dueAtUtc: $dueAtUtc, ')
           ..write('originalDueAtUtc: $originalDueAtUtc, ')
-          ..write('deferredUntilUtc: $deferredUntilUtc, ')
           ..write('postponeCount: $postponeCount, ')
           ..write('schedulerVersion: $schedulerVersion, ')
           ..write('parametersVersion: $parametersVersion, ')
@@ -6091,7 +5890,6 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
     lastReviewUtc,
     dueAtUtc,
     originalDueAtUtc,
-    deferredUntilUtc,
     postponeCount,
     schedulerVersion,
     parametersVersion,
@@ -6114,7 +5912,6 @@ class CardMemoryRow extends DataClass implements Insertable<CardMemoryRow> {
           other.lastReviewUtc == this.lastReviewUtc &&
           other.dueAtUtc == this.dueAtUtc &&
           other.originalDueAtUtc == this.originalDueAtUtc &&
-          other.deferredUntilUtc == this.deferredUntilUtc &&
           other.postponeCount == this.postponeCount &&
           other.schedulerVersion == this.schedulerVersion &&
           other.parametersVersion == this.parametersVersion &&
@@ -6135,7 +5932,6 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
   final Value<int?> lastReviewUtc;
   final Value<int> dueAtUtc;
   final Value<int> originalDueAtUtc;
-  final Value<int?> deferredUntilUtc;
   final Value<int> postponeCount;
   final Value<String> schedulerVersion;
   final Value<String> parametersVersion;
@@ -6155,7 +5951,6 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     this.lastReviewUtc = const Value.absent(),
     this.dueAtUtc = const Value.absent(),
     this.originalDueAtUtc = const Value.absent(),
-    this.deferredUntilUtc = const Value.absent(),
     this.postponeCount = const Value.absent(),
     this.schedulerVersion = const Value.absent(),
     this.parametersVersion = const Value.absent(),
@@ -6176,7 +5971,6 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     this.lastReviewUtc = const Value.absent(),
     required int dueAtUtc,
     required int originalDueAtUtc,
-    this.deferredUntilUtc = const Value.absent(),
     this.postponeCount = const Value.absent(),
     required String schedulerVersion,
     required String parametersVersion,
@@ -6202,7 +5996,6 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     Expression<int>? lastReviewUtc,
     Expression<int>? dueAtUtc,
     Expression<int>? originalDueAtUtc,
-    Expression<int>? deferredUntilUtc,
     Expression<int>? postponeCount,
     Expression<String>? schedulerVersion,
     Expression<String>? parametersVersion,
@@ -6223,7 +6016,6 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
       if (lastReviewUtc != null) 'last_review_utc': lastReviewUtc,
       if (dueAtUtc != null) 'due_at_utc': dueAtUtc,
       if (originalDueAtUtc != null) 'original_due_at_utc': originalDueAtUtc,
-      if (deferredUntilUtc != null) 'deferred_until_utc': deferredUntilUtc,
       if (postponeCount != null) 'postpone_count': postponeCount,
       if (schedulerVersion != null) 'scheduler_version': schedulerVersion,
       if (parametersVersion != null) 'parameters_version': parametersVersion,
@@ -6246,7 +6038,6 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     Value<int?>? lastReviewUtc,
     Value<int>? dueAtUtc,
     Value<int>? originalDueAtUtc,
-    Value<int?>? deferredUntilUtc,
     Value<int>? postponeCount,
     Value<String>? schedulerVersion,
     Value<String>? parametersVersion,
@@ -6267,7 +6058,6 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
       lastReviewUtc: lastReviewUtc ?? this.lastReviewUtc,
       dueAtUtc: dueAtUtc ?? this.dueAtUtc,
       originalDueAtUtc: originalDueAtUtc ?? this.originalDueAtUtc,
-      deferredUntilUtc: deferredUntilUtc ?? this.deferredUntilUtc,
       postponeCount: postponeCount ?? this.postponeCount,
       schedulerVersion: schedulerVersion ?? this.schedulerVersion,
       parametersVersion: parametersVersion ?? this.parametersVersion,
@@ -6312,9 +6102,6 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
     if (originalDueAtUtc.present) {
       map['original_due_at_utc'] = Variable<int>(originalDueAtUtc.value);
     }
-    if (deferredUntilUtc.present) {
-      map['deferred_until_utc'] = Variable<int>(deferredUntilUtc.value);
-    }
     if (postponeCount.present) {
       map['postpone_count'] = Variable<int>(postponeCount.value);
     }
@@ -6355,7 +6142,6 @@ class CardMemoriesCompanion extends UpdateCompanion<CardMemoryRow> {
           ..write('lastReviewUtc: $lastReviewUtc, ')
           ..write('dueAtUtc: $dueAtUtc, ')
           ..write('originalDueAtUtc: $originalDueAtUtc, ')
-          ..write('deferredUntilUtc: $deferredUntilUtc, ')
           ..write('postponeCount: $postponeCount, ')
           ..write('schedulerVersion: $schedulerVersion, ')
           ..write('parametersVersion: $parametersVersion, ')
@@ -9163,1084 +8949,6 @@ class RevlogEntriesCompanion extends UpdateCompanion<RevlogRow> {
   }
 }
 
-class $ScheduleAdjustmentsTable extends ScheduleAdjustments
-    with TableInfo<$ScheduleAdjustmentsTable, ScheduleAdjustmentRow> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $ScheduleAdjustmentsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _elementIdMeta = const VerificationMeta(
-    'elementId',
-  );
-  @override
-  late final GeneratedColumn<String> elementId = GeneratedColumn<String>(
-    'element_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _elementTypeMeta = const VerificationMeta(
-    'elementType',
-  );
-  @override
-  late final GeneratedColumn<int> elementType = GeneratedColumn<int>(
-    'element_type',
-    aliasedName,
-    false,
-    check: () => ComparableExpr(elementType).isBetweenValues(0, 2),
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _modeMeta = const VerificationMeta('mode');
-  @override
-  late final GeneratedColumn<int> mode = GeneratedColumn<int>(
-    'mode',
-    aliasedName,
-    false,
-    check: () => ComparableExpr(mode).isBetweenValues(0, 1),
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
-  @override
-  late final GeneratedColumn<int> reason = GeneratedColumn<int>(
-    'reason',
-    aliasedName,
-    false,
-    check: () => ComparableExpr(reason).isBetweenValues(0, 4),
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _notBeforeAtUtcMeta = const VerificationMeta(
-    'notBeforeAtUtc',
-  );
-  @override
-  late final GeneratedColumn<int> notBeforeAtUtc = GeneratedColumn<int>(
-    'not_before_at_utc',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _notBeforeStudyDayMeta = const VerificationMeta(
-    'notBeforeStudyDay',
-  );
-  @override
-  late final GeneratedColumn<int> notBeforeStudyDay = GeneratedColumn<int>(
-    'not_before_study_day',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _scheduledForAtUtcMeta = const VerificationMeta(
-    'scheduledForAtUtc',
-  );
-  @override
-  late final GeneratedColumn<int> scheduledForAtUtc = GeneratedColumn<int>(
-    'scheduled_for_at_utc',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _scheduledForStudyDayMeta =
-      const VerificationMeta('scheduledForStudyDay');
-  @override
-  late final GeneratedColumn<int> scheduledForStudyDay = GeneratedColumn<int>(
-    'scheduled_for_study_day',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _zoneIdMeta = const VerificationMeta('zoneId');
-  @override
-  late final GeneratedColumn<String> zoneId = GeneratedColumn<String>(
-    'zone_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _operationIdMeta = const VerificationMeta(
-    'operationId',
-  );
-  @override
-  late final GeneratedColumn<String> operationId = GeneratedColumn<String>(
-    'operation_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _batchIdMeta = const VerificationMeta(
-    'batchId',
-  );
-  @override
-  late final GeneratedColumn<String> batchId = GeneratedColumn<String>(
-    'batch_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _policyVersionMeta = const VerificationMeta(
-    'policyVersion',
-  );
-  @override
-  late final GeneratedColumn<String> policyVersion = GeneratedColumn<String>(
-    'policy_version',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
-    'createdAtUtc',
-  );
-  @override
-  late final GeneratedColumn<int> createdAtUtc = GeneratedColumn<int>(
-    'created_at_utc',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _createdStudyDayMeta = const VerificationMeta(
-    'createdStudyDay',
-  );
-  @override
-  late final GeneratedColumn<int> createdStudyDay = GeneratedColumn<int>(
-    'created_study_day',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _createdZoneIdMeta = const VerificationMeta(
-    'createdZoneId',
-  );
-  @override
-  late final GeneratedColumn<String> createdZoneId = GeneratedColumn<String>(
-    'created_zone_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _clearedAtUtcMeta = const VerificationMeta(
-    'clearedAtUtc',
-  );
-  @override
-  late final GeneratedColumn<int> clearedAtUtc = GeneratedColumn<int>(
-    'cleared_at_utc',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _clearedByOperationIdMeta =
-      const VerificationMeta('clearedByOperationId');
-  @override
-  late final GeneratedColumn<String> clearedByOperationId =
-      GeneratedColumn<String>(
-        'cleared_by_operation_id',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    elementId,
-    elementType,
-    mode,
-    reason,
-    notBeforeAtUtc,
-    notBeforeStudyDay,
-    scheduledForAtUtc,
-    scheduledForStudyDay,
-    zoneId,
-    operationId,
-    batchId,
-    policyVersion,
-    createdAtUtc,
-    createdStudyDay,
-    createdZoneId,
-    clearedAtUtc,
-    clearedByOperationId,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'schedule_adjustments';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<ScheduleAdjustmentRow> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('element_id')) {
-      context.handle(
-        _elementIdMeta,
-        elementId.isAcceptableOrUnknown(data['element_id']!, _elementIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_elementIdMeta);
-    }
-    if (data.containsKey('element_type')) {
-      context.handle(
-        _elementTypeMeta,
-        elementType.isAcceptableOrUnknown(
-          data['element_type']!,
-          _elementTypeMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_elementTypeMeta);
-    }
-    if (data.containsKey('mode')) {
-      context.handle(
-        _modeMeta,
-        mode.isAcceptableOrUnknown(data['mode']!, _modeMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_modeMeta);
-    }
-    if (data.containsKey('reason')) {
-      context.handle(
-        _reasonMeta,
-        reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_reasonMeta);
-    }
-    if (data.containsKey('not_before_at_utc')) {
-      context.handle(
-        _notBeforeAtUtcMeta,
-        notBeforeAtUtc.isAcceptableOrUnknown(
-          data['not_before_at_utc']!,
-          _notBeforeAtUtcMeta,
-        ),
-      );
-    }
-    if (data.containsKey('not_before_study_day')) {
-      context.handle(
-        _notBeforeStudyDayMeta,
-        notBeforeStudyDay.isAcceptableOrUnknown(
-          data['not_before_study_day']!,
-          _notBeforeStudyDayMeta,
-        ),
-      );
-    }
-    if (data.containsKey('scheduled_for_at_utc')) {
-      context.handle(
-        _scheduledForAtUtcMeta,
-        scheduledForAtUtc.isAcceptableOrUnknown(
-          data['scheduled_for_at_utc']!,
-          _scheduledForAtUtcMeta,
-        ),
-      );
-    }
-    if (data.containsKey('scheduled_for_study_day')) {
-      context.handle(
-        _scheduledForStudyDayMeta,
-        scheduledForStudyDay.isAcceptableOrUnknown(
-          data['scheduled_for_study_day']!,
-          _scheduledForStudyDayMeta,
-        ),
-      );
-    }
-    if (data.containsKey('zone_id')) {
-      context.handle(
-        _zoneIdMeta,
-        zoneId.isAcceptableOrUnknown(data['zone_id']!, _zoneIdMeta),
-      );
-    }
-    if (data.containsKey('operation_id')) {
-      context.handle(
-        _operationIdMeta,
-        operationId.isAcceptableOrUnknown(
-          data['operation_id']!,
-          _operationIdMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_operationIdMeta);
-    }
-    if (data.containsKey('batch_id')) {
-      context.handle(
-        _batchIdMeta,
-        batchId.isAcceptableOrUnknown(data['batch_id']!, _batchIdMeta),
-      );
-    }
-    if (data.containsKey('policy_version')) {
-      context.handle(
-        _policyVersionMeta,
-        policyVersion.isAcceptableOrUnknown(
-          data['policy_version']!,
-          _policyVersionMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_policyVersionMeta);
-    }
-    if (data.containsKey('created_at_utc')) {
-      context.handle(
-        _createdAtUtcMeta,
-        createdAtUtc.isAcceptableOrUnknown(
-          data['created_at_utc']!,
-          _createdAtUtcMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_createdAtUtcMeta);
-    }
-    if (data.containsKey('created_study_day')) {
-      context.handle(
-        _createdStudyDayMeta,
-        createdStudyDay.isAcceptableOrUnknown(
-          data['created_study_day']!,
-          _createdStudyDayMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_createdStudyDayMeta);
-    }
-    if (data.containsKey('created_zone_id')) {
-      context.handle(
-        _createdZoneIdMeta,
-        createdZoneId.isAcceptableOrUnknown(
-          data['created_zone_id']!,
-          _createdZoneIdMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_createdZoneIdMeta);
-    }
-    if (data.containsKey('cleared_at_utc')) {
-      context.handle(
-        _clearedAtUtcMeta,
-        clearedAtUtc.isAcceptableOrUnknown(
-          data['cleared_at_utc']!,
-          _clearedAtUtcMeta,
-        ),
-      );
-    }
-    if (data.containsKey('cleared_by_operation_id')) {
-      context.handle(
-        _clearedByOperationIdMeta,
-        clearedByOperationId.isAcceptableOrUnknown(
-          data['cleared_by_operation_id']!,
-          _clearedByOperationIdMeta,
-        ),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  ScheduleAdjustmentRow map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return ScheduleAdjustmentRow(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      elementId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}element_id'],
-      )!,
-      elementType: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}element_type'],
-      )!,
-      mode: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}mode'],
-      )!,
-      reason: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}reason'],
-      )!,
-      notBeforeAtUtc: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}not_before_at_utc'],
-      ),
-      notBeforeStudyDay: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}not_before_study_day'],
-      ),
-      scheduledForAtUtc: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}scheduled_for_at_utc'],
-      ),
-      scheduledForStudyDay: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}scheduled_for_study_day'],
-      ),
-      zoneId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}zone_id'],
-      ),
-      operationId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}operation_id'],
-      )!,
-      batchId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}batch_id'],
-      ),
-      policyVersion: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}policy_version'],
-      )!,
-      createdAtUtc: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}created_at_utc'],
-      )!,
-      createdStudyDay: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}created_study_day'],
-      )!,
-      createdZoneId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}created_zone_id'],
-      )!,
-      clearedAtUtc: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}cleared_at_utc'],
-      ),
-      clearedByOperationId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}cleared_by_operation_id'],
-      ),
-    );
-  }
-
-  @override
-  $ScheduleAdjustmentsTable createAlias(String alias) {
-    return $ScheduleAdjustmentsTable(attachedDatabase, alias);
-  }
-}
-
-class ScheduleAdjustmentRow extends DataClass
-    implements Insertable<ScheduleAdjustmentRow> {
-  final String id;
-  final String elementId;
-  final int elementType;
-  final int mode;
-  final int reason;
-  final int? notBeforeAtUtc;
-  final int? notBeforeStudyDay;
-  final int? scheduledForAtUtc;
-  final int? scheduledForStudyDay;
-  final String? zoneId;
-  final String operationId;
-  final String? batchId;
-  final String policyVersion;
-  final int createdAtUtc;
-  final int createdStudyDay;
-  final String createdZoneId;
-  final int? clearedAtUtc;
-  final String? clearedByOperationId;
-  const ScheduleAdjustmentRow({
-    required this.id,
-    required this.elementId,
-    required this.elementType,
-    required this.mode,
-    required this.reason,
-    this.notBeforeAtUtc,
-    this.notBeforeStudyDay,
-    this.scheduledForAtUtc,
-    this.scheduledForStudyDay,
-    this.zoneId,
-    required this.operationId,
-    this.batchId,
-    required this.policyVersion,
-    required this.createdAtUtc,
-    required this.createdStudyDay,
-    required this.createdZoneId,
-    this.clearedAtUtc,
-    this.clearedByOperationId,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['element_id'] = Variable<String>(elementId);
-    map['element_type'] = Variable<int>(elementType);
-    map['mode'] = Variable<int>(mode);
-    map['reason'] = Variable<int>(reason);
-    if (!nullToAbsent || notBeforeAtUtc != null) {
-      map['not_before_at_utc'] = Variable<int>(notBeforeAtUtc);
-    }
-    if (!nullToAbsent || notBeforeStudyDay != null) {
-      map['not_before_study_day'] = Variable<int>(notBeforeStudyDay);
-    }
-    if (!nullToAbsent || scheduledForAtUtc != null) {
-      map['scheduled_for_at_utc'] = Variable<int>(scheduledForAtUtc);
-    }
-    if (!nullToAbsent || scheduledForStudyDay != null) {
-      map['scheduled_for_study_day'] = Variable<int>(scheduledForStudyDay);
-    }
-    if (!nullToAbsent || zoneId != null) {
-      map['zone_id'] = Variable<String>(zoneId);
-    }
-    map['operation_id'] = Variable<String>(operationId);
-    if (!nullToAbsent || batchId != null) {
-      map['batch_id'] = Variable<String>(batchId);
-    }
-    map['policy_version'] = Variable<String>(policyVersion);
-    map['created_at_utc'] = Variable<int>(createdAtUtc);
-    map['created_study_day'] = Variable<int>(createdStudyDay);
-    map['created_zone_id'] = Variable<String>(createdZoneId);
-    if (!nullToAbsent || clearedAtUtc != null) {
-      map['cleared_at_utc'] = Variable<int>(clearedAtUtc);
-    }
-    if (!nullToAbsent || clearedByOperationId != null) {
-      map['cleared_by_operation_id'] = Variable<String>(clearedByOperationId);
-    }
-    return map;
-  }
-
-  ScheduleAdjustmentsCompanion toCompanion(bool nullToAbsent) {
-    return ScheduleAdjustmentsCompanion(
-      id: Value(id),
-      elementId: Value(elementId),
-      elementType: Value(elementType),
-      mode: Value(mode),
-      reason: Value(reason),
-      notBeforeAtUtc: notBeforeAtUtc == null && nullToAbsent
-          ? const Value.absent()
-          : Value(notBeforeAtUtc),
-      notBeforeStudyDay: notBeforeStudyDay == null && nullToAbsent
-          ? const Value.absent()
-          : Value(notBeforeStudyDay),
-      scheduledForAtUtc: scheduledForAtUtc == null && nullToAbsent
-          ? const Value.absent()
-          : Value(scheduledForAtUtc),
-      scheduledForStudyDay: scheduledForStudyDay == null && nullToAbsent
-          ? const Value.absent()
-          : Value(scheduledForStudyDay),
-      zoneId: zoneId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(zoneId),
-      operationId: Value(operationId),
-      batchId: batchId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(batchId),
-      policyVersion: Value(policyVersion),
-      createdAtUtc: Value(createdAtUtc),
-      createdStudyDay: Value(createdStudyDay),
-      createdZoneId: Value(createdZoneId),
-      clearedAtUtc: clearedAtUtc == null && nullToAbsent
-          ? const Value.absent()
-          : Value(clearedAtUtc),
-      clearedByOperationId: clearedByOperationId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(clearedByOperationId),
-    );
-  }
-
-  factory ScheduleAdjustmentRow.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return ScheduleAdjustmentRow(
-      id: serializer.fromJson<String>(json['id']),
-      elementId: serializer.fromJson<String>(json['elementId']),
-      elementType: serializer.fromJson<int>(json['elementType']),
-      mode: serializer.fromJson<int>(json['mode']),
-      reason: serializer.fromJson<int>(json['reason']),
-      notBeforeAtUtc: serializer.fromJson<int?>(json['notBeforeAtUtc']),
-      notBeforeStudyDay: serializer.fromJson<int?>(json['notBeforeStudyDay']),
-      scheduledForAtUtc: serializer.fromJson<int?>(json['scheduledForAtUtc']),
-      scheduledForStudyDay: serializer.fromJson<int?>(
-        json['scheduledForStudyDay'],
-      ),
-      zoneId: serializer.fromJson<String?>(json['zoneId']),
-      operationId: serializer.fromJson<String>(json['operationId']),
-      batchId: serializer.fromJson<String?>(json['batchId']),
-      policyVersion: serializer.fromJson<String>(json['policyVersion']),
-      createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
-      createdStudyDay: serializer.fromJson<int>(json['createdStudyDay']),
-      createdZoneId: serializer.fromJson<String>(json['createdZoneId']),
-      clearedAtUtc: serializer.fromJson<int?>(json['clearedAtUtc']),
-      clearedByOperationId: serializer.fromJson<String?>(
-        json['clearedByOperationId'],
-      ),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'elementId': serializer.toJson<String>(elementId),
-      'elementType': serializer.toJson<int>(elementType),
-      'mode': serializer.toJson<int>(mode),
-      'reason': serializer.toJson<int>(reason),
-      'notBeforeAtUtc': serializer.toJson<int?>(notBeforeAtUtc),
-      'notBeforeStudyDay': serializer.toJson<int?>(notBeforeStudyDay),
-      'scheduledForAtUtc': serializer.toJson<int?>(scheduledForAtUtc),
-      'scheduledForStudyDay': serializer.toJson<int?>(scheduledForStudyDay),
-      'zoneId': serializer.toJson<String?>(zoneId),
-      'operationId': serializer.toJson<String>(operationId),
-      'batchId': serializer.toJson<String?>(batchId),
-      'policyVersion': serializer.toJson<String>(policyVersion),
-      'createdAtUtc': serializer.toJson<int>(createdAtUtc),
-      'createdStudyDay': serializer.toJson<int>(createdStudyDay),
-      'createdZoneId': serializer.toJson<String>(createdZoneId),
-      'clearedAtUtc': serializer.toJson<int?>(clearedAtUtc),
-      'clearedByOperationId': serializer.toJson<String?>(clearedByOperationId),
-    };
-  }
-
-  ScheduleAdjustmentRow copyWith({
-    String? id,
-    String? elementId,
-    int? elementType,
-    int? mode,
-    int? reason,
-    Value<int?> notBeforeAtUtc = const Value.absent(),
-    Value<int?> notBeforeStudyDay = const Value.absent(),
-    Value<int?> scheduledForAtUtc = const Value.absent(),
-    Value<int?> scheduledForStudyDay = const Value.absent(),
-    Value<String?> zoneId = const Value.absent(),
-    String? operationId,
-    Value<String?> batchId = const Value.absent(),
-    String? policyVersion,
-    int? createdAtUtc,
-    int? createdStudyDay,
-    String? createdZoneId,
-    Value<int?> clearedAtUtc = const Value.absent(),
-    Value<String?> clearedByOperationId = const Value.absent(),
-  }) => ScheduleAdjustmentRow(
-    id: id ?? this.id,
-    elementId: elementId ?? this.elementId,
-    elementType: elementType ?? this.elementType,
-    mode: mode ?? this.mode,
-    reason: reason ?? this.reason,
-    notBeforeAtUtc: notBeforeAtUtc.present
-        ? notBeforeAtUtc.value
-        : this.notBeforeAtUtc,
-    notBeforeStudyDay: notBeforeStudyDay.present
-        ? notBeforeStudyDay.value
-        : this.notBeforeStudyDay,
-    scheduledForAtUtc: scheduledForAtUtc.present
-        ? scheduledForAtUtc.value
-        : this.scheduledForAtUtc,
-    scheduledForStudyDay: scheduledForStudyDay.present
-        ? scheduledForStudyDay.value
-        : this.scheduledForStudyDay,
-    zoneId: zoneId.present ? zoneId.value : this.zoneId,
-    operationId: operationId ?? this.operationId,
-    batchId: batchId.present ? batchId.value : this.batchId,
-    policyVersion: policyVersion ?? this.policyVersion,
-    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
-    createdStudyDay: createdStudyDay ?? this.createdStudyDay,
-    createdZoneId: createdZoneId ?? this.createdZoneId,
-    clearedAtUtc: clearedAtUtc.present ? clearedAtUtc.value : this.clearedAtUtc,
-    clearedByOperationId: clearedByOperationId.present
-        ? clearedByOperationId.value
-        : this.clearedByOperationId,
-  );
-  ScheduleAdjustmentRow copyWithCompanion(ScheduleAdjustmentsCompanion data) {
-    return ScheduleAdjustmentRow(
-      id: data.id.present ? data.id.value : this.id,
-      elementId: data.elementId.present ? data.elementId.value : this.elementId,
-      elementType: data.elementType.present
-          ? data.elementType.value
-          : this.elementType,
-      mode: data.mode.present ? data.mode.value : this.mode,
-      reason: data.reason.present ? data.reason.value : this.reason,
-      notBeforeAtUtc: data.notBeforeAtUtc.present
-          ? data.notBeforeAtUtc.value
-          : this.notBeforeAtUtc,
-      notBeforeStudyDay: data.notBeforeStudyDay.present
-          ? data.notBeforeStudyDay.value
-          : this.notBeforeStudyDay,
-      scheduledForAtUtc: data.scheduledForAtUtc.present
-          ? data.scheduledForAtUtc.value
-          : this.scheduledForAtUtc,
-      scheduledForStudyDay: data.scheduledForStudyDay.present
-          ? data.scheduledForStudyDay.value
-          : this.scheduledForStudyDay,
-      zoneId: data.zoneId.present ? data.zoneId.value : this.zoneId,
-      operationId: data.operationId.present
-          ? data.operationId.value
-          : this.operationId,
-      batchId: data.batchId.present ? data.batchId.value : this.batchId,
-      policyVersion: data.policyVersion.present
-          ? data.policyVersion.value
-          : this.policyVersion,
-      createdAtUtc: data.createdAtUtc.present
-          ? data.createdAtUtc.value
-          : this.createdAtUtc,
-      createdStudyDay: data.createdStudyDay.present
-          ? data.createdStudyDay.value
-          : this.createdStudyDay,
-      createdZoneId: data.createdZoneId.present
-          ? data.createdZoneId.value
-          : this.createdZoneId,
-      clearedAtUtc: data.clearedAtUtc.present
-          ? data.clearedAtUtc.value
-          : this.clearedAtUtc,
-      clearedByOperationId: data.clearedByOperationId.present
-          ? data.clearedByOperationId.value
-          : this.clearedByOperationId,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('ScheduleAdjustmentRow(')
-          ..write('id: $id, ')
-          ..write('elementId: $elementId, ')
-          ..write('elementType: $elementType, ')
-          ..write('mode: $mode, ')
-          ..write('reason: $reason, ')
-          ..write('notBeforeAtUtc: $notBeforeAtUtc, ')
-          ..write('notBeforeStudyDay: $notBeforeStudyDay, ')
-          ..write('scheduledForAtUtc: $scheduledForAtUtc, ')
-          ..write('scheduledForStudyDay: $scheduledForStudyDay, ')
-          ..write('zoneId: $zoneId, ')
-          ..write('operationId: $operationId, ')
-          ..write('batchId: $batchId, ')
-          ..write('policyVersion: $policyVersion, ')
-          ..write('createdAtUtc: $createdAtUtc, ')
-          ..write('createdStudyDay: $createdStudyDay, ')
-          ..write('createdZoneId: $createdZoneId, ')
-          ..write('clearedAtUtc: $clearedAtUtc, ')
-          ..write('clearedByOperationId: $clearedByOperationId')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    id,
-    elementId,
-    elementType,
-    mode,
-    reason,
-    notBeforeAtUtc,
-    notBeforeStudyDay,
-    scheduledForAtUtc,
-    scheduledForStudyDay,
-    zoneId,
-    operationId,
-    batchId,
-    policyVersion,
-    createdAtUtc,
-    createdStudyDay,
-    createdZoneId,
-    clearedAtUtc,
-    clearedByOperationId,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is ScheduleAdjustmentRow &&
-          other.id == this.id &&
-          other.elementId == this.elementId &&
-          other.elementType == this.elementType &&
-          other.mode == this.mode &&
-          other.reason == this.reason &&
-          other.notBeforeAtUtc == this.notBeforeAtUtc &&
-          other.notBeforeStudyDay == this.notBeforeStudyDay &&
-          other.scheduledForAtUtc == this.scheduledForAtUtc &&
-          other.scheduledForStudyDay == this.scheduledForStudyDay &&
-          other.zoneId == this.zoneId &&
-          other.operationId == this.operationId &&
-          other.batchId == this.batchId &&
-          other.policyVersion == this.policyVersion &&
-          other.createdAtUtc == this.createdAtUtc &&
-          other.createdStudyDay == this.createdStudyDay &&
-          other.createdZoneId == this.createdZoneId &&
-          other.clearedAtUtc == this.clearedAtUtc &&
-          other.clearedByOperationId == this.clearedByOperationId);
-}
-
-class ScheduleAdjustmentsCompanion
-    extends UpdateCompanion<ScheduleAdjustmentRow> {
-  final Value<String> id;
-  final Value<String> elementId;
-  final Value<int> elementType;
-  final Value<int> mode;
-  final Value<int> reason;
-  final Value<int?> notBeforeAtUtc;
-  final Value<int?> notBeforeStudyDay;
-  final Value<int?> scheduledForAtUtc;
-  final Value<int?> scheduledForStudyDay;
-  final Value<String?> zoneId;
-  final Value<String> operationId;
-  final Value<String?> batchId;
-  final Value<String> policyVersion;
-  final Value<int> createdAtUtc;
-  final Value<int> createdStudyDay;
-  final Value<String> createdZoneId;
-  final Value<int?> clearedAtUtc;
-  final Value<String?> clearedByOperationId;
-  final Value<int> rowid;
-  const ScheduleAdjustmentsCompanion({
-    this.id = const Value.absent(),
-    this.elementId = const Value.absent(),
-    this.elementType = const Value.absent(),
-    this.mode = const Value.absent(),
-    this.reason = const Value.absent(),
-    this.notBeforeAtUtc = const Value.absent(),
-    this.notBeforeStudyDay = const Value.absent(),
-    this.scheduledForAtUtc = const Value.absent(),
-    this.scheduledForStudyDay = const Value.absent(),
-    this.zoneId = const Value.absent(),
-    this.operationId = const Value.absent(),
-    this.batchId = const Value.absent(),
-    this.policyVersion = const Value.absent(),
-    this.createdAtUtc = const Value.absent(),
-    this.createdStudyDay = const Value.absent(),
-    this.createdZoneId = const Value.absent(),
-    this.clearedAtUtc = const Value.absent(),
-    this.clearedByOperationId = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  ScheduleAdjustmentsCompanion.insert({
-    required String id,
-    required String elementId,
-    required int elementType,
-    required int mode,
-    required int reason,
-    this.notBeforeAtUtc = const Value.absent(),
-    this.notBeforeStudyDay = const Value.absent(),
-    this.scheduledForAtUtc = const Value.absent(),
-    this.scheduledForStudyDay = const Value.absent(),
-    this.zoneId = const Value.absent(),
-    required String operationId,
-    this.batchId = const Value.absent(),
-    required String policyVersion,
-    required int createdAtUtc,
-    required int createdStudyDay,
-    required String createdZoneId,
-    this.clearedAtUtc = const Value.absent(),
-    this.clearedByOperationId = const Value.absent(),
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       elementId = Value(elementId),
-       elementType = Value(elementType),
-       mode = Value(mode),
-       reason = Value(reason),
-       operationId = Value(operationId),
-       policyVersion = Value(policyVersion),
-       createdAtUtc = Value(createdAtUtc),
-       createdStudyDay = Value(createdStudyDay),
-       createdZoneId = Value(createdZoneId);
-  static Insertable<ScheduleAdjustmentRow> custom({
-    Expression<String>? id,
-    Expression<String>? elementId,
-    Expression<int>? elementType,
-    Expression<int>? mode,
-    Expression<int>? reason,
-    Expression<int>? notBeforeAtUtc,
-    Expression<int>? notBeforeStudyDay,
-    Expression<int>? scheduledForAtUtc,
-    Expression<int>? scheduledForStudyDay,
-    Expression<String>? zoneId,
-    Expression<String>? operationId,
-    Expression<String>? batchId,
-    Expression<String>? policyVersion,
-    Expression<int>? createdAtUtc,
-    Expression<int>? createdStudyDay,
-    Expression<String>? createdZoneId,
-    Expression<int>? clearedAtUtc,
-    Expression<String>? clearedByOperationId,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (elementId != null) 'element_id': elementId,
-      if (elementType != null) 'element_type': elementType,
-      if (mode != null) 'mode': mode,
-      if (reason != null) 'reason': reason,
-      if (notBeforeAtUtc != null) 'not_before_at_utc': notBeforeAtUtc,
-      if (notBeforeStudyDay != null) 'not_before_study_day': notBeforeStudyDay,
-      if (scheduledForAtUtc != null) 'scheduled_for_at_utc': scheduledForAtUtc,
-      if (scheduledForStudyDay != null)
-        'scheduled_for_study_day': scheduledForStudyDay,
-      if (zoneId != null) 'zone_id': zoneId,
-      if (operationId != null) 'operation_id': operationId,
-      if (batchId != null) 'batch_id': batchId,
-      if (policyVersion != null) 'policy_version': policyVersion,
-      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
-      if (createdStudyDay != null) 'created_study_day': createdStudyDay,
-      if (createdZoneId != null) 'created_zone_id': createdZoneId,
-      if (clearedAtUtc != null) 'cleared_at_utc': clearedAtUtc,
-      if (clearedByOperationId != null)
-        'cleared_by_operation_id': clearedByOperationId,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  ScheduleAdjustmentsCompanion copyWith({
-    Value<String>? id,
-    Value<String>? elementId,
-    Value<int>? elementType,
-    Value<int>? mode,
-    Value<int>? reason,
-    Value<int?>? notBeforeAtUtc,
-    Value<int?>? notBeforeStudyDay,
-    Value<int?>? scheduledForAtUtc,
-    Value<int?>? scheduledForStudyDay,
-    Value<String?>? zoneId,
-    Value<String>? operationId,
-    Value<String?>? batchId,
-    Value<String>? policyVersion,
-    Value<int>? createdAtUtc,
-    Value<int>? createdStudyDay,
-    Value<String>? createdZoneId,
-    Value<int?>? clearedAtUtc,
-    Value<String?>? clearedByOperationId,
-    Value<int>? rowid,
-  }) {
-    return ScheduleAdjustmentsCompanion(
-      id: id ?? this.id,
-      elementId: elementId ?? this.elementId,
-      elementType: elementType ?? this.elementType,
-      mode: mode ?? this.mode,
-      reason: reason ?? this.reason,
-      notBeforeAtUtc: notBeforeAtUtc ?? this.notBeforeAtUtc,
-      notBeforeStudyDay: notBeforeStudyDay ?? this.notBeforeStudyDay,
-      scheduledForAtUtc: scheduledForAtUtc ?? this.scheduledForAtUtc,
-      scheduledForStudyDay: scheduledForStudyDay ?? this.scheduledForStudyDay,
-      zoneId: zoneId ?? this.zoneId,
-      operationId: operationId ?? this.operationId,
-      batchId: batchId ?? this.batchId,
-      policyVersion: policyVersion ?? this.policyVersion,
-      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
-      createdStudyDay: createdStudyDay ?? this.createdStudyDay,
-      createdZoneId: createdZoneId ?? this.createdZoneId,
-      clearedAtUtc: clearedAtUtc ?? this.clearedAtUtc,
-      clearedByOperationId: clearedByOperationId ?? this.clearedByOperationId,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (elementId.present) {
-      map['element_id'] = Variable<String>(elementId.value);
-    }
-    if (elementType.present) {
-      map['element_type'] = Variable<int>(elementType.value);
-    }
-    if (mode.present) {
-      map['mode'] = Variable<int>(mode.value);
-    }
-    if (reason.present) {
-      map['reason'] = Variable<int>(reason.value);
-    }
-    if (notBeforeAtUtc.present) {
-      map['not_before_at_utc'] = Variable<int>(notBeforeAtUtc.value);
-    }
-    if (notBeforeStudyDay.present) {
-      map['not_before_study_day'] = Variable<int>(notBeforeStudyDay.value);
-    }
-    if (scheduledForAtUtc.present) {
-      map['scheduled_for_at_utc'] = Variable<int>(scheduledForAtUtc.value);
-    }
-    if (scheduledForStudyDay.present) {
-      map['scheduled_for_study_day'] = Variable<int>(
-        scheduledForStudyDay.value,
-      );
-    }
-    if (zoneId.present) {
-      map['zone_id'] = Variable<String>(zoneId.value);
-    }
-    if (operationId.present) {
-      map['operation_id'] = Variable<String>(operationId.value);
-    }
-    if (batchId.present) {
-      map['batch_id'] = Variable<String>(batchId.value);
-    }
-    if (policyVersion.present) {
-      map['policy_version'] = Variable<String>(policyVersion.value);
-    }
-    if (createdAtUtc.present) {
-      map['created_at_utc'] = Variable<int>(createdAtUtc.value);
-    }
-    if (createdStudyDay.present) {
-      map['created_study_day'] = Variable<int>(createdStudyDay.value);
-    }
-    if (createdZoneId.present) {
-      map['created_zone_id'] = Variable<String>(createdZoneId.value);
-    }
-    if (clearedAtUtc.present) {
-      map['cleared_at_utc'] = Variable<int>(clearedAtUtc.value);
-    }
-    if (clearedByOperationId.present) {
-      map['cleared_by_operation_id'] = Variable<String>(
-        clearedByOperationId.value,
-      );
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('ScheduleAdjustmentsCompanion(')
-          ..write('id: $id, ')
-          ..write('elementId: $elementId, ')
-          ..write('elementType: $elementType, ')
-          ..write('mode: $mode, ')
-          ..write('reason: $reason, ')
-          ..write('notBeforeAtUtc: $notBeforeAtUtc, ')
-          ..write('notBeforeStudyDay: $notBeforeStudyDay, ')
-          ..write('scheduledForAtUtc: $scheduledForAtUtc, ')
-          ..write('scheduledForStudyDay: $scheduledForStudyDay, ')
-          ..write('zoneId: $zoneId, ')
-          ..write('operationId: $operationId, ')
-          ..write('batchId: $batchId, ')
-          ..write('policyVersion: $policyVersion, ')
-          ..write('createdAtUtc: $createdAtUtc, ')
-          ..write('createdStudyDay: $createdStudyDay, ')
-          ..write('createdZoneId: $createdZoneId, ')
-          ..write('clearedAtUtc: $clearedAtUtc, ')
-          ..write('clearedByOperationId: $clearedByOperationId, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
 class $SchedulerEventsTable extends SchedulerEvents
     with TableInfo<$SchedulerEventsTable, SchedulerEventRow> {
   @override
@@ -10410,29 +9118,6 @@ class $SchedulerEventsTable extends SchedulerEvents
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
-  static const VerificationMeta _adjustmentsBeforeMeta = const VerificationMeta(
-    'adjustmentsBefore',
-  );
-  @override
-  late final GeneratedColumn<String> adjustmentsBefore =
-      GeneratedColumn<String>(
-        'adjustments_before',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _adjustmentsAfterMeta = const VerificationMeta(
-    'adjustmentsAfter',
-  );
-  @override
-  late final GeneratedColumn<String> adjustmentsAfter = GeneratedColumn<String>(
-    'adjustments_after',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
   static const VerificationMeta _undoesEventIdMeta = const VerificationMeta(
     'undoesEventId',
   );
@@ -10483,8 +9168,6 @@ class $SchedulerEventsTable extends SchedulerEvents
     stateAfter,
     algorithmicDueBefore,
     algorithmicDueAfter,
-    adjustmentsBefore,
-    adjustmentsAfter,
     undoesEventId,
     batchId,
     metadataJson,
@@ -10632,24 +9315,6 @@ class $SchedulerEventsTable extends SchedulerEvents
         ),
       );
     }
-    if (data.containsKey('adjustments_before')) {
-      context.handle(
-        _adjustmentsBeforeMeta,
-        adjustmentsBefore.isAcceptableOrUnknown(
-          data['adjustments_before']!,
-          _adjustmentsBeforeMeta,
-        ),
-      );
-    }
-    if (data.containsKey('adjustments_after')) {
-      context.handle(
-        _adjustmentsAfterMeta,
-        adjustmentsAfter.isAcceptableOrUnknown(
-          data['adjustments_after']!,
-          _adjustmentsAfterMeta,
-        ),
-      );
-    }
     if (data.containsKey('undoes_event_id')) {
       context.handle(
         _undoesEventIdMeta,
@@ -10743,14 +9408,6 @@ class $SchedulerEventsTable extends SchedulerEvents
         DriftSqlType.string,
         data['${effectivePrefix}algorithmic_due_after'],
       ),
-      adjustmentsBefore: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}adjustments_before'],
-      ),
-      adjustmentsAfter: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}adjustments_after'],
-      ),
       undoesEventId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}undoes_event_id'],
@@ -10789,8 +9446,6 @@ class SchedulerEventRow extends DataClass
   final String? stateAfter;
   final String? algorithmicDueBefore;
   final String? algorithmicDueAfter;
-  final String? adjustmentsBefore;
-  final String? adjustmentsAfter;
   final String? undoesEventId;
   final String? batchId;
   final String? metadataJson;
@@ -10810,8 +9465,6 @@ class SchedulerEventRow extends DataClass
     this.stateAfter,
     this.algorithmicDueBefore,
     this.algorithmicDueAfter,
-    this.adjustmentsBefore,
-    this.adjustmentsAfter,
     this.undoesEventId,
     this.batchId,
     this.metadataJson,
@@ -10849,12 +9502,6 @@ class SchedulerEventRow extends DataClass
     }
     if (!nullToAbsent || algorithmicDueAfter != null) {
       map['algorithmic_due_after'] = Variable<String>(algorithmicDueAfter);
-    }
-    if (!nullToAbsent || adjustmentsBefore != null) {
-      map['adjustments_before'] = Variable<String>(adjustmentsBefore);
-    }
-    if (!nullToAbsent || adjustmentsAfter != null) {
-      map['adjustments_after'] = Variable<String>(adjustmentsAfter);
     }
     if (!nullToAbsent || undoesEventId != null) {
       map['undoes_event_id'] = Variable<String>(undoesEventId);
@@ -10901,12 +9548,6 @@ class SchedulerEventRow extends DataClass
       algorithmicDueAfter: algorithmicDueAfter == null && nullToAbsent
           ? const Value.absent()
           : Value(algorithmicDueAfter),
-      adjustmentsBefore: adjustmentsBefore == null && nullToAbsent
-          ? const Value.absent()
-          : Value(adjustmentsBefore),
-      adjustmentsAfter: adjustmentsAfter == null && nullToAbsent
-          ? const Value.absent()
-          : Value(adjustmentsAfter),
       undoesEventId: undoesEventId == null && nullToAbsent
           ? const Value.absent()
           : Value(undoesEventId),
@@ -10944,10 +9585,6 @@ class SchedulerEventRow extends DataClass
       algorithmicDueAfter: serializer.fromJson<String?>(
         json['algorithmicDueAfter'],
       ),
-      adjustmentsBefore: serializer.fromJson<String?>(
-        json['adjustmentsBefore'],
-      ),
-      adjustmentsAfter: serializer.fromJson<String?>(json['adjustmentsAfter']),
       undoesEventId: serializer.fromJson<String?>(json['undoesEventId']),
       batchId: serializer.fromJson<String?>(json['batchId']),
       metadataJson: serializer.fromJson<String?>(json['metadataJson']),
@@ -10972,8 +9609,6 @@ class SchedulerEventRow extends DataClass
       'stateAfter': serializer.toJson<String?>(stateAfter),
       'algorithmicDueBefore': serializer.toJson<String?>(algorithmicDueBefore),
       'algorithmicDueAfter': serializer.toJson<String?>(algorithmicDueAfter),
-      'adjustmentsBefore': serializer.toJson<String?>(adjustmentsBefore),
-      'adjustmentsAfter': serializer.toJson<String?>(adjustmentsAfter),
       'undoesEventId': serializer.toJson<String?>(undoesEventId),
       'batchId': serializer.toJson<String?>(batchId),
       'metadataJson': serializer.toJson<String?>(metadataJson),
@@ -10996,8 +9631,6 @@ class SchedulerEventRow extends DataClass
     Value<String?> stateAfter = const Value.absent(),
     Value<String?> algorithmicDueBefore = const Value.absent(),
     Value<String?> algorithmicDueAfter = const Value.absent(),
-    Value<String?> adjustmentsBefore = const Value.absent(),
-    Value<String?> adjustmentsAfter = const Value.absent(),
     Value<String?> undoesEventId = const Value.absent(),
     Value<String?> batchId = const Value.absent(),
     Value<String?> metadataJson = const Value.absent(),
@@ -11025,12 +9658,6 @@ class SchedulerEventRow extends DataClass
     algorithmicDueAfter: algorithmicDueAfter.present
         ? algorithmicDueAfter.value
         : this.algorithmicDueAfter,
-    adjustmentsBefore: adjustmentsBefore.present
-        ? adjustmentsBefore.value
-        : this.adjustmentsBefore,
-    adjustmentsAfter: adjustmentsAfter.present
-        ? adjustmentsAfter.value
-        : this.adjustmentsAfter,
     undoesEventId: undoesEventId.present
         ? undoesEventId.value
         : this.undoesEventId,
@@ -11076,12 +9703,6 @@ class SchedulerEventRow extends DataClass
       algorithmicDueAfter: data.algorithmicDueAfter.present
           ? data.algorithmicDueAfter.value
           : this.algorithmicDueAfter,
-      adjustmentsBefore: data.adjustmentsBefore.present
-          ? data.adjustmentsBefore.value
-          : this.adjustmentsBefore,
-      adjustmentsAfter: data.adjustmentsAfter.present
-          ? data.adjustmentsAfter.value
-          : this.adjustmentsAfter,
       undoesEventId: data.undoesEventId.present
           ? data.undoesEventId.value
           : this.undoesEventId,
@@ -11110,8 +9731,6 @@ class SchedulerEventRow extends DataClass
           ..write('stateAfter: $stateAfter, ')
           ..write('algorithmicDueBefore: $algorithmicDueBefore, ')
           ..write('algorithmicDueAfter: $algorithmicDueAfter, ')
-          ..write('adjustmentsBefore: $adjustmentsBefore, ')
-          ..write('adjustmentsAfter: $adjustmentsAfter, ')
           ..write('undoesEventId: $undoesEventId, ')
           ..write('batchId: $batchId, ')
           ..write('metadataJson: $metadataJson')
@@ -11136,8 +9755,6 @@ class SchedulerEventRow extends DataClass
     stateAfter,
     algorithmicDueBefore,
     algorithmicDueAfter,
-    adjustmentsBefore,
-    adjustmentsAfter,
     undoesEventId,
     batchId,
     metadataJson,
@@ -11161,8 +9778,6 @@ class SchedulerEventRow extends DataClass
           other.stateAfter == this.stateAfter &&
           other.algorithmicDueBefore == this.algorithmicDueBefore &&
           other.algorithmicDueAfter == this.algorithmicDueAfter &&
-          other.adjustmentsBefore == this.adjustmentsBefore &&
-          other.adjustmentsAfter == this.adjustmentsAfter &&
           other.undoesEventId == this.undoesEventId &&
           other.batchId == this.batchId &&
           other.metadataJson == this.metadataJson);
@@ -11184,8 +9799,6 @@ class SchedulerEventsCompanion extends UpdateCompanion<SchedulerEventRow> {
   final Value<String?> stateAfter;
   final Value<String?> algorithmicDueBefore;
   final Value<String?> algorithmicDueAfter;
-  final Value<String?> adjustmentsBefore;
-  final Value<String?> adjustmentsAfter;
   final Value<String?> undoesEventId;
   final Value<String?> batchId;
   final Value<String?> metadataJson;
@@ -11206,8 +9819,6 @@ class SchedulerEventsCompanion extends UpdateCompanion<SchedulerEventRow> {
     this.stateAfter = const Value.absent(),
     this.algorithmicDueBefore = const Value.absent(),
     this.algorithmicDueAfter = const Value.absent(),
-    this.adjustmentsBefore = const Value.absent(),
-    this.adjustmentsAfter = const Value.absent(),
     this.undoesEventId = const Value.absent(),
     this.batchId = const Value.absent(),
     this.metadataJson = const Value.absent(),
@@ -11229,8 +9840,6 @@ class SchedulerEventsCompanion extends UpdateCompanion<SchedulerEventRow> {
     this.stateAfter = const Value.absent(),
     this.algorithmicDueBefore = const Value.absent(),
     this.algorithmicDueAfter = const Value.absent(),
-    this.adjustmentsBefore = const Value.absent(),
-    this.adjustmentsAfter = const Value.absent(),
     this.undoesEventId = const Value.absent(),
     this.batchId = const Value.absent(),
     this.metadataJson = const Value.absent(),
@@ -11258,8 +9867,6 @@ class SchedulerEventsCompanion extends UpdateCompanion<SchedulerEventRow> {
     Expression<String>? stateAfter,
     Expression<String>? algorithmicDueBefore,
     Expression<String>? algorithmicDueAfter,
-    Expression<String>? adjustmentsBefore,
-    Expression<String>? adjustmentsAfter,
     Expression<String>? undoesEventId,
     Expression<String>? batchId,
     Expression<String>? metadataJson,
@@ -11283,8 +9890,6 @@ class SchedulerEventsCompanion extends UpdateCompanion<SchedulerEventRow> {
         'algorithmic_due_before': algorithmicDueBefore,
       if (algorithmicDueAfter != null)
         'algorithmic_due_after': algorithmicDueAfter,
-      if (adjustmentsBefore != null) 'adjustments_before': adjustmentsBefore,
-      if (adjustmentsAfter != null) 'adjustments_after': adjustmentsAfter,
       if (undoesEventId != null) 'undoes_event_id': undoesEventId,
       if (batchId != null) 'batch_id': batchId,
       if (metadataJson != null) 'metadata_json': metadataJson,
@@ -11308,8 +9913,6 @@ class SchedulerEventsCompanion extends UpdateCompanion<SchedulerEventRow> {
     Value<String?>? stateAfter,
     Value<String?>? algorithmicDueBefore,
     Value<String?>? algorithmicDueAfter,
-    Value<String?>? adjustmentsBefore,
-    Value<String?>? adjustmentsAfter,
     Value<String?>? undoesEventId,
     Value<String?>? batchId,
     Value<String?>? metadataJson,
@@ -11331,8 +9934,6 @@ class SchedulerEventsCompanion extends UpdateCompanion<SchedulerEventRow> {
       stateAfter: stateAfter ?? this.stateAfter,
       algorithmicDueBefore: algorithmicDueBefore ?? this.algorithmicDueBefore,
       algorithmicDueAfter: algorithmicDueAfter ?? this.algorithmicDueAfter,
-      adjustmentsBefore: adjustmentsBefore ?? this.adjustmentsBefore,
-      adjustmentsAfter: adjustmentsAfter ?? this.adjustmentsAfter,
       undoesEventId: undoesEventId ?? this.undoesEventId,
       batchId: batchId ?? this.batchId,
       metadataJson: metadataJson ?? this.metadataJson,
@@ -11392,12 +9993,6 @@ class SchedulerEventsCompanion extends UpdateCompanion<SchedulerEventRow> {
         algorithmicDueAfter.value,
       );
     }
-    if (adjustmentsBefore.present) {
-      map['adjustments_before'] = Variable<String>(adjustmentsBefore.value);
-    }
-    if (adjustmentsAfter.present) {
-      map['adjustments_after'] = Variable<String>(adjustmentsAfter.value);
-    }
     if (undoesEventId.present) {
       map['undoes_event_id'] = Variable<String>(undoesEventId.value);
     }
@@ -11431,513 +10026,9 @@ class SchedulerEventsCompanion extends UpdateCompanion<SchedulerEventRow> {
           ..write('stateAfter: $stateAfter, ')
           ..write('algorithmicDueBefore: $algorithmicDueBefore, ')
           ..write('algorithmicDueAfter: $algorithmicDueAfter, ')
-          ..write('adjustmentsBefore: $adjustmentsBefore, ')
-          ..write('adjustmentsAfter: $adjustmentsAfter, ')
           ..write('undoesEventId: $undoesEventId, ')
           ..write('batchId: $batchId, ')
           ..write('metadataJson: $metadataJson, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $DailyPresentationPlansTable extends DailyPresentationPlans
-    with TableInfo<$DailyPresentationPlansTable, DailyPresentationPlanRow> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $DailyPresentationPlansTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _studyDayMeta = const VerificationMeta(
-    'studyDay',
-  );
-  @override
-  late final GeneratedColumn<int> studyDay = GeneratedColumn<int>(
-    'study_day',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _zoneIdMeta = const VerificationMeta('zoneId');
-  @override
-  late final GeneratedColumn<String> zoneId = GeneratedColumn<String>(
-    'zone_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _identityJsonMeta = const VerificationMeta(
-    'identityJson',
-  );
-  @override
-  late final GeneratedColumn<String> identityJson = GeneratedColumn<String>(
-    'identity_json',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _remainingEntriesJsonMeta =
-      const VerificationMeta('remainingEntriesJson');
-  @override
-  late final GeneratedColumn<String> remainingEntriesJson =
-      GeneratedColumn<String>(
-        'remaining_entries_json',
-        aliasedName,
-        false,
-        type: DriftSqlType.string,
-        requiredDuringInsert: true,
-      );
-  static const VerificationMeta _mergeCursorMeta = const VerificationMeta(
-    'mergeCursor',
-  );
-  @override
-  late final GeneratedColumn<int> mergeCursor = GeneratedColumn<int>(
-    'merge_cursor',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
-    'createdAtUtc',
-  );
-  @override
-  late final GeneratedColumn<int> createdAtUtc = GeneratedColumn<int>(
-    'created_at_utc',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _updatedAtUtcMeta = const VerificationMeta(
-    'updatedAtUtc',
-  );
-  @override
-  late final GeneratedColumn<int> updatedAtUtc = GeneratedColumn<int>(
-    'updated_at_utc',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    studyDay,
-    zoneId,
-    identityJson,
-    remainingEntriesJson,
-    mergeCursor,
-    createdAtUtc,
-    updatedAtUtc,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'daily_presentation_plans';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<DailyPresentationPlanRow> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('study_day')) {
-      context.handle(
-        _studyDayMeta,
-        studyDay.isAcceptableOrUnknown(data['study_day']!, _studyDayMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_studyDayMeta);
-    }
-    if (data.containsKey('zone_id')) {
-      context.handle(
-        _zoneIdMeta,
-        zoneId.isAcceptableOrUnknown(data['zone_id']!, _zoneIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_zoneIdMeta);
-    }
-    if (data.containsKey('identity_json')) {
-      context.handle(
-        _identityJsonMeta,
-        identityJson.isAcceptableOrUnknown(
-          data['identity_json']!,
-          _identityJsonMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_identityJsonMeta);
-    }
-    if (data.containsKey('remaining_entries_json')) {
-      context.handle(
-        _remainingEntriesJsonMeta,
-        remainingEntriesJson.isAcceptableOrUnknown(
-          data['remaining_entries_json']!,
-          _remainingEntriesJsonMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_remainingEntriesJsonMeta);
-    }
-    if (data.containsKey('merge_cursor')) {
-      context.handle(
-        _mergeCursorMeta,
-        mergeCursor.isAcceptableOrUnknown(
-          data['merge_cursor']!,
-          _mergeCursorMeta,
-        ),
-      );
-    }
-    if (data.containsKey('created_at_utc')) {
-      context.handle(
-        _createdAtUtcMeta,
-        createdAtUtc.isAcceptableOrUnknown(
-          data['created_at_utc']!,
-          _createdAtUtcMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_createdAtUtcMeta);
-    }
-    if (data.containsKey('updated_at_utc')) {
-      context.handle(
-        _updatedAtUtcMeta,
-        updatedAtUtc.isAcceptableOrUnknown(
-          data['updated_at_utc']!,
-          _updatedAtUtcMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_updatedAtUtcMeta);
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {studyDay, zoneId};
-  @override
-  DailyPresentationPlanRow map(
-    Map<String, dynamic> data, {
-    String? tablePrefix,
-  }) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return DailyPresentationPlanRow(
-      studyDay: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}study_day'],
-      )!,
-      zoneId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}zone_id'],
-      )!,
-      identityJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}identity_json'],
-      )!,
-      remainingEntriesJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}remaining_entries_json'],
-      )!,
-      mergeCursor: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}merge_cursor'],
-      )!,
-      createdAtUtc: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}created_at_utc'],
-      )!,
-      updatedAtUtc: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}updated_at_utc'],
-      )!,
-    );
-  }
-
-  @override
-  $DailyPresentationPlansTable createAlias(String alias) {
-    return $DailyPresentationPlansTable(attachedDatabase, alias);
-  }
-}
-
-class DailyPresentationPlanRow extends DataClass
-    implements Insertable<DailyPresentationPlanRow> {
-  final int studyDay;
-  final String zoneId;
-  final String identityJson;
-  final String remainingEntriesJson;
-  final int mergeCursor;
-  final int createdAtUtc;
-  final int updatedAtUtc;
-  const DailyPresentationPlanRow({
-    required this.studyDay,
-    required this.zoneId,
-    required this.identityJson,
-    required this.remainingEntriesJson,
-    required this.mergeCursor,
-    required this.createdAtUtc,
-    required this.updatedAtUtc,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['study_day'] = Variable<int>(studyDay);
-    map['zone_id'] = Variable<String>(zoneId);
-    map['identity_json'] = Variable<String>(identityJson);
-    map['remaining_entries_json'] = Variable<String>(remainingEntriesJson);
-    map['merge_cursor'] = Variable<int>(mergeCursor);
-    map['created_at_utc'] = Variable<int>(createdAtUtc);
-    map['updated_at_utc'] = Variable<int>(updatedAtUtc);
-    return map;
-  }
-
-  DailyPresentationPlansCompanion toCompanion(bool nullToAbsent) {
-    return DailyPresentationPlansCompanion(
-      studyDay: Value(studyDay),
-      zoneId: Value(zoneId),
-      identityJson: Value(identityJson),
-      remainingEntriesJson: Value(remainingEntriesJson),
-      mergeCursor: Value(mergeCursor),
-      createdAtUtc: Value(createdAtUtc),
-      updatedAtUtc: Value(updatedAtUtc),
-    );
-  }
-
-  factory DailyPresentationPlanRow.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return DailyPresentationPlanRow(
-      studyDay: serializer.fromJson<int>(json['studyDay']),
-      zoneId: serializer.fromJson<String>(json['zoneId']),
-      identityJson: serializer.fromJson<String>(json['identityJson']),
-      remainingEntriesJson: serializer.fromJson<String>(
-        json['remainingEntriesJson'],
-      ),
-      mergeCursor: serializer.fromJson<int>(json['mergeCursor']),
-      createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
-      updatedAtUtc: serializer.fromJson<int>(json['updatedAtUtc']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'studyDay': serializer.toJson<int>(studyDay),
-      'zoneId': serializer.toJson<String>(zoneId),
-      'identityJson': serializer.toJson<String>(identityJson),
-      'remainingEntriesJson': serializer.toJson<String>(remainingEntriesJson),
-      'mergeCursor': serializer.toJson<int>(mergeCursor),
-      'createdAtUtc': serializer.toJson<int>(createdAtUtc),
-      'updatedAtUtc': serializer.toJson<int>(updatedAtUtc),
-    };
-  }
-
-  DailyPresentationPlanRow copyWith({
-    int? studyDay,
-    String? zoneId,
-    String? identityJson,
-    String? remainingEntriesJson,
-    int? mergeCursor,
-    int? createdAtUtc,
-    int? updatedAtUtc,
-  }) => DailyPresentationPlanRow(
-    studyDay: studyDay ?? this.studyDay,
-    zoneId: zoneId ?? this.zoneId,
-    identityJson: identityJson ?? this.identityJson,
-    remainingEntriesJson: remainingEntriesJson ?? this.remainingEntriesJson,
-    mergeCursor: mergeCursor ?? this.mergeCursor,
-    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
-    updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
-  );
-  DailyPresentationPlanRow copyWithCompanion(
-    DailyPresentationPlansCompanion data,
-  ) {
-    return DailyPresentationPlanRow(
-      studyDay: data.studyDay.present ? data.studyDay.value : this.studyDay,
-      zoneId: data.zoneId.present ? data.zoneId.value : this.zoneId,
-      identityJson: data.identityJson.present
-          ? data.identityJson.value
-          : this.identityJson,
-      remainingEntriesJson: data.remainingEntriesJson.present
-          ? data.remainingEntriesJson.value
-          : this.remainingEntriesJson,
-      mergeCursor: data.mergeCursor.present
-          ? data.mergeCursor.value
-          : this.mergeCursor,
-      createdAtUtc: data.createdAtUtc.present
-          ? data.createdAtUtc.value
-          : this.createdAtUtc,
-      updatedAtUtc: data.updatedAtUtc.present
-          ? data.updatedAtUtc.value
-          : this.updatedAtUtc,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('DailyPresentationPlanRow(')
-          ..write('studyDay: $studyDay, ')
-          ..write('zoneId: $zoneId, ')
-          ..write('identityJson: $identityJson, ')
-          ..write('remainingEntriesJson: $remainingEntriesJson, ')
-          ..write('mergeCursor: $mergeCursor, ')
-          ..write('createdAtUtc: $createdAtUtc, ')
-          ..write('updatedAtUtc: $updatedAtUtc')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    studyDay,
-    zoneId,
-    identityJson,
-    remainingEntriesJson,
-    mergeCursor,
-    createdAtUtc,
-    updatedAtUtc,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is DailyPresentationPlanRow &&
-          other.studyDay == this.studyDay &&
-          other.zoneId == this.zoneId &&
-          other.identityJson == this.identityJson &&
-          other.remainingEntriesJson == this.remainingEntriesJson &&
-          other.mergeCursor == this.mergeCursor &&
-          other.createdAtUtc == this.createdAtUtc &&
-          other.updatedAtUtc == this.updatedAtUtc);
-}
-
-class DailyPresentationPlansCompanion
-    extends UpdateCompanion<DailyPresentationPlanRow> {
-  final Value<int> studyDay;
-  final Value<String> zoneId;
-  final Value<String> identityJson;
-  final Value<String> remainingEntriesJson;
-  final Value<int> mergeCursor;
-  final Value<int> createdAtUtc;
-  final Value<int> updatedAtUtc;
-  final Value<int> rowid;
-  const DailyPresentationPlansCompanion({
-    this.studyDay = const Value.absent(),
-    this.zoneId = const Value.absent(),
-    this.identityJson = const Value.absent(),
-    this.remainingEntriesJson = const Value.absent(),
-    this.mergeCursor = const Value.absent(),
-    this.createdAtUtc = const Value.absent(),
-    this.updatedAtUtc = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  DailyPresentationPlansCompanion.insert({
-    required int studyDay,
-    required String zoneId,
-    required String identityJson,
-    required String remainingEntriesJson,
-    this.mergeCursor = const Value.absent(),
-    required int createdAtUtc,
-    required int updatedAtUtc,
-    this.rowid = const Value.absent(),
-  }) : studyDay = Value(studyDay),
-       zoneId = Value(zoneId),
-       identityJson = Value(identityJson),
-       remainingEntriesJson = Value(remainingEntriesJson),
-       createdAtUtc = Value(createdAtUtc),
-       updatedAtUtc = Value(updatedAtUtc);
-  static Insertable<DailyPresentationPlanRow> custom({
-    Expression<int>? studyDay,
-    Expression<String>? zoneId,
-    Expression<String>? identityJson,
-    Expression<String>? remainingEntriesJson,
-    Expression<int>? mergeCursor,
-    Expression<int>? createdAtUtc,
-    Expression<int>? updatedAtUtc,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (studyDay != null) 'study_day': studyDay,
-      if (zoneId != null) 'zone_id': zoneId,
-      if (identityJson != null) 'identity_json': identityJson,
-      if (remainingEntriesJson != null)
-        'remaining_entries_json': remainingEntriesJson,
-      if (mergeCursor != null) 'merge_cursor': mergeCursor,
-      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
-      if (updatedAtUtc != null) 'updated_at_utc': updatedAtUtc,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  DailyPresentationPlansCompanion copyWith({
-    Value<int>? studyDay,
-    Value<String>? zoneId,
-    Value<String>? identityJson,
-    Value<String>? remainingEntriesJson,
-    Value<int>? mergeCursor,
-    Value<int>? createdAtUtc,
-    Value<int>? updatedAtUtc,
-    Value<int>? rowid,
-  }) {
-    return DailyPresentationPlansCompanion(
-      studyDay: studyDay ?? this.studyDay,
-      zoneId: zoneId ?? this.zoneId,
-      identityJson: identityJson ?? this.identityJson,
-      remainingEntriesJson: remainingEntriesJson ?? this.remainingEntriesJson,
-      mergeCursor: mergeCursor ?? this.mergeCursor,
-      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
-      updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (studyDay.present) {
-      map['study_day'] = Variable<int>(studyDay.value);
-    }
-    if (zoneId.present) {
-      map['zone_id'] = Variable<String>(zoneId.value);
-    }
-    if (identityJson.present) {
-      map['identity_json'] = Variable<String>(identityJson.value);
-    }
-    if (remainingEntriesJson.present) {
-      map['remaining_entries_json'] = Variable<String>(
-        remainingEntriesJson.value,
-      );
-    }
-    if (mergeCursor.present) {
-      map['merge_cursor'] = Variable<int>(mergeCursor.value);
-    }
-    if (createdAtUtc.present) {
-      map['created_at_utc'] = Variable<int>(createdAtUtc.value);
-    }
-    if (updatedAtUtc.present) {
-      map['updated_at_utc'] = Variable<int>(updatedAtUtc.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('DailyPresentationPlansCompanion(')
-          ..write('studyDay: $studyDay, ')
-          ..write('zoneId: $zoneId, ')
-          ..write('identityJson: $identityJson, ')
-          ..write('remainingEntriesJson: $remainingEntriesJson, ')
-          ..write('mergeCursor: $mergeCursor, ')
-          ..write('createdAtUtc: $createdAtUtc, ')
-          ..write('updatedAtUtc: $updatedAtUtc, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -12016,17 +10107,6 @@ class $MercyBatchesTable extends MercyBatches
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _priorAdjustmentsJsonMeta =
-      const VerificationMeta('priorAdjustmentsJson');
-  @override
-  late final GeneratedColumn<String> priorAdjustmentsJson =
-      GeneratedColumn<String>(
-        'prior_adjustments_json',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
   static const VerificationMeta _appliedSnapshotJsonMeta =
       const VerificationMeta('appliedSnapshotJson');
   @override
@@ -12079,7 +10159,6 @@ class $MercyBatchesTable extends MercyBatches
     undoOperationId,
     policyVersion,
     previewJson,
-    priorAdjustmentsJson,
     appliedSnapshotJson,
     createdAtUtc,
     appliedAtUtc,
@@ -12156,15 +10235,6 @@ class $MercyBatchesTable extends MercyBatches
     } else if (isInserting) {
       context.missing(_previewJsonMeta);
     }
-    if (data.containsKey('prior_adjustments_json')) {
-      context.handle(
-        _priorAdjustmentsJsonMeta,
-        priorAdjustmentsJson.isAcceptableOrUnknown(
-          data['prior_adjustments_json']!,
-          _priorAdjustmentsJsonMeta,
-        ),
-      );
-    }
     if (data.containsKey('applied_snapshot_json')) {
       context.handle(
         _appliedSnapshotJsonMeta,
@@ -12236,10 +10306,6 @@ class $MercyBatchesTable extends MercyBatches
         DriftSqlType.string,
         data['${effectivePrefix}preview_json'],
       )!,
-      priorAdjustmentsJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}prior_adjustments_json'],
-      ),
       appliedSnapshotJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}applied_snapshot_json'],
@@ -12272,11 +10338,8 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
   final String? undoOperationId;
   final String policyVersion;
   final String previewJson;
-  final String? priorAdjustmentsJson;
 
-  /// Serialized applied-batch snapshot: the exact prior and applied adjustment
-  /// sets plus per-item canonical state. Undo restores from this and nothing
-  /// else, which is what makes it exact rather than a recomputation.
+  /// Exact per-element canonical states needed to validate and undo an apply.
   final String? appliedSnapshotJson;
   final int createdAtUtc;
   final int? appliedAtUtc;
@@ -12288,7 +10351,6 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
     this.undoOperationId,
     required this.policyVersion,
     required this.previewJson,
-    this.priorAdjustmentsJson,
     this.appliedSnapshotJson,
     required this.createdAtUtc,
     this.appliedAtUtc,
@@ -12307,9 +10369,6 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
     }
     map['policy_version'] = Variable<String>(policyVersion);
     map['preview_json'] = Variable<String>(previewJson);
-    if (!nullToAbsent || priorAdjustmentsJson != null) {
-      map['prior_adjustments_json'] = Variable<String>(priorAdjustmentsJson);
-    }
     if (!nullToAbsent || appliedSnapshotJson != null) {
       map['applied_snapshot_json'] = Variable<String>(appliedSnapshotJson);
     }
@@ -12335,9 +10394,6 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
           : Value(undoOperationId),
       policyVersion: Value(policyVersion),
       previewJson: Value(previewJson),
-      priorAdjustmentsJson: priorAdjustmentsJson == null && nullToAbsent
-          ? const Value.absent()
-          : Value(priorAdjustmentsJson),
       appliedSnapshotJson: appliedSnapshotJson == null && nullToAbsent
           ? const Value.absent()
           : Value(appliedSnapshotJson),
@@ -12365,9 +10421,6 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
       undoOperationId: serializer.fromJson<String?>(json['undoOperationId']),
       policyVersion: serializer.fromJson<String>(json['policyVersion']),
       previewJson: serializer.fromJson<String>(json['previewJson']),
-      priorAdjustmentsJson: serializer.fromJson<String?>(
-        json['priorAdjustmentsJson'],
-      ),
       appliedSnapshotJson: serializer.fromJson<String?>(
         json['appliedSnapshotJson'],
       ),
@@ -12386,7 +10439,6 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
       'undoOperationId': serializer.toJson<String?>(undoOperationId),
       'policyVersion': serializer.toJson<String>(policyVersion),
       'previewJson': serializer.toJson<String>(previewJson),
-      'priorAdjustmentsJson': serializer.toJson<String?>(priorAdjustmentsJson),
       'appliedSnapshotJson': serializer.toJson<String?>(appliedSnapshotJson),
       'createdAtUtc': serializer.toJson<int>(createdAtUtc),
       'appliedAtUtc': serializer.toJson<int?>(appliedAtUtc),
@@ -12401,7 +10453,6 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
     Value<String?> undoOperationId = const Value.absent(),
     String? policyVersion,
     String? previewJson,
-    Value<String?> priorAdjustmentsJson = const Value.absent(),
     Value<String?> appliedSnapshotJson = const Value.absent(),
     int? createdAtUtc,
     Value<int?> appliedAtUtc = const Value.absent(),
@@ -12417,9 +10468,6 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
         : this.undoOperationId,
     policyVersion: policyVersion ?? this.policyVersion,
     previewJson: previewJson ?? this.previewJson,
-    priorAdjustmentsJson: priorAdjustmentsJson.present
-        ? priorAdjustmentsJson.value
-        : this.priorAdjustmentsJson,
     appliedSnapshotJson: appliedSnapshotJson.present
         ? appliedSnapshotJson.value
         : this.appliedSnapshotJson,
@@ -12445,9 +10493,6 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
       previewJson: data.previewJson.present
           ? data.previewJson.value
           : this.previewJson,
-      priorAdjustmentsJson: data.priorAdjustmentsJson.present
-          ? data.priorAdjustmentsJson.value
-          : this.priorAdjustmentsJson,
       appliedSnapshotJson: data.appliedSnapshotJson.present
           ? data.appliedSnapshotJson.value
           : this.appliedSnapshotJson,
@@ -12472,7 +10517,6 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
           ..write('undoOperationId: $undoOperationId, ')
           ..write('policyVersion: $policyVersion, ')
           ..write('previewJson: $previewJson, ')
-          ..write('priorAdjustmentsJson: $priorAdjustmentsJson, ')
           ..write('appliedSnapshotJson: $appliedSnapshotJson, ')
           ..write('createdAtUtc: $createdAtUtc, ')
           ..write('appliedAtUtc: $appliedAtUtc, ')
@@ -12489,7 +10533,6 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
     undoOperationId,
     policyVersion,
     previewJson,
-    priorAdjustmentsJson,
     appliedSnapshotJson,
     createdAtUtc,
     appliedAtUtc,
@@ -12505,7 +10548,6 @@ class MercyBatchRow extends DataClass implements Insertable<MercyBatchRow> {
           other.undoOperationId == this.undoOperationId &&
           other.policyVersion == this.policyVersion &&
           other.previewJson == this.previewJson &&
-          other.priorAdjustmentsJson == this.priorAdjustmentsJson &&
           other.appliedSnapshotJson == this.appliedSnapshotJson &&
           other.createdAtUtc == this.createdAtUtc &&
           other.appliedAtUtc == this.appliedAtUtc &&
@@ -12519,7 +10561,6 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
   final Value<String?> undoOperationId;
   final Value<String> policyVersion;
   final Value<String> previewJson;
-  final Value<String?> priorAdjustmentsJson;
   final Value<String?> appliedSnapshotJson;
   final Value<int> createdAtUtc;
   final Value<int?> appliedAtUtc;
@@ -12532,7 +10573,6 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
     this.undoOperationId = const Value.absent(),
     this.policyVersion = const Value.absent(),
     this.previewJson = const Value.absent(),
-    this.priorAdjustmentsJson = const Value.absent(),
     this.appliedSnapshotJson = const Value.absent(),
     this.createdAtUtc = const Value.absent(),
     this.appliedAtUtc = const Value.absent(),
@@ -12546,7 +10586,6 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
     this.undoOperationId = const Value.absent(),
     required String policyVersion,
     required String previewJson,
-    this.priorAdjustmentsJson = const Value.absent(),
     this.appliedSnapshotJson = const Value.absent(),
     required int createdAtUtc,
     this.appliedAtUtc = const Value.absent(),
@@ -12564,7 +10603,6 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
     Expression<String>? undoOperationId,
     Expression<String>? policyVersion,
     Expression<String>? previewJson,
-    Expression<String>? priorAdjustmentsJson,
     Expression<String>? appliedSnapshotJson,
     Expression<int>? createdAtUtc,
     Expression<int>? appliedAtUtc,
@@ -12579,8 +10617,6 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
       if (undoOperationId != null) 'undo_operation_id': undoOperationId,
       if (policyVersion != null) 'policy_version': policyVersion,
       if (previewJson != null) 'preview_json': previewJson,
-      if (priorAdjustmentsJson != null)
-        'prior_adjustments_json': priorAdjustmentsJson,
       if (appliedSnapshotJson != null)
         'applied_snapshot_json': appliedSnapshotJson,
       if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
@@ -12597,7 +10633,6 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
     Value<String?>? undoOperationId,
     Value<String>? policyVersion,
     Value<String>? previewJson,
-    Value<String?>? priorAdjustmentsJson,
     Value<String?>? appliedSnapshotJson,
     Value<int>? createdAtUtc,
     Value<int?>? appliedAtUtc,
@@ -12611,7 +10646,6 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
       undoOperationId: undoOperationId ?? this.undoOperationId,
       policyVersion: policyVersion ?? this.policyVersion,
       previewJson: previewJson ?? this.previewJson,
-      priorAdjustmentsJson: priorAdjustmentsJson ?? this.priorAdjustmentsJson,
       appliedSnapshotJson: appliedSnapshotJson ?? this.appliedSnapshotJson,
       createdAtUtc: createdAtUtc ?? this.createdAtUtc,
       appliedAtUtc: appliedAtUtc ?? this.appliedAtUtc,
@@ -12640,11 +10674,6 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
     }
     if (previewJson.present) {
       map['preview_json'] = Variable<String>(previewJson.value);
-    }
-    if (priorAdjustmentsJson.present) {
-      map['prior_adjustments_json'] = Variable<String>(
-        priorAdjustmentsJson.value,
-      );
     }
     if (appliedSnapshotJson.present) {
       map['applied_snapshot_json'] = Variable<String>(
@@ -12675,7 +10704,6 @@ class MercyBatchesCompanion extends UpdateCompanion<MercyBatchRow> {
           ..write('undoOperationId: $undoOperationId, ')
           ..write('policyVersion: $policyVersion, ')
           ..write('previewJson: $previewJson, ')
-          ..write('priorAdjustmentsJson: $priorAdjustmentsJson, ')
           ..write('appliedSnapshotJson: $appliedSnapshotJson, ')
           ..write('createdAtUtc: $createdAtUtc, ')
           ..write('appliedAtUtc: $appliedAtUtc, ')
@@ -14233,13 +12261,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CardMemoriesTable cardMemories = $CardMemoriesTable(this);
   late final $ReviewEventsTable reviewEvents = $ReviewEventsTable(this);
   late final $RevlogEntriesTable revlogEntries = $RevlogEntriesTable(this);
-  late final $ScheduleAdjustmentsTable scheduleAdjustments =
-      $ScheduleAdjustmentsTable(this);
   late final $SchedulerEventsTable schedulerEvents = $SchedulerEventsTable(
     this,
   );
-  late final $DailyPresentationPlansTable dailyPresentationPlans =
-      $DailyPresentationPlansTable(this);
   late final $MercyBatchesTable mercyBatches = $MercyBatchesTable(this);
   late final $SearchDocumentsTable searchDocuments = $SearchDocumentsTable(
     this,
@@ -14262,9 +12286,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     cardMemories,
     reviewEvents,
     revlogEntries,
-    scheduleAdjustments,
     schedulerEvents,
-    dailyPresentationPlans,
     mercyBatches,
     searchDocuments,
     activityEvents,
@@ -16710,8 +14732,6 @@ typedef $$ElementSchedulesTableCreateCompanionBuilder =
       required int lifecycle,
       required int dueDay,
       required int originalDueDay,
-      Value<int?> deferredUntil,
-      Value<int> deferralKind,
       Value<String?> rootId,
       Value<String?> parentElementId,
       Value<int?> ordinal,
@@ -16730,8 +14750,6 @@ typedef $$ElementSchedulesTableUpdateCompanionBuilder =
       Value<int> lifecycle,
       Value<int> dueDay,
       Value<int> originalDueDay,
-      Value<int?> deferredUntil,
-      Value<int> deferralKind,
       Value<String?> rootId,
       Value<String?> parentElementId,
       Value<int?> ordinal,
@@ -16779,16 +14797,6 @@ class $$ElementSchedulesTableFilterComposer
 
   ColumnFilters<int> get originalDueDay => $composableBuilder(
     column: $table.originalDueDay,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get deferredUntil => $composableBuilder(
-    column: $table.deferredUntil,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get deferralKind => $composableBuilder(
-    column: $table.deferralKind,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16872,16 +14880,6 @@ class $$ElementSchedulesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get deferredUntil => $composableBuilder(
-    column: $table.deferredUntil,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get deferralKind => $composableBuilder(
-    column: $table.deferralKind,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<String> get rootId => $composableBuilder(
     column: $table.rootId,
     builder: (column) => ColumnOrderings(column),
@@ -16953,16 +14951,6 @@ class $$ElementSchedulesTableAnnotationComposer
 
   GeneratedColumn<int> get originalDueDay => $composableBuilder(
     column: $table.originalDueDay,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get deferredUntil => $composableBuilder(
-    column: $table.deferredUntil,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get deferralKind => $composableBuilder(
-    column: $table.deferralKind,
     builder: (column) => column,
   );
 
@@ -17038,8 +15026,6 @@ class $$ElementSchedulesTableTableManager
                 Value<int> lifecycle = const Value.absent(),
                 Value<int> dueDay = const Value.absent(),
                 Value<int> originalDueDay = const Value.absent(),
-                Value<int?> deferredUntil = const Value.absent(),
-                Value<int> deferralKind = const Value.absent(),
                 Value<String?> rootId = const Value.absent(),
                 Value<String?> parentElementId = const Value.absent(),
                 Value<int?> ordinal = const Value.absent(),
@@ -17056,8 +15042,6 @@ class $$ElementSchedulesTableTableManager
                 lifecycle: lifecycle,
                 dueDay: dueDay,
                 originalDueDay: originalDueDay,
-                deferredUntil: deferredUntil,
-                deferralKind: deferralKind,
                 rootId: rootId,
                 parentElementId: parentElementId,
                 ordinal: ordinal,
@@ -17076,8 +15060,6 @@ class $$ElementSchedulesTableTableManager
                 required int lifecycle,
                 required int dueDay,
                 required int originalDueDay,
-                Value<int?> deferredUntil = const Value.absent(),
-                Value<int> deferralKind = const Value.absent(),
                 Value<String?> rootId = const Value.absent(),
                 Value<String?> parentElementId = const Value.absent(),
                 Value<int?> ordinal = const Value.absent(),
@@ -17094,8 +15076,6 @@ class $$ElementSchedulesTableTableManager
                 lifecycle: lifecycle,
                 dueDay: dueDay,
                 originalDueDay: originalDueDay,
-                deferredUntil: deferredUntil,
-                deferralKind: deferralKind,
                 rootId: rootId,
                 parentElementId: parentElementId,
                 ordinal: ordinal,
@@ -17135,19 +15115,18 @@ typedef $$TopicStatesTableCreateCompanionBuilder =
     TopicStatesCompanion Function({
       required String elementId,
       required int elementType,
-      required String profileId,
-      required int stepIndex,
-      Value<double> intervalDays,
-      Value<double> aFactor,
-      Value<double> yieldEwma,
-      Value<int> encounters,
-      Value<int> postponeCount,
+      required int status,
+      Value<int> repetitionCount,
+      Value<int> lapseCount,
+      Value<int> storedInterval,
+      Value<int?> lastReviewDay,
+      Value<String> aFactorRaw,
+      Value<String> lastIntervalRatioRaw,
+      Value<int> historyBlockId,
+      Value<int> recentPostponementCount,
+      Value<int> totalPostponementCount,
+      Value<int> learningControl,
       Value<int> encountersSinceLastCard,
-      Value<int?> lastEncounterDay,
-      Value<int?> algorithmDueDay,
-      Value<String> schedulerKind,
-      Value<String> schedulerVersion,
-      Value<String?> policyInputSnapshot,
       Value<int> revision,
       Value<int> rowid,
     });
@@ -17155,19 +15134,18 @@ typedef $$TopicStatesTableUpdateCompanionBuilder =
     TopicStatesCompanion Function({
       Value<String> elementId,
       Value<int> elementType,
-      Value<String> profileId,
-      Value<int> stepIndex,
-      Value<double> intervalDays,
-      Value<double> aFactor,
-      Value<double> yieldEwma,
-      Value<int> encounters,
-      Value<int> postponeCount,
+      Value<int> status,
+      Value<int> repetitionCount,
+      Value<int> lapseCount,
+      Value<int> storedInterval,
+      Value<int?> lastReviewDay,
+      Value<String> aFactorRaw,
+      Value<String> lastIntervalRatioRaw,
+      Value<int> historyBlockId,
+      Value<int> recentPostponementCount,
+      Value<int> totalPostponementCount,
+      Value<int> learningControl,
       Value<int> encountersSinceLastCard,
-      Value<int?> lastEncounterDay,
-      Value<int?> algorithmDueDay,
-      Value<String> schedulerKind,
-      Value<String> schedulerVersion,
-      Value<String?> policyInputSnapshot,
       Value<int> revision,
       Value<int> rowid,
     });
@@ -17191,68 +15169,63 @@ class $$TopicStatesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get profileId => $composableBuilder(
-    column: $table.profileId,
+  ColumnFilters<int> get status => $composableBuilder(
+    column: $table.status,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get stepIndex => $composableBuilder(
-    column: $table.stepIndex,
+  ColumnFilters<int> get repetitionCount => $composableBuilder(
+    column: $table.repetitionCount,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get intervalDays => $composableBuilder(
-    column: $table.intervalDays,
+  ColumnFilters<int> get lapseCount => $composableBuilder(
+    column: $table.lapseCount,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get aFactor => $composableBuilder(
-    column: $table.aFactor,
+  ColumnFilters<int> get storedInterval => $composableBuilder(
+    column: $table.storedInterval,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get yieldEwma => $composableBuilder(
-    column: $table.yieldEwma,
+  ColumnFilters<int> get lastReviewDay => $composableBuilder(
+    column: $table.lastReviewDay,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get encounters => $composableBuilder(
-    column: $table.encounters,
+  ColumnFilters<String> get aFactorRaw => $composableBuilder(
+    column: $table.aFactorRaw,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get postponeCount => $composableBuilder(
-    column: $table.postponeCount,
+  ColumnFilters<String> get lastIntervalRatioRaw => $composableBuilder(
+    column: $table.lastIntervalRatioRaw,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get historyBlockId => $composableBuilder(
+    column: $table.historyBlockId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get recentPostponementCount => $composableBuilder(
+    column: $table.recentPostponementCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get totalPostponementCount => $composableBuilder(
+    column: $table.totalPostponementCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get learningControl => $composableBuilder(
+    column: $table.learningControl,
     builder: (column) => ColumnFilters(column),
   );
 
   ColumnFilters<int> get encountersSinceLastCard => $composableBuilder(
     column: $table.encountersSinceLastCard,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get lastEncounterDay => $composableBuilder(
-    column: $table.lastEncounterDay,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get algorithmDueDay => $composableBuilder(
-    column: $table.algorithmDueDay,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get schedulerKind => $composableBuilder(
-    column: $table.schedulerKind,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get schedulerVersion => $composableBuilder(
-    column: $table.schedulerVersion,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get policyInputSnapshot => $composableBuilder(
-    column: $table.policyInputSnapshot,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -17281,68 +15254,63 @@ class $$TopicStatesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get profileId => $composableBuilder(
-    column: $table.profileId,
+  ColumnOrderings<int> get status => $composableBuilder(
+    column: $table.status,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get stepIndex => $composableBuilder(
-    column: $table.stepIndex,
+  ColumnOrderings<int> get repetitionCount => $composableBuilder(
+    column: $table.repetitionCount,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get intervalDays => $composableBuilder(
-    column: $table.intervalDays,
+  ColumnOrderings<int> get lapseCount => $composableBuilder(
+    column: $table.lapseCount,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get aFactor => $composableBuilder(
-    column: $table.aFactor,
+  ColumnOrderings<int> get storedInterval => $composableBuilder(
+    column: $table.storedInterval,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get yieldEwma => $composableBuilder(
-    column: $table.yieldEwma,
+  ColumnOrderings<int> get lastReviewDay => $composableBuilder(
+    column: $table.lastReviewDay,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get encounters => $composableBuilder(
-    column: $table.encounters,
+  ColumnOrderings<String> get aFactorRaw => $composableBuilder(
+    column: $table.aFactorRaw,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get postponeCount => $composableBuilder(
-    column: $table.postponeCount,
+  ColumnOrderings<String> get lastIntervalRatioRaw => $composableBuilder(
+    column: $table.lastIntervalRatioRaw,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get historyBlockId => $composableBuilder(
+    column: $table.historyBlockId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get recentPostponementCount => $composableBuilder(
+    column: $table.recentPostponementCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get totalPostponementCount => $composableBuilder(
+    column: $table.totalPostponementCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get learningControl => $composableBuilder(
+    column: $table.learningControl,
     builder: (column) => ColumnOrderings(column),
   );
 
   ColumnOrderings<int> get encountersSinceLastCard => $composableBuilder(
     column: $table.encountersSinceLastCard,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get lastEncounterDay => $composableBuilder(
-    column: $table.lastEncounterDay,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get algorithmDueDay => $composableBuilder(
-    column: $table.algorithmDueDay,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get schedulerKind => $composableBuilder(
-    column: $table.schedulerKind,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get schedulerVersion => $composableBuilder(
-    column: $table.schedulerVersion,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get policyInputSnapshot => $composableBuilder(
-    column: $table.policyInputSnapshot,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -17369,60 +15337,61 @@ class $$TopicStatesTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get profileId =>
-      $composableBuilder(column: $table.profileId, builder: (column) => column);
+  GeneratedColumn<int> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
 
-  GeneratedColumn<int> get stepIndex =>
-      $composableBuilder(column: $table.stepIndex, builder: (column) => column);
-
-  GeneratedColumn<double> get intervalDays => $composableBuilder(
-    column: $table.intervalDays,
+  GeneratedColumn<int> get repetitionCount => $composableBuilder(
+    column: $table.repetitionCount,
     builder: (column) => column,
   );
 
-  GeneratedColumn<double> get aFactor =>
-      $composableBuilder(column: $table.aFactor, builder: (column) => column);
-
-  GeneratedColumn<double> get yieldEwma =>
-      $composableBuilder(column: $table.yieldEwma, builder: (column) => column);
-
-  GeneratedColumn<int> get encounters => $composableBuilder(
-    column: $table.encounters,
+  GeneratedColumn<int> get lapseCount => $composableBuilder(
+    column: $table.lapseCount,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get postponeCount => $composableBuilder(
-    column: $table.postponeCount,
+  GeneratedColumn<int> get storedInterval => $composableBuilder(
+    column: $table.storedInterval,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lastReviewDay => $composableBuilder(
+    column: $table.lastReviewDay,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get aFactorRaw => $composableBuilder(
+    column: $table.aFactorRaw,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastIntervalRatioRaw => $composableBuilder(
+    column: $table.lastIntervalRatioRaw,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get historyBlockId => $composableBuilder(
+    column: $table.historyBlockId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get recentPostponementCount => $composableBuilder(
+    column: $table.recentPostponementCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get totalPostponementCount => $composableBuilder(
+    column: $table.totalPostponementCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get learningControl => $composableBuilder(
+    column: $table.learningControl,
     builder: (column) => column,
   );
 
   GeneratedColumn<int> get encountersSinceLastCard => $composableBuilder(
     column: $table.encountersSinceLastCard,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get lastEncounterDay => $composableBuilder(
-    column: $table.lastEncounterDay,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get algorithmDueDay => $composableBuilder(
-    column: $table.algorithmDueDay,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get schedulerKind => $composableBuilder(
-    column: $table.schedulerKind,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get schedulerVersion => $composableBuilder(
-    column: $table.schedulerVersion,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get policyInputSnapshot => $composableBuilder(
-    column: $table.policyInputSnapshot,
     builder: (column) => column,
   );
 
@@ -17463,37 +15432,35 @@ class $$TopicStatesTableTableManager
               ({
                 Value<String> elementId = const Value.absent(),
                 Value<int> elementType = const Value.absent(),
-                Value<String> profileId = const Value.absent(),
-                Value<int> stepIndex = const Value.absent(),
-                Value<double> intervalDays = const Value.absent(),
-                Value<double> aFactor = const Value.absent(),
-                Value<double> yieldEwma = const Value.absent(),
-                Value<int> encounters = const Value.absent(),
-                Value<int> postponeCount = const Value.absent(),
+                Value<int> status = const Value.absent(),
+                Value<int> repetitionCount = const Value.absent(),
+                Value<int> lapseCount = const Value.absent(),
+                Value<int> storedInterval = const Value.absent(),
+                Value<int?> lastReviewDay = const Value.absent(),
+                Value<String> aFactorRaw = const Value.absent(),
+                Value<String> lastIntervalRatioRaw = const Value.absent(),
+                Value<int> historyBlockId = const Value.absent(),
+                Value<int> recentPostponementCount = const Value.absent(),
+                Value<int> totalPostponementCount = const Value.absent(),
+                Value<int> learningControl = const Value.absent(),
                 Value<int> encountersSinceLastCard = const Value.absent(),
-                Value<int?> lastEncounterDay = const Value.absent(),
-                Value<int?> algorithmDueDay = const Value.absent(),
-                Value<String> schedulerKind = const Value.absent(),
-                Value<String> schedulerVersion = const Value.absent(),
-                Value<String?> policyInputSnapshot = const Value.absent(),
                 Value<int> revision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TopicStatesCompanion(
                 elementId: elementId,
                 elementType: elementType,
-                profileId: profileId,
-                stepIndex: stepIndex,
-                intervalDays: intervalDays,
-                aFactor: aFactor,
-                yieldEwma: yieldEwma,
-                encounters: encounters,
-                postponeCount: postponeCount,
+                status: status,
+                repetitionCount: repetitionCount,
+                lapseCount: lapseCount,
+                storedInterval: storedInterval,
+                lastReviewDay: lastReviewDay,
+                aFactorRaw: aFactorRaw,
+                lastIntervalRatioRaw: lastIntervalRatioRaw,
+                historyBlockId: historyBlockId,
+                recentPostponementCount: recentPostponementCount,
+                totalPostponementCount: totalPostponementCount,
+                learningControl: learningControl,
                 encountersSinceLastCard: encountersSinceLastCard,
-                lastEncounterDay: lastEncounterDay,
-                algorithmDueDay: algorithmDueDay,
-                schedulerKind: schedulerKind,
-                schedulerVersion: schedulerVersion,
-                policyInputSnapshot: policyInputSnapshot,
                 revision: revision,
                 rowid: rowid,
               ),
@@ -17501,37 +15468,35 @@ class $$TopicStatesTableTableManager
               ({
                 required String elementId,
                 required int elementType,
-                required String profileId,
-                required int stepIndex,
-                Value<double> intervalDays = const Value.absent(),
-                Value<double> aFactor = const Value.absent(),
-                Value<double> yieldEwma = const Value.absent(),
-                Value<int> encounters = const Value.absent(),
-                Value<int> postponeCount = const Value.absent(),
+                required int status,
+                Value<int> repetitionCount = const Value.absent(),
+                Value<int> lapseCount = const Value.absent(),
+                Value<int> storedInterval = const Value.absent(),
+                Value<int?> lastReviewDay = const Value.absent(),
+                Value<String> aFactorRaw = const Value.absent(),
+                Value<String> lastIntervalRatioRaw = const Value.absent(),
+                Value<int> historyBlockId = const Value.absent(),
+                Value<int> recentPostponementCount = const Value.absent(),
+                Value<int> totalPostponementCount = const Value.absent(),
+                Value<int> learningControl = const Value.absent(),
                 Value<int> encountersSinceLastCard = const Value.absent(),
-                Value<int?> lastEncounterDay = const Value.absent(),
-                Value<int?> algorithmDueDay = const Value.absent(),
-                Value<String> schedulerKind = const Value.absent(),
-                Value<String> schedulerVersion = const Value.absent(),
-                Value<String?> policyInputSnapshot = const Value.absent(),
                 Value<int> revision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TopicStatesCompanion.insert(
                 elementId: elementId,
                 elementType: elementType,
-                profileId: profileId,
-                stepIndex: stepIndex,
-                intervalDays: intervalDays,
-                aFactor: aFactor,
-                yieldEwma: yieldEwma,
-                encounters: encounters,
-                postponeCount: postponeCount,
+                status: status,
+                repetitionCount: repetitionCount,
+                lapseCount: lapseCount,
+                storedInterval: storedInterval,
+                lastReviewDay: lastReviewDay,
+                aFactorRaw: aFactorRaw,
+                lastIntervalRatioRaw: lastIntervalRatioRaw,
+                historyBlockId: historyBlockId,
+                recentPostponementCount: recentPostponementCount,
+                totalPostponementCount: totalPostponementCount,
+                learningControl: learningControl,
                 encountersSinceLastCard: encountersSinceLastCard,
-                lastEncounterDay: lastEncounterDay,
-                algorithmDueDay: algorithmDueDay,
-                schedulerKind: schedulerKind,
-                schedulerVersion: schedulerVersion,
-                policyInputSnapshot: policyInputSnapshot,
                 revision: revision,
                 rowid: rowid,
               ),
@@ -17572,7 +15537,6 @@ typedef $$CardMemoriesTableCreateCompanionBuilder =
       Value<int?> lastReviewUtc,
       required int dueAtUtc,
       required int originalDueAtUtc,
-      Value<int?> deferredUntilUtc,
       Value<int> postponeCount,
       required String schedulerVersion,
       required String parametersVersion,
@@ -17594,7 +15558,6 @@ typedef $$CardMemoriesTableUpdateCompanionBuilder =
       Value<int?> lastReviewUtc,
       Value<int> dueAtUtc,
       Value<int> originalDueAtUtc,
-      Value<int?> deferredUntilUtc,
       Value<int> postponeCount,
       Value<String> schedulerVersion,
       Value<String> parametersVersion,
@@ -17678,11 +15641,6 @@ class $$CardMemoriesTableFilterComposer
 
   ColumnFilters<int> get originalDueAtUtc => $composableBuilder(
     column: $table.originalDueAtUtc,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get deferredUntilUtc => $composableBuilder(
-    column: $table.deferredUntilUtc,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -17799,11 +15757,6 @@ class $$CardMemoriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get deferredUntilUtc => $composableBuilder(
-    column: $table.deferredUntilUtc,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<int> get postponeCount => $composableBuilder(
     column: $table.postponeCount,
     builder: (column) => ColumnOrderings(column),
@@ -17905,11 +15858,6 @@ class $$CardMemoriesTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get deferredUntilUtc => $composableBuilder(
-    column: $table.deferredUntilUtc,
-    builder: (column) => column,
-  );
-
   GeneratedColumn<int> get postponeCount => $composableBuilder(
     column: $table.postponeCount,
     builder: (column) => column,
@@ -18005,7 +15953,6 @@ class $$CardMemoriesTableTableManager
                 Value<int?> lastReviewUtc = const Value.absent(),
                 Value<int> dueAtUtc = const Value.absent(),
                 Value<int> originalDueAtUtc = const Value.absent(),
-                Value<int?> deferredUntilUtc = const Value.absent(),
                 Value<int> postponeCount = const Value.absent(),
                 Value<String> schedulerVersion = const Value.absent(),
                 Value<String> parametersVersion = const Value.absent(),
@@ -18025,7 +15972,6 @@ class $$CardMemoriesTableTableManager
                 lastReviewUtc: lastReviewUtc,
                 dueAtUtc: dueAtUtc,
                 originalDueAtUtc: originalDueAtUtc,
-                deferredUntilUtc: deferredUntilUtc,
                 postponeCount: postponeCount,
                 schedulerVersion: schedulerVersion,
                 parametersVersion: parametersVersion,
@@ -18047,7 +15993,6 @@ class $$CardMemoriesTableTableManager
                 Value<int?> lastReviewUtc = const Value.absent(),
                 required int dueAtUtc,
                 required int originalDueAtUtc,
-                Value<int?> deferredUntilUtc = const Value.absent(),
                 Value<int> postponeCount = const Value.absent(),
                 required String schedulerVersion,
                 required String parametersVersion,
@@ -18067,7 +16012,6 @@ class $$CardMemoriesTableTableManager
                 lastReviewUtc: lastReviewUtc,
                 dueAtUtc: dueAtUtc,
                 originalDueAtUtc: originalDueAtUtc,
-                deferredUntilUtc: deferredUntilUtc,
                 postponeCount: postponeCount,
                 schedulerVersion: schedulerVersion,
                 parametersVersion: parametersVersion,
@@ -19440,493 +17384,6 @@ typedef $$RevlogEntriesTableProcessedTableManager =
       RevlogRow,
       PrefetchHooks Function()
     >;
-typedef $$ScheduleAdjustmentsTableCreateCompanionBuilder =
-    ScheduleAdjustmentsCompanion Function({
-      required String id,
-      required String elementId,
-      required int elementType,
-      required int mode,
-      required int reason,
-      Value<int?> notBeforeAtUtc,
-      Value<int?> notBeforeStudyDay,
-      Value<int?> scheduledForAtUtc,
-      Value<int?> scheduledForStudyDay,
-      Value<String?> zoneId,
-      required String operationId,
-      Value<String?> batchId,
-      required String policyVersion,
-      required int createdAtUtc,
-      required int createdStudyDay,
-      required String createdZoneId,
-      Value<int?> clearedAtUtc,
-      Value<String?> clearedByOperationId,
-      Value<int> rowid,
-    });
-typedef $$ScheduleAdjustmentsTableUpdateCompanionBuilder =
-    ScheduleAdjustmentsCompanion Function({
-      Value<String> id,
-      Value<String> elementId,
-      Value<int> elementType,
-      Value<int> mode,
-      Value<int> reason,
-      Value<int?> notBeforeAtUtc,
-      Value<int?> notBeforeStudyDay,
-      Value<int?> scheduledForAtUtc,
-      Value<int?> scheduledForStudyDay,
-      Value<String?> zoneId,
-      Value<String> operationId,
-      Value<String?> batchId,
-      Value<String> policyVersion,
-      Value<int> createdAtUtc,
-      Value<int> createdStudyDay,
-      Value<String> createdZoneId,
-      Value<int?> clearedAtUtc,
-      Value<String?> clearedByOperationId,
-      Value<int> rowid,
-    });
-
-class $$ScheduleAdjustmentsTableFilterComposer
-    extends Composer<_$AppDatabase, $ScheduleAdjustmentsTable> {
-  $$ScheduleAdjustmentsTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get elementId => $composableBuilder(
-    column: $table.elementId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get elementType => $composableBuilder(
-    column: $table.elementType,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get mode => $composableBuilder(
-    column: $table.mode,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get reason => $composableBuilder(
-    column: $table.reason,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get notBeforeAtUtc => $composableBuilder(
-    column: $table.notBeforeAtUtc,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get notBeforeStudyDay => $composableBuilder(
-    column: $table.notBeforeStudyDay,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get scheduledForAtUtc => $composableBuilder(
-    column: $table.scheduledForAtUtc,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get scheduledForStudyDay => $composableBuilder(
-    column: $table.scheduledForStudyDay,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get zoneId => $composableBuilder(
-    column: $table.zoneId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get operationId => $composableBuilder(
-    column: $table.operationId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get batchId => $composableBuilder(
-    column: $table.batchId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get policyVersion => $composableBuilder(
-    column: $table.policyVersion,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get createdAtUtc => $composableBuilder(
-    column: $table.createdAtUtc,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get createdStudyDay => $composableBuilder(
-    column: $table.createdStudyDay,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get createdZoneId => $composableBuilder(
-    column: $table.createdZoneId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get clearedAtUtc => $composableBuilder(
-    column: $table.clearedAtUtc,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get clearedByOperationId => $composableBuilder(
-    column: $table.clearedByOperationId,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$ScheduleAdjustmentsTableOrderingComposer
-    extends Composer<_$AppDatabase, $ScheduleAdjustmentsTable> {
-  $$ScheduleAdjustmentsTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get elementId => $composableBuilder(
-    column: $table.elementId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get elementType => $composableBuilder(
-    column: $table.elementType,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get mode => $composableBuilder(
-    column: $table.mode,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get reason => $composableBuilder(
-    column: $table.reason,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get notBeforeAtUtc => $composableBuilder(
-    column: $table.notBeforeAtUtc,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get notBeforeStudyDay => $composableBuilder(
-    column: $table.notBeforeStudyDay,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get scheduledForAtUtc => $composableBuilder(
-    column: $table.scheduledForAtUtc,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get scheduledForStudyDay => $composableBuilder(
-    column: $table.scheduledForStudyDay,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get zoneId => $composableBuilder(
-    column: $table.zoneId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get operationId => $composableBuilder(
-    column: $table.operationId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get batchId => $composableBuilder(
-    column: $table.batchId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get policyVersion => $composableBuilder(
-    column: $table.policyVersion,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get createdAtUtc => $composableBuilder(
-    column: $table.createdAtUtc,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get createdStudyDay => $composableBuilder(
-    column: $table.createdStudyDay,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get createdZoneId => $composableBuilder(
-    column: $table.createdZoneId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get clearedAtUtc => $composableBuilder(
-    column: $table.clearedAtUtc,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get clearedByOperationId => $composableBuilder(
-    column: $table.clearedByOperationId,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$ScheduleAdjustmentsTableAnnotationComposer
-    extends Composer<_$AppDatabase, $ScheduleAdjustmentsTable> {
-  $$ScheduleAdjustmentsTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get elementId =>
-      $composableBuilder(column: $table.elementId, builder: (column) => column);
-
-  GeneratedColumn<int> get elementType => $composableBuilder(
-    column: $table.elementType,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get mode =>
-      $composableBuilder(column: $table.mode, builder: (column) => column);
-
-  GeneratedColumn<int> get reason =>
-      $composableBuilder(column: $table.reason, builder: (column) => column);
-
-  GeneratedColumn<int> get notBeforeAtUtc => $composableBuilder(
-    column: $table.notBeforeAtUtc,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get notBeforeStudyDay => $composableBuilder(
-    column: $table.notBeforeStudyDay,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get scheduledForAtUtc => $composableBuilder(
-    column: $table.scheduledForAtUtc,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get scheduledForStudyDay => $composableBuilder(
-    column: $table.scheduledForStudyDay,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get zoneId =>
-      $composableBuilder(column: $table.zoneId, builder: (column) => column);
-
-  GeneratedColumn<String> get operationId => $composableBuilder(
-    column: $table.operationId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get batchId =>
-      $composableBuilder(column: $table.batchId, builder: (column) => column);
-
-  GeneratedColumn<String> get policyVersion => $composableBuilder(
-    column: $table.policyVersion,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get createdAtUtc => $composableBuilder(
-    column: $table.createdAtUtc,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get createdStudyDay => $composableBuilder(
-    column: $table.createdStudyDay,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get createdZoneId => $composableBuilder(
-    column: $table.createdZoneId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get clearedAtUtc => $composableBuilder(
-    column: $table.clearedAtUtc,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get clearedByOperationId => $composableBuilder(
-    column: $table.clearedByOperationId,
-    builder: (column) => column,
-  );
-}
-
-class $$ScheduleAdjustmentsTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $ScheduleAdjustmentsTable,
-          ScheduleAdjustmentRow,
-          $$ScheduleAdjustmentsTableFilterComposer,
-          $$ScheduleAdjustmentsTableOrderingComposer,
-          $$ScheduleAdjustmentsTableAnnotationComposer,
-          $$ScheduleAdjustmentsTableCreateCompanionBuilder,
-          $$ScheduleAdjustmentsTableUpdateCompanionBuilder,
-          (
-            ScheduleAdjustmentRow,
-            BaseReferences<
-              _$AppDatabase,
-              $ScheduleAdjustmentsTable,
-              ScheduleAdjustmentRow
-            >,
-          ),
-          ScheduleAdjustmentRow,
-          PrefetchHooks Function()
-        > {
-  $$ScheduleAdjustmentsTableTableManager(
-    _$AppDatabase db,
-    $ScheduleAdjustmentsTable table,
-  ) : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$ScheduleAdjustmentsTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$ScheduleAdjustmentsTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$ScheduleAdjustmentsTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String> elementId = const Value.absent(),
-                Value<int> elementType = const Value.absent(),
-                Value<int> mode = const Value.absent(),
-                Value<int> reason = const Value.absent(),
-                Value<int?> notBeforeAtUtc = const Value.absent(),
-                Value<int?> notBeforeStudyDay = const Value.absent(),
-                Value<int?> scheduledForAtUtc = const Value.absent(),
-                Value<int?> scheduledForStudyDay = const Value.absent(),
-                Value<String?> zoneId = const Value.absent(),
-                Value<String> operationId = const Value.absent(),
-                Value<String?> batchId = const Value.absent(),
-                Value<String> policyVersion = const Value.absent(),
-                Value<int> createdAtUtc = const Value.absent(),
-                Value<int> createdStudyDay = const Value.absent(),
-                Value<String> createdZoneId = const Value.absent(),
-                Value<int?> clearedAtUtc = const Value.absent(),
-                Value<String?> clearedByOperationId = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => ScheduleAdjustmentsCompanion(
-                id: id,
-                elementId: elementId,
-                elementType: elementType,
-                mode: mode,
-                reason: reason,
-                notBeforeAtUtc: notBeforeAtUtc,
-                notBeforeStudyDay: notBeforeStudyDay,
-                scheduledForAtUtc: scheduledForAtUtc,
-                scheduledForStudyDay: scheduledForStudyDay,
-                zoneId: zoneId,
-                operationId: operationId,
-                batchId: batchId,
-                policyVersion: policyVersion,
-                createdAtUtc: createdAtUtc,
-                createdStudyDay: createdStudyDay,
-                createdZoneId: createdZoneId,
-                clearedAtUtc: clearedAtUtc,
-                clearedByOperationId: clearedByOperationId,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                required String elementId,
-                required int elementType,
-                required int mode,
-                required int reason,
-                Value<int?> notBeforeAtUtc = const Value.absent(),
-                Value<int?> notBeforeStudyDay = const Value.absent(),
-                Value<int?> scheduledForAtUtc = const Value.absent(),
-                Value<int?> scheduledForStudyDay = const Value.absent(),
-                Value<String?> zoneId = const Value.absent(),
-                required String operationId,
-                Value<String?> batchId = const Value.absent(),
-                required String policyVersion,
-                required int createdAtUtc,
-                required int createdStudyDay,
-                required String createdZoneId,
-                Value<int?> clearedAtUtc = const Value.absent(),
-                Value<String?> clearedByOperationId = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => ScheduleAdjustmentsCompanion.insert(
-                id: id,
-                elementId: elementId,
-                elementType: elementType,
-                mode: mode,
-                reason: reason,
-                notBeforeAtUtc: notBeforeAtUtc,
-                notBeforeStudyDay: notBeforeStudyDay,
-                scheduledForAtUtc: scheduledForAtUtc,
-                scheduledForStudyDay: scheduledForStudyDay,
-                zoneId: zoneId,
-                operationId: operationId,
-                batchId: batchId,
-                policyVersion: policyVersion,
-                createdAtUtc: createdAtUtc,
-                createdStudyDay: createdStudyDay,
-                createdZoneId: createdZoneId,
-                clearedAtUtc: clearedAtUtc,
-                clearedByOperationId: clearedByOperationId,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
-typedef $$ScheduleAdjustmentsTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $ScheduleAdjustmentsTable,
-      ScheduleAdjustmentRow,
-      $$ScheduleAdjustmentsTableFilterComposer,
-      $$ScheduleAdjustmentsTableOrderingComposer,
-      $$ScheduleAdjustmentsTableAnnotationComposer,
-      $$ScheduleAdjustmentsTableCreateCompanionBuilder,
-      $$ScheduleAdjustmentsTableUpdateCompanionBuilder,
-      (
-        ScheduleAdjustmentRow,
-        BaseReferences<
-          _$AppDatabase,
-          $ScheduleAdjustmentsTable,
-          ScheduleAdjustmentRow
-        >,
-      ),
-      ScheduleAdjustmentRow,
-      PrefetchHooks Function()
-    >;
 typedef $$SchedulerEventsTableCreateCompanionBuilder =
     SchedulerEventsCompanion Function({
       required String id,
@@ -19944,8 +17401,6 @@ typedef $$SchedulerEventsTableCreateCompanionBuilder =
       Value<String?> stateAfter,
       Value<String?> algorithmicDueBefore,
       Value<String?> algorithmicDueAfter,
-      Value<String?> adjustmentsBefore,
-      Value<String?> adjustmentsAfter,
       Value<String?> undoesEventId,
       Value<String?> batchId,
       Value<String?> metadataJson,
@@ -19968,8 +17423,6 @@ typedef $$SchedulerEventsTableUpdateCompanionBuilder =
       Value<String?> stateAfter,
       Value<String?> algorithmicDueBefore,
       Value<String?> algorithmicDueAfter,
-      Value<String?> adjustmentsBefore,
-      Value<String?> adjustmentsAfter,
       Value<String?> undoesEventId,
       Value<String?> batchId,
       Value<String?> metadataJson,
@@ -20057,16 +17510,6 @@ class $$SchedulerEventsTableFilterComposer
 
   ColumnFilters<String> get algorithmicDueAfter => $composableBuilder(
     column: $table.algorithmicDueAfter,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get adjustmentsBefore => $composableBuilder(
-    column: $table.adjustmentsBefore,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get adjustmentsAfter => $composableBuilder(
-    column: $table.adjustmentsAfter,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -20170,16 +17613,6 @@ class $$SchedulerEventsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get adjustmentsBefore => $composableBuilder(
-    column: $table.adjustmentsBefore,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get adjustmentsAfter => $composableBuilder(
-    column: $table.adjustmentsAfter,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<String> get undoesEventId => $composableBuilder(
     column: $table.undoesEventId,
     builder: (column) => ColumnOrderings(column),
@@ -20272,16 +17705,6 @@ class $$SchedulerEventsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get adjustmentsBefore => $composableBuilder(
-    column: $table.adjustmentsBefore,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get adjustmentsAfter => $composableBuilder(
-    column: $table.adjustmentsAfter,
-    builder: (column) => column,
-  );
-
   GeneratedColumn<String> get undoesEventId => $composableBuilder(
     column: $table.undoesEventId,
     builder: (column) => column,
@@ -20348,8 +17771,6 @@ class $$SchedulerEventsTableTableManager
                 Value<String?> stateAfter = const Value.absent(),
                 Value<String?> algorithmicDueBefore = const Value.absent(),
                 Value<String?> algorithmicDueAfter = const Value.absent(),
-                Value<String?> adjustmentsBefore = const Value.absent(),
-                Value<String?> adjustmentsAfter = const Value.absent(),
                 Value<String?> undoesEventId = const Value.absent(),
                 Value<String?> batchId = const Value.absent(),
                 Value<String?> metadataJson = const Value.absent(),
@@ -20370,8 +17791,6 @@ class $$SchedulerEventsTableTableManager
                 stateAfter: stateAfter,
                 algorithmicDueBefore: algorithmicDueBefore,
                 algorithmicDueAfter: algorithmicDueAfter,
-                adjustmentsBefore: adjustmentsBefore,
-                adjustmentsAfter: adjustmentsAfter,
                 undoesEventId: undoesEventId,
                 batchId: batchId,
                 metadataJson: metadataJson,
@@ -20394,8 +17813,6 @@ class $$SchedulerEventsTableTableManager
                 Value<String?> stateAfter = const Value.absent(),
                 Value<String?> algorithmicDueBefore = const Value.absent(),
                 Value<String?> algorithmicDueAfter = const Value.absent(),
-                Value<String?> adjustmentsBefore = const Value.absent(),
-                Value<String?> adjustmentsAfter = const Value.absent(),
                 Value<String?> undoesEventId = const Value.absent(),
                 Value<String?> batchId = const Value.absent(),
                 Value<String?> metadataJson = const Value.absent(),
@@ -20416,8 +17833,6 @@ class $$SchedulerEventsTableTableManager
                 stateAfter: stateAfter,
                 algorithmicDueBefore: algorithmicDueBefore,
                 algorithmicDueAfter: algorithmicDueAfter,
-                adjustmentsBefore: adjustmentsBefore,
-                adjustmentsAfter: adjustmentsAfter,
                 undoesEventId: undoesEventId,
                 batchId: batchId,
                 metadataJson: metadataJson,
@@ -20448,273 +17863,6 @@ typedef $$SchedulerEventsTableProcessedTableManager =
       SchedulerEventRow,
       PrefetchHooks Function()
     >;
-typedef $$DailyPresentationPlansTableCreateCompanionBuilder =
-    DailyPresentationPlansCompanion Function({
-      required int studyDay,
-      required String zoneId,
-      required String identityJson,
-      required String remainingEntriesJson,
-      Value<int> mergeCursor,
-      required int createdAtUtc,
-      required int updatedAtUtc,
-      Value<int> rowid,
-    });
-typedef $$DailyPresentationPlansTableUpdateCompanionBuilder =
-    DailyPresentationPlansCompanion Function({
-      Value<int> studyDay,
-      Value<String> zoneId,
-      Value<String> identityJson,
-      Value<String> remainingEntriesJson,
-      Value<int> mergeCursor,
-      Value<int> createdAtUtc,
-      Value<int> updatedAtUtc,
-      Value<int> rowid,
-    });
-
-class $$DailyPresentationPlansTableFilterComposer
-    extends Composer<_$AppDatabase, $DailyPresentationPlansTable> {
-  $$DailyPresentationPlansTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<int> get studyDay => $composableBuilder(
-    column: $table.studyDay,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get zoneId => $composableBuilder(
-    column: $table.zoneId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get identityJson => $composableBuilder(
-    column: $table.identityJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get remainingEntriesJson => $composableBuilder(
-    column: $table.remainingEntriesJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get mergeCursor => $composableBuilder(
-    column: $table.mergeCursor,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get createdAtUtc => $composableBuilder(
-    column: $table.createdAtUtc,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get updatedAtUtc => $composableBuilder(
-    column: $table.updatedAtUtc,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$DailyPresentationPlansTableOrderingComposer
-    extends Composer<_$AppDatabase, $DailyPresentationPlansTable> {
-  $$DailyPresentationPlansTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<int> get studyDay => $composableBuilder(
-    column: $table.studyDay,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get zoneId => $composableBuilder(
-    column: $table.zoneId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get identityJson => $composableBuilder(
-    column: $table.identityJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get remainingEntriesJson => $composableBuilder(
-    column: $table.remainingEntriesJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get mergeCursor => $composableBuilder(
-    column: $table.mergeCursor,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get createdAtUtc => $composableBuilder(
-    column: $table.createdAtUtc,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get updatedAtUtc => $composableBuilder(
-    column: $table.updatedAtUtc,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$DailyPresentationPlansTableAnnotationComposer
-    extends Composer<_$AppDatabase, $DailyPresentationPlansTable> {
-  $$DailyPresentationPlansTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<int> get studyDay =>
-      $composableBuilder(column: $table.studyDay, builder: (column) => column);
-
-  GeneratedColumn<String> get zoneId =>
-      $composableBuilder(column: $table.zoneId, builder: (column) => column);
-
-  GeneratedColumn<String> get identityJson => $composableBuilder(
-    column: $table.identityJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get remainingEntriesJson => $composableBuilder(
-    column: $table.remainingEntriesJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get mergeCursor => $composableBuilder(
-    column: $table.mergeCursor,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get createdAtUtc => $composableBuilder(
-    column: $table.createdAtUtc,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get updatedAtUtc => $composableBuilder(
-    column: $table.updatedAtUtc,
-    builder: (column) => column,
-  );
-}
-
-class $$DailyPresentationPlansTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $DailyPresentationPlansTable,
-          DailyPresentationPlanRow,
-          $$DailyPresentationPlansTableFilterComposer,
-          $$DailyPresentationPlansTableOrderingComposer,
-          $$DailyPresentationPlansTableAnnotationComposer,
-          $$DailyPresentationPlansTableCreateCompanionBuilder,
-          $$DailyPresentationPlansTableUpdateCompanionBuilder,
-          (
-            DailyPresentationPlanRow,
-            BaseReferences<
-              _$AppDatabase,
-              $DailyPresentationPlansTable,
-              DailyPresentationPlanRow
-            >,
-          ),
-          DailyPresentationPlanRow,
-          PrefetchHooks Function()
-        > {
-  $$DailyPresentationPlansTableTableManager(
-    _$AppDatabase db,
-    $DailyPresentationPlansTable table,
-  ) : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$DailyPresentationPlansTableFilterComposer(
-                $db: db,
-                $table: table,
-              ),
-          createOrderingComposer: () =>
-              $$DailyPresentationPlansTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$DailyPresentationPlansTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
-          updateCompanionCallback:
-              ({
-                Value<int> studyDay = const Value.absent(),
-                Value<String> zoneId = const Value.absent(),
-                Value<String> identityJson = const Value.absent(),
-                Value<String> remainingEntriesJson = const Value.absent(),
-                Value<int> mergeCursor = const Value.absent(),
-                Value<int> createdAtUtc = const Value.absent(),
-                Value<int> updatedAtUtc = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => DailyPresentationPlansCompanion(
-                studyDay: studyDay,
-                zoneId: zoneId,
-                identityJson: identityJson,
-                remainingEntriesJson: remainingEntriesJson,
-                mergeCursor: mergeCursor,
-                createdAtUtc: createdAtUtc,
-                updatedAtUtc: updatedAtUtc,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required int studyDay,
-                required String zoneId,
-                required String identityJson,
-                required String remainingEntriesJson,
-                Value<int> mergeCursor = const Value.absent(),
-                required int createdAtUtc,
-                required int updatedAtUtc,
-                Value<int> rowid = const Value.absent(),
-              }) => DailyPresentationPlansCompanion.insert(
-                studyDay: studyDay,
-                zoneId: zoneId,
-                identityJson: identityJson,
-                remainingEntriesJson: remainingEntriesJson,
-                mergeCursor: mergeCursor,
-                createdAtUtc: createdAtUtc,
-                updatedAtUtc: updatedAtUtc,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
-typedef $$DailyPresentationPlansTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $DailyPresentationPlansTable,
-      DailyPresentationPlanRow,
-      $$DailyPresentationPlansTableFilterComposer,
-      $$DailyPresentationPlansTableOrderingComposer,
-      $$DailyPresentationPlansTableAnnotationComposer,
-      $$DailyPresentationPlansTableCreateCompanionBuilder,
-      $$DailyPresentationPlansTableUpdateCompanionBuilder,
-      (
-        DailyPresentationPlanRow,
-        BaseReferences<
-          _$AppDatabase,
-          $DailyPresentationPlansTable,
-          DailyPresentationPlanRow
-        >,
-      ),
-      DailyPresentationPlanRow,
-      PrefetchHooks Function()
-    >;
 typedef $$MercyBatchesTableCreateCompanionBuilder =
     MercyBatchesCompanion Function({
       required String batchId,
@@ -20723,7 +17871,6 @@ typedef $$MercyBatchesTableCreateCompanionBuilder =
       Value<String?> undoOperationId,
       required String policyVersion,
       required String previewJson,
-      Value<String?> priorAdjustmentsJson,
       Value<String?> appliedSnapshotJson,
       required int createdAtUtc,
       Value<int?> appliedAtUtc,
@@ -20738,7 +17885,6 @@ typedef $$MercyBatchesTableUpdateCompanionBuilder =
       Value<String?> undoOperationId,
       Value<String> policyVersion,
       Value<String> previewJson,
-      Value<String?> priorAdjustmentsJson,
       Value<String?> appliedSnapshotJson,
       Value<int> createdAtUtc,
       Value<int?> appliedAtUtc,
@@ -20782,11 +17928,6 @@ class $$MercyBatchesTableFilterComposer
 
   ColumnFilters<String> get previewJson => $composableBuilder(
     column: $table.previewJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get priorAdjustmentsJson => $composableBuilder(
-    column: $table.priorAdjustmentsJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -20850,11 +17991,6 @@ class $$MercyBatchesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get priorAdjustmentsJson => $composableBuilder(
-    column: $table.priorAdjustmentsJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<String> get appliedSnapshotJson => $composableBuilder(
     column: $table.appliedSnapshotJson,
     builder: (column) => ColumnOrderings(column),
@@ -20910,11 +18046,6 @@ class $$MercyBatchesTableAnnotationComposer
 
   GeneratedColumn<String> get previewJson => $composableBuilder(
     column: $table.previewJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get priorAdjustmentsJson => $composableBuilder(
-    column: $table.priorAdjustmentsJson,
     builder: (column) => column,
   );
 
@@ -20976,7 +18107,6 @@ class $$MercyBatchesTableTableManager
                 Value<String?> undoOperationId = const Value.absent(),
                 Value<String> policyVersion = const Value.absent(),
                 Value<String> previewJson = const Value.absent(),
-                Value<String?> priorAdjustmentsJson = const Value.absent(),
                 Value<String?> appliedSnapshotJson = const Value.absent(),
                 Value<int> createdAtUtc = const Value.absent(),
                 Value<int?> appliedAtUtc = const Value.absent(),
@@ -20989,7 +18119,6 @@ class $$MercyBatchesTableTableManager
                 undoOperationId: undoOperationId,
                 policyVersion: policyVersion,
                 previewJson: previewJson,
-                priorAdjustmentsJson: priorAdjustmentsJson,
                 appliedSnapshotJson: appliedSnapshotJson,
                 createdAtUtc: createdAtUtc,
                 appliedAtUtc: appliedAtUtc,
@@ -21004,7 +18133,6 @@ class $$MercyBatchesTableTableManager
                 Value<String?> undoOperationId = const Value.absent(),
                 required String policyVersion,
                 required String previewJson,
-                Value<String?> priorAdjustmentsJson = const Value.absent(),
                 Value<String?> appliedSnapshotJson = const Value.absent(),
                 required int createdAtUtc,
                 Value<int?> appliedAtUtc = const Value.absent(),
@@ -21017,7 +18145,6 @@ class $$MercyBatchesTableTableManager
                 undoOperationId: undoOperationId,
                 policyVersion: policyVersion,
                 previewJson: previewJson,
-                priorAdjustmentsJson: priorAdjustmentsJson,
                 appliedSnapshotJson: appliedSnapshotJson,
                 createdAtUtc: createdAtUtc,
                 appliedAtUtc: appliedAtUtc,
@@ -21909,15 +19036,8 @@ class $AppDatabaseManager {
       $$ReviewEventsTableTableManager(_db, _db.reviewEvents);
   $$RevlogEntriesTableTableManager get revlogEntries =>
       $$RevlogEntriesTableTableManager(_db, _db.revlogEntries);
-  $$ScheduleAdjustmentsTableTableManager get scheduleAdjustments =>
-      $$ScheduleAdjustmentsTableTableManager(_db, _db.scheduleAdjustments);
   $$SchedulerEventsTableTableManager get schedulerEvents =>
       $$SchedulerEventsTableTableManager(_db, _db.schedulerEvents);
-  $$DailyPresentationPlansTableTableManager get dailyPresentationPlans =>
-      $$DailyPresentationPlansTableTableManager(
-        _db,
-        _db.dailyPresentationPlans,
-      );
   $$MercyBatchesTableTableManager get mercyBatches =>
       $$MercyBatchesTableTableManager(_db, _db.mercyBatches);
   $$SearchDocumentsTableTableManager get searchDocuments =>

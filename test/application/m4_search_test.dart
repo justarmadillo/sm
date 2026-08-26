@@ -75,23 +75,28 @@ void main() {
   });
 
   group('indexing', () {
-    test('an imported article is findable by its body, not only its title',
-        () async {
-      final Source source = await harness.import('Pulmonology', _pulmonology);
+    test(
+      'an imported article is findable by its body, not only its title',
+      () async {
+        final Source source = await harness.import('Pulmonology', _pulmonology);
 
-      final List<SearchResult> hits = await harness.searchQuery.run(
-        'pneumocytes',
-      );
-      expect(hits, hasLength(1));
-      expect(hits.single.ref, ElementRef(id: source.id, type: ElementType.source));
-      expect(hits.single.typeLabel, 'Article');
-      expect(hits.single.snippet, contains('pneumocytes'));
-      expect(
-        hits.single.schedule,
-        isNotNull,
-        reason: 'a result shows when the element is next due',
-      );
-    });
+        final List<SearchResult> hits = await harness.searchQuery.run(
+          'pneumocytes',
+        );
+        expect(hits, hasLength(1));
+        expect(
+          hits.single.ref,
+          ElementRef(id: source.id, type: ElementType.source),
+        );
+        expect(hits.single.typeLabel, 'Article');
+        expect(hits.single.snippet, contains('pneumocytes'));
+        expect(
+          hits.single.schedule,
+          isNotNull,
+          reason: 'a result shows when the element is next due',
+        );
+      },
+    );
 
     test('a card is findable by its answer as well as its question', () async {
       final Source source = await harness.import('Cardiology', _cardiology);
@@ -144,7 +149,10 @@ void main() {
       );
 
       final List<SearchResult> hits = await harness.searchQuery.run('alveolar');
-      expect(hits.map((SearchResult r) => r.title), contains('Alveolar mechanics'));
+      expect(
+        hits.map((SearchResult r) => r.title),
+        contains('Alveolar mechanics'),
+      );
     });
 
     test('a prefix matches while the user is still typing', () async {
@@ -170,14 +178,16 @@ void main() {
       expect(await harness.searchQuery.indexIsValid(), isTrue);
     });
 
-    test('rebuilds from the materialized rows without losing anything',
-        () async {
-      await harness.import('Pulmonology', _pulmonology);
-      await harness.search.rebuildIndex();
+    test(
+      'rebuilds from the materialized rows without losing anything',
+      () async {
+        await harness.import('Pulmonology', _pulmonology);
+        await harness.search.rebuildIndex();
 
-      expect(await harness.searchQuery.indexIsValid(), isTrue);
-      expect(await harness.searchQuery.run('surfactant'), hasLength(1));
-    });
+        expect(await harness.searchQuery.indexIsValid(), isTrue);
+        expect(await harness.searchQuery.run('surfactant'), hasLength(1));
+      },
+    );
 
     test('a removed document leaves no hit behind', () async {
       final Source source = await harness.import('Pulmonology', _pulmonology);

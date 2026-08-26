@@ -36,15 +36,24 @@ final class SettingsStore {
   /// table's history useless for working out when a constant was retuned.
   Future<Result<AppSettings>> save(AppSettings settings) async {
     try {
-      final Map<String, String> next = settings.toMap();
+      // The UI constrains every field, but commands and imports can also build
+      // AppSettings directly. Round-trip once so persisted values always obey
+      // the same executable/UI domains as decoded values.
+      final AppSettings canonical = AppSettings.fromMap(settings.toMap());
+      final Map<String, String> next = canonical.toMap();
       final Map<String, String> stored = await _repository.readAll();
       final changed = <String, String>{
         for (final MapEntry<String, String> entry in next.entries)
           if (stored[entry.key] != entry.value) entry.key: entry.value,
       };
       if (changed.isNotEmpty) await _repository.writeAll(changed);
-      _cached = settings;
-      return Ok<AppSettings>(settings);
+      for (final String key in stored.keys) {
+        if (!next.containsKey(key) && _isReplacedSchedulerKey(key)) {
+          await _repository.remove(key);
+        }
+      }
+      _cached = canonical;
+      return Ok<AppSettings>(canonical);
     } on Object catch (error, stackTrace) {
       return Err<AppSettings>(
         StorageFailure(
@@ -65,3 +74,30 @@ final class SettingsStore {
   Future<AppSettings> _read() async =>
       AppSettings.fromMap(await _repository.readAll());
 }
+
+bool _isReplacedSchedulerKey(String key) =>
+    key.startsWith('topic.') ||
+    key.startsWith('profile.days.') ||
+    _replacedSchedulerKeys.contains(key);
+
+const Set<String> _replacedSchedulerKeys = <String>{
+  'queue.max_cards',
+  'queue.max_new_cards',
+  'queue.max_topics',
+  'queue.cards_per_topic',
+  'queue.min_topic_every',
+  'queue.randomization',
+  'queue.protected_percentile',
+  'queue.auto_postpone',
+  'queue.study_more_step',
+  'postpone.later_min_fraction',
+  'postpone.later_max_fraction',
+  'postpone.later_max_days',
+  'postpone.auto_base_fraction',
+  'postpone.auto_priority_multiplier',
+  'postpone.auto_dispersal',
+  'postpone.auto_max_days',
+  'postpone.mercy_horizon_days',
+  'postpone.mercy_daily_cap',
+  'reader.default_later_days',
+};

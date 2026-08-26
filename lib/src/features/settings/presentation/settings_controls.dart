@@ -72,6 +72,7 @@ class SettingsRow extends StatelessWidget {
     required this.hint,
     required this.control,
     super.key,
+    this.controlWidth = 190,
   });
 
   final String label;
@@ -80,6 +81,7 @@ class SettingsRow extends StatelessWidget {
   final String hint;
 
   final Widget control;
+  final double controlWidth;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -108,7 +110,7 @@ class SettingsRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 18),
-        SizedBox(width: 190, child: control),
+        SizedBox(width: controlWidth, child: control),
       ],
     ),
   );
@@ -121,11 +123,15 @@ class IntField extends StatefulWidget {
     required this.onChanged,
     super.key,
     this.suffix,
+    this.min,
+    this.max,
   });
 
   final int value;
   final ValueChanged<int> onChanged;
   final String? suffix;
+  final int? min;
+  final int? max;
 
   @override
   State<IntField> createState() => _IntFieldState();
@@ -168,8 +174,208 @@ class _IntFieldState extends State<IntField> {
     style: const TextStyle(fontSize: 13),
     onChanged: (String text) {
       final int? parsed = int.tryParse(text);
-      if (parsed != null) widget.onChanged(parsed);
+      if (parsed == null) return;
+      widget.onChanged(
+        parsed.clamp(widget.min ?? parsed, widget.max ?? parsed).toInt(),
+      );
     },
+  );
+}
+
+/// A real-number field with optional inclusive bounds.
+class DoubleField extends StatefulWidget {
+  const DoubleField({
+    required this.value,
+    required this.onChanged,
+    super.key,
+    this.suffix,
+    this.min,
+    this.max,
+  });
+
+  final double value;
+  final ValueChanged<double> onChanged;
+  final String? suffix;
+  final double? min;
+  final double? max;
+
+  @override
+  State<DoubleField> createState() => _DoubleFieldState();
+}
+
+class _DoubleFieldState extends State<DoubleField> {
+  late final TextEditingController _controller = TextEditingController(
+    text: _format(widget.value),
+  );
+
+  static String _format(double value) {
+    final String text = value.toStringAsFixed(6);
+    return text.replaceFirst(RegExp(r'\.?0+$'), '');
+  }
+
+  @override
+  void didUpdateWidget(DoubleField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final double? typed = double.tryParse(_controller.text);
+    if (widget.value != oldWidget.value && typed != widget.value) {
+      _controller.text = _format(widget.value);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: _controller,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    inputFormatters: <TextInputFormatter>[
+      FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+    ],
+    decoration: InputDecoration(
+      isDense: true,
+      border: const OutlineInputBorder(),
+      suffixText: widget.suffix,
+    ),
+    style: const TextStyle(fontSize: 13),
+    onChanged: (String text) {
+      final double? parsed = double.tryParse(text);
+      if (parsed == null || !parsed.isFinite) return;
+      widget.onChanged(
+        parsed.clamp(widget.min ?? parsed, widget.max ?? parsed).toDouble(),
+      );
+    },
+  );
+}
+
+/// A short free-text setting such as a Smart Postpone profile name.
+class StringField extends StatefulWidget {
+  const StringField({required this.value, required this.onChanged, super.key});
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<StringField> createState() => _StringFieldState();
+}
+
+class _StringFieldState extends State<StringField> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.value,
+  );
+
+  @override
+  void didUpdateWidget(StringField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value && _controller.text != widget.value) {
+      _controller.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: _controller,
+    decoration: const InputDecoration(
+      isDense: true,
+      border: OutlineInputBorder(),
+    ),
+    style: const TextStyle(fontSize: 13),
+    onChanged: widget.onChanged,
+  );
+}
+
+/// Editor for SM20's optional row-major 20 by 20 UInt16 Mercy matrix.
+class UInt16MatrixField extends StatefulWidget {
+  const UInt16MatrixField({
+    required this.value,
+    required this.onChanged,
+    super.key,
+  });
+
+  final List<int>? value;
+  final ValueChanged<List<int>?> onChanged;
+
+  @override
+  State<UInt16MatrixField> createState() => _UInt16MatrixFieldState();
+}
+
+class _UInt16MatrixFieldState extends State<UInt16MatrixField> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.value?.join(', ') ?? '',
+  );
+  String? _error;
+
+  @override
+  void didUpdateWidget(UInt16MatrixField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final String oldValue = oldWidget.value?.join(',') ?? '';
+    final String newValue = widget.value?.join(',') ?? '';
+    if (oldValue != newValue && _normalized(_controller.text) != newValue) {
+      _controller.text = widget.value?.join(', ') ?? '';
+      _error = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  static String _normalized(String text) => text
+      .split(RegExp(r'[\s,;]+'))
+      .where((String part) => part.isNotEmpty)
+      .join(',');
+
+  void _changed(String text) {
+    if (text.trim().isEmpty) {
+      setState(() => _error = null);
+      widget.onChanged(null);
+      return;
+    }
+    final List<String> parts = text
+        .split(RegExp(r'[\s,;]+'))
+        .where((String part) => part.isNotEmpty)
+        .toList(growable: false);
+    final values = <int>[];
+    for (final String part in parts) {
+      final int? value = int.tryParse(part);
+      if (value == null || value < 0 || value > 0xFFFF) {
+        setState(() => _error = 'Use unsigned 16-bit values (0–65535).');
+        return;
+      }
+      values.add(value);
+    }
+    if (values.length != 400) {
+      setState(() => _error = '${values.length}/400 values entered');
+      return;
+    }
+    setState(() => _error = null);
+    widget.onChanged(List<int>.unmodifiable(values));
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: _controller,
+    minLines: 3,
+    maxLines: 6,
+    decoration: InputDecoration(
+      isDense: true,
+      border: const OutlineInputBorder(),
+      hintText: '400 comma- or space-separated UInt16 values',
+      errorText: _error,
+    ),
+    style: const TextStyle(fontSize: 12),
+    onChanged: _changed,
   );
 }
 

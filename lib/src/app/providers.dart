@@ -11,6 +11,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../application/browser/browser_handlers.dart';
 import '../application/diagnostics/diagnostics_query.dart';
 import '../application/diagnostics/scheduler_metrics_query.dart';
 import '../application/extraction/extraction_handlers.dart';
@@ -25,10 +26,10 @@ import '../application/reader/reader_handlers.dart';
 import '../application/review/review_handlers.dart';
 import '../application/scheduling/effective_due_query.dart';
 import '../application/scheduling/mercy_handlers.dart';
-import '../application/scheduling/schedule_adjustment_service.dart';
 import '../application/scheduling/scheduling_context.dart';
 import '../application/search/search_query.dart';
 import '../application/settings/settings_store.dart';
+import '../application/settings/sm20_runtime_store.dart';
 import '../core/clock.dart';
 import '../core/ids.dart';
 import '../core/tracing.dart';
@@ -116,12 +117,18 @@ final Provider<SettingsStore> settingsStoreProvider = Provider<SettingsStore>(
   (Ref ref) => SettingsStore(ref.watch(settingsRepositoryProvider)),
 );
 
+final Provider<Sm20RuntimeStore> sm20RuntimeStoreProvider =
+    Provider<Sm20RuntimeStore>(
+      (Ref ref) => Sm20RuntimeStore(ref.watch(settingsRepositoryProvider)),
+    );
+
 /// Builds schedulers, the calendar, and the priority scale from live settings.
 final Provider<SchedulingContext> schedulingContextProvider =
     Provider<SchedulingContext>(
       (Ref ref) => SchedulingContext(
         settings: ref.watch(settingsStoreProvider),
         learning: ref.watch(learningRepositoryProvider),
+        runtime: ref.watch(sm20RuntimeStoreProvider),
         clock: ref.watch(clockProvider),
         resolveZone: ref.watch(timeZoneResolverProvider),
       ),
@@ -279,6 +286,20 @@ final Provider<PriorityHandlers> priorityHandlersProvider =
       ),
     );
 
+/// SM20's browser Learning command group.
+final Provider<BrowserHandlers> browserHandlersProvider =
+    Provider<BrowserHandlers>(
+      (Ref ref) => BrowserHandlers(
+        learning: ref.watch(learningRepositoryProvider),
+        transfer: ref.watch(transferRepositoryProvider),
+        transactions: ref.watch(transactionRunnerProvider),
+        context: ref.watch(schedulingContextProvider),
+        clock: ref.watch(clockProvider),
+        ids: ref.watch(idGeneratorProvider),
+        diagnostics: ref.watch(diagnosticsProvider),
+      ),
+    );
+
 /// The overload valve, Study More, and Mercy.
 final Provider<QueueHandlers> queueHandlersProvider = Provider<QueueHandlers>(
   (Ref ref) => QueueHandlers(
@@ -319,10 +340,6 @@ final Provider<MercyHandlers> mercyHandlersProvider = Provider<MercyHandlers>(
     transfer: ref.watch(transferRepositoryProvider),
     transactions: ref.watch(transactionRunnerProvider),
     context: ref.watch(schedulingContextProvider),
-    adjustments: ScheduleAdjustmentService(
-      learning: ref.watch(learningRepositoryProvider),
-      ids: ref.watch(idGeneratorProvider),
-    ),
     queue: ref.watch(queueHandlersProvider),
     ids: ref.watch(idGeneratorProvider),
   ),
@@ -365,7 +382,6 @@ final Provider<DiagnosticsQuery> diagnosticsQueryProvider =
         content: ref.watch(contentRepositoryProvider),
         search: ref.watch(searchRepositoryProvider),
         context: ref.watch(schedulingContextProvider),
-        effectiveDue: ref.watch(effectiveDueQueryProvider),
       ),
     );
 

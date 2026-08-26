@@ -8,12 +8,13 @@ library;
 
 import 'package:drift/drift.dart';
 
+import '../../domain/scheduling/sm20_numeric.dart';
 import 'tables.dart';
 
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 7;
+const int kSchemaVersion = 9;
 
 /// Name of the external-content FTS5 index over [SearchDocuments].
 const String kSearchIndexTable = 'search_index';
@@ -29,9 +30,7 @@ const String kSearchIndexTable = 'search_index';
     CardMemories,
     ReviewEvents,
     RevlogEntries,
-    ScheduleAdjustments,
     SchedulerEvents,
-    DailyPresentationPlans,
     MercyBatches,
     SearchDocuments,
     ActivityEvents,
@@ -126,16 +125,50 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(revlogEntries);
         await m.createTable(searchDocuments);
         await _addColumnIfMissing(m, elementSchedules, elementSchedules.rootId);
-        for (final GeneratedColumn<Object> column in <GeneratedColumn<Object>>[
-          topicStates.intervalDays,
-          topicStates.aFactor,
-          topicStates.yieldEwma,
-          topicStates.encounters,
-          topicStates.postponeCount,
-          topicStates.encountersSinceLastCard,
-          topicStates.lastEncounterDay,
-        ]) {
-          await _addColumnIfMissing(m, topicStates, column);
+        final bool hasLegacyTopicShape = await _hasColumn(
+          'topic_states',
+          'profile_id',
+        );
+        if (hasLegacyTopicShape) {
+          // These are historical v5 columns. They are intentionally not part
+          // of the current Drift table shape, but old collections still have
+          // to be advanced through v5 before the v8 rebuild can convert them.
+          await _addRawColumnIfMissing(
+            'topic_states',
+            'interval_days',
+            'REAL NOT NULL DEFAULT 0 CHECK (interval_days >= 0)',
+          );
+          await _addRawColumnIfMissing(
+            'topic_states',
+            'a_factor',
+            'REAL NOT NULL DEFAULT 0 CHECK (a_factor >= 0)',
+          );
+          await _addRawColumnIfMissing(
+            'topic_states',
+            'yield_ewma',
+            'REAL NOT NULL DEFAULT 0 CHECK (yield_ewma >= 0)',
+          );
+          await _addRawColumnIfMissing(
+            'topic_states',
+            'encounters',
+            'INTEGER NOT NULL DEFAULT 0 CHECK (encounters >= 0)',
+          );
+          await _addRawColumnIfMissing(
+            'topic_states',
+            'postpone_count',
+            'INTEGER NOT NULL DEFAULT 0 CHECK (postpone_count >= 0)',
+          );
+          await _addRawColumnIfMissing(
+            'topic_states',
+            'encounters_since_last_card',
+            'INTEGER NOT NULL DEFAULT 0 '
+                'CHECK (encounters_since_last_card >= 0)',
+          );
+          await _addRawColumnIfMissing(
+            'topic_states',
+            'last_encounter_day',
+            'INTEGER NULL',
+          );
         }
         await _addColumnIfMissing(m, cardMemories, cardMemories.postponeCount);
 
@@ -145,25 +178,27 @@ class AppDatabase extends _$AppDatabase {
         // instead of restarting it. The sequences below are the shipped
         // defaults; a topic on an edited profile lands on the closest of them,
         // which is a one-time approximation of an interval, not of progress.
-        await customStatement(
-          'UPDATE topic_states SET interval_days = CASE profile_id '
-          "WHEN 'focused' THEN "
-          'CASE MIN(step_index, 8) WHEN 0 THEN 1 WHEN 1 THEN 2 WHEN 2 THEN 3 '
-          'WHEN 3 THEN 5 WHEN 4 THEN 7 WHEN 5 THEN 10 WHEN 6 THEN 14 '
-          'WHEN 7 THEN 21 ELSE 30 END '
-          "WHEN 'slow' THEN "
-          'CASE MIN(step_index, 7) WHEN 0 THEN 7 WHEN 1 THEN 14 WHEN 2 THEN 30 '
-          'WHEN 3 THEN 60 WHEN 4 THEN 120 WHEN 5 THEN 240 WHEN 6 THEN 365 '
-          'ELSE 730 END '
-          "WHEN 'extract' THEN "
-          'CASE MIN(step_index, 6) WHEN 0 THEN 1 WHEN 1 THEN 3 WHEN 2 THEN 7 '
-          'WHEN 3 THEN 14 WHEN 4 THEN 30 WHEN 5 THEN 60 ELSE 120 END '
-          'ELSE '
-          'CASE MIN(step_index, 8) WHEN 0 THEN 1 WHEN 1 THEN 3 WHEN 2 THEN 7 '
-          'WHEN 3 THEN 14 WHEN 4 THEN 30 WHEN 5 THEN 60 WHEN 6 THEN 120 '
-          'WHEN 7 THEN 240 ELSE 365 END END, '
-          'a_factor = 2.0, encounters = step_index',
-        );
+        if (hasLegacyTopicShape) {
+          await customStatement(
+            'UPDATE topic_states SET interval_days = CASE profile_id '
+            "WHEN 'focused' THEN "
+            'CASE MIN(step_index, 8) WHEN 0 THEN 1 WHEN 1 THEN 2 WHEN 2 THEN 3 '
+            'WHEN 3 THEN 5 WHEN 4 THEN 7 WHEN 5 THEN 10 WHEN 6 THEN 14 '
+            'WHEN 7 THEN 21 ELSE 30 END '
+            "WHEN 'slow' THEN "
+            'CASE MIN(step_index, 7) WHEN 0 THEN 7 WHEN 1 THEN 14 WHEN 2 THEN 30 '
+            'WHEN 3 THEN 60 WHEN 4 THEN 120 WHEN 5 THEN 240 WHEN 6 THEN 365 '
+            'ELSE 730 END '
+            "WHEN 'extract' THEN "
+            'CASE MIN(step_index, 6) WHEN 0 THEN 1 WHEN 1 THEN 3 WHEN 2 THEN 7 '
+            'WHEN 3 THEN 14 WHEN 4 THEN 30 WHEN 5 THEN 60 ELSE 120 END '
+            'ELSE '
+            'CASE MIN(step_index, 8) WHEN 0 THEN 1 WHEN 1 THEN 3 WHEN 2 THEN 7 '
+            'WHEN 3 THEN 14 WHEN 4 THEN 30 WHEN 5 THEN 60 WHEN 6 THEN 120 '
+            'WHEN 7 THEN 240 ELSE 365 END END, '
+            'a_factor = 2.0, encounters = step_index',
+          );
+        }
 
         // Every schedule learns its root source. An extract already stores it
         // denormalized; a card reaches it through whichever parent it has.
@@ -253,11 +288,6 @@ class AppDatabase extends _$AppDatabase {
           elementSchedules.updatedAtUtc,
           elementSchedules.revision,
           elementSchedules.legacyDueProvenance,
-          topicStates.algorithmDueDay,
-          topicStates.schedulerKind,
-          topicStates.schedulerVersion,
-          topicStates.policyInputSnapshot,
-          topicStates.revision,
           cardMemories.schedulerName,
           cardMemories.scheduledDays,
           cardMemories.fsrsStateJson,
@@ -272,13 +302,46 @@ class AppDatabase extends _$AppDatabase {
           await _addColumnIfMissing(m, table, column);
         }
 
+        final bool hasPreSm20TopicShape = !await _hasColumn(
+          'topic_states',
+          'status',
+        );
+        if (hasPreSm20TopicShape) {
+          // Historical v6 topic provenance. As with the v5 fields above,
+          // these exist only long enough for a pre-v8 database to complete
+          // its ordered migrations and are removed by the SM20 rebuild.
+          await _addRawColumnIfMissing(
+            'topic_states',
+            'algorithm_due_day',
+            'INTEGER NULL',
+          );
+          await _addRawColumnIfMissing(
+            'topic_states',
+            'scheduler_kind',
+            "TEXT NOT NULL DEFAULT 'topic_afactor_v1'",
+          );
+          await _addRawColumnIfMissing(
+            'topic_states',
+            'scheduler_version',
+            "TEXT NOT NULL DEFAULT 'topic_afactor_v1/1'",
+          );
+          await _addRawColumnIfMissing(
+            'topic_states',
+            'policy_input_snapshot',
+            'TEXT NULL',
+          );
+          await _addRawColumnIfMissing(
+            'topic_states',
+            'revision',
+            'INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1)',
+          );
+        }
+
         // Rebuilt after the new columns exist, or the copy would name a
         // column the old table does not have yet.
         await m.alterTable(TableMigration(cardMemories));
 
-        await m.createTable(scheduleAdjustments);
         await m.createTable(schedulerEvents);
-        await m.createTable(dailyPresentationPlans);
         await m.createTable(mercyBatches);
 
         // Import every historical card observation into the new append-only
@@ -309,23 +372,31 @@ class AppDatabase extends _$AppDatabase {
         // All pre-v6 topic rows lack trustworthy policy provenance. Preserve
         // their exact due/interval/step and label them legacy; never infer
         // that the global setting in force today produced yesterday's row.
-        await customStatement(
-          "UPDATE topic_states SET scheduler_kind = 'legacy_sequence', "
-          "scheduler_version = 'legacy_sequence/1', "
-          'algorithm_due_day = (SELECT due_day FROM element_schedules e '
-          'WHERE e.element_id = topic_states.element_id '
-          'AND e.element_type = topic_states.element_type), revision = 1',
-        );
+        if (hasPreSm20TopicShape) {
+          await customStatement(
+            "UPDATE topic_states SET scheduler_kind = 'legacy_sequence', "
+            "scheduler_version = 'legacy_sequence/1', "
+            'algorithm_due_day = (SELECT due_day FROM element_schedules e '
+            'WHERE e.element_id = topic_states.element_id '
+            'AND e.element_type = topic_states.element_type), revision = 1',
+          );
+        }
 
         // Where a legacy row's visible due date contradicts the original due
         // it claims to have come from, the provenance is unknowable: some
         // earlier build overwrote the canonical date to implement a
         // postponement. Keep the date the user can see, and mark it as
         // unknown rather than presenting a fabricated history as fact.
+        // The deferral columns are gone from the current schema, so an old
+        // file may or may not still have them at this point in the chain.
+        final bool hadDeferral = await _hasColumn(
+          'element_schedules',
+          'deferred_until',
+        );
         await customStatement(
           'UPDATE element_schedules SET legacy_due_provenance = 1 '
-          'WHERE element_type IN (0, 1) AND due_day <> original_due_day '
-          'AND deferred_until IS NULL',
+          'WHERE element_type IN (0, 1) AND due_day <> original_due_day'
+          '${hadDeferral ? ' AND deferred_until IS NULL' : ''}',
         );
 
         // Recover common element audit/provenance from immutable content rows.
@@ -381,78 +452,72 @@ class AppDatabase extends _$AppDatabase {
       }
 
       if (from < 7) {
-        // The v6 contract made typed adjustments canonical but left the v4/v5
-        // deferral columns populated. A row deferred by an older build would
-        // therefore have become eligible again the moment its owner upgraded,
-        // silently returning work the user had pushed away. Convert every
-        // surviving legacy deferral into the lower bound it always meant, then
-        // clear the columns so exactly one mechanism can defer an element.
-        //
-        // Cards keep an exact UTC instant when one was stored; the day-only
-        // fallback uses UTC midnight, which is the honest bound the legacy
-        // column could express, and says so in its policy version.
-        await customStatement(
-          'INSERT OR IGNORE INTO schedule_adjustments ('
-          'id, element_id, element_type, mode, reason, '
-          'not_before_at_utc, not_before_study_day, '
-          'scheduled_for_at_utc, scheduled_for_study_day, zone_id, '
-          'operation_id, batch_id, policy_version, created_at_utc, '
-          'created_study_day, created_zone_id, cleared_at_utc, '
-          'cleared_by_operation_id) '
-          "SELECT 'legacy-deferral:' || e.element_id || ':' || e.element_type, "
-          'e.element_id, e.element_type, 0, '
-          'CASE WHEN e.deferral_kind = 2 THEN 1 ELSE 0 END, '
-          'CASE WHEN e.element_type = 2 THEN COALESCE('
-          '(SELECT m.deferred_until_utc FROM card_memories m '
-          'WHERE m.card_id = e.element_id), e.deferred_until * 86400000) '
-          'END, '
-          'CASE WHEN e.element_type = 2 THEN NULL ELSE e.deferred_until END, '
-          'NULL, NULL, e.zone_id, '
-          "'migration:v7:legacy_deferral:' || e.element_id, NULL, "
-          "'legacy_deferral_import_v1', "
-          'COALESCE(e.updated_at_utc, e.created_at_utc, 0), '
-          'CAST((COALESCE(e.updated_at_utc, e.created_at_utc, 0) - 14400000) '
-          '/ 86400000 AS INTEGER), e.zone_id, NULL, NULL '
-          'FROM element_schedules e WHERE e.deferred_until IS NOT NULL',
-        );
-
-        // A card could also carry an exact deferral with no day-level twin.
-        await customStatement(
-          'INSERT OR IGNORE INTO schedule_adjustments ('
-          'id, element_id, element_type, mode, reason, '
-          'not_before_at_utc, not_before_study_day, '
-          'scheduled_for_at_utc, scheduled_for_study_day, zone_id, '
-          'operation_id, batch_id, policy_version, created_at_utc, '
-          'created_study_day, created_zone_id, cleared_at_utc, '
-          'cleared_by_operation_id) '
-          "SELECT 'legacy-deferral:' || m.card_id || ':2', m.card_id, 2, 0, "
-          'CASE WHEN e.deferral_kind = 2 THEN 1 ELSE 0 END, '
-          'm.deferred_until_utc, NULL, NULL, NULL, e.zone_id, '
-          "'migration:v7:legacy_deferral:' || m.card_id, NULL, "
-          "'legacy_deferral_import_v1', "
-          'COALESCE(e.updated_at_utc, e.created_at_utc, 0), '
-          'CAST((COALESCE(e.updated_at_utc, e.created_at_utc, 0) - 14400000) '
-          '/ 86400000 AS INTEGER), e.zone_id, NULL, NULL '
-          'FROM card_memories m JOIN element_schedules e '
-          'ON e.element_id = m.card_id AND e.element_type = 2 '
-          'WHERE m.deferred_until_utc IS NOT NULL',
-        );
-
-        // Retire the legacy coordinate. The paired CHECK constraint means the
-        // kind has to fall back to `none` in the same statement.
-        await customStatement(
-          'UPDATE element_schedules SET deferred_until = NULL, '
-          'deferral_kind = 0 WHERE deferred_until IS NOT NULL',
-        );
-        await customStatement(
-          'UPDATE card_memories SET deferred_until_utc = NULL '
-          'WHERE deferred_until_utc IS NOT NULL',
-        );
+        // The typed-adjustment scheduler is retired. Do not translate its
+        // predecessor into another compatibility representation: clear the
+        // old coordinates before SM20 becomes the sole scheduling policy.
+        if (await _hasColumn('element_schedules', 'deferred_until')) {
+          await customStatement(
+            'UPDATE element_schedules SET deferred_until = NULL, '
+            'deferral_kind = 0 WHERE deferred_until IS NOT NULL',
+          );
+        }
+        if (await _hasColumn('card_memories', 'deferred_until_utc')) {
+          await customStatement(
+            'UPDATE card_memories SET deferred_until_utc = NULL '
+            'WHERE deferred_until_utc IS NOT NULL',
+          );
+        }
 
         // Mercy undo restores from a stored snapshot rather than recomputing,
         // so the column has to exist before the first batch can be applied.
-        await _addColumnIfMissing(m, mercyBatches, mercyBatches.appliedSnapshotJson);
+        await _addColumnIfMissing(
+          m,
+          mercyBatches,
+          mercyBatches.appliedSnapshotJson,
+        );
 
+        await _createIndexes(m);
+      }
+
+      if (from < 8) {
+        // Replace the retired sequence/A-factor topic row with the sole SM20
+        // record. This is a one-time data conversion, not a runtime legacy
+        // scheduler: after this rebuild no old scheduler discriminator or
+        // policy column remains in the live schema.
+        await _migrateTopicStatesToSm20(m);
+        // These tables belonged to the superseded scheduler and are not part
+        // of the SM20 schema. A database upgraded from v6/v7 must not retain
+        // them merely because SQLite otherwise leaves unmentioned tables in
+        // place.
+        await customStatement('DROP TABLE IF EXISTS schedule_adjustments');
+        await customStatement('DROP TABLE IF EXISTS daily_presentation_plans');
+        await _createIndexes(m);
+      }
+
+      if (from < 9) {
+        // Retire the deferral overlay and the two dead lifecycle states in
+        // one step, because they are one decision: SM20 expresses a
+        // postponement as a low-level reschedule of the canonical due date,
+        // and it knows only pending, memorized, dismissed, and deleted.
+        //
+        // The renumbering has to run before the rebuild. A table rebuild
+        // installs the *current* definition, whose lifecycle CHECK is
+        // 0..2, so copying rows that still carry the old 0..4 numbering
+        // would abort the whole upgrade.
+        //
+        // A suspended element becomes dismissed rather than active on
+        // purpose: it was taken out of the queue deliberately, and silently
+        // returning that work would repeat the mistake v7 avoided when it
+        // refused to drop stored deferrals.
+        await customStatement(
+          'UPDATE element_schedules SET lifecycle = CASE lifecycle '
+          'WHEN 0 THEN 0 WHEN 4 THEN 2 ELSE 1 END',
+        );
+        // v7 already cleared the deferral values; this drops the columns.
+        // They need a rebuild rather than DROP COLUMN because the retired
+        // CHECK constraint named both of them.
+        await m.alterTable(TableMigration(elementSchedules));
+        await m.alterTable(TableMigration(cardMemories));
         await _createIndexes(m);
       }
     },
@@ -483,6 +548,101 @@ class AppDatabase extends _$AppDatabase {
       (QueryRow row) => row.read<String>('name') == column.name,
     );
     if (!present) await m.addColumn(table, column);
+  }
+
+  /// Adds a column used only by an intermediate historical migration.
+  ///
+  /// Current Drift tables deliberately omit retired scheduler fields, so an
+  /// old file must be stepped through their raw SQL shape before v8 can read
+  /// and convert those values.
+  Future<void> _addRawColumnIfMissing(
+    String table,
+    String column,
+    String declaration,
+  ) async {
+    if (!await _hasColumn(table, column)) {
+      await customStatement(
+        'ALTER TABLE $table ADD COLUMN $column $declaration',
+      );
+    }
+  }
+
+  Future<void> _migrateTopicStatesToSm20(Migrator m) async {
+    if (!await _hasTable('topic_states')) {
+      await m.createTable(topicStates);
+      return;
+    }
+    if (await _hasColumn('topic_states', 'status')) return;
+
+    final List<QueryRow> rows = await customSelect(
+      'SELECT t.element_id, t.element_type, t.interval_days, t.a_factor, '
+      't.encounters, t.postpone_count, t.encounters_since_last_card, '
+      't.last_encounter_day, t.revision, e.lifecycle '
+      'FROM topic_states t LEFT JOIN element_schedules e '
+      'ON e.element_id = t.element_id AND e.element_type = t.element_type '
+      'ORDER BY t.element_id, t.element_type',
+    ).get();
+
+    await customStatement(
+      'ALTER TABLE topic_states RENAME TO topic_states_v7_legacy',
+    );
+    await m.createTable(topicStates);
+
+    for (final QueryRow row in rows) {
+      final int lifecycle = row.read<int?>('lifecycle') ?? 0;
+      final int oldEncounters = row.read<int>('encounters');
+      final int repetitions = oldEncounters.clamp(0, 65535);
+      // Pre-v9 lifecycle indices: active 0, suspended 1, dismissed 2,
+      // finished 3, deleted 4. v9 renumbers them; this step runs first and
+      // must keep reading the old numbering.
+      final int status = switch (lifecycle) {
+        4 => 3, // deleted
+        1 || 2 || 3 => 2, // suspended, dismissed, or finished
+        _ => repetitions == 0 ? 0 : 1, // pending or memorized
+      };
+
+      final double legacyInterval = row.read<double>('interval_days');
+      final int storedInterval = repetitions == 0 || !legacyInterval.isFinite
+          ? 0
+          : sm20RoundEven(legacyInterval).clamp(0, 44530);
+      final double legacyA = row.read<double>('a_factor');
+      final double convertedA = !legacyA.isFinite || legacyA <= 0
+          ? 1.2
+          : legacyA.clamp(1.01, 6.0);
+      final int postponements = row
+          .read<int>('postpone_count')
+          .clamp(0, 0x7fffffff);
+      final int encountersSinceLastCard = row
+          .read<int>('encounters_since_last_card')
+          .clamp(0, 0x7fffffff);
+      final int revision = row.read<int>('revision').clamp(1, 0x7fffffff);
+
+      await customStatement(
+        'INSERT INTO topic_states ('
+        'element_id, element_type, status, repetition_count, lapse_count, '
+        'stored_interval, last_review_day, a_factor_raw, '
+        'last_interval_ratio_raw, history_block_id, '
+        'recent_postponement_count, total_postponement_count, '
+        'learning_control, encounters_since_last_card, revision) '
+        'VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, 0, ?, ?, 0, ?, ?)',
+        <Object?>[
+          row.read<String>('element_id'),
+          row.read<int>('element_type'),
+          status,
+          repetitions,
+          storedInterval,
+          row.read<int?>('last_encounter_day'),
+          DelphiReal48.fromDouble(convertedA).toString(),
+          DelphiReal48.fromDouble(0).toString(),
+          postponements,
+          postponements,
+          encountersSinceLastCard,
+          revision,
+        ],
+      );
+    }
+
+    await customStatement('DROP TABLE topic_states_v7_legacy');
   }
 
   Future<void> _createIndexes(Migrator m) async {
@@ -572,22 +732,6 @@ class AppDatabase extends _$AppDatabase {
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_element_identity '
       'ON element_schedules (element_id)',
     );
-    if (await _hasTable('schedule_adjustments')) {
-      await customStatement(
-        'CREATE INDEX IF NOT EXISTS idx_adjustments_element '
-        'ON schedule_adjustments (element_id, element_type, cleared_at_utc)',
-      );
-      await customStatement(
-        'CREATE UNIQUE INDEX IF NOT EXISTS idx_adjustments_active_exact '
-        'ON schedule_adjustments (element_id, element_type) '
-        'WHERE mode = 1 AND cleared_at_utc IS NULL',
-      );
-      await customStatement(
-        'CREATE UNIQUE INDEX IF NOT EXISTS idx_adjustments_operation_reason '
-        'ON schedule_adjustments '
-        '(operation_id, element_id, element_type, reason)',
-      );
-    }
     if (await _hasTable('scheduler_events')) {
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_scheduler_events_element '

@@ -37,7 +37,10 @@ void main() {
   }
 
   /// One source with a schedule and pacing row, as M3 would have left it.
-  Future<void> seedM3Collection(AppDatabase db) async {
+  Future<void> seedM3Collection(
+    AppDatabase db, {
+    bool withM4Columns = false,
+  }) async {
     await _addLegacyCardParentColumns(db);
     await db.customStatement(
       'INSERT INTO sources (id, title, markdown, content_hash, word_count, '
@@ -49,7 +52,19 @@ void main() {
       'parent_is_source, start_block_id, start_offset, end_block_id, '
       'end_offset, selected_text_hash, created_at_utc) '
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      <Object?>['x1', 'passage', 's1', 's1', 1, 'b1', 0, 'b1', 7, 'b' * 64, 1000],
+      <Object?>[
+        'x1',
+        'passage',
+        's1',
+        's1',
+        1,
+        'b1',
+        0,
+        'b1',
+        7,
+        'b' * 64,
+        1000,
+      ],
     );
     await db.customStatement(
       'INSERT INTO cards (id, extract_id, kind, front, back, created_at_utc) '
@@ -68,6 +83,40 @@ void main() {
         <Object?>[id, type, 'V', 0, 20000, 20000, 'UTC'],
       );
     }
+    // Recreate the retired topic row explicitly. The current application no
+    // longer exposes these columns at runtime; they exist here only as an
+    // on-disk fixture for the one-time upgrade path.
+    await db.customStatement('DROP TABLE topic_states');
+    await db.customStatement(
+      withM4Columns
+          ? '''
+        CREATE TABLE topic_states (
+          element_id TEXT NOT NULL,
+          element_type INTEGER NOT NULL CHECK (element_type BETWEEN 0 AND 1),
+          profile_id TEXT NOT NULL,
+          step_index INTEGER NOT NULL CHECK (step_index >= 0),
+          interval_days REAL NOT NULL DEFAULT 0 CHECK (interval_days >= 0),
+          a_factor REAL NOT NULL DEFAULT 0 CHECK (a_factor >= 0),
+          yield_ewma REAL NOT NULL DEFAULT 0 CHECK (yield_ewma >= 0),
+          encounters INTEGER NOT NULL DEFAULT 0 CHECK (encounters >= 0),
+          postpone_count INTEGER NOT NULL DEFAULT 0 CHECK (postpone_count >= 0),
+          encounters_since_last_card INTEGER NOT NULL DEFAULT 0
+            CHECK (encounters_since_last_card >= 0),
+          last_encounter_day INTEGER NULL,
+          PRIMARY KEY (element_id, element_type)
+        )
+      '''
+          : '''
+        CREATE TABLE topic_states (
+          element_id TEXT NOT NULL,
+          element_type INTEGER NOT NULL CHECK (element_type BETWEEN 0 AND 1),
+          profile_id TEXT NOT NULL,
+          step_index INTEGER NOT NULL CHECK (step_index >= 0),
+          PRIMARY KEY (element_id, element_type)
+        )
+      ''',
+    );
+
     // A half-read article, four steps into the normal sequence.
     await db.customStatement(
       'INSERT INTO topic_states (element_id, element_type, profile_id, '
@@ -99,7 +148,8 @@ void main() {
       await expectLater(
         insert(RevlogEventType.postpone.value, 3),
         throwsA(isA<Object>()),
-        reason: 'a grade on a postpone would poison an optimizer’s training '
+        reason:
+            'a grade on a postpone would poison an optimizer’s training '
             'set, so SQL refuses it as well as Dart',
       );
     });
@@ -164,37 +214,42 @@ void main() {
       expect(restored.feedsOptimizer, isTrue);
     });
 
-    test('separates what an optimizer may train on from what it may not',
-        () async {
-      final AppDatabase db = await openFileDatabase();
-      addTearDown(db.close);
-      final DriftLearningRepository learning = DriftLearningRepository(db);
+    test(
+      'separates what an optimizer may train on from what it may not',
+      () async {
+        final AppDatabase db = await openFileDatabase();
+        addTearDown(db.close);
+        final DriftLearningRepository learning = DriftLearningRepository(db);
 
-      const ElementRef ref = ElementRef(id: 'c1', type: ElementType.card);
-      var counter = 0;
-      Future<void> log(RevlogEventType type, {int? grade}) => learning
-          .appendRevlog(
-            RevlogEntry(
-              id: 'r${counter++}',
-              operationId: 'op-$counter',
-              ref: ref,
-              eventType: type,
-              atUtc: DateTime.utc(2026, 3, 5, 10),
-              grade: grade,
-            ),
-          );
+        const ElementRef ref = ElementRef(id: 'c1', type: ElementType.card);
+        var counter = 0;
+        Future<void> log(RevlogEventType type, {int? grade}) =>
+            learning.appendRevlog(
+              RevlogEntry(
+                id: 'r${counter++}',
+                operationId: 'op-$counter',
+                ref: ref,
+                eventType: type,
+                atUtc: DateTime.utc(2026, 3, 5, 10),
+                grade: grade,
+              ),
+            );
 
-      await log(RevlogEventType.review, grade: 3);
-      await log(RevlogEventType.practice, grade: 4);
-      await log(RevlogEventType.postpone);
-      await log(RevlogEventType.autoPostpone);
-      await log(RevlogEventType.bury);
+        await log(RevlogEventType.review, grade: 3);
+        await log(RevlogEventType.practice, grade: 4);
+        await log(RevlogEventType.postpone);
+        await log(RevlogEventType.autoPostpone);
+        await log(RevlogEventType.bury);
 
-      final List<RevlogEntry> all = await learning.listRevlogFor(ref);
-      expect(all, hasLength(5));
-      expect(all.where((RevlogEntry e) => e.feedsOptimizer), hasLength(1));
-      expect(all.where((RevlogEntry e) => e.eventType.isDeferral), hasLength(3));
-    });
+        final List<RevlogEntry> all = await learning.listRevlogFor(ref);
+        expect(all, hasLength(5));
+        expect(all.where((RevlogEntry e) => e.feedsOptimizer), hasLength(1));
+        expect(
+          all.where((RevlogEntry e) => e.eventType.isDeferral),
+          hasLength(3),
+        );
+      },
+    );
 
     test('is queryable by day for the diagnostics panel', () async {
       final AppDatabase db = await openFileDatabase();
@@ -234,13 +289,6 @@ void main() {
       await old.customStatement('DROP INDEX IF EXISTS idx_schedules_root');
       for (final (String table, String column) in <(String, String)>[
         ('element_schedules', 'root_id'),
-        ('topic_states', 'interval_days'),
-        ('topic_states', 'a_factor'),
-        ('topic_states', 'yield_ewma'),
-        ('topic_states', 'encounters'),
-        ('topic_states', 'postpone_count'),
-        ('topic_states', 'encounters_since_last_card'),
-        ('topic_states', 'last_encounter_day'),
         ('card_memories', 'postpone_count'),
       ]) {
         await old.customStatement('ALTER TABLE $table DROP COLUMN $column');
@@ -260,24 +308,28 @@ void main() {
           .getSingle();
       expect(version.data.values.first, kSchemaVersion);
 
-      // The half-read article keeps its place: step four of the normal
-      // sequence is a thirty-day interval, not a fresh start.
+      // The half-read article keeps its place when the intermediate M4 state
+      // is converted into the sole SM20 row.
       final source = await migrated
           .customSelect(
-            'SELECT interval_days, a_factor, encounters FROM topic_states '
+            'SELECT status, repetition_count, stored_interval, a_factor_raw '
+            'FROM topic_states '
             "WHERE element_id = 's1'",
           )
           .getSingle();
-      expect(source.read<double>('interval_days'), 30);
-      expect(source.read<double>('a_factor'), 2.0);
-      expect(source.read<int>('encounters'), 4);
+      expect(source.read<int>('status'), 1);
+      expect(source.read<int>('repetition_count'), 4);
+      expect(source.read<int>('stored_interval'), 30);
+      expect(real48FromHex(source.read<String>('a_factor_raw')).value, 2.0);
 
       final extract = await migrated
           .customSelect(
-            "SELECT interval_days FROM topic_states WHERE element_id = 'x1'",
+            'SELECT repetition_count, stored_interval FROM topic_states '
+            "WHERE element_id = 'x1'",
           )
           .getSingle();
-      expect(extract.read<double>('interval_days'), 7);
+      expect(extract.read<int>('repetition_count'), 2);
+      expect(extract.read<int>('stored_interval'), 7);
     });
 
     test('gives every element its root article', () async {
@@ -311,7 +363,7 @@ void main() {
     test('is re-runnable, so an interrupted upgrade is not fatal', () async {
       final File file = File('${workspace.path}/db/$kDatabaseFileName');
       final AppDatabase db = await openFileDatabase();
-      await seedM3Collection(db);
+      await seedM3Collection(db, withM4Columns: true);
       // Every M4 column is already present; claiming version 4 makes the
       // migration run again over a database that is really at version 5.
       await db.customStatement('PRAGMA user_version = 4');
@@ -356,4 +408,3 @@ Future<void> _addLegacyCardParentColumns(AppDatabase database) async {
     'CREATE INDEX IF NOT EXISTS idx_cards_source ON cards (source_id)',
   );
 }
-

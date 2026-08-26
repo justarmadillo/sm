@@ -18,10 +18,8 @@ import '../../domain/content/reader_anchor.dart';
 import '../../domain/content/source.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/presentation_plan.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/schedule_adjustment.dart';
 import '../../domain/scheduling/scheduler_event.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
@@ -282,23 +280,6 @@ abstract interface class LearningRepository {
     int? limit,
   });
 
-  /// All adjustments for one element. Cleared rows remain queryable for audit
-  /// and exact undo.
-  Future<List<ScheduleAdjustment>> listAdjustmentsFor(
-    ElementRef ref, {
-    bool includeCleared = false,
-  });
-
-  /// Active adjustments for a bounded or collection-wide scope.
-  Future<List<ScheduleAdjustment>> listActiveAdjustments({
-    Set<ElementRef>? elements,
-    Set<ScheduleAdjustmentReason>? reasons,
-  });
-
-  Future<void> saveAdjustment(ScheduleAdjustment adjustment);
-
-  Future<void> saveAdjustments(List<ScheduleAdjustment> adjustments);
-
   /// Durable Mercy batches. Preview, apply, and undo are three separate
   /// transactions that may be separated by minutes or by a restart, so the
   /// proposal and its exact prior adjustment set have to survive in storage
@@ -321,17 +302,6 @@ abstract interface class LearningRepository {
   /// How many batches were applied on or after [day]. Drives the warning that
   /// repeated Mercy is hiding a structural overload rather than curing one.
   Future<int> countAppliedMercyBatchesSince(StudyDay day);
-
-  Future<StoredPresentationPlan?> findPresentationPlan(StudyDay day);
-
-  Future<void> savePresentationPlan(StoredPresentationPlan plan);
-
-  /// Removes one completed element and advances the persisted merge cursor.
-  Future<StoredPresentationPlan?> consumePresentationPlanEntry({
-    required StudyDay day,
-    required ElementRef ref,
-    required DateTime atUtc,
-  });
 
   /// How many entries of each event type were written on [day].
   Future<Map<RevlogEventType, int>> countRevlogOn(StudyDay day);
@@ -363,12 +333,6 @@ abstract interface class LearningRepository {
 
   /// Replaces many topics and their schedules together.
   Future<void> saveTopics(List<TopicState> topics);
-
-  /// Active elements the app deferred automatically to a day at or after
-  /// [from], so raising a limit or Study More can recall them.
-  Future<List<ElementSchedule>> listAutomaticDeferrals({
-    required StudyDay from,
-  });
 
   /// Active elements whose original due day is before [day], oldest first.
   ///

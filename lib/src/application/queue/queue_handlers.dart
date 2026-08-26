@@ -1,26 +1,11 @@
-/// Handlers for daily admission, Study More, and Mercy.
+/// Application transactions for SM20's three learning queues.
 ///
-/// This is the load valve. A collection is expected to exceed learning
-/// capacity — that is the normal state of incremental reading, not an error —
-/// so something has to shed work, and it should be the lowest-priority work
-/// rather than whatever the user happens not to reach.
-///
-/// Four invariants hold across every handler here:
-///
-/// * **No fabricated history.** A deferral writes `deferredUntil` and nothing
-///   else. The algorithmic due date, the interval, and every FSRS value
-///   survive untouched, so overdue ranking stays honest and a future
-///   optimizer never sees a review that did not happen.
-/// * **A protected top.** The best-priority slice of the collection is never
-///   deferred automatically. Without that floor the valve eventually pushes
-///   everything out and the collection schedules nothing.
-/// * **Started steps are never deferred.** A card inside a learning or
-///   relearning step was already admitted today and is due again in minutes.
-/// * **Exactly once per day.** Admission is keyed on the study day, so
-///   rebuilding the queue during a session never defers anything twice.
+/// Outstanding is the only mixed and priority-sorted queue. Final Drill and
+/// Pending are durable fallback stages and are intentionally never admitted
+/// through a capacity valve or injected as mandatory steps.
 library;
 
-import 'dart:convert';
+import 'dart:math' as math;
 
 import '../../core/clock.dart';
 import '../../core/ids.dart';
@@ -28,58 +13,46 @@ import '../../core/result.dart';
 import '../../core/tracing.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/presentation_plan.dart';
+import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/queue_policy.dart';
 import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/schedule_adjustment.dart';
+import '../../domain/scheduling/sm20_collection_state.dart';
+import '../../domain/scheduling/sm20_numeric.dart';
+import '../../domain/scheduling/sm20_postpone.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../../domain/settings/app_settings.dart';
-import '../../domain/transfer/dataset_lineage.dart';
 import '../app_command.dart';
 import '../ports/repositories.dart';
 import '../ports/transaction_runner.dart';
-import '../scheduling/schedule_adjustment_service.dart';
 import '../scheduling/scheduling_context.dart';
 import '../scheduling/scheduling_journal.dart';
 import 'queue_commands.dart';
 
-/// Activity kind recorded once per study day when admission runs.
-const String kDailyAdmissionKind = 'queue.admission';
+const String kDailyAdmissionKind = 'sm20.queue.opened';
+const String kSmartPostponeKind = 'sm20.smart_postpone';
+const String kEnterStageKind = 'sm20.queue.stage_entered';
+const String kCutDrillsKind = 'sm20.queue.drills_cut';
+const String kRandomizeQueueKind = 'sm20.queue.randomized';
 
-/// Activity kind recorded when the user asks for more work.
-const String kStudyMoreKind = 'queue.study_more';
+String dailyAdmissionOperationId(StudyDay day) => 'sm20-queue:$day';
 
-/// `[Derived]` Versioned capacity planner. The headroom value is exposed here
-/// pending calibration rather than being presented as a SuperMemo constant.
-const String kOverflowPolicyVersion = 'supermemo_like_v1';
-const double kOverflowHeadroomFraction = 0.10;
-
-/// A deterministic operation id for [day]'s admission.
-///
-/// Derived rather than random on purpose: it is what makes the day's valve
-/// idempotent across rebuilds, restarts, and crashes.
-String dailyAdmissionOperationId(StudyDay day) => 'admission:$day';
-
-/// What one admission run did.
 final class AdmissionOutcome {
   const AdmissionOutcome({
     required this.plan,
-    required this.deferred,
+    required this.automaticallyPostponed,
     required this.alreadyApplied,
   });
 
-  /// The day's queue.
   final QueuePlan plan;
 
-  /// How many elements the valve pushed out.
-  final int deferred;
+  /// Number moved by today's automatic Smart Postpone pass.
+  final int automaticallyPostponed;
 
-  /// Whether this day had already been admitted and nothing was rewritten.
+  /// True once today's one-shot automatic sort has already been recorded.
   final bool alreadyApplied;
 }
 
-/// Runs the overload valve and the two manual load controls.
 final class QueueHandlers {
   QueueHandlers({
     required ContentRepository content,
@@ -97,8 +70,6 @@ final class QueueHandlers {
        _context = context,
        _clock = clock,
        _ids = ids,
-       _adjustments = ScheduleAdjustmentService(learning: learning, ids: ids),
-       _journal = SchedulingJournal(learning: learning, ids: ids),
        _diagnostics = diagnostics;
 
   final ContentRepository _content;
@@ -108,69 +79,223 @@ final class QueueHandlers {
   final SchedulingContext _context;
   final Clock _clock;
   final IdGenerator _ids;
-  final ScheduleAdjustmentService _adjustments;
-  final SchedulingJournal _journal;
   final DiagnosticSink _diagnostics;
 
-  /// Runs the rollover-only overflow policy, then returns a durable plan.
   Future<Result<AdmissionOutcome>> runDailyAdmission(
     RunDailyAdmission command,
   ) async {
     try {
       return await _transactions.run<Result<AdmissionOutcome>>(() async {
-        final AppSettings settings = await _context.settings();
-        final bool applied = await _learning.hasActivity(
-          command.operationId.value,
-          kDailyAdmissionKind,
+        var settings = await _context.settings();
+        final Sm20CollectionState before = await _context.runtimeState();
+        final Sm20Prng prng = Sm20Prng(seed: before.prngSeed);
+        var candidates = await loadCandidates(command.day);
+        var byRef = <ElementRef, QueueCandidate>{
+          for (final QueueCandidate candidate in candidates)
+            candidate.ref: candidate,
+        };
+
+        final List<QueueCandidate> dueBeforePostpone = <QueueCandidate>[
+          for (final QueueCandidate candidate in candidates)
+            if (!candidate.isPending &&
+                candidate.isDue(
+                  nowUtc: command.timestampUtc,
+                  today: command.day,
+                ))
+              candidate,
+        ];
+        final List<ElementRef> outstandingBeforePostpone = _orderedRefs(
+          before.outstanding,
+          dueBeforePostpone,
+          byRef: byRef,
+          accept: (QueueCandidate value) => !value.isPending,
         );
-        var deferred = 0;
-        if (!applied) {
-          if (settings.queue.autoPostpone) {
-            deferred = await _applyRolloverOverflow(command, settings);
-          }
-          await _transfer.advanceGeneration();
+        final AutoPostponeResult automatic = await _runAutomaticPostpone(
+          command: command,
+          settings: settings,
+          runtime: before,
+          candidates: candidates,
+          outstanding: outstandingBeforePostpone,
+          prng: prng,
+        );
+        if (automatic.disableAutoPostpone) {
+          settings = settings.copyWith(
+            postpone: settings.postpone.copyWith(autoEnabled: false),
+          );
+        }
+        final Set<ElementRef> automaticallyPostponed =
+            automatic.smartPostpone?.postponed.toSet() ?? <ElementRef>{};
+        final Sm20CollectionState runtime = before.copyWith(
+          prngSeed: prng.state.seed,
+          lastAutomaticPostponeDay: automatic.lastAutoRunDay,
+          outstanding: <ElementRef>[
+            for (final ElementRef ref in before.outstanding)
+              if (!automaticallyPostponed.contains(ref)) ref,
+          ],
+          outstandingItems: <ElementRef>[
+            for (final ElementRef ref in before.outstandingItems)
+              if (!automaticallyPostponed.contains(ref)) ref,
+          ],
+          outstandingTopics: <ElementRef>[
+            for (final ElementRef ref in before.outstandingTopics)
+              if (!automaticallyPostponed.contains(ref)) ref,
+          ],
+        );
+        if (automaticallyPostponed.isNotEmpty) {
+          // Rescheduling changed canonical due state; all queue calculations
+          // below must observe the replacements written by the same
+          // transaction.
+          candidates = await loadCandidates(command.day);
+          byRef = <ElementRef, QueueCandidate>{
+            for (final QueueCandidate candidate in candidates)
+              candidate.ref: candidate,
+          };
         }
 
-        final List<QueueCandidate> candidates = await loadCandidates(
-          command.day,
+        final List<ElementRef> pending = _orderedRefs(
+          runtime.pending,
+          candidates.where((QueueCandidate value) => value.isPending),
+          byRef: byRef,
+          accept: (QueueCandidate value) => value.isPending,
         );
-        final DatasetIdentity dataset = await _transfer.currentIdentity();
-        final QueuePolicy configured = await _context.queuePolicy();
-        final QueuePolicy policy = QueuePolicy(
-          settings: configured.settings,
-          scale: configured.scale,
-          datasetId: dataset.datasetId,
-          policyVersion: configured.policyVersion,
+        final List<ElementRef> finalDrill = <ElementRef>[
+          for (final ElementRef ref in runtime.finalDrill)
+            if (byRef.containsKey(ref)) ref,
+        ];
+
+        final List<QueueCandidate> newlyDue = <QueueCandidate>[
+          for (final QueueCandidate candidate in candidates)
+            if (!candidate.isPending &&
+                candidate.isDue(nowUtc: _clock.nowUtc(), today: command.day))
+              candidate,
+        ];
+        final List<ElementRef> outstanding = _orderedRefs(
+          runtime.outstanding,
+          newlyDue,
+          byRef: byRef,
+          accept: (QueueCandidate value) => !value.isPending,
         );
-        final StoredPresentationPlan? stored = await _learning
-            .findPresentationPlan(command.day);
-        final QueuePlan fresh = policy.build(
+
+        final Set<ElementRef> itemMembership = <ElementRef>{
+          for (final ElementRef ref in runtime.outstandingItems)
+            if (outstanding.contains(ref) && byRef.containsKey(ref)) ref,
+          for (final ElementRef ref in outstanding)
+            if (byRef[ref]?.isCard ?? false) ref,
+        };
+        final bool alreadySorted = runtime.lastAutomaticSortDay == command.day;
+        final bool shouldSort =
+            settings.queue.autoSort && !alreadySorted && outstanding.isNotEmpty;
+        final QueuePolicy policy = await _context.queuePolicy();
+        final QueuePlan outstandingPlan = policy.build(
           candidates: candidates,
           nowUtc: _clock.nowUtc(),
           today: command.day,
-          extraAdmissions: command.extraAdmissions,
-          mergeCursor: stored?.mergeCursor ?? QueueMergeCursor.zero,
+          prng: prng,
+          combinedOrder: outstanding,
+          outstandingItemMembership: itemMembership,
+          sort: shouldSort,
         );
-        final PresentationPlanIdentity planIdentity = _presentationPlanIdentity(
-          command.day,
-          settings,
-          dataset,
-          candidates,
-          policy,
+
+        StudyDay? lastSort = runtime.lastAutomaticSortDay;
+        List<ElementRef> storedOutstanding = outstanding;
+        List<ElementRef> storedItems = <ElementRef>[
+          for (final ElementRef ref in runtime.outstandingItems)
+            if (outstanding.contains(ref)) ref,
+        ];
+        List<ElementRef> storedTopics = <ElementRef>[
+          for (final ElementRef ref in runtime.outstandingTopics)
+            if (outstanding.contains(ref)) ref,
+        ];
+        if (shouldSort && outstanding.length >= 2) {
+          lastSort = command.day;
+          storedOutstanding = <ElementRef>[
+            for (final QueueCandidate value in outstandingPlan.entries)
+              value.ref,
+          ];
+          storedItems = <ElementRef>[
+            for (final QueueCandidate value
+                in outstandingPlan.prioritySortedItems)
+              value.ref,
+          ];
+          storedTopics = <ElementRef>[
+            for (final QueueCandidate value
+                in outstandingPlan.prioritySortedTopics)
+              value.ref,
+          ];
+        } else {
+          final Set<ElementRef> storedItemSet = storedItems.toSet();
+          final Set<ElementRef> storedTopicSet = storedTopics.toSet();
+          for (final ElementRef ref in outstanding) {
+            if (storedItemSet.contains(ref) || storedTopicSet.contains(ref)) {
+              continue;
+            }
+            if (byRef[ref]?.isCard ?? false) {
+              storedItems.add(ref);
+              storedItemSet.add(ref);
+            } else {
+              storedTopics.add(ref);
+              storedTopicSet.add(ref);
+            }
+          }
+        }
+
+        var learningMode = 0;
+        QueuePlan visible = outstandingPlan;
+        // A stage the user entered by hand outranks the automatic chain and
+        // survives reloads. It lapses on its own once its queue is empty,
+        // which is what returns the user to Outstanding without a command.
+        final bool heldDrill =
+            runtime.learningMode == 1 && finalDrill.isNotEmpty;
+        final bool heldPending =
+            runtime.learningMode == 2 && pending.isNotEmpty;
+        if (heldDrill || (visible.isEmpty && finalDrill.isNotEmpty)) {
+          learningMode = 1;
+          final List<QueueCandidate> drill = <QueueCandidate>[
+            for (final ElementRef ref in finalDrill)
+              if (byRef[ref] case final QueueCandidate candidate) candidate,
+          ];
+          if (settings.queue.randomizeFinalDrill && runtime.learningMode != 1) {
+            QueuePolicy.randomizeFixedSize<QueueCandidate>(drill, prng);
+            finalDrill
+              ..clear()
+              ..addAll(drill.map((QueueCandidate value) => value.ref));
+          }
+          visible = QueuePlan.stage(
+            candidates: drill,
+            lane: QueueLane.finalDrill,
+            prngState: prng.state,
+          );
+        } else if (heldPending || (visible.isEmpty && pending.isNotEmpty)) {
+          learningMode = 2;
+          visible = QueuePlan.stage(
+            candidates: <QueueCandidate>[
+              for (final ElementRef ref in pending)
+                if (byRef[ref] case final QueueCandidate candidate) candidate,
+            ],
+            lane: QueueLane.pending,
+            prngState: prng.state,
+          );
+        }
+
+        final Sm20CollectionState after = runtime.copyWith(
+          prngSeed: prng.state.seed,
+          learningStartDay: runtime.learningStartDay ?? command.day,
+          lastAutomaticSortDay: lastSort,
+          lastCollectionUseUtc: command.timestampUtc,
+          learningMode: learningMode,
+          outstanding: storedOutstanding,
+          outstandingItems: storedItems,
+          outstandingTopics: storedTopics,
+          pending: pending,
+          finalDrill: finalDrill,
         );
-        final QueuePlan plan = await _persistOrResumePlan(
-          identity: planIdentity,
-          fresh: fresh,
-          candidates: candidates,
-          stored: stored,
-          forceRebuild: command.extraAdmissions > 0,
-          atUtc: command.timestampUtc,
+        await _context.saveRuntimeState(after);
+
+        final bool logged = await _learning.hasActivity(
+          command.operationId.value,
+          kDailyAdmissionKind,
         );
-        if (!applied) {
-          // Written after the plan exists, not before: the counters are the
-          // whole point of the row. A later rebuild sees only the survivors,
-          // so this is the only moment at which what was due, what was
-          // admitted, and what did not fit are all known.
+        if (!logged) {
           await _learning.appendActivity(
             ActivityRecord(
               id: _ids.newId(),
@@ -179,12 +304,16 @@ final class QueueHandlers {
               atUtc: command.timestampUtc,
               metadata: <String, Object?>{
                 'day': command.day.toString(),
-                'deferred': deferred,
-                'overflow_profile': kOverflowPolicyVersion,
-                ...plan.counters.toMetadata(),
+                'stage': learningMode,
+                'sorted': shouldSort && outstanding.length >= 2,
+                'auto_postpone_outcome': automatic.outcome.name,
+                'automatically_postponed': automaticallyPostponed.length,
+                'auto_postpone_overdue': automatic.overdueCount,
+                ...visible.counters.toMetadata(),
               },
             ),
           );
+          await _transfer.advanceGeneration();
         }
         _diagnostics.record(
           DiagnosticEvent(
@@ -193,17 +322,21 @@ final class QueueHandlers {
             timestampUtc: _clock.nowUtc(),
             operationId: command.operationId,
             fields: <String, Object?>{
-              ...plan.counters.toMetadata(),
-              'rollover_deferred': deferred,
+              'stage': learningMode,
+              'outstanding': storedOutstanding.length,
+              'final_drill': finalDrill.length,
+              'pending': pending.length,
+              'auto_postpone_outcome': automatic.outcome.name,
+              'automatically_postponed': automaticallyPostponed.length,
+              'prng_seed': prng.state.seed,
             },
           ),
         );
-
         return Ok<AdmissionOutcome>(
           AdmissionOutcome(
-            plan: plan,
-            deferred: deferred,
-            alreadyApplied: applied,
+            plan: visible,
+            automaticallyPostponed: automaticallyPostponed.length,
+            alreadyApplied: alreadySorted,
           ),
         );
       });
@@ -214,125 +347,348 @@ final class QueueHandlers {
     }
   }
 
-  /// Recalls automatic deferrals so the user can keep working.
-  Future<Result<int>> studyMore(StudyMore command) async {
+  /// Enters Final Drill or Pending on demand, ahead of the automatic chain.
+  ///
+  /// The stage is stored rather than derived, so the next queue load presents
+  /// it even while Outstanding still has elements. Nothing is scheduled,
+  /// created, or graded: this only chooses which existing queue is shown.
+  Future<Result<Sm20QueueCommandOutcome>> enterLearningStage(
+    EnterLearningStage command,
+  ) async {
     try {
-      return await _transactions.run<Result<int>>(() async {
-        if (await _learning.hasActivity(
-          command.operationId.value,
-          kStudyMoreKind,
-        )) {
-          final List<ActivityRecord> recent = await _learning.recentActivity(
-            limit: 500,
+      return await _transactions.run<Result<Sm20QueueCommandOutcome>>(() async {
+        final Sm20CollectionState runtime = await _context.runtimeState();
+        final List<ElementRef> queue = switch (command.stage) {
+          Sm20StageRequest.outstanding => runtime.outstanding,
+          Sm20StageRequest.finalDrill => runtime.finalDrill,
+          Sm20StageRequest.randomLearning => runtime.pending,
+        };
+        if (queue.isEmpty) {
+          // The executable greys out a stage whose queue is empty. Refusing
+          // here is the same rule stated as an outcome, so a caller that has
+          // not disabled the control still cannot land on a blank queue.
+          return Err<Sm20QueueCommandOutcome>(
+            ValidationFailure(switch (command.stage) {
+              Sm20StageRequest.outstanding =>
+                'nothing is outstanding right now',
+              Sm20StageRequest.finalDrill =>
+                'nothing is scheduled for the final drill',
+              Sm20StageRequest.randomLearning =>
+                'there are no pending elements to learn',
+            }),
           );
-          ActivityRecord? prior;
-          for (final ActivityRecord record in recent) {
-            if (record.operationId == command.operationId.value &&
-                record.kind == kStudyMoreKind) {
-              prior = record;
-              break;
-            }
-          }
-          return Ok<int>((prior?.metadata?['recalled'] as num?)?.toInt() ?? 0);
         }
-        final AppSettings settings = await _context.settings();
-        final int limit = command.count ?? settings.queue.studyMoreStep;
-        if (limit <= 0) return const Ok<int>(0);
-
-        final List<ScheduleAdjustment> automatic = await _learning
-            .listActiveAdjustments(
-              reasons: const <ScheduleAdjustmentReason>{
-                ScheduleAdjustmentReason.autoOverflow,
-              },
-            );
-        final Map<ElementRef, ElementSchedule> schedules =
-            <ElementRef, ElementSchedule>{};
-        for (final ScheduleAdjustment adjustment in automatic) {
-          final ElementSchedule? schedule = await _learning.findSchedule(
-            adjustment.element,
-          );
-          if (schedule != null) schedules[adjustment.element] = schedule;
-        }
-        final List<ElementRef> selected = schedules.keys.toList()
-          ..sort((ElementRef left, ElementRef right) {
-            final int byPriority = schedules[left]!.priority.compareTo(
-              schedules[right]!.priority,
-            );
-            return byPriority != 0 ? byPriority : left.compareTo(right);
-          });
-        if (selected.length > limit) {
-          selected.removeRange(limit, selected.length);
-        }
-        final ScheduleAdjustmentMutation mutation = await _adjustments
-            .clearAutoOverflow(
-              elements: selected,
-              atUtc: command.timestampUtc,
-              studyDay: command.day,
-              operationId: command.operationId.value,
-            );
-        final int recalled = mutation.beforeSnapshot.activeAdjustments
-            .where(
-              (ScheduleAdjustment adjustment) =>
-                  adjustment.reason == ScheduleAdjustmentReason.autoOverflow,
-            )
-            .length;
-
+        await _context.saveRuntimeState(
+          runtime.copyWith(learningMode: command.stage.learningMode),
+        );
         await _learning.appendActivity(
           ActivityRecord(
             id: _ids.newId(),
             operationId: command.operationId.value,
-            kind: kStudyMoreKind,
+            kind: kEnterStageKind,
             atUtc: command.timestampUtc,
             metadata: <String, Object?>{
-              'recalled': recalled,
-              'day': command.day.toString(),
+              'stage': command.stage.name,
+              'learning_mode': command.stage.learningMode,
+              'queue_size': queue.length,
             },
           ),
         );
-        await _transfer.advanceGeneration();
-        return Ok<int>(recalled);
+        return Ok<Sm20QueueCommandOutcome>(
+          Sm20QueueCommandOutcome(
+            affected: queue.length,
+            learningMode: command.stage.learningMode,
+          ),
+        );
       });
     } on Object catch (error, stackTrace) {
-      return Err<int>(_fail(command, kStudyMoreKind, error, stackTrace));
-    }
-  }
-
-  /// The counters this day's admission recorded, or null if it has not run.
-  ///
-  /// A later build of the same queue sees only what is still due, which would
-  /// make the day's deferrals invisible in the very panel that exists to show
-  /// them. They are read back from the activity row the valve wrote.
-  Future<QueueCounters?> recordedCounters(StudyDay day) async {
-    final String operationId = dailyAdmissionOperationId(day);
-    final List<ActivityRecord> recent = await _learning.recentActivity(
-      limit: 200,
-    );
-    for (final ActivityRecord record in recent) {
-      if (record.kind != kDailyAdmissionKind) continue;
-      if (record.operationId != operationId) continue;
-      final Map<String, Object?>? metadata = record.metadata;
-      if (metadata == null) return null;
-      int read(String key) => (metadata[key] as num?)?.toInt() ?? 0;
-      return QueueCounters(
-        dueCards: read('due_cards'),
-        dueTopics: read('due_topics'),
-        admittedCards: read('admitted_cards'),
-        admittedTopics: read('admitted_topics'),
-        admittedNewCards: read('admitted_new_cards'),
-        overflowCards: read('overflow_cards'),
-        overflowTopics: read('overflow_topics'),
-        protectedElements: read('protected'),
-        protectionPercent:
-            (metadata['protection_percent'] as num?)?.toDouble() ?? 100,
+      return Err<Sm20QueueCommandOutcome>(
+        _fail(command, kEnterStageKind, error, stackTrace),
       );
     }
-    return null;
   }
 
-  /// Every eligible element on [day], as queue candidates.
+  /// Cut drills: empties the Final Drill queue.
   ///
-  /// Shared with the read model so the queue the user sees is built from
-  /// exactly the set the valve judged.
+  /// Membership is all that goes. Every element keeps its due date, interval,
+  /// A, priority and counters, because being in the drill never changed any of
+  /// them in the first place.
+  Future<Result<Sm20QueueCommandOutcome>> cutDrills(CutDrills command) async {
+    try {
+      return await _transactions.run<Result<Sm20QueueCommandOutcome>>(() async {
+        final Sm20CollectionState runtime = await _context.runtimeState();
+        final int removed = runtime.finalDrill.length;
+        if (removed == 0) {
+          return const Ok<Sm20QueueCommandOutcome>(
+            Sm20QueueCommandOutcome(affected: 0, learningMode: 0),
+          );
+        }
+        // Leaving the drill stage selected would present an empty queue, so a
+        // cut that empties the current stage falls back to Outstanding.
+        final int mode = runtime.learningMode == 1 ? 0 : runtime.learningMode;
+        await _context.saveRuntimeState(
+          runtime.copyWith(
+            finalDrill: const <ElementRef>[],
+            learningMode: mode,
+          ),
+        );
+        await _learning.appendActivity(
+          ActivityRecord(
+            id: _ids.newId(),
+            operationId: command.operationId.value,
+            kind: kCutDrillsKind,
+            atUtc: command.timestampUtc,
+            metadata: <String, Object?>{'removed': removed},
+          ),
+        );
+        await _transfer.advanceGeneration();
+        return Ok<Sm20QueueCommandOutcome>(
+          Sm20QueueCommandOutcome(affected: removed, learningMode: mode),
+        );
+      });
+    } on Object catch (error, stackTrace) {
+      return Err<Sm20QueueCommandOutcome>(
+        _fail(command, kCutDrillsKind, error, stackTrace),
+      );
+    }
+  }
+
+  /// Reorders one stored queue with the section 9.6 fixed-size swap.
+  Future<Result<Sm20QueueCommandOutcome>> randomizeQueue(
+    RandomizeQueue command,
+  ) async {
+    try {
+      return await _transactions.run<Result<Sm20QueueCommandOutcome>>(() async {
+        final Sm20CollectionState runtime = await _context.runtimeState();
+        final List<ElementRef> queue = <ElementRef>[
+          ...switch (command.queue) {
+            Sm20RandomizableQueue.outstanding => runtime.outstanding,
+            Sm20RandomizableQueue.finalDrill => runtime.finalDrill,
+            Sm20RandomizableQueue.pending => runtime.pending,
+          },
+        ];
+        if (queue.length < 2) {
+          return Ok<Sm20QueueCommandOutcome>(
+            Sm20QueueCommandOutcome(
+              affected: queue.length,
+              learningMode: runtime.learningMode,
+            ),
+          );
+        }
+        // One shared stream: a manual reshuffle advances it exactly as the
+        // automatic randomizations do, and every later draw moves with it.
+        final Sm20Prng prng = Sm20Prng(seed: runtime.prngSeed);
+        QueuePolicy.randomizeFixedSize<ElementRef>(queue, prng);
+        final Sm20CollectionState next = switch (command.queue) {
+          // The combined order is what the user sees; the per-type lists stay
+          // as they are, exactly as the daily sort leaves them.
+          Sm20RandomizableQueue.outstanding => runtime.copyWith(
+            outstanding: queue,
+          ),
+          Sm20RandomizableQueue.finalDrill => runtime.copyWith(
+            finalDrill: queue,
+          ),
+          Sm20RandomizableQueue.pending => runtime.copyWith(pending: queue),
+        };
+        await _context.saveRuntimeState(
+          next.copyWith(prngSeed: prng.state.seed),
+        );
+        await _learning.appendActivity(
+          ActivityRecord(
+            id: _ids.newId(),
+            operationId: command.operationId.value,
+            kind: kRandomizeQueueKind,
+            atUtc: command.timestampUtc,
+            metadata: <String, Object?>{
+              'queue': command.queue.name,
+              'count': queue.length,
+              'prng_seed': prng.state.seed,
+            },
+          ),
+        );
+        return Ok<Sm20QueueCommandOutcome>(
+          Sm20QueueCommandOutcome(
+            affected: queue.length,
+            learningMode: runtime.learningMode,
+          ),
+        );
+      });
+    } on Object catch (error, stackTrace) {
+      return Err<Sm20QueueCommandOutcome>(
+        _fail(command, kRandomizeQueueKind, error, stackTrace),
+      );
+    }
+  }
+
+  /// Runs manual Smart Postpone or its write-free simulation.
+  Future<Result<AppliedSmartPostpone>> runSmartPostpone(
+    RunSmartPostpone command,
+  ) async {
+    try {
+      return await _transactions.run<Result<AppliedSmartPostpone>>(() async {
+        final AppSettings settings = await _context.settings();
+        final Sm20CollectionState runtime = await _context.runtimeState();
+        var profile = command.profile ?? settings.postpone.defaultProfile;
+        List<ElementRef> sourceRefs;
+        if (profile.scope == SmartPostponeScope.global) {
+          sourceRefs = runtime.outstanding;
+        } else if (command.sourcePopulation != null) {
+          sourceRefs = command.sourcePopulation!;
+        } else if (profile.scope == SmartPostponeScope.browser) {
+          // The executable changes a browser scope with no current browser
+          // back to global Outstanding before dispatch.
+          profile = profile.copyWith(scope: SmartPostponeScope.global);
+          sourceRefs = runtime.outstanding;
+        } else {
+          final List<ElementSchedule> schedules = await _learning.listSchedules(
+            types: ElementType.values.toSet(),
+          );
+          sourceRefs = <ElementRef>[
+            for (final ElementSchedule schedule in schedules)
+              if (schedule.rootId == profile.rootElementId.toString())
+                schedule.ref,
+          ];
+        }
+
+        final List<QueueCandidate> candidates = await _loadCandidatesForRefs(
+          sourceRefs,
+        );
+        final Set<ElementRef> outstanding = runtime.outstanding.toSet();
+        final List<Sm20PostponeCandidate> source = await _postponeCandidates(
+          candidates: candidates,
+          outstanding: outstanding,
+          atUtc: command.timestampUtc,
+        );
+        final Sm20Prng prng = Sm20Prng(seed: runtime.prngSeed);
+        final SmartPostponeResult result = const SmartPostponeEngine().run(
+          source: source,
+          profile: profile,
+          priorityScale: await _context.priorityScale(),
+          today: command.day,
+          prng: prng,
+          applicableSubbranchProfiles: command.applicableSubbranchProfiles,
+        );
+        if (result.profile.simulate) {
+          return Ok<AppliedSmartPostpone>(
+            AppliedSmartPostpone(result: result, written: 0),
+          );
+        }
+
+        final int written = await _applySmartPostpone(
+          operationId: command.operationId.value,
+          atUtc: command.timestampUtc,
+          today: command.day,
+          candidates: candidates,
+          result: result,
+          eventType: RevlogEventType.postpone,
+        );
+        final Set<ElementRef> moved = result.postponed.toSet();
+        await _context.saveRuntimeState(
+          runtime.copyWith(
+            prngSeed: prng.state.seed,
+            outstanding: runtime.outstanding
+                .where((ElementRef ref) => !moved.contains(ref))
+                .toList(),
+            outstandingItems: runtime.outstandingItems
+                .where((ElementRef ref) => !moved.contains(ref))
+                .toList(),
+            outstandingTopics: runtime.outstandingTopics
+                .where((ElementRef ref) => !moved.contains(ref))
+                .toList(),
+          ),
+        );
+        await _learning.appendActivity(
+          ActivityRecord(
+            id: _ids.newId(),
+            operationId: command.operationId.value,
+            kind: kSmartPostponeKind,
+            atUtc: command.timestampUtc,
+            metadata: <String, Object?>{
+              'profile': result.profile.profileName,
+              'scope': result.profile.scope.name,
+              'source_count': result.sourceOrder.length,
+              'postponed': result.postponed.length,
+              'unpostponed': result.unpostponed.length,
+              'forced_pass': result.forcedPassRan,
+              'random_draws': result.randomDraws,
+              'warning_count': result.warningCount,
+            },
+          ),
+        );
+        if (written > 0) await _transfer.advanceGeneration();
+        return Ok<AppliedSmartPostpone>(
+          AppliedSmartPostpone(result: result, written: written),
+        );
+      });
+    } on Object catch (error, stackTrace) {
+      return Err<AppliedSmartPostpone>(
+        _fail(command, kSmartPostponeKind, error, stackTrace),
+      );
+    }
+  }
+
+  /// Runs the executable's one-shot automatic Smart Postpone entry point and
+  /// applies every selected low-level reschedule inside the queue transaction.
+  Future<AutoPostponeResult> _runAutomaticPostpone({
+    required RunDailyAdmission command,
+    required AppSettings settings,
+    required Sm20CollectionState runtime,
+    required List<QueueCandidate> candidates,
+    required List<ElementRef> outstanding,
+    required Sm20Prng prng,
+  }) async {
+    final PriorityScale priorityScale = await _context.priorityScale();
+    final List<Sm20PostponeCandidate> scheduled = await _postponeCandidates(
+      candidates: candidates,
+      outstanding: outstanding.toSet(),
+      atUtc: command.timestampUtc,
+    );
+
+    final AutoPostponeResult automatic = const AutoPostponeEngine().run(
+      AutoPostponeRequest(
+        today: command.day,
+        nowUtc: command.timestampUtc,
+        autoEnabled: settings.postpone.autoEnabled,
+        lastAutoRunDay: runtime.lastAutomaticPostponeDay,
+        collectionNonempty: candidates.isNotEmpty,
+        lastCollectionUseUtc: runtime.lastCollectionUseUtc,
+        force: false,
+        combinedOutstandingCount: outstanding.length,
+        collectionLearningStartDay: runtime.learningStartDay ?? command.day,
+        scheduledElements: scheduled,
+        defaultProfile: settings.postpone.defaultProfile,
+        priorityScale: priorityScale,
+      ),
+      prng,
+    );
+
+    if (automatic.disableAutoPostpone) {
+      final Result<AppSettings> saved = await _context.saveSettings(
+        settings.copyWith(
+          postpone: settings.postpone.copyWith(autoEnabled: false),
+        ),
+      );
+      if (saved case Err<AppSettings>(:final failure)) {
+        throw StateError(failure.message);
+      }
+    }
+
+    final SmartPostponeResult? result = automatic.smartPostpone;
+    if (result == null || result.decisions.isEmpty) return automatic;
+    await _applySmartPostpone(
+      operationId: command.operationId.value,
+      atUtc: command.timestampUtc,
+      today: command.day,
+      candidates: candidates,
+      result: result,
+      eventType: RevlogEventType.autoPostpone,
+    );
+    return automatic;
+  }
+
+  /// All active topic records and card memories. Due filtering belongs to the
+  /// queue transaction because existing queue membership can intentionally
+  /// contain a future repetition added by a browser command.
   Future<List<QueueCandidate>> loadCandidates(StudyDay day) async {
     final List<ElementSchedule> topicSchedules = await _learning.listSchedules(
       types: const <ElementType>{ElementType.source, ElementType.extract},
@@ -346,292 +702,284 @@ final class QueueHandlers {
     final List<CardState> cards = await _learning.listCardStates(
       lifecycles: const <ElementLifecycle>{ElementLifecycle.active},
     );
-    final Set<ElementRef> refs = <ElementRef>{
-      ...topicSchedules.map((ElementSchedule schedule) => schedule.ref),
-      ...cards.map((CardState card) => card.ref),
-    };
-    final ScheduleAdjustmentSet adjustments = ScheduleAdjustmentSet(
-      await _learning.listActiveAdjustments(elements: refs),
-    );
-    const EffectiveDueService effectiveDue = EffectiveDueService();
     return <QueueCandidate>[
       for (final ElementSchedule schedule in topicSchedules)
         if (topics[schedule.ref] case final TopicState topic)
-          QueueCandidate.topic(
-            topic,
-            rootId: schedule.rootId,
-            effectiveDueDay: effectiveDue.topicDueStudyDay(
-              topic: topic.ref,
-              algorithmicDueStudyDay: topic.schedule.algorithmicDueDay,
-              adjustments: adjustments,
-            ),
-          ),
+          if (topic.status != Sm20ElementStatus.dismissed &&
+              topic.status != Sm20ElementStatus.deleted)
+            QueueCandidate.topic(topic, rootId: schedule.rootId),
       for (final CardState card in cards)
-        QueueCandidate.card(
-          card,
-          rootId: card.schedule.rootId,
-          effectiveDueAtUtc: effectiveDue.cardDueAtUtc(
-            card: card.ref,
-            algorithmicDueAtUtc: card.memory.dueAtUtc,
-            adjustments: adjustments,
-          ),
-        ),
+        QueueCandidate.card(card, rootId: card.schedule.rootId),
     ];
   }
 
-  Future<int> _applyRolloverOverflow(
-    RunDailyAdmission command,
-    AppSettings settings,
+  /// Resolves an explicit source population, preserving the caller's order.
+  ///
+  /// Unlike [loadCandidates] this keeps non-Active records: a branch or
+  /// browser Smart Postpone source legitimately contains dismissed, suspended,
+  /// and pending elements, and the postpone engine — not this loader — is what
+  /// decides they are ineligible.
+  Future<List<QueueCandidate>> _loadCandidatesForRefs(
+    List<ElementRef> refs,
   ) async {
-    final List<QueueCandidate> candidates = await loadCandidates(command.day);
-    final DatasetIdentity dataset = await _transfer.currentIdentity();
-    final QueuePolicy configured = await _context.queuePolicy();
-    final QueuePolicy policy = QueuePolicy(
-      settings: configured.settings,
-      scale: configured.scale,
-      datasetId: dataset.datasetId,
-      policyVersion: configured.policyVersion,
-    );
-    final QueuePlan admission = policy.build(
-      candidates: candidates,
-      nowUtc: command.timestampUtc,
-      today: command.day,
-    );
-    final StudyDayCalendar calendar = await _context.calendar();
-    final List<ScoredCandidate> backlog =
-        admission.overflow.where((ScoredCandidate scored) {
-          final QueueCandidate candidate = scored.candidate;
-          if (scored.isProtected || candidate.isIntradayStep) return false;
-          if (scored.lane == QueueLane.availableNewCard) return false;
-          final StudyDay canonicalDay = candidate.isCard
-              ? calendar.dayOf(candidate.card!.memory.dueAtUtc)
-              : candidate.topic!.schedule.algorithmicDueDay;
-          // The default profile touches only work already outstanding before
-          // rollover. Material becoming due today remains canonical and due.
-          return canonicalDay < command.day;
-        }).toList()..sort((ScoredCandidate left, ScoredCandidate right) {
-          final int byPriority = left.candidate.schedule.priority.compareTo(
-            right.candidate.schedule.priority,
-          );
-          return byPriority != 0 ? byPriority : left.ref.compareTo(right.ref);
-        });
-    if (backlog.isEmpty) return 0;
-
-    final _FutureCapacityLedger ledger = _FutureCapacityLedger(
-      today: command.day,
-      cardCapacity: _capacityAfterHeadroom(settings.queue.maxCards),
-      topicCapacity: _capacityAfterHeadroom(settings.queue.maxTopics),
-    );
-    for (final QueueCandidate candidate in candidates) {
-      final StudyDay effectiveDay = candidate.isCard
-          ? calendar.dayOf(
-              candidate.effectiveCardDueAtUtc ??
-                  candidate.card!.memory.dueAtUtc,
-            )
-          : candidate.effectiveTopicDueDay ??
-                candidate.topic!.schedule.algorithmicDueDay;
-      if (effectiveDay > command.day) {
-        ledger.addExisting(effectiveDay, isCard: candidate.isCard);
+    final List<ElementRef> topicRefs = <ElementRef>[];
+    final List<String> cardIds = <String>[];
+    final Set<ElementRef> seen = <ElementRef>{};
+    final List<ElementRef> ordered = <ElementRef>[];
+    for (final ElementRef ref in refs) {
+      if (!seen.add(ref)) continue;
+      ordered.add(ref);
+      if (ref.type == ElementType.card) {
+        cardIds.add(ref.id);
+      } else {
+        topicRefs.add(ref);
       }
     }
-
-    final List<RevlogEntry> compatibilityEntries = <RevlogEntry>[];
-    var deferred = 0;
-    for (final ScoredCandidate scored in backlog) {
-      final QueueCandidate candidate = scored.candidate;
-      final StudyDay? destination = ledger.reserveNext(
-        isCard: candidate.isCard,
-      );
-      if (destination == null) continue;
-      final AdjustmentApplication applied = await _adjustments.setLowerBound(
-        element: candidate.ref,
-        reason: ScheduleAdjustmentReason.autoOverflow,
-        operationId: command.operationId.value,
-        atUtc: command.timestampUtc,
-        studyDay: command.day,
-        notBeforeAtUtc: candidate.isCard
-            ? calendar.startOfDayUtc(destination)
-            : null,
-        notBeforeStudyDay: candidate.isCard ? null : destination,
-        replaceSameReason: true,
-        policyVersion: kOverflowPolicyVersion,
-      );
-      if (applied.alreadyApplied) continue;
-      compatibilityEntries.add(
-        _journal.build(
-          operationId: command.operationId.value,
-          ref: candidate.ref,
-          eventType: RevlogEventType.autoPostpone,
-          atUtc: command.timestampUtc,
-          before: RevlogSnapshot(
-            priorityKey: candidate.schedule.priority.orderKey,
-            lifecycle: candidate.schedule.lifecycle.index,
-          ),
-          after: RevlogSnapshot(
-            dueAtUtc: calendar.startOfDayUtc(destination),
-            priorityKey: candidate.schedule.priority.orderKey,
-            lifecycle: candidate.schedule.lifecycle.index,
-          ),
-          scheduledDays: candidate.scheduledDays,
-          metadata: <String, Object?>{
-            'destination': destination.toString(),
-            'stream': candidate.isCard ? 'card' : 'topic',
-            'policy_version': kOverflowPolicyVersion,
-            'headroom_fraction': kOverflowHeadroomFraction,
-          },
-        ),
-      );
-      deferred++;
-    }
-    await _journal.appendAll(compatibilityEntries);
-    return deferred;
-  }
-
-  int _capacityAfterHeadroom(int cap) =>
-      (cap * (1 - kOverflowHeadroomFraction)).floor().clamp(0, cap).toInt();
-
-  PresentationPlanIdentity _presentationPlanIdentity(
-    StudyDay day,
-    AppSettings settings,
-    DatasetIdentity dataset,
-    List<QueueCandidate> candidates,
-    QueuePolicy policy,
-  ) {
-    final List<QueueCandidate> ordered = candidates.toList()
-      ..sort(
-        (QueueCandidate left, QueueCandidate right) =>
-            left.ref.compareTo(right.ref),
-      );
-    final String candidateState = <String>[
-      for (final QueueCandidate candidate in ordered)
-        '${candidate.ref}|${candidate.schedule.revision}|'
-            '${candidate.card?.memory.revision ?? candidate.topic?.revision}|'
-            '${candidate.effectiveCardDueAtUtc?.millisecondsSinceEpoch ?? candidate.effectiveTopicDueDay?.epochDay}',
-    ].join(';');
-    final List<MapEntry<String, String>> settingEntries =
-        settings.toMap().entries.toList()..sort(
-          (MapEntry<String, String> left, MapEntry<String, String> right) =>
-              left.key.compareTo(right.key),
-        );
-    return PresentationPlanIdentity(
-      studyDay: day,
-      policyVersion: policy.policyVersion,
-      settingsRevision: _stableDigest(
-        jsonEncode(<String, String>{
-          for (final entry in settingEntries) entry.key: entry.value,
-        }),
-      ),
-      datasetGeneration: dataset.generation,
-      candidateRevision: _stableDigest(candidateState),
-      deterministicSeedVersion: policy.policyVersion,
+    final Map<ElementRef, TopicState> topics = await _learning.findTopics(
+      topicRefs,
     );
+    final Map<String, CardState> cards = await _learning.findCardStates(
+      cardIds,
+    );
+    final List<QueueCandidate> candidates = <QueueCandidate>[];
+    for (final ElementRef ref in ordered) {
+      if (ref.type == ElementType.card) {
+        final CardState? card = cards[ref.id];
+        if (card != null) {
+          candidates.add(
+            QueueCandidate.card(card, rootId: card.schedule.rootId),
+          );
+        }
+      } else {
+        final TopicState? topic = topics[ref];
+        if (topic != null) {
+          candidates.add(
+            QueueCandidate.topic(topic, rootId: topic.schedule.rootId),
+          );
+        }
+      }
+    }
+    return candidates;
   }
 
-  Future<QueuePlan> _persistOrResumePlan({
-    required PresentationPlanIdentity identity,
-    required QueuePlan fresh,
+  /// Projects live records onto the postpone engine's input record.
+  ///
+  /// Both the automatic and the manual entry points build their population
+  /// here so a profile cannot mean two different things depending on which
+  /// button ran it.
+  Future<List<Sm20PostponeCandidate>> _postponeCandidates({
     required List<QueueCandidate> candidates,
-    required StoredPresentationPlan? stored,
-    required bool forceRebuild,
+    required Set<ElementRef> outstanding,
     required DateTime atUtc,
   }) async {
-    final Map<ElementRef, QueueCandidate> byRef = <ElementRef, QueueCandidate>{
-      for (final candidate in candidates) candidate.ref: candidate,
-    };
-    final Map<ElementRef, QueueLane> freshLanes = <ElementRef, QueueLane>{
-      for (final scored in fresh.scored) scored.ref: scored.lane,
-    };
-
-    // A stored plan is resumed only while it was planned under the same
-    // rules. A different study day, policy, or settings revision is a
-    // different day's plan, and quietly resuming the old one would ignore the
-    // change the user just made.
-    final bool resumable =
-        stored != null &&
-        !forceRebuild &&
-        identity.sharesBasisWith(stored.identity);
-
-    if (stored != null && resumable) {
-      final List<PresentationPlanEntry> remaining = <PresentationPlanEntry>[
-        for (final entry in stored.remainingEntries)
-          if (byRef[entry.ref] case final QueueCandidate candidate)
-            if (candidate.isEligible(
-              nowUtc: _clock.nowUtc(),
-              today: identity.studyDay,
-            ))
-              entry,
-      ];
-      final Set<ElementRef> present = remaining
-          .map((PresentationPlanEntry entry) => entry.ref)
-          .toSet();
-      final List<PresentationPlanEntry> mandatory = <PresentationPlanEntry>[
-        for (final scored in fresh.scored)
-          if (scored.lane == QueueLane.mandatoryIntradayStep &&
-              !present.contains(scored.ref))
-            PresentationPlanEntry(ref: scored.ref, lane: scored.lane),
-      ];
-      if (mandatory.isNotEmpty) {
-        final int nextCard = remaining.indexWhere(
-          (PresentationPlanEntry entry) => entry.ref.type == ElementType.card,
+    final StudyDayCalendar calendar = await _context.calendar();
+    final CardScheduler cardScheduler = await _context.cardScheduler();
+    final List<Sm20PostponeCandidate> source = <Sm20PostponeCandidate>[];
+    for (final QueueCandidate candidate in candidates) {
+      final ElementRef ref = candidate.ref;
+      if (candidate.isCard) {
+        final CardState card = candidate.card!;
+        final CardMemory memory = card.memory;
+        // Reps, not the FSRS learning state, decide memorization: FSRS calls a
+        // never-reviewed card Learning, and SM20 treats that record as Pending.
+        final bool memorized = memory.reps > 0;
+        source.add(
+          Sm20PostponeCandidate(
+            ref: ref,
+            priority: card.schedule.priority,
+            storedInterval: memory.scheduledDays == null
+                ? 0
+                : math.max(memory.scheduledDays!.round(), 0),
+            lastReviewDay: memory.lastReviewAtUtc == null
+                ? null
+                : calendar.dayOf(memory.lastReviewAtUtc!),
+            totalPostponements: memory.postponeCount,
+            isOutstanding: outstanding.contains(ref),
+            isMemorized: memorized,
+            scheduledDay: calendar.dayOf(memory.dueAtUtc),
+            // A never-reviewed card has no measurable retrievability, and the
+            // executable evaluates such a record against the fixed default
+            // forgetting index rather than skipping it.
+            forgettingIndex: memorized
+                ? 100 * (1 - cardScheduler.retrievability(memory, atUtc: atUtc))
+                : 10,
+            isDeleted: card.schedule.lifecycle == ElementLifecycle.deleted,
+          ),
         );
-        remaining.insertAll(nextCard < 0 ? 0 : nextCard, mandatory);
-        present.addAll(
-          mandatory.map((PresentationPlanEntry entry) => entry.ref),
+      } else {
+        final TopicState topic = candidate.topic!;
+        source.add(
+          Sm20PostponeCandidate(
+            ref: ref,
+            priority: topic.schedule.priority,
+            storedInterval: math.max(topic.storedInterval, 0),
+            lastReviewDay: topic.lastReviewDay,
+            totalPostponements: topic.totalPostponementCount,
+            isOutstanding: outstanding.contains(ref),
+            isMemorized: topic.status == Sm20ElementStatus.memorized,
+            scheduledDay: topic.schedule.algorithmicDueDay,
+            aFactor: topic.aFactor,
+            isDeleted: topic.status == Sm20ElementStatus.deleted,
+          ),
         );
       }
-      // Work admitted since the plan was written — recalled by Study More, or
-      // newly created — joins the tail rather than waiting for tomorrow. The
-      // caps already decided this set, so appending it cannot exceed them, and
-      // appending keeps the user's current place instead of reshuffling it.
-      remaining.addAll(<PresentationPlanEntry>[
-        for (final QueueCandidate candidate in fresh.entries)
-          if (!present.contains(candidate.ref))
-            PresentationPlanEntry(
-              ref: candidate.ref,
-              lane: freshLanes[candidate.ref] ?? QueueLane.regularDueTopic,
-            ),
-      ]);
-      final StoredPresentationPlan resumed = StoredPresentationPlan(
-        identity: identity,
-        remainingEntries: List<PresentationPlanEntry>.unmodifiable(remaining),
-        mergeCursor: stored.mergeCursor,
-        createdAtUtc: stored.createdAtUtc,
-        updatedAtUtc: atUtc,
-      );
-      await _learning.savePresentationPlan(resumed);
-      return QueuePlan(
-        entries: <QueueCandidate>[
-          for (final entry in remaining)
-            if (byRef[entry.ref] case final QueueCandidate candidate) candidate,
-        ],
-        overflow: fresh.overflow,
-        counters: fresh.counters,
-        scored: fresh.scored,
-        nextMergeCursor: stored.mergeCursor,
-      );
     }
-
-    final List<PresentationPlanEntry> entries = <PresentationPlanEntry>[
-      for (final candidate in fresh.entries)
-        PresentationPlanEntry(
-          ref: candidate.ref,
-          lane: freshLanes[candidate.ref] ?? QueueLane.regularDueTopic,
-        ),
-    ];
-    final StoredPresentationPlan created = StoredPresentationPlan(
-      identity: identity,
-      remainingEntries: List<PresentationPlanEntry>.unmodifiable(entries),
-      mergeCursor: stored?.mergeCursor ?? QueueMergeCursor.zero,
-      createdAtUtc: stored?.createdAtUtc ?? atUtc,
-      updatedAtUtc: atUtc,
-    );
-    await _learning.savePresentationPlan(created);
-    return fresh;
+    return source;
   }
 
-  /// The content repository, held so the read model can share this handler's
-  /// candidate loading without a second dependency graph.
+  /// Writes every real decision as a low-level reschedule.
+  ///
+  /// This is not a repetition: A, priority, repetitions, and lapses are left
+  /// alone, and the only last-review movement is the target-at-or-before
+  /// correction the section 8.1 rescheduler performs itself. A simulation
+  /// never reaches here, so nothing it computed can leak into storage.
+  Future<int> _applySmartPostpone({
+    required String operationId,
+    required DateTime atUtc,
+    required StudyDay today,
+    required List<QueueCandidate> candidates,
+    required SmartPostponeResult result,
+    required RevlogEventType eventType,
+  }) async {
+    final List<SmartPostponeDecision> writes = <SmartPostponeDecision>[
+      for (final SmartPostponeDecision decision in result.decisions)
+        if (decision.writesRecord) decision,
+    ];
+    if (writes.isEmpty) return 0;
+
+    final Map<ElementRef, QueueCandidate> byRef = <ElementRef, QueueCandidate>{
+      for (final QueueCandidate candidate in candidates)
+        candidate.ref: candidate,
+    };
+    final StudyDayCalendar calendar = await _context.calendar();
+    final PriorityScale scale = await _context.priorityScale();
+    final TopicScheduler topicScheduler = await _context.topicScheduler();
+    final CardScheduler cardScheduler = await _context.cardScheduler();
+    final SchedulingJournal journal = SchedulingJournal(
+      learning: _learning,
+      ids: _ids,
+    );
+    final List<RevlogEntry> revlog = <RevlogEntry>[];
+    var written = 0;
+
+    for (final SmartPostponeDecision decision in writes) {
+      final QueueCandidate? candidate = byRef[decision.ref];
+      if (candidate == null) continue;
+      final String itemOperation =
+          '$operationId:${decision.ref.type.name}:${decision.ref.id}';
+      final Map<String, Object?> metadata = <String, Object?>{
+        'pass': decision.pass.name,
+        'delay_days': decision.delayDays,
+        'factor': decision.factor,
+        'new_interval_days': decision.newIntervalDays,
+        'target_day': decision.targetDay.toString(),
+        'priority_percent': decision.priorityPercent,
+        'age_days': decision.ageDays,
+        'warns_above_two_hundred_days': decision.warnsAboveTwoHundredDays,
+        'profile': result.profile.profileName,
+      };
+      if (candidate.isCard) {
+        final CardState before = candidate.card!;
+        final CardState moved = cardScheduler.rescheduleElement(
+          before,
+          targetDay: decision.targetDay,
+          today: today,
+        );
+        final CardState after = moved.copyWith(
+          schedule: moved.schedule.copyWith(updatedAtUtc: atUtc),
+        );
+        await _learning.saveCardState(after);
+        revlog.add(
+          journal.build(
+            operationId: itemOperation,
+            ref: decision.ref,
+            eventType: eventType,
+            atUtc: atUtc,
+            before: journal.cardSnapshot(
+              before,
+              pressure: scale.pressureOf(before.schedule.priority),
+            ),
+            after: journal.cardSnapshot(
+              after,
+              pressure: scale.pressureOf(after.schedule.priority),
+            ),
+            scheduledDays: after.memory.scheduledDays,
+            postponeCount: after.memory.postponeCount,
+            schedulerVersion: after.memory.schedulerVersion,
+            parametersVersion: after.memory.parametersVersion,
+            metadata: metadata,
+          ),
+        );
+      } else {
+        final TopicState before = candidate.topic!;
+        final TopicTransition moved = topicScheduler.rescheduleElement(
+          before,
+          targetDay: decision.targetDay,
+          today: today,
+        );
+        final TopicState after = moved.state.copyWith(
+          schedule: moved.state.schedule.copyWith(updatedAtUtc: atUtc),
+        );
+        await _learning.saveTopic(after);
+        revlog.add(
+          journal.build(
+            operationId: itemOperation,
+            ref: decision.ref,
+            eventType: eventType,
+            atUtc: atUtc,
+            before: journal.topicSnapshot(
+              before,
+              calendar: calendar,
+              pressure: scale.pressureOf(before.schedule.priority),
+            ),
+            after: journal.topicSnapshot(
+              after,
+              calendar: calendar,
+              pressure: scale.pressureOf(after.schedule.priority),
+            ),
+            scheduledDays: after.intervalDays,
+            postponeCount: after.totalPostponementCount,
+            schedulerVersion: after.schedulerVersion,
+            metadata: metadata,
+          ),
+        );
+      }
+      written += 1;
+    }
+
+    if (revlog.isNotEmpty) await _learning.appendRevlogBatch(revlog);
+    return written;
+  }
+
   ContentRepository get content => _content;
+
+  List<ElementRef> _orderedRefs(
+    Iterable<ElementRef> existing,
+    Iterable<QueueCandidate> additions, {
+    required Map<ElementRef, QueueCandidate> byRef,
+    required bool Function(QueueCandidate) accept,
+  }) {
+    final Set<ElementRef> seen = <ElementRef>{};
+    final List<ElementRef> result = <ElementRef>[];
+    for (final ElementRef ref in existing) {
+      // Existing queue membership is retained only while a live schedule
+      // still exists. It need not be due: Add to Outstanding can put a future
+      // repetition here deliberately.
+      final QueueCandidate? candidate = byRef[ref];
+      if (candidate != null && accept(candidate) && seen.add(ref)) {
+        result.add(ref);
+      }
+    }
+    // Remove stale refs by consulting all active schedules through additions
+    // when additions represents the full accepted population. The caller
+    // performs a second safety filter below for the due-only Outstanding set.
+    for (final QueueCandidate candidate in additions) {
+      if (accept(candidate) && seen.add(candidate.ref)) {
+        result.add(candidate.ref);
+      }
+    }
+    return result;
+  }
 
   UnexpectedFailure _fail(
     AppCommand command,
@@ -655,46 +1003,4 @@ final class QueueHandlers {
     );
     return failure;
   }
-}
-
-final class _FutureCapacityLedger {
-  _FutureCapacityLedger({
-    required this.today,
-    required this.cardCapacity,
-    required this.topicCapacity,
-  });
-
-  final StudyDay today;
-  final int cardCapacity;
-  final int topicCapacity;
-  final Map<int, int> _cardLoad = <int, int>{};
-  final Map<int, int> _topicLoad = <int, int>{};
-
-  void addExisting(StudyDay day, {required bool isCard}) {
-    final Map<int, int> load = isCard ? _cardLoad : _topicLoad;
-    load.update(day.epochDay, (int value) => value + 1, ifAbsent: () => 1);
-  }
-
-  StudyDay? reserveNext({required bool isCard}) {
-    final int capacity = isCard ? cardCapacity : topicCapacity;
-    if (capacity <= 0) return null;
-    final Map<int, int> load = isCard ? _cardLoad : _topicLoad;
-    for (var offset = 1; offset <= 36500; offset++) {
-      final StudyDay day = today.addDays(offset);
-      final int current = load[day.epochDay] ?? 0;
-      if (current >= capacity) continue;
-      load[day.epochDay] = current + 1;
-      return day;
-    }
-    return null;
-  }
-}
-
-String _stableDigest(String value) {
-  var hash = 0x811c9dc5;
-  for (final int unit in value.codeUnits) {
-    hash ^= unit;
-    hash = (hash * 0x01000193) & 0x7fffffff;
-  }
-  return hash.toRadixString(16).padLeft(8, '0');
 }

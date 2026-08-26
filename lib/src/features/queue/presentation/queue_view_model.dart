@@ -17,7 +17,10 @@ import '../../../application/scheduling/mercy_workflow.dart';
 import '../../../core/result.dart';
 import '../../../core/tracing.dart';
 import '../../../domain/scheduling/card_scheduler.dart';
+import '../../../domain/scheduling/element.dart';
 import '../../../domain/scheduling/queue_policy.dart';
+import '../../../domain/scheduling/study_day.dart';
+import '../../../domain/settings/app_settings.dart';
 import '../../library/presentation/library_view_model.dart';
 
 @immutable
@@ -25,7 +28,6 @@ final class QueueUiState {
   const QueueUiState({
     required this.projection,
     this.completedThisSession = 0,
-    this.extraAdmissions = 0,
     this.message,
     this.isBusy = false,
   });
@@ -34,10 +36,6 @@ final class QueueUiState {
   final QueueProjection projection;
 
   final int completedThisSession;
-
-  /// Headroom added by Study More, for this session only. Never persisted:
-  /// asking for more work today is not the same as raising a daily limit.
-  final int extraAdmissions;
 
   /// Ephemeral: shown once, then cleared.
   final UiMessage? message;
@@ -50,20 +48,15 @@ final class QueueUiState {
 
   QueueCounters get counters => projection.counters;
 
-  /// Whether the valve shed anything today, so Study More is worth offering.
-  bool get hasDeferrals => projection.counters.overflowTotal > 0;
-
   QueueUiState copyWith({
     QueueProjection? projection,
     int? completedThisSession,
-    int? extraAdmissions,
     UiMessage? message,
     bool clearMessage = false,
     bool? isBusy,
   }) => QueueUiState(
     projection: projection ?? this.projection,
     completedThisSession: completedThisSession ?? this.completedThisSession,
-    extraAdmissions: extraAdmissions ?? this.extraAdmissions,
     message: clearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
   );
@@ -81,56 +74,18 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
   /// from a canceled child route or when the user presses Refresh.
   Future<void> refresh() => _reload(countEncounter: false);
 
-  /// Takes back some of what the valve deferred today.
-  ///
-  /// Recalls automatic deferrals only: a manual Later stands, because the
-  /// user said "not now" about that element specifically.
-  Future<void> studyMore() async {
-    final QueueUiState? current = state.valueOrNull;
-    if (current == null || current.isBusy) return;
-    state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: true));
-
-    final Result<int> result = await ref
-        .read(queueHandlersProvider)
-        .studyMore(
-          StudyMore(
-            OperationId(ref.read(idGeneratorProvider).newId()),
-            day: current.projection.today,
-          ),
-        );
-    final int step = (await ref.read(schedulingContextProvider).settings())
-        .queue
-        .studyMoreStep;
-    final QueueProjection projection = await ref
-        .read(queueQueryProvider)
-        .load(extraAdmissions: current.extraAdmissions + step);
-
-    state = AsyncValue<QueueUiState>.data(
-      current.copyWith(
-        projection: projection,
-        extraAdmissions: current.extraAdmissions + step,
-        isBusy: false,
-        message: result.fold(
-          (int recalled) => UiMessage(
-            recalled == 0
-                ? 'Nothing left to recall today'
-                : '$recalled more element${recalled == 1 ? '' : 's'} today',
-          ),
-          (AppFailure failure) => UiMessage(failure.message, isError: true),
-        ),
-      ),
-    );
-  }
-
   /// Computes a Mercy proposal without writing anything.
   ///
   /// Returned rather than stored on the state so the screen can show the exact
   /// calendar and let the user walk away from it. Nothing has moved until
   /// [applyMercy] is called with the returned batch.
   Future<StoredMercyBatch?> previewMercy({
-    int? horizonDays,
-    int? dailyCap,
-    bool includeFutureRepetitions = false,
+    int? reschedulingDays,
+    int? gatheringDays,
+    int? elementsPerDay,
+    bool solveFromDailyCap = false,
+    bool? includeFuture,
+    MercyMode? mode,
   }) async {
     final QueueUiState? current = state.valueOrNull;
     if (current == null || current.isBusy) return null;
@@ -142,25 +97,196 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
           PreviewMercy(
             OperationId(ref.read(idGeneratorProvider).newId()),
             day: current.projection.today,
-            horizonDays: horizonDays,
-            dailyCap: dailyCap,
-            includeFutureRepetitions: includeFutureRepetitions,
+            reschedulingDays: reschedulingDays,
+            gatheringDays: gatheringDays,
+            elementsPerDay: elementsPerDay,
+            solveFromDailyCap: solveFromDailyCap,
+            includeFuture: includeFuture,
+            mode: mode,
           ),
         );
 
-    return result.fold((StoredMercyBatch batch) {
-      state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: false));
-      return batch;
-    }, (AppFailure failure) {
-      state = AsyncValue<QueueUiState>.data(
-        current.copyWith(
-          isBusy: false,
-          message: UiMessage(failure.message, isError: true),
-        ),
-      );
-      return null;
-    });
+    return result.fold(
+      (StoredMercyBatch batch) {
+        state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: false));
+        return batch;
+      },
+      (AppFailure failure) {
+        state = AsyncValue<QueueUiState>.data(
+          current.copyWith(
+            isBusy: false,
+            message: UiMessage(failure.message, isError: true),
+          ),
+        );
+        return null;
+      },
+    );
   }
+
+  /// Live Default profile, used to seed the Smart Postpone dialog.
+  Future<SmartPostponeSettings> smartPostponeSettings() async =>
+      (await ref.read(schedulingContextProvider).settings())
+          .postpone
+          .defaultProfile;
+
+  /// Runs Smart Postpone, or its write-free simulation.
+  ///
+  /// Simulation and the real run are the same command with one flag, so what
+  /// the confirmation dialog shows is produced by the engine that will write —
+  /// not by a second estimate that could disagree with it.
+  Future<AppliedSmartPostpone?> smartPostpone({
+    required bool simulate,
+    SmartPostponeSettings? profile,
+    List<ElementRef>? sourcePopulation,
+    List<SmartPostponeSettings> applicableSubbranchProfiles =
+        const <SmartPostponeSettings>[],
+  }) async {
+    final QueueUiState? current = state.valueOrNull;
+    if (current == null || current.isBusy) return null;
+    state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: true));
+
+    final SmartPostponeSettings base = profile ?? await smartPostponeSettings();
+    final Result<AppliedSmartPostpone> result = await ref
+        .read(queueHandlersProvider)
+        .runSmartPostpone(
+          RunSmartPostpone(
+            OperationId(ref.read(idGeneratorProvider).newId()),
+            day: current.projection.today,
+            profile: base.copyWith(simulate: simulate),
+            sourcePopulation: sourcePopulation,
+            applicableSubbranchProfiles: applicableSubbranchProfiles,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        );
+
+    // A simulation wrote nothing, so the projection it was computed from is
+    // still current and reloading it would only cost a rebuild.
+    final QueueProjection projection = simulate || result.isErr
+        ? current.projection
+        : await ref.read(queueQueryProvider).load();
+
+    return result.fold(
+      (AppliedSmartPostpone applied) {
+        state = AsyncValue<QueueUiState>.data(
+          current.copyWith(
+            projection: projection,
+            isBusy: false,
+            message: simulate
+                ? null
+                : UiMessage(
+                    applied.written == 0
+                        ? 'Nothing was eligible for postponement'
+                        : 'Smart Postpone moved ${applied.written} element'
+                              '${applied.written == 1 ? '' : 's'}',
+                  ),
+          ),
+        );
+        return applied;
+      },
+      (AppFailure failure) {
+        state = AsyncValue<QueueUiState>.data(
+          current.copyWith(
+            isBusy: false,
+            message: UiMessage(failure.message, isError: true),
+          ),
+        );
+        return null;
+      },
+    );
+  }
+
+  /// Enters Final Drill or Pending on demand, as the Learn menu does.
+  Future<void> enterStage(Sm20StageRequest stage) => _queueCommand(
+    (OperationId operation, StudyDay day, DateTime now) => ref
+        .read(queueHandlersProvider)
+        .enterLearningStage(
+          EnterLearningStage(
+            operation,
+            day: day,
+            stage: stage,
+            timestampUtc: now,
+          ),
+        ),
+    success: (Sm20QueueCommandOutcome outcome) => switch (stage) {
+      Sm20StageRequest.outstanding =>
+        'Outstanding: ${outcome.affected} element'
+            '${outcome.affected == 1 ? '' : 's'}',
+      Sm20StageRequest.finalDrill =>
+        'Final drill: ${outcome.affected} element'
+            '${outcome.affected == 1 ? '' : 's'}',
+      Sm20StageRequest.randomLearning =>
+        'Random learning: ${outcome.affected} pending element'
+            '${outcome.affected == 1 ? '' : 's'}',
+    },
+  );
+
+  /// Cut drills: empties the Final Drill queue.
+  Future<void> cutDrills() => _queueCommand(
+    (OperationId operation, StudyDay day, DateTime now) => ref
+        .read(queueHandlersProvider)
+        .cutDrills(CutDrills(operation, day: day, timestampUtc: now)),
+    success: (Sm20QueueCommandOutcome outcome) => outcome.affected == 0
+        ? 'The final drill was already empty'
+        : 'Cut ${outcome.affected} element'
+              '${outcome.affected == 1 ? '' : 's'} from the final drill',
+  );
+
+  /// Reorders one stored queue with the fixed-size swap.
+  Future<void> randomizeQueue(Sm20RandomizableQueue queue) => _queueCommand(
+    (OperationId operation, StudyDay day, DateTime now) => ref
+        .read(queueHandlersProvider)
+        .randomizeQueue(
+          RandomizeQueue(operation, day: day, queue: queue, timestampUtc: now),
+        ),
+    success: (Sm20QueueCommandOutcome outcome) => switch (queue) {
+      Sm20RandomizableQueue.outstanding => 'Repetitions randomized',
+      Sm20RandomizableQueue.finalDrill => 'Final drill randomized',
+      Sm20RandomizableQueue.pending => 'Pending queue randomized',
+    },
+  );
+
+  /// Shared shape for the manual stage and queue commands.
+  ///
+  /// Each of them changes stored queue state, so the projection is reloaded
+  /// rather than patched: the stage that comes back is the one the queue
+  /// transaction actually settled on.
+  Future<void> _queueCommand(
+    Future<Result<Sm20QueueCommandOutcome>> Function(
+      OperationId operation,
+      StudyDay day,
+      DateTime now,
+    )
+    run, {
+    required String Function(Sm20QueueCommandOutcome outcome) success,
+  }) async {
+    final QueueUiState? current = state.valueOrNull;
+    if (current == null || current.isBusy) return;
+    state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: true));
+
+    final Result<Sm20QueueCommandOutcome> result = await run(
+      OperationId(ref.read(idGeneratorProvider).newId()),
+      current.projection.today,
+      ref.read(clockProvider).nowUtc(),
+    );
+    final QueueProjection projection = result.isErr
+        ? current.projection
+        : await ref.read(queueQueryProvider).load();
+
+    state = AsyncValue<QueueUiState>.data(
+      current.copyWith(
+        projection: projection,
+        isBusy: false,
+        message: result.fold(
+          (Sm20QueueCommandOutcome outcome) => UiMessage(success(outcome)),
+          (AppFailure failure) => UiMessage(failure.message, isError: true),
+        ),
+      ),
+    );
+  }
+
+  /// Live defaults for the Mercy capacity and ordering dialog.
+  Future<MercySettings> mercySettings() async =>
+      (await ref.read(schedulingContextProvider).settings()).mercy;
 
   /// Commits a previewed batch the user confirmed.
   Future<void> applyMercy(StoredMercyBatch batch) async {
@@ -257,7 +383,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
         );
     final QueueProjection projection = await ref
         .read(queueQueryProvider)
-        .load(extraAdmissions: current.extraAdmissions);
+        .load();
 
     state = AsyncValue<QueueUiState>.data(
       current.copyWith(
@@ -287,15 +413,11 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
     final QueueUiState? current = state.valueOrNull;
     final int completed =
         (current?.completedThisSession ?? 0) + (countEncounter ? 1 : 0);
-    final int extra = current?.extraAdmissions ?? 0;
     state = const AsyncLoading<QueueUiState>();
     state = await AsyncValue.guard(
       () async => QueueUiState(
-        projection: await ref
-            .read(queueQueryProvider)
-            .load(extraAdmissions: extra),
+        projection: await ref.read(queueQueryProvider).load(),
         completedThisSession: completed,
-        extraAdmissions: extra,
       ),
     );
   }

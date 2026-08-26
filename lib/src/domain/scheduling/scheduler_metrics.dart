@@ -1,10 +1,10 @@
-/// Operational scheduler metrics and the sustained-overload warning.
+/// Operational scheduler metrics for the canonical SM20 schedule.
 ///
 /// This module is deliberately a pure reporting boundary. Persistence adapters
-/// project canonical card instants, topic StudyDays, active adjustments, and
-/// append-only events into the samples below; the collector only aggregates
-/// those samples. In particular, metrics never feed queue admission and never
-/// manufacture reviews.
+/// project canonical card instants, topic StudyDays, and append-only events
+/// into the samples below; the collector only aggregates those samples. In
+/// particular, metrics never feed queue admission and never manufacture
+/// reviews.
 library;
 
 import 'dart:math' as math;
@@ -12,7 +12,6 @@ import 'dart:math' as math;
 import 'package:meta/meta.dart';
 
 import 'element.dart';
-import 'schedule_adjustment.dart';
 import 'study_day.dart';
 
 /// Version of the reporting definitions in this file.
@@ -20,58 +19,35 @@ import 'study_day.dart';
 /// **[Product decision]** Versioning the definitions makes later changes to a
 /// reporting window or percentile estimator visible instead of rewriting old
 /// dashboards in place.
-const String schedulerMetricsPolicyVersion = 'scheduler_metrics_v1/1';
-
-/// The authoritative warning boundary for sustained automatic overflow.
-const double automaticOverflowWarningFraction = 0.30;
-
-/// Number of consecutive reporting weeks required for an overload warning.
-const int automaticOverflowWarningWeeks = 3;
+const String schedulerMetricsPolicyVersion = 'scheduler_metrics_sm20/1';
 
 /// Number of StudyDays in the forward-looking due series.
 const int schedulerDueHorizonDays = 30;
 
-/// A reporting projection of one schedulable element's two due coordinates.
+/// A reporting projection of one schedulable element's canonical due day.
 ///
-/// Card adapters must map both exact UTC instants through the configured
-/// [StudyDayCalendar]. This is a reporting projection only: it does not turn a
-/// card's canonical instant into a day-based schedule.
+/// Card adapters map their exact UTC instant through the configured
+/// [StudyDayCalendar]. This reporting projection does not turn a card's
+/// canonical instant into a day-based schedule.
 @immutable
 final class DueMetricSample {
   DueMetricSample({
     required this.element,
-    required this.algorithmicDue,
-    required this.effectiveDue,
+    required this.due,
     required this.branchId,
     this.estimatedForegroundMs = 0,
   }) {
     _requireText(element.id, 'element.id');
     _requireText(branchId, 'branchId');
-    _requireSameZone(algorithmicDue, effectiveDue);
     _requireNonNegative(estimatedForegroundMs, 'estimatedForegroundMs');
   }
 
   final ElementRef element;
-  final StudyDay algorithmicDue;
-  final StudyDay effectiveDue;
+  final StudyDay due;
   final String branchId;
 
   /// A forecast input for branch workload reporting, never admission.
   final int estimatedForegroundMs;
-}
-
-/// One active presentation adjustment included in a metrics snapshot.
-@immutable
-final class AdjustmentLoadSample {
-  const AdjustmentLoadSample({
-    required this.element,
-    required this.reason,
-    required this.mode,
-  });
-
-  final ElementRef element;
-  final ScheduleAdjustmentReason reason;
-  final ScheduleAdjustmentMode mode;
 }
 
 /// Event-derived counters for one StudyDay.
@@ -83,55 +59,36 @@ final class AdjustmentLoadSample {
 final class DailySchedulerActivity {
   DailySchedulerActivity({
     required this.day,
-    this.dueWorkCount = 0,
-    this.automaticOverflowCount = 0,
     this.manualLaterCount = 0,
-    this.newCardsIntroduced = 0,
     this.actualCardReviews = 0,
     this.topicsCompleted = 0,
     this.cardOpportunities = 0,
     this.topicOpportunities = 0,
     this.cardForegroundMs = 0,
     this.topicForegroundMs = 0,
-    this.protectedElementViolations = 0,
   }) {
     final Map<String, int> values = <String, int>{
-      'dueWorkCount': dueWorkCount,
-      'automaticOverflowCount': automaticOverflowCount,
       'manualLaterCount': manualLaterCount,
-      'newCardsIntroduced': newCardsIntroduced,
       'actualCardReviews': actualCardReviews,
       'topicsCompleted': topicsCompleted,
       'cardOpportunities': cardOpportunities,
       'topicOpportunities': topicOpportunities,
       'cardForegroundMs': cardForegroundMs,
       'topicForegroundMs': topicForegroundMs,
-      'protectedElementViolations': protectedElementViolations,
     };
     for (final MapEntry<String, int> entry in values.entries) {
       _requireNonNegative(entry.value, entry.key);
     }
-    if (automaticOverflowCount > dueWorkCount) {
-      throw ArgumentError(
-        'automaticOverflowCount cannot exceed the unique due-work count',
-      );
-    }
   }
 
   final StudyDay day;
-
-  /// Unique due elements/opportunities in the activity period's denominator.
-  final int dueWorkCount;
-  final int automaticOverflowCount;
   final int manualLaterCount;
-  final int newCardsIntroduced;
   final int actualCardReviews;
   final int topicsCompleted;
   final int cardOpportunities;
   final int topicOpportunities;
   final int cardForegroundMs;
   final int topicForegroundMs;
-  final int protectedElementViolations;
 }
 
 /// One confirmed Mercy batch in the reporting period.
@@ -250,38 +207,8 @@ final class TopicEncounterMetricSample {
   final String policyVersion;
   final double intervalDays;
 
-  /// Null is valid for a legacy sequence that had no A-Factor.
+  /// Null is valid when no A-Factor measurement was recorded.
   final double? aFactor;
-}
-
-/// One already-bucketed local reporting week.
-///
-/// The adapter chooses the collection's visible week boundary. Keeping the
-/// boundary outside this module avoids guessing whether the product wants ISO
-/// weeks or rolling seven-day windows. Consecutiveness is still verified by
-/// exact seven-StudyDay spacing.
-@immutable
-final class WeeklyOverloadMetricSample {
-  WeeklyOverloadMetricSample({
-    required this.weekStart,
-    required this.dueWorkCount,
-    required this.automaticOverflowCount,
-  }) {
-    _requireNonNegative(dueWorkCount, 'dueWorkCount');
-    _requireNonNegative(automaticOverflowCount, 'automaticOverflowCount');
-    if (automaticOverflowCount > dueWorkCount) {
-      throw ArgumentError(
-        'automaticOverflowCount cannot exceed the unique due-work count',
-      );
-    }
-  }
-
-  final StudyDay weekStart;
-  final int dueWorkCount;
-  final int automaticOverflowCount;
-
-  double? get automaticOverflowFraction =>
-      dueWorkCount == 0 ? null : automaticOverflowCount / dueWorkCount;
 }
 
 /// Fully normalized input to [SchedulerMetricsCollector].
@@ -292,8 +219,6 @@ final class SchedulerMetricsInput {
     StudyDay? activityStart,
     StudyDay? activityEnd,
     Iterable<DueMetricSample> due = const <DueMetricSample>[],
-    Iterable<AdjustmentLoadSample> activeAdjustments =
-        const <AdjustmentLoadSample>[],
     Iterable<DailySchedulerActivity> activity =
         const <DailySchedulerActivity>[],
     Iterable<MercyBatchMetricSample> mercyBatches =
@@ -304,8 +229,6 @@ final class SchedulerMetricsInput {
         const <BranchWorkloadMetricSample>[],
     Iterable<TopicEncounterMetricSample> topicEncounters =
         const <TopicEncounterMetricSample>[],
-    Iterable<WeeklyOverloadMetricSample> overloadWeeks =
-        const <WeeklyOverloadMetricSample>[],
   }) {
     final StudyDay start = activityStart ?? asOfStudyDay.addDays(-29);
     final StudyDay end = activityEnd ?? asOfStudyDay;
@@ -318,8 +241,7 @@ final class SchedulerMetricsInput {
     final List<DueMetricSample> dueList = due.toList(growable: false);
     final Set<ElementRef> dueElements = <ElementRef>{};
     for (final DueMetricSample sample in dueList) {
-      _requireSameZone(asOfStudyDay, sample.algorithmicDue);
-      _requireSameZone(asOfStudyDay, sample.effectiveDue);
+      _requireSameZone(asOfStudyDay, sample.due);
       if (!dueElements.add(sample.element)) {
         throw ArgumentError('duplicate due sample for ${sample.element}');
       }
@@ -341,21 +263,11 @@ final class SchedulerMetricsInput {
         throw ArgumentError('duplicate Mercy batch ${sample.batchId}');
       }
     }
-    final List<WeeklyOverloadMetricSample> weekList = overloadWeeks.toList(
-      growable: false,
-    );
-    for (final WeeklyOverloadMetricSample sample in weekList) {
-      _requireSameZone(asOfStudyDay, sample.weekStart);
-    }
-
     return SchedulerMetricsInput._(
       asOfStudyDay: asOfStudyDay,
       activityStart: start,
       activityEnd: end,
       due: List<DueMetricSample>.unmodifiable(dueList),
-      activeAdjustments: List<AdjustmentLoadSample>.unmodifiable(
-        activeAdjustments,
-      ),
       activity: List<DailySchedulerActivity>.unmodifiable(activityList),
       mercyBatches: List<MercyBatchMetricSample>.unmodifiable(mercyList),
       priorityOutcomes: List<PriorityOutcomeMetricSample>.unmodifiable(
@@ -367,7 +279,6 @@ final class SchedulerMetricsInput {
       topicEncounters: List<TopicEncounterMetricSample>.unmodifiable(
         topicEncounters,
       ),
-      overloadWeeks: List<WeeklyOverloadMetricSample>.unmodifiable(weekList),
     );
   }
 
@@ -376,60 +287,36 @@ final class SchedulerMetricsInput {
     required this.activityStart,
     required this.activityEnd,
     required this.due,
-    required this.activeAdjustments,
     required this.activity,
     required this.mercyBatches,
     required this.priorityOutcomes,
     required this.futureWorkload,
     required this.topicEncounters,
-    required this.overloadWeeks,
   });
 
   final StudyDay asOfStudyDay;
   final StudyDay activityStart;
   final StudyDay activityEnd;
   final List<DueMetricSample> due;
-  final List<AdjustmentLoadSample> activeAdjustments;
   final List<DailySchedulerActivity> activity;
   final List<MercyBatchMetricSample> mercyBatches;
   final List<PriorityOutcomeMetricSample> priorityOutcomes;
   final List<BranchWorkloadMetricSample> futureWorkload;
   final List<TopicEncounterMetricSample> topicEncounters;
-  final List<WeeklyOverloadMetricSample> overloadWeeks;
 }
 
-/// Algorithmic and effective load for one future StudyDay.
+/// Canonical scheduled load for one future StudyDay.
 @immutable
 final class DueLoadMetric {
   const DueLoadMetric({
     required this.studyDay,
-    required this.algorithmicCards,
-    required this.algorithmicTopics,
-    required this.effectiveCards,
-    required this.effectiveTopics,
+    required this.cards,
+    required this.topics,
   });
 
   final StudyDay studyDay;
-  final int algorithmicCards;
-  final int algorithmicTopics;
-  final int effectiveCards;
-  final int effectiveTopics;
-}
-
-/// Current active presentation load for one typed adjustment reason.
-@immutable
-final class AdjustmentLoadMetric {
-  const AdjustmentLoadMetric({
-    required this.adjustmentCount,
-    required this.distinctElementCount,
-    required this.lowerBoundCount,
-    required this.exactOverrideCount,
-  });
-
-  final int adjustmentCount;
-  final int distinctElementCount;
-  final int lowerBoundCount;
-  final int exactOverrideCount;
+  final int cards;
+  final int topics;
 }
 
 /// A ratio that preserves its raw counts and is null when undefined.
@@ -548,24 +435,6 @@ final class TopicPolicyMetric {
   final DistributionMetric aFactors;
 }
 
-/// Result of evaluating the three-consecutive-week overload rule.
-@immutable
-final class SustainedOverloadWarning {
-  const SustainedOverloadWarning({
-    required this.active,
-    required this.threshold,
-    required this.requiredConsecutiveWeeks,
-    required this.latestConsecutiveWeeks,
-    required this.latestWeekStart,
-  });
-
-  final bool active;
-  final double threshold;
-  final int requiredConsecutiveWeeks;
-  final int latestConsecutiveWeeks;
-  final StudyDay? latestWeekStart;
-}
-
 /// Complete operational snapshot required by the scheduler contract.
 @immutable
 final class SchedulerMetricsSnapshot {
@@ -575,26 +444,18 @@ final class SchedulerMetricsSnapshot {
     required this.activityStart,
     required this.activityEnd,
     required this.next30Days,
-    required this.algorithmicOverdueCards,
-    required this.algorithmicOverdueTopics,
-    required this.effectiveOverdueCards,
-    required this.effectiveOverdueTopics,
-    required this.activeAdjustmentLoadByReason,
-    required this.automaticOverflowCount,
-    required this.dueWorkCount,
+    required this.overdueCards,
+    required this.overdueTopics,
     required this.manualLaterCount,
     required this.mercyCount,
     required this.mercyBatchSizes,
-    required this.newCardsIntroduced,
     required this.actualCardReviews,
     required this.topicsCompleted,
     required this.cardTopicOpportunityRatio,
     required this.cardTopicForegroundTimeRatio,
     required this.priorityDeciles,
-    required this.protectedElementViolations,
     required this.futureWorkloadByBranch,
     required this.topicPolicies,
-    required this.overloadWarning,
   });
 
   final String policyVersion;
@@ -602,32 +463,18 @@ final class SchedulerMetricsSnapshot {
   final StudyDay activityStart;
   final StudyDay activityEnd;
   final List<DueLoadMetric> next30Days;
-  final int algorithmicOverdueCards;
-  final int algorithmicOverdueTopics;
-  final int effectiveOverdueCards;
-  final int effectiveOverdueTopics;
-  final Map<ScheduleAdjustmentReason, AdjustmentLoadMetric>
-  activeAdjustmentLoadByReason;
-  final int automaticOverflowCount;
-  final int dueWorkCount;
+  final int overdueCards;
+  final int overdueTopics;
   final int manualLaterCount;
   final int mercyCount;
   final List<int> mercyBatchSizes;
-  final int newCardsIntroduced;
   final int actualCardReviews;
   final int topicsCompleted;
   final RatioMetric cardTopicOpportunityRatio;
   final RatioMetric cardTopicForegroundTimeRatio;
   final List<PriorityDecileMetric> priorityDeciles;
-  final int protectedElementViolations;
   final List<BranchWorkloadMetric> futureWorkloadByBranch;
   final List<TopicPolicyMetric> topicPolicies;
-  final SustainedOverloadWarning overloadWarning;
-
-  double? get automaticOverflowFraction =>
-      dueWorkCount == 0 ? null : automaticOverflowCount / dueWorkCount;
-
-  bool get protectionInvariantHolds => protectedElementViolations == 0;
 }
 
 /// Pure, deterministic metrics aggregator.
@@ -640,84 +487,45 @@ final class SchedulerMetricsCollector {
       for (var offset = 0; offset < schedulerDueHorizonDays; offset++)
         _MutableDueLoad(input.asOfStudyDay.addDays(offset)),
     ];
-    var algorithmicOverdueCards = 0;
-    var algorithmicOverdueTopics = 0;
-    var effectiveOverdueCards = 0;
-    var effectiveOverdueTopics = 0;
+    var overdueCards = 0;
+    var overdueTopics = 0;
     for (final DueMetricSample sample in input.due) {
       final bool card = sample.element.type == ElementType.card;
-      final int algorithmicOffset = input.asOfStudyDay.daysUntil(
-        sample.algorithmicDue,
-      );
-      if (algorithmicOffset < 0) {
+      final int offset = input.asOfStudyDay.daysUntil(sample.due);
+      if (offset < 0) {
         if (card) {
-          algorithmicOverdueCards++;
+          overdueCards++;
         } else {
-          algorithmicOverdueTopics++;
+          overdueTopics++;
         }
-      } else if (algorithmicOffset < schedulerDueHorizonDays) {
+      } else if (offset < schedulerDueHorizonDays) {
         if (card) {
-          horizon[algorithmicOffset].algorithmicCards++;
+          horizon[offset].cards++;
         } else {
-          horizon[algorithmicOffset].algorithmicTopics++;
+          horizon[offset].topics++;
         }
       }
-
-      final int effectiveOffset = input.asOfStudyDay.daysUntil(
-        sample.effectiveDue,
-      );
-      if (effectiveOffset < 0) {
-        if (card) {
-          effectiveOverdueCards++;
-        } else {
-          effectiveOverdueTopics++;
-        }
-      } else if (effectiveOffset < schedulerDueHorizonDays) {
-        if (card) {
-          horizon[effectiveOffset].effectiveCards++;
-        } else {
-          horizon[effectiveOffset].effectiveTopics++;
-        }
-      }
-    }
-
-    final Map<ScheduleAdjustmentReason, _MutableAdjustmentLoad>
-    adjustmentBuilders = <ScheduleAdjustmentReason, _MutableAdjustmentLoad>{
-      for (final ScheduleAdjustmentReason reason
-          in ScheduleAdjustmentReason.values)
-        reason: _MutableAdjustmentLoad(),
-    };
-    for (final AdjustmentLoadSample sample in input.activeAdjustments) {
-      adjustmentBuilders[sample.reason]!.add(sample);
     }
 
     final Iterable<DailySchedulerActivity> activity = input.activity.where(
       (DailySchedulerActivity value) =>
           value.day >= input.activityStart && value.day <= input.activityEnd,
     );
-    var dueWorkCount = 0;
-    var automaticOverflowCount = 0;
     var manualLaterCount = 0;
-    var newCardsIntroduced = 0;
     var actualCardReviews = 0;
     var topicsCompleted = 0;
     var cardOpportunities = 0;
     var topicOpportunities = 0;
     var cardForegroundMs = 0;
     var topicForegroundMs = 0;
-    var protectedElementViolations = 0;
     for (final DailySchedulerActivity value in activity) {
-      dueWorkCount += value.dueWorkCount;
-      automaticOverflowCount += value.automaticOverflowCount;
       manualLaterCount += value.manualLaterCount;
-      newCardsIntroduced += value.newCardsIntroduced;
       actualCardReviews += value.actualCardReviews;
       topicsCompleted += value.topicsCompleted;
       cardOpportunities += value.cardOpportunities;
       topicOpportunities += value.topicOpportunities;
       cardForegroundMs += value.cardForegroundMs;
       topicForegroundMs += value.topicForegroundMs;
-      protectedElementViolations += value.protectedElementViolations;
     }
 
     final List<MercyBatchMetricSample> mercy =
@@ -784,30 +592,13 @@ final class SchedulerMetricsCollector {
       next30Days: List<DueLoadMetric>.unmodifiable(
         horizon.map((_MutableDueLoad value) => value.freeze()),
       ),
-      algorithmicOverdueCards: algorithmicOverdueCards,
-      algorithmicOverdueTopics: algorithmicOverdueTopics,
-      effectiveOverdueCards: effectiveOverdueCards,
-      effectiveOverdueTopics: effectiveOverdueTopics,
-      activeAdjustmentLoadByReason:
-          Map<ScheduleAdjustmentReason, AdjustmentLoadMetric>.unmodifiable(
-            <ScheduleAdjustmentReason, AdjustmentLoadMetric>{
-              for (final MapEntry<
-                    ScheduleAdjustmentReason,
-                    _MutableAdjustmentLoad
-                  >
-                  entry
-                  in adjustmentBuilders.entries)
-                entry.key: entry.value.freeze(),
-            },
-          ),
-      automaticOverflowCount: automaticOverflowCount,
-      dueWorkCount: dueWorkCount,
+      overdueCards: overdueCards,
+      overdueTopics: overdueTopics,
       manualLaterCount: manualLaterCount,
       mercyCount: mercy.length,
       mercyBatchSizes: List<int>.unmodifiable(
         mercy.map((MercyBatchMetricSample value) => value.size),
       ),
-      newCardsIntroduced: newCardsIntroduced,
       actualCardReviews: actualCardReviews,
       topicsCompleted: topicsCompleted,
       cardTopicOpportunityRatio: RatioMetric(
@@ -819,74 +610,8 @@ final class SchedulerMetricsCollector {
         denominator: topicForegroundMs,
       ),
       priorityDeciles: List<PriorityDecileMetric>.unmodifiable(deciles),
-      protectedElementViolations: protectedElementViolations,
       futureWorkloadByBranch: List<BranchWorkloadMetric>.unmodifiable(branches),
       topicPolicies: List<TopicPolicyMetric>.unmodifiable(topicPolicies),
-      overloadWarning: const SustainedOverloadWarningEvaluator().evaluate(
-        input.overloadWeeks,
-      ),
-    );
-  }
-}
-
-/// Evaluates the required three-consecutive-week warning.
-@immutable
-final class SustainedOverloadWarningEvaluator {
-  const SustainedOverloadWarningEvaluator({
-    this.threshold = automaticOverflowWarningFraction,
-    this.requiredConsecutiveWeeks = automaticOverflowWarningWeeks,
-  }) : assert(threshold >= 0 && threshold <= 1),
-       assert(requiredConsecutiveWeeks > 0);
-
-  final double threshold;
-  final int requiredConsecutiveWeeks;
-
-  SustainedOverloadWarning evaluate(
-    Iterable<WeeklyOverloadMetricSample> samples,
-  ) {
-    final List<WeeklyOverloadMetricSample> ordered = samples.toList()
-      ..sort(
-        (WeeklyOverloadMetricSample left, WeeklyOverloadMetricSample right) =>
-            left.weekStart.compareTo(right.weekStart),
-      );
-    if (ordered.isEmpty) {
-      return SustainedOverloadWarning(
-        active: false,
-        threshold: threshold,
-        requiredConsecutiveWeeks: requiredConsecutiveWeeks,
-        latestConsecutiveWeeks: 0,
-        latestWeekStart: null,
-      );
-    }
-    for (var index = 1; index < ordered.length; index++) {
-      if (ordered[index - 1].weekStart == ordered[index].weekStart) {
-        throw ArgumentError(
-          'duplicate overload week ${ordered[index].weekStart}',
-        );
-      }
-    }
-
-    var streak = 0;
-    StudyDay? previous;
-    for (final WeeklyOverloadMetricSample sample in ordered) {
-      final bool consecutive =
-          previous == null || previous.daysUntil(sample.weekStart) == 7;
-      final double? fraction = sample.automaticOverflowFraction;
-      final bool qualifies = fraction != null && fraction >= threshold;
-      if (!consecutive || !qualifies) {
-        streak = qualifies ? 1 : 0;
-      } else {
-        streak++;
-      }
-      previous = sample.weekStart;
-    }
-
-    return SustainedOverloadWarning(
-      active: streak >= requiredConsecutiveWeeks,
-      threshold: threshold,
-      requiredConsecutiveWeeks: requiredConsecutiveWeeks,
-      latestConsecutiveWeeks: streak,
-      latestWeekStart: ordered.last.weekStart,
     );
   }
 }
@@ -895,41 +620,11 @@ final class _MutableDueLoad {
   _MutableDueLoad(this.studyDay);
 
   final StudyDay studyDay;
-  int algorithmicCards = 0;
-  int algorithmicTopics = 0;
-  int effectiveCards = 0;
-  int effectiveTopics = 0;
+  int cards = 0;
+  int topics = 0;
 
-  DueLoadMetric freeze() => DueLoadMetric(
-    studyDay: studyDay,
-    algorithmicCards: algorithmicCards,
-    algorithmicTopics: algorithmicTopics,
-    effectiveCards: effectiveCards,
-    effectiveTopics: effectiveTopics,
-  );
-}
-
-final class _MutableAdjustmentLoad {
-  final Set<ElementRef> elements = <ElementRef>{};
-  int lowerBounds = 0;
-  int exactOverrides = 0;
-
-  void add(AdjustmentLoadSample sample) {
-    elements.add(sample.element);
-    switch (sample.mode) {
-      case ScheduleAdjustmentMode.lowerBound:
-        lowerBounds++;
-      case ScheduleAdjustmentMode.exactOverride:
-        exactOverrides++;
-    }
-  }
-
-  AdjustmentLoadMetric freeze() => AdjustmentLoadMetric(
-    adjustmentCount: lowerBounds + exactOverrides,
-    distinctElementCount: elements.length,
-    lowerBoundCount: lowerBounds,
-    exactOverrideCount: exactOverrides,
-  );
+  DueLoadMetric freeze() =>
+      DueLoadMetric(studyDay: studyDay, cards: cards, topics: topics);
 }
 
 final class _MutableBranchWorkload {

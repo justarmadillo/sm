@@ -630,7 +630,7 @@ class _StatusBar extends StatelessWidget {
               ),
             ],
             const Spacer(),
-            Text('Step ${state.topic.stepIndex} · next $due'),
+            Text('Repetitions ${state.topic.repetitionCount} · next $due'),
           ],
         ),
       ),
@@ -785,8 +785,8 @@ class _ActionBar extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               TextButton(
-                onPressed: state.isBusy ? null : model.finish,
-                child: const Text('Finish source'),
+                onPressed: state.isBusy ? null : model.dismiss,
+                child: const Text('Dismiss source'),
               ),
               const SizedBox(width: 6),
               OutlinedButton(

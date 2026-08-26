@@ -110,7 +110,8 @@ void main() {
 
       final after = stateOf(ReaderMode.scheduled);
       expect(after.marker, beforeMarker);
-      expect(after.topic.stepIndex, beforeTopic.stepIndex);
+      expect(after.topic.storedInterval, beforeTopic.storedInterval);
+      expect(after.topic.repetitionCount, beforeTopic.repetitionCount);
       expect(after.topic.schedule.dueDay, beforeTopic.schedule.dueDay);
       expect(after.source.markdown, state.source.markdown);
     });
@@ -256,7 +257,8 @@ void main() {
       final after = stateOf(ReaderMode.scheduled);
       expect(after.extracts.map((e) => e.id), <String>[keep!.id]);
       expect(after.source.markdown, state.source.markdown);
-      expect(after.topic.stepIndex, 0);
+      // Removing an extract leaves the parent's own repetition state alone.
+      expect(after.topic.storedInterval, 0);
     });
   });
 }

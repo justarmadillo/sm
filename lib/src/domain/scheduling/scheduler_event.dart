@@ -2,8 +2,7 @@
 ///
 /// These events are deliberately richer than the legacy repetition log. They
 /// retain the calendar coordinate used when an operation occurred, canonical
-/// before/after state, algorithmic due values, and the complete presentation
-/// adjustment snapshots needed for exact undo.
+/// before/after state, and algorithmic due values needed for exact undo.
 library;
 
 import 'package:meta/meta.dart';
@@ -19,17 +18,9 @@ enum SchedulerEventType {
   topicEncountered('topic_encountered'),
   topicEncounterUndone('topic_encounter_undone'),
   priorityChanged('priority_changed'),
-  manualLaterSet('manual_later_set'),
-  manualLaterCleared('manual_later_cleared'),
-  autoOverflowSet('auto_overflow_set'),
-  autoOverflowCleared('auto_overflow_cleared'),
-  siblingBuried('sibling_buried'),
-  siblingBuryCleared('sibling_bury_cleared'),
   mercyPreviewed('mercy_previewed'),
   mercyApplied('mercy_applied'),
   mercyUndone('mercy_undone'),
-  manualRescheduleSet('manual_reschedule_set'),
-  manualRescheduleCleared('manual_reschedule_cleared'),
   suspended('suspended'),
   resumed('resumed'),
   dismissed('dismissed'),
@@ -63,8 +54,6 @@ final class SchedulerEvent {
     this.stateAfter,
     this.algorithmicDueBefore,
     this.algorithmicDueAfter,
-    this.adjustmentsBefore,
-    this.adjustmentsAfter,
     this.undoesEventId,
     this.batchId,
     this.metadata,
@@ -119,9 +108,6 @@ final class SchedulerEvent {
   final String? algorithmicDueBefore;
   final String? algorithmicDueAfter;
 
-  /// Deterministically serialized active adjustment sets.
-  final String? adjustmentsBefore;
-  final String? adjustmentsAfter;
   final String? undoesEventId;
   final String? batchId;
   final Map<String, Object?>? metadata;

@@ -1,18 +1,11 @@
-/// Every tunable the schedulers, the queue, and the overload valve read.
+/// Persisted settings for the SM20 scheduler and the rest of the application.
 ///
-/// The constants in the scheduling design documents are starting points, not
-/// derived values, so none of them is written into an algorithm. They live
-/// here as one immutable value, are edited in Settings, and are persisted as
-/// flat key/value pairs. Two consequences the rest of the app depends on: a
-/// scheduler stays a pure function of `(state, command, today, settings)` and
-/// is therefore exhaustively testable, and retuning a constant is a data
-/// change rather than a code change.
-///
-/// Decoding is deliberately total: a missing, unknown, or malformed value
-/// yields the shipped default instead of throwing, because a settings row
-/// written by a newer build must never stop an older one from opening the
-/// collection.
+/// Scheduler settings in this file mirror the controls and records described
+/// by `SM20_AIO_SCHEDULER.md`. They intentionally do not retain the previous
+/// capacity-based scheduler's fields or storage keys.
 library;
+
+import 'dart:convert';
 
 import 'package:meta/meta.dart';
 
@@ -43,209 +36,107 @@ final class StudyDaySettings {
   int get hashCode => Object.hash(zoneId, rolloverMinutes);
 }
 
-/// Admission caps, mixing, and sorting for the daily queue.
+/// SM20's daily Outstanding ordering and stage controls.
 @immutable
 final class QueueSettings {
   const QueueSettings({
-    this.maxCards = 200,
-    this.maxNewCards = 20,
-    this.maxTopics = 50,
-    this.cardsPerTopic = 4,
-    this.minTopicEvery = 8,
-    this.randomization = 0.05,
-    this.protectedPercentile = 0.01,
-    this.autoPostpone = true,
-    this.studyMoreStep = 20,
+    this.topicPercent = 20,
+    this.itemRandomization = 0,
+    this.topicRandomization = 0,
+    this.autoSort = true,
+    this.randomizeFinalDrill = false,
+    this.confirmStageTransitions = true,
   });
 
-  /// Most unique cards admitted on one study day.
-  final int maxCards;
+  /// Percentage of topic-family elements in the merged Outstanding queue.
+  final int topicPercent;
 
-  /// How many of [maxCards] may be cards never reviewed before.
-  final int maxNewCards;
+  /// Item randomization slider value, from 0 through 100.
+  final int itemRandomization;
 
-  /// Most topics — sources and extracts together — admitted on one day.
-  final int maxTopics;
+  /// Topic randomization slider value, from 0 through 100.
+  final int topicRandomization;
 
-  /// Cards served between topics. SuperMemo's healthy ratio is 4:1 or wider.
-  final int cardsPerTopic;
+  /// Whether Outstanding is sorted automatically once per study day.
+  final bool autoSort;
 
-  /// Hard interleave floor: at most this many elements may pass without a
-  /// topic while topics remain due. Guards against items swamping reading.
-  final int minTopicEvery;
+  /// Whether Final Drill is randomized before it is served.
+  final bool randomizeFinalDrill;
 
-  /// Degree of deterministic daily shuffle. `0` gives strict priority order.
-  final double randomization;
-
-  /// Top fraction of the collection that auto-postpone must never touch.
-  final double protectedPercentile;
-
-  /// Whether excess due material is deferred automatically at all.
-  final bool autoPostpone;
-
-  /// How many extra elements one Study More press admits.
-  final int studyMoreStep;
+  /// Whether transitions into Final Drill and Pending require confirmation.
+  final bool confirmStageTransitions;
 
   QueueSettings copyWith({
-    int? maxCards,
-    int? maxNewCards,
-    int? maxTopics,
-    int? cardsPerTopic,
-    int? minTopicEvery,
-    double? randomization,
-    double? protectedPercentile,
-    bool? autoPostpone,
-    int? studyMoreStep,
+    int? topicPercent,
+    int? itemRandomization,
+    int? topicRandomization,
+    bool? autoSort,
+    bool? randomizeFinalDrill,
+    bool? confirmStageTransitions,
   }) => QueueSettings(
-    maxCards: maxCards ?? this.maxCards,
-    maxNewCards: maxNewCards ?? this.maxNewCards,
-    maxTopics: maxTopics ?? this.maxTopics,
-    cardsPerTopic: cardsPerTopic ?? this.cardsPerTopic,
-    minTopicEvery: minTopicEvery ?? this.minTopicEvery,
-    randomization: randomization ?? this.randomization,
-    protectedPercentile: protectedPercentile ?? this.protectedPercentile,
-    autoPostpone: autoPostpone ?? this.autoPostpone,
-    studyMoreStep: studyMoreStep ?? this.studyMoreStep,
+    topicPercent: topicPercent ?? this.topicPercent,
+    itemRandomization: itemRandomization ?? this.itemRandomization,
+    topicRandomization: topicRandomization ?? this.topicRandomization,
+    autoSort: autoSort ?? this.autoSort,
+    randomizeFinalDrill: randomizeFinalDrill ?? this.randomizeFinalDrill,
+    confirmStageTransitions:
+        confirmStageTransitions ?? this.confirmStageTransitions,
   );
 
   @override
   bool operator ==(Object other) =>
       other is QueueSettings &&
-      other.maxCards == maxCards &&
-      other.maxNewCards == maxNewCards &&
-      other.maxTopics == maxTopics &&
-      other.cardsPerTopic == cardsPerTopic &&
-      other.minTopicEvery == minTopicEvery &&
-      other.randomization == randomization &&
-      other.protectedPercentile == protectedPercentile &&
-      other.autoPostpone == autoPostpone &&
-      other.studyMoreStep == studyMoreStep;
+      other.topicPercent == topicPercent &&
+      other.itemRandomization == itemRandomization &&
+      other.topicRandomization == topicRandomization &&
+      other.autoSort == autoSort &&
+      other.randomizeFinalDrill == randomizeFinalDrill &&
+      other.confirmStageTransitions == confirmStageTransitions;
 
   @override
-  int get hashCode => Object.hashAll(<Object>[
-    maxCards,
-    maxNewCards,
-    maxTopics,
-    cardsPerTopic,
-    minTopicEvery,
-    randomization,
-    protectedPercentile,
-    autoPostpone,
-    studyMoreStep,
-  ]);
+  int get hashCode => Object.hash(
+    topicPercent,
+    itemRandomization,
+    topicRandomization,
+    autoSort,
+    randomizeFinalDrill,
+    confirmStageTransitions,
+  );
 }
 
-/// The A-factor model that paces sources and extracts.
-///
-/// Every coefficient here appears in the worked examples of the scheduling
-/// design. Naming them makes the arithmetic auditable and, once months of
-/// logged inputs exist, tunable against real data instead of by guesswork.
+/// The first-interval range used by the browser Remember command.
 @immutable
-final class TopicSchedulerSettings {
-  const TopicSchedulerSettings({
-    this.baseAFactor = 2.0,
-    this.priorityFloor = 0.7,
-    this.prioritySpan = 0.8,
-    this.minAFactor = 1.01,
-    this.maxAFactor = 6.0,
-    this.sourceFirstIntervalSpan = 20,
-    this.sourceFirstIntervalMax = 30,
-    this.extractFirstIntervalSpan = 10,
-    this.extractFirstIntervalMax = 14,
-    this.extractFinishPromptAfter = 3,
+final class RememberSettings {
+  const RememberSettings({
+    this.firstIntervalLowDays = 1,
+    this.firstIntervalHighDays = 1,
   });
 
-  /// A before any modulation.
-  final double baseAFactor;
+  /// Inclusive lower endpoint of the initial interval range.
+  final int firstIntervalLowDays;
 
-  /// `A × (priorityFloor + prioritySpan × pressure)`: top priority shrinks A
-  /// so the element returns often; the bottom grows it so it recedes fast.
-  final double priorityFloor;
+  /// Inclusive upper endpoint. Zero requests the generated-interval path.
+  final int firstIntervalHighDays;
 
-  /// Width of the priority modulation band. See [priorityFloor].
-  final double prioritySpan;
-
-  /// Lower clamp on A. A floor of 1.0 means a repetition never shortens an
-  /// interval by itself; only the user can do that.
-  final double minAFactor;
-
-  /// Upper clamp on A.
-  final double maxAFactor;
-
-  /// `first = clamp(round(1 + span × pressure²), 1, max)` for sources.
-  final int sourceFirstIntervalSpan;
-
-  /// Upper clamp on a source's first interval, in days.
-  final int sourceFirstIntervalMax;
-
-  /// The same span for extracts, which start shorter because they are a debt.
-  final int extractFirstIntervalSpan;
-
-  /// Upper clamp on an extract's first interval, in days.
-  final int extractFirstIntervalMax;
-
-  /// Encounters since the last card before an extract is offered Finish.
-  final int extractFinishPromptAfter;
-
-  TopicSchedulerSettings copyWith({
-    double? baseAFactor,
-    double? priorityFloor,
-    double? prioritySpan,
-    double? minAFactor,
-    double? maxAFactor,
-    int? sourceFirstIntervalSpan,
-    int? sourceFirstIntervalMax,
-    int? extractFirstIntervalSpan,
-    int? extractFirstIntervalMax,
-    int? extractFinishPromptAfter,
-  }) => TopicSchedulerSettings(
-    baseAFactor: baseAFactor ?? this.baseAFactor,
-    priorityFloor: priorityFloor ?? this.priorityFloor,
-    prioritySpan: prioritySpan ?? this.prioritySpan,
-    minAFactor: minAFactor ?? this.minAFactor,
-    maxAFactor: maxAFactor ?? this.maxAFactor,
-    sourceFirstIntervalSpan:
-        sourceFirstIntervalSpan ?? this.sourceFirstIntervalSpan,
-    sourceFirstIntervalMax:
-        sourceFirstIntervalMax ?? this.sourceFirstIntervalMax,
-    extractFirstIntervalSpan:
-        extractFirstIntervalSpan ?? this.extractFirstIntervalSpan,
-    extractFirstIntervalMax:
-        extractFirstIntervalMax ?? this.extractFirstIntervalMax,
-    extractFinishPromptAfter:
-        extractFinishPromptAfter ?? this.extractFinishPromptAfter,
+  RememberSettings copyWith({
+    int? firstIntervalLowDays,
+    int? firstIntervalHighDays,
+  }) => RememberSettings(
+    firstIntervalLowDays: firstIntervalLowDays ?? this.firstIntervalLowDays,
+    firstIntervalHighDays: firstIntervalHighDays ?? this.firstIntervalHighDays,
   );
 
   @override
   bool operator ==(Object other) =>
-      other is TopicSchedulerSettings &&
-      other.baseAFactor == baseAFactor &&
-      other.priorityFloor == priorityFloor &&
-      other.prioritySpan == prioritySpan &&
-      other.minAFactor == minAFactor &&
-      other.maxAFactor == maxAFactor &&
-      other.sourceFirstIntervalSpan == sourceFirstIntervalSpan &&
-      other.sourceFirstIntervalMax == sourceFirstIntervalMax &&
-      other.extractFirstIntervalSpan == extractFirstIntervalSpan &&
-      other.extractFirstIntervalMax == extractFirstIntervalMax &&
-      other.extractFinishPromptAfter == extractFinishPromptAfter;
+      other is RememberSettings &&
+      other.firstIntervalLowDays == firstIntervalLowDays &&
+      other.firstIntervalHighDays == firstIntervalHighDays;
 
   @override
-  int get hashCode => Object.hashAll(<Object>[
-    baseAFactor,
-    priorityFloor,
-    prioritySpan,
-    minAFactor,
-    maxAFactor,
-    sourceFirstIntervalSpan,
-    sourceFirstIntervalMax,
-    extractFirstIntervalSpan,
-    extractFirstIntervalMax,
-    extractFinishPromptAfter,
-  ]);
+  int get hashCode => Object.hash(firstIntervalLowDays, firstIntervalHighDays);
 }
 
-/// FSRS knobs plus the two item behaviours that are not FSRS's business.
+/// FSRS knobs and item-review behaviours.
 @immutable
 final class CardSettings {
   const CardSettings({
@@ -258,27 +149,12 @@ final class CardSettings {
     this.burySiblings = true,
   });
 
-  /// Probability of recall FSRS aims for at the scheduled instant.
   final double desiredRetention;
-
-  /// Intraday learning steps, in minutes.
   final List<int> learningStepMinutes;
-
-  /// Intraday relearning steps, in minutes.
   final List<int> relearningStepMinutes;
-
-  /// Upper clamp on any scheduled interval.
   final int maximumIntervalDays;
-
-  /// Whether FSRS spreads due dates to avoid clumping.
   final bool enableFuzzing;
-
-  /// Lapses after which a card is flagged and its source passage offered.
-  /// Flagged, never auto-suspended: repeated failure usually means the card
-  /// was written badly, and suspending it hides the evidence.
   final int leechLapses;
-
-  /// Whether answering a card pushes same-day siblings to the next day.
   final bool burySiblings;
 
   CardSettings copyWith({
@@ -322,126 +198,635 @@ final class CardSettings {
   ]);
 }
 
-/// The three postponement mechanisms, deliberately kept apart: a manual
-/// Later, the daily overload valve, and a one-shot backlog spread.
+/// Population used by a Smart Postpone run.
+enum SmartPostponeScope { global, branch, browser }
+
+/// How Smart Postpone decides how many elements remain unpostponed.
+enum SmartPostponeMethod { parameters, topCount }
+
+/// How profiles attached to nested branches affect the active profile.
+enum SmartPostponeSubbranchMode { respect, ignore, conservative, liberal }
+
+/// SM20's complete user-visible Smart Postpone profile record.
+@immutable
+final class SmartPostponeSettings {
+  const SmartPostponeSettings({
+    this.rootElementId = 0,
+    this.scope = SmartPostponeScope.global,
+    this.method = SmartPostponeMethod.topCount,
+    this.profileName = 'Default',
+    this.subbranchMode = SmartPostponeSubbranchMode.ignore,
+    this.protectedCount = 50,
+    this.includeNonOutstanding = false,
+    this.simulate = false,
+    this.itemDelayPercent = 20,
+    this.topicDelayPercent = 50,
+    this.itemMaximumDelayDays = 50,
+    this.topicMaximumDelayDays = 100,
+    this.itemMinimumDelayDays = 1,
+    this.topicMinimumDelayDays = 6,
+    this.skipItems = false,
+    this.skipTopics = false,
+    this.itemAgeCutoffDays = 500,
+    this.topicAgeCutoffDays = 800,
+    this.itemForgettingIndexCutoff = 6,
+    this.topicAFactorCutoff = 1.03,
+    this.itemPostponeCountCutoff = 50,
+    this.topicPostponeCountCutoff = 100,
+    this.itemPriorityThreshold = 6,
+    this.topicPriorityThreshold = 3,
+    this.modifyItemByForgettingIndex = true,
+    this.modifyTopicByAFactor = true,
+  });
+
+  final int rootElementId;
+  final SmartPostponeScope scope;
+  final SmartPostponeMethod method;
+  final String profileName;
+  final SmartPostponeSubbranchMode subbranchMode;
+  final int protectedCount;
+  final bool includeNonOutstanding;
+  final bool simulate;
+  final int itemDelayPercent;
+  final int topicDelayPercent;
+  final int itemMaximumDelayDays;
+  final int topicMaximumDelayDays;
+  final int itemMinimumDelayDays;
+  final int topicMinimumDelayDays;
+  final bool skipItems;
+  final bool skipTopics;
+  final int itemAgeCutoffDays;
+  final int topicAgeCutoffDays;
+  final int itemForgettingIndexCutoff;
+  final double topicAFactorCutoff;
+  final int itemPostponeCountCutoff;
+  final int topicPostponeCountCutoff;
+  final double itemPriorityThreshold;
+  final double topicPriorityThreshold;
+
+  /// Preserved profile flag; the SM20 evaluator does not read it.
+  final bool modifyItemByForgettingIndex;
+
+  /// Preserved profile flag; the SM20 evaluator does not read it.
+  final bool modifyTopicByAFactor;
+
+  /// Lossless storage form of the complete SM20 `0x47` profile record.
+  ///
+  /// Named profiles are persisted as JSON rather than as flat dotted keys
+  /// because their names are user data and the record must round-trip every
+  /// field, including the two flags the evaluator deliberately ignores.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'root_element_id': rootElementId,
+    'scope': scope.name,
+    'method': method.name,
+    'profile_name': profileName,
+    'subbranch_mode': subbranchMode.name,
+    'protected_count': protectedCount,
+    'include_non_outstanding': includeNonOutstanding,
+    'simulate': simulate,
+    'item_delay_percent': itemDelayPercent,
+    'topic_delay_percent': topicDelayPercent,
+    'item_maximum_delay_days': itemMaximumDelayDays,
+    'topic_maximum_delay_days': topicMaximumDelayDays,
+    'item_minimum_delay_days': itemMinimumDelayDays,
+    'topic_minimum_delay_days': topicMinimumDelayDays,
+    'skip_items': skipItems,
+    'skip_topics': skipTopics,
+    'item_age_cutoff_days': itemAgeCutoffDays,
+    'topic_age_cutoff_days': topicAgeCutoffDays,
+    'item_forgetting_index_cutoff': itemForgettingIndexCutoff,
+    'topic_a_factor_cutoff': topicAFactorCutoff,
+    'item_postpone_count_cutoff': itemPostponeCountCutoff,
+    'topic_postpone_count_cutoff': topicPostponeCountCutoff,
+    'item_priority_threshold': itemPriorityThreshold,
+    'topic_priority_threshold': topicPriorityThreshold,
+    'modify_item_by_forgetting_index': modifyItemByForgettingIndex,
+    'modify_topic_by_a_factor': modifyTopicByAFactor,
+  };
+
+  /// Rebuilds a record, falling back to [fallback] field by field.
+  ///
+  /// A corrupt or partial entry degrades to the fallback profile instead of
+  /// dropping the whole managed profile, which would silently unassign every
+  /// branch that referenced it.
+  static SmartPostponeSettings fromJson(
+    Map<String, Object?> json, {
+    SmartPostponeSettings fallback = const SmartPostponeSettings(),
+  }) => SmartPostponeSettings(
+    rootElementId: _jsonInt(
+      json['root_element_id'],
+      fallback.rootElementId,
+      min: 0,
+      max: 0xFFFFFFFF,
+    ),
+    scope: _jsonEnum(json['scope'], SmartPostponeScope.values, fallback.scope),
+    method: _jsonEnum(
+      json['method'],
+      SmartPostponeMethod.values,
+      fallback.method,
+    ),
+    profileName: json['profile_name'] is String
+        ? json['profile_name']! as String
+        : fallback.profileName,
+    subbranchMode: _jsonEnum(
+      json['subbranch_mode'],
+      SmartPostponeSubbranchMode.values,
+      fallback.subbranchMode,
+    ),
+    protectedCount: _jsonInt(
+      json['protected_count'],
+      fallback.protectedCount,
+      min: 0,
+      max: 10000,
+    ),
+    includeNonOutstanding: _jsonBool(
+      json['include_non_outstanding'],
+      fallback.includeNonOutstanding,
+    ),
+    simulate: _jsonBool(json['simulate'], fallback.simulate),
+    itemDelayPercent: _jsonInt(
+      json['item_delay_percent'],
+      fallback.itemDelayPercent,
+      min: 1,
+      max: 1000,
+    ),
+    topicDelayPercent: _jsonInt(
+      json['topic_delay_percent'],
+      fallback.topicDelayPercent,
+      min: 1,
+      max: 1000,
+    ),
+    itemMaximumDelayDays: _jsonInt(
+      json['item_maximum_delay_days'],
+      fallback.itemMaximumDelayDays,
+      min: 1,
+      max: 10000,
+    ),
+    topicMaximumDelayDays: _jsonInt(
+      json['topic_maximum_delay_days'],
+      fallback.topicMaximumDelayDays,
+      min: 1,
+      max: 10000,
+    ),
+    itemMinimumDelayDays: _jsonInt(
+      json['item_minimum_delay_days'],
+      fallback.itemMinimumDelayDays,
+      min: 1,
+      max: 10000,
+    ),
+    topicMinimumDelayDays: _jsonInt(
+      json['topic_minimum_delay_days'],
+      fallback.topicMinimumDelayDays,
+      min: 1,
+      max: 10000,
+    ),
+    skipItems: _jsonBool(json['skip_items'], fallback.skipItems),
+    skipTopics: _jsonBool(json['skip_topics'], fallback.skipTopics),
+    itemAgeCutoffDays: _jsonInt(
+      json['item_age_cutoff_days'],
+      fallback.itemAgeCutoffDays,
+      min: 2,
+      max: 4000,
+    ),
+    topicAgeCutoffDays: _jsonInt(
+      json['topic_age_cutoff_days'],
+      fallback.topicAgeCutoffDays,
+      min: 2,
+      max: 4000,
+    ),
+    itemForgettingIndexCutoff: _jsonInt(
+      json['item_forgetting_index_cutoff'],
+      fallback.itemForgettingIndexCutoff,
+      min: 3,
+      max: 20,
+    ),
+    topicAFactorCutoff: _jsonDouble(
+      json['topic_a_factor_cutoff'],
+      fallback.topicAFactorCutoff,
+      min: 1.01,
+      max: 6,
+    ),
+    itemPostponeCountCutoff: _jsonInt(
+      json['item_postpone_count_cutoff'],
+      fallback.itemPostponeCountCutoff,
+      min: 1,
+      max: 255,
+    ),
+    topicPostponeCountCutoff: _jsonInt(
+      json['topic_postpone_count_cutoff'],
+      fallback.topicPostponeCountCutoff,
+      min: 1,
+      max: 255,
+    ),
+    itemPriorityThreshold: _jsonDouble(
+      json['item_priority_threshold'],
+      fallback.itemPriorityThreshold,
+      min: 0.01,
+      max: 100,
+    ),
+    topicPriorityThreshold: _jsonDouble(
+      json['topic_priority_threshold'],
+      fallback.topicPriorityThreshold,
+      min: 0.0001,
+      max: 100,
+    ),
+    modifyItemByForgettingIndex: _jsonBool(
+      json['modify_item_by_forgetting_index'],
+      fallback.modifyItemByForgettingIndex,
+    ),
+    modifyTopicByAFactor: _jsonBool(
+      json['modify_topic_by_a_factor'],
+      fallback.modifyTopicByAFactor,
+    ),
+  );
+
+  SmartPostponeSettings copyWith({
+    int? rootElementId,
+    SmartPostponeScope? scope,
+    SmartPostponeMethod? method,
+    String? profileName,
+    SmartPostponeSubbranchMode? subbranchMode,
+    int? protectedCount,
+    bool? includeNonOutstanding,
+    bool? simulate,
+    int? itemDelayPercent,
+    int? topicDelayPercent,
+    int? itemMaximumDelayDays,
+    int? topicMaximumDelayDays,
+    int? itemMinimumDelayDays,
+    int? topicMinimumDelayDays,
+    bool? skipItems,
+    bool? skipTopics,
+    int? itemAgeCutoffDays,
+    int? topicAgeCutoffDays,
+    int? itemForgettingIndexCutoff,
+    double? topicAFactorCutoff,
+    int? itemPostponeCountCutoff,
+    int? topicPostponeCountCutoff,
+    double? itemPriorityThreshold,
+    double? topicPriorityThreshold,
+    bool? modifyItemByForgettingIndex,
+    bool? modifyTopicByAFactor,
+  }) => SmartPostponeSettings(
+    rootElementId: rootElementId ?? this.rootElementId,
+    scope: scope ?? this.scope,
+    method: method ?? this.method,
+    profileName: profileName ?? this.profileName,
+    subbranchMode: subbranchMode ?? this.subbranchMode,
+    protectedCount: protectedCount ?? this.protectedCount,
+    includeNonOutstanding: includeNonOutstanding ?? this.includeNonOutstanding,
+    simulate: simulate ?? this.simulate,
+    itemDelayPercent: itemDelayPercent ?? this.itemDelayPercent,
+    topicDelayPercent: topicDelayPercent ?? this.topicDelayPercent,
+    itemMaximumDelayDays: itemMaximumDelayDays ?? this.itemMaximumDelayDays,
+    topicMaximumDelayDays: topicMaximumDelayDays ?? this.topicMaximumDelayDays,
+    itemMinimumDelayDays: itemMinimumDelayDays ?? this.itemMinimumDelayDays,
+    topicMinimumDelayDays: topicMinimumDelayDays ?? this.topicMinimumDelayDays,
+    skipItems: skipItems ?? this.skipItems,
+    skipTopics: skipTopics ?? this.skipTopics,
+    itemAgeCutoffDays: itemAgeCutoffDays ?? this.itemAgeCutoffDays,
+    topicAgeCutoffDays: topicAgeCutoffDays ?? this.topicAgeCutoffDays,
+    itemForgettingIndexCutoff:
+        itemForgettingIndexCutoff ?? this.itemForgettingIndexCutoff,
+    topicAFactorCutoff: topicAFactorCutoff ?? this.topicAFactorCutoff,
+    itemPostponeCountCutoff:
+        itemPostponeCountCutoff ?? this.itemPostponeCountCutoff,
+    topicPostponeCountCutoff:
+        topicPostponeCountCutoff ?? this.topicPostponeCountCutoff,
+    itemPriorityThreshold: itemPriorityThreshold ?? this.itemPriorityThreshold,
+    topicPriorityThreshold:
+        topicPriorityThreshold ?? this.topicPriorityThreshold,
+    modifyItemByForgettingIndex:
+        modifyItemByForgettingIndex ?? this.modifyItemByForgettingIndex,
+    modifyTopicByAFactor: modifyTopicByAFactor ?? this.modifyTopicByAFactor,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is SmartPostponeSettings &&
+      other.rootElementId == rootElementId &&
+      other.scope == scope &&
+      other.method == method &&
+      other.profileName == profileName &&
+      other.subbranchMode == subbranchMode &&
+      other.protectedCount == protectedCount &&
+      other.includeNonOutstanding == includeNonOutstanding &&
+      other.simulate == simulate &&
+      other.itemDelayPercent == itemDelayPercent &&
+      other.topicDelayPercent == topicDelayPercent &&
+      other.itemMaximumDelayDays == itemMaximumDelayDays &&
+      other.topicMaximumDelayDays == topicMaximumDelayDays &&
+      other.itemMinimumDelayDays == itemMinimumDelayDays &&
+      other.topicMinimumDelayDays == topicMinimumDelayDays &&
+      other.skipItems == skipItems &&
+      other.skipTopics == skipTopics &&
+      other.itemAgeCutoffDays == itemAgeCutoffDays &&
+      other.topicAgeCutoffDays == topicAgeCutoffDays &&
+      other.itemForgettingIndexCutoff == itemForgettingIndexCutoff &&
+      other.topicAFactorCutoff == topicAFactorCutoff &&
+      other.itemPostponeCountCutoff == itemPostponeCountCutoff &&
+      other.topicPostponeCountCutoff == topicPostponeCountCutoff &&
+      other.itemPriorityThreshold == itemPriorityThreshold &&
+      other.topicPriorityThreshold == topicPriorityThreshold &&
+      other.modifyItemByForgettingIndex == modifyItemByForgettingIndex &&
+      other.modifyTopicByAFactor == modifyTopicByAFactor;
+
+  @override
+  int get hashCode => Object.hashAll(<Object>[
+    rootElementId,
+    scope,
+    method,
+    profileName,
+    subbranchMode,
+    protectedCount,
+    includeNonOutstanding,
+    simulate,
+    itemDelayPercent,
+    topicDelayPercent,
+    itemMaximumDelayDays,
+    topicMaximumDelayDays,
+    itemMinimumDelayDays,
+    topicMinimumDelayDays,
+    skipItems,
+    skipTopics,
+    itemAgeCutoffDays,
+    topicAgeCutoffDays,
+    itemForgettingIndexCutoff,
+    topicAFactorCutoff,
+    itemPostponeCountCutoff,
+    topicPostponeCountCutoff,
+    itemPriorityThreshold,
+    topicPriorityThreshold,
+    modifyItemByForgettingIndex,
+    modifyTopicByAFactor,
+  ]);
+}
+
+/// Automatic postponement plus the collection's managed profile registry.
+///
+/// `Default` is a permanent profile slot because the automatic path loads it
+/// by name. Other profiles can be saved under arbitrary non-empty names and
+/// assigned to branches for the nested-profile merge described by SM20.
 @immutable
 final class PostponeSettings {
   const PostponeSettings({
-    this.laterMinFraction = 0.20,
-    this.laterMaxFraction = 0.20,
-    this.laterMaxDays = 365,
-    this.autoBaseFraction = 0.10,
-    this.autoPriorityMultiplier = 4.0,
-    this.autoDispersal = 0.2,
-    this.autoMaxDays = 1095,
-    this.mercyHorizonDays = 14,
-    this.mercyDailyCap = 100,
+    this.autoEnabled = true,
+    this.defaultProfile = const SmartPostponeSettings(),
+    this.namedProfiles = const <String, SmartPostponeSettings>{},
+    this.branchProfileAssignments = const <int, String>{},
   });
 
-  /// A manual Later delays by a fraction of the element's own interval, so
-  /// "later" on a two-day topic is not the same as on a one-year card.
-  final double laterMinFraction;
+  static const String defaultProfileName = 'Default';
 
-  /// Upper end of the manual Later fraction band.
-  final double laterMaxFraction;
+  final bool autoEnabled;
 
-  /// Upper clamp on a manual Later delay, in days.
-  final int laterMaxDays;
+  /// The undeletable profile used by automatic postponement.
+  final SmartPostponeSettings defaultProfile;
 
-  /// Auto-postpone delay is `interval × base × (1 + multiplier × pressure)`.
-  final double autoBaseFraction;
+  /// User-managed profiles, excluding the reserved [defaultProfileName].
+  ///
+  /// The map key is authoritative. Decoding and profile-management helpers
+  /// keep each record's [SmartPostponeSettings.profileName] synchronized with
+  /// that key.
+  final Map<String, SmartPostponeSettings> namedProfiles;
 
-  /// How much further bottom-priority material is pushed than top.
-  final double autoPriorityMultiplier;
+  /// Branch-root element ID to managed profile name.
+  ///
+  /// Assignments may reference [defaultProfileName] or a key in
+  /// [namedProfiles]. Deleting a named profile also deletes its assignments.
+  final Map<int, String> branchProfileAssignments;
 
-  /// Random ± spread applied to each delay so a day's overflow does not land
-  /// together on one future day and recreate the same overload.
-  final double autoDispersal;
+  /// Profile names in the same stable order used by the Settings list.
+  List<String> get profileNames {
+    final List<String> names = namedProfiles.keys.toList()..sort();
+    return <String>[defaultProfileName, ...names];
+  }
 
-  /// Upper clamp on an automatic delay, in days.
-  final int autoMaxDays;
+  /// Looks up a managed profile. `Default` can never be absent.
+  SmartPostponeSettings? profileNamed(String name) =>
+      name == defaultProfileName ? defaultProfile : namedProfiles[name];
 
-  /// Mercy spreads a backlog over this many days.
-  final int mercyHorizonDays;
+  /// Adds or replaces a named profile.
+  ///
+  /// The reserved Default slot must be changed through [replaceDefault].
+  PostponeSettings saveNamedProfile(
+    String name,
+    SmartPostponeSettings profile,
+  ) {
+    final String normalized = name.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'profile name cannot be empty');
+    }
+    if (normalized == defaultProfileName) {
+      throw ArgumentError.value(
+        name,
+        'name',
+        'Default is the permanent automatic-postpone profile',
+      );
+    }
+    return copyWith(
+      namedProfiles: <String, SmartPostponeSettings>{
+        ...namedProfiles,
+        normalized: profile.copyWith(profileName: normalized),
+      },
+    );
+  }
 
-  /// How many elements Mercy places on each day of the horizon.
-  final int mercyDailyCap;
+  /// Replaces the permanent Default slot from any managed profile record.
+  PostponeSettings replaceDefault(SmartPostponeSettings profile) => copyWith(
+    defaultProfile: profile.copyWith(profileName: defaultProfileName),
+  );
+
+  /// Deletes a named profile and every branch assignment that refers to it.
+  PostponeSettings deleteNamedProfile(String name) {
+    if (name == defaultProfileName || !namedProfiles.containsKey(name)) {
+      return this;
+    }
+    return copyWith(
+      namedProfiles: <String, SmartPostponeSettings>{
+        for (final MapEntry<String, SmartPostponeSettings> entry
+            in namedProfiles.entries)
+          if (entry.key != name) entry.key: entry.value,
+      },
+      branchProfileAssignments: <int, String>{
+        for (final MapEntry<int, String> entry
+            in branchProfileAssignments.entries)
+          if (entry.value != name) entry.key: entry.value,
+      },
+    );
+  }
+
+  /// Attaches a managed profile to a branch root.
+  PostponeSettings assignBranchProfile(int rootElementId, String profileName) {
+    if (rootElementId < 0 || rootElementId > 0xFFFFFFFF) {
+      throw RangeError.range(rootElementId, 0, 0xFFFFFFFF, 'rootElementId');
+    }
+    if (profileNamed(profileName) == null) {
+      throw ArgumentError.value(
+        profileName,
+        'profileName',
+        'branch assignments must reference a managed profile',
+      );
+    }
+    return copyWith(
+      branchProfileAssignments: <int, String>{
+        ...branchProfileAssignments,
+        rootElementId: profileName,
+      },
+    );
+  }
+
+  /// Removes the profile attached to [rootElementId], if any.
+  PostponeSettings unassignBranchProfile(int rootElementId) => copyWith(
+    branchProfileAssignments: <int, String>{
+      for (final MapEntry<int, String> entry
+          in branchProfileAssignments.entries)
+        if (entry.key != rootElementId) entry.key: entry.value,
+    },
+  );
 
   PostponeSettings copyWith({
-    double? laterMinFraction,
-    double? laterMaxFraction,
-    int? laterMaxDays,
-    double? autoBaseFraction,
-    double? autoPriorityMultiplier,
-    double? autoDispersal,
-    int? autoMaxDays,
-    int? mercyHorizonDays,
-    int? mercyDailyCap,
+    bool? autoEnabled,
+    SmartPostponeSettings? defaultProfile,
+    Map<String, SmartPostponeSettings>? namedProfiles,
+    Map<int, String>? branchProfileAssignments,
   }) => PostponeSettings(
-    laterMinFraction: laterMinFraction ?? this.laterMinFraction,
-    laterMaxFraction: laterMaxFraction ?? this.laterMaxFraction,
-    laterMaxDays: laterMaxDays ?? this.laterMaxDays,
-    autoBaseFraction: autoBaseFraction ?? this.autoBaseFraction,
-    autoPriorityMultiplier:
-        autoPriorityMultiplier ?? this.autoPriorityMultiplier,
-    autoDispersal: autoDispersal ?? this.autoDispersal,
-    autoMaxDays: autoMaxDays ?? this.autoMaxDays,
-    mercyHorizonDays: mercyHorizonDays ?? this.mercyHorizonDays,
-    mercyDailyCap: mercyDailyCap ?? this.mercyDailyCap,
+    autoEnabled: autoEnabled ?? this.autoEnabled,
+    defaultProfile: defaultProfile ?? this.defaultProfile,
+    namedProfiles: namedProfiles ?? this.namedProfiles,
+    branchProfileAssignments:
+        branchProfileAssignments ?? this.branchProfileAssignments,
   );
 
   @override
   bool operator ==(Object other) =>
       other is PostponeSettings &&
-      other.laterMinFraction == laterMinFraction &&
-      other.laterMaxFraction == laterMaxFraction &&
-      other.laterMaxDays == laterMaxDays &&
-      other.autoBaseFraction == autoBaseFraction &&
-      other.autoPriorityMultiplier == autoPriorityMultiplier &&
-      other.autoDispersal == autoDispersal &&
-      other.autoMaxDays == autoMaxDays &&
-      other.mercyHorizonDays == mercyHorizonDays &&
-      other.mercyDailyCap == mercyDailyCap;
+      other.autoEnabled == autoEnabled &&
+      other.defaultProfile == defaultProfile &&
+      _sameMap(other.namedProfiles, namedProfiles) &&
+      _sameMap(other.branchProfileAssignments, branchProfileAssignments);
 
   @override
-  int get hashCode => Object.hashAll(<Object>[
-    laterMinFraction,
-    laterMaxFraction,
-    laterMaxDays,
-    autoBaseFraction,
-    autoPriorityMultiplier,
-    autoDispersal,
-    autoMaxDays,
-    mercyHorizonDays,
-    mercyDailyCap,
+  int get hashCode => Object.hash(
+    autoEnabled,
+    _mapHash(namedProfiles),
+    _mapHash(branchProfileAssignments),
+    defaultProfile,
+  );
+}
+
+/// Ordering used by Mercy before it redistributes candidates.
+enum MercyMode { highScoreFirst, lowScoreFirst, sourceOrder, random }
+
+/// SM20 Mercy scoring, gathering, and capacity-planner settings.
+@immutable
+final class MercySettings {
+  const MercySettings({
+    this.mode = MercyMode.highScoreFirst,
+    this.reschedulingDays = 14,
+    this.gatheringDays = 14,
+    this.dailyCap = 100,
+    this.includeFuture = false,
+    this.importanceWeight = 10,
+    this.latenessWeight = 3,
+    this.investmentWeight = 4,
+    this.easinessWeight = 1,
+    this.recencyWeight = 1,
+    this.intervalFactorMatrix,
+  });
+
+  final MercyMode mode;
+  final int reschedulingDays;
+  final int gatheringDays;
+  final int dailyCap;
+  final bool includeFuture;
+  final double importanceWeight;
+  final double latenessWeight;
+  final double investmentWeight;
+  final double easinessWeight;
+  final double recencyWeight;
+
+  /// Optional row-major 20 by 20 UInt16 matrix, scaled by 1000.
+  ///
+  /// The executable does not ship one universal matrix; it is live collection
+  /// state. Null means no matrix has yet been imported for this collection.
+  final List<int>? intervalFactorMatrix;
+
+  MercySettings copyWith({
+    MercyMode? mode,
+    int? reschedulingDays,
+    int? gatheringDays,
+    int? dailyCap,
+    bool? includeFuture,
+    double? importanceWeight,
+    double? latenessWeight,
+    double? investmentWeight,
+    double? easinessWeight,
+    double? recencyWeight,
+    Object? intervalFactorMatrix = _notProvided,
+  }) => MercySettings(
+    mode: mode ?? this.mode,
+    reschedulingDays: reschedulingDays ?? this.reschedulingDays,
+    gatheringDays: gatheringDays ?? this.gatheringDays,
+    dailyCap: dailyCap ?? this.dailyCap,
+    includeFuture: includeFuture ?? this.includeFuture,
+    importanceWeight: importanceWeight ?? this.importanceWeight,
+    latenessWeight: latenessWeight ?? this.latenessWeight,
+    investmentWeight: investmentWeight ?? this.investmentWeight,
+    easinessWeight: easinessWeight ?? this.easinessWeight,
+    recencyWeight: recencyWeight ?? this.recencyWeight,
+    intervalFactorMatrix: identical(intervalFactorMatrix, _notProvided)
+        ? this.intervalFactorMatrix
+        : intervalFactorMatrix as List<int>?,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is MercySettings &&
+      other.mode == mode &&
+      other.reschedulingDays == reschedulingDays &&
+      other.gatheringDays == gatheringDays &&
+      other.dailyCap == dailyCap &&
+      other.includeFuture == includeFuture &&
+      other.importanceWeight == importanceWeight &&
+      other.latenessWeight == latenessWeight &&
+      other.investmentWeight == investmentWeight &&
+      other.easinessWeight == easinessWeight &&
+      other.recencyWeight == recencyWeight &&
+      _sameNullableInts(other.intervalFactorMatrix, intervalFactorMatrix);
+
+  @override
+  int get hashCode => Object.hashAll(<Object?>[
+    mode,
+    reschedulingDays,
+    gatheringDays,
+    dailyCap,
+    includeFuture,
+    importanceWeight,
+    latenessWeight,
+    investmentWeight,
+    easinessWeight,
+    recencyWeight,
+    intervalFactorMatrix == null ? null : Object.hashAll(intervalFactorMatrix!),
   ]);
 }
 
 /// Reader behaviour that is a preference rather than a scheduling rule.
 @immutable
 final class ReaderSettings {
-  const ReaderSettings({this.reminderWords = 500, this.defaultLaterDays = 1});
+  const ReaderSettings({this.reminderWords = 500});
 
-  /// Words after the session's opening marker before the reminder line shows.
   final int reminderWords;
 
-  /// Days a plain Later moves a topic when its interval is not yet known.
-  final int defaultLaterDays;
-
-  ReaderSettings copyWith({int? reminderWords, int? defaultLaterDays}) =>
-      ReaderSettings(
-        reminderWords: reminderWords ?? this.reminderWords,
-        defaultLaterDays: defaultLaterDays ?? this.defaultLaterDays,
-      );
+  ReaderSettings copyWith({int? reminderWords}) =>
+      ReaderSettings(reminderWords: reminderWords ?? this.reminderWords);
 
   @override
   bool operator ==(Object other) =>
-      other is ReaderSettings &&
-      other.reminderWords == reminderWords &&
-      other.defaultLaterDays == defaultLaterDays;
+      other is ReaderSettings && other.reminderWords == reminderWords;
 
   @override
-  int get hashCode => Object.hash(reminderWords, defaultLaterDays);
+  int get hashCode => reminderWords.hashCode;
 }
 
 /// The local rotating diagnostic log and the developer panel.
@@ -454,17 +839,9 @@ final class DiagnosticsSettings {
     this.showContentInPanel = false,
   });
 
-  /// Whether structured diagnostics are written to disk at all.
   final bool logEnabled;
-
-  /// Size at which the active log file rotates.
   final int logMaxBytes;
-
-  /// How many rotated files are kept.
   final int logRetainedFiles;
-
-  /// Whether the diagnostics panel may render element text. Off by default:
-  /// a panel meant for scheduling bugs should not spill a collection.
   final bool showContentInPanel;
 
   DiagnosticsSettings copyWith({
@@ -496,35 +873,30 @@ final class DiagnosticsSettings {
   );
 }
 
-/// The complete configuration of one collection.
+/// The complete persisted configuration of one collection.
 @immutable
 final class AppSettings {
   const AppSettings({
     this.studyDay = const StudyDaySettings(),
     this.queue = const QueueSettings(),
-    this.topics = const TopicSchedulerSettings(),
+    this.remember = const RememberSettings(),
     this.cards = const CardSettings(),
     this.postpone = const PostponeSettings(),
+    this.mercy = const MercySettings(),
     this.reader = const ReaderSettings(),
     this.diagnostics = const DiagnosticsSettings(),
-    this.intervalProfiles = defaultIntervalProfileDays,
   });
 
-  /// Restores settings from the stored key/value rows.
+  /// Total decoder for flat settings rows.
   ///
-  /// Never throws: a malformed or unknown value falls back to the shipped
-  /// default so one bad row cannot make a collection unopenable.
+  /// Unknown keys are ignored. Missing or malformed fields independently fall
+  /// back to the shipped value; syntactically valid out-of-range numbers are
+  /// clamped to the executable/UI domain.
   factory AppSettings.fromMap(Map<String, String> stored) {
-    final profiles = <String, List<int>>{...defaultIntervalProfileDays};
-    for (final MapEntry<String, String> entry in stored.entries) {
-      if (!entry.key.startsWith(_profilePrefix)) continue;
-      final List<int> days = _readIntList(entry.value);
-      if (days.isNotEmpty) {
-        profiles[entry.key.substring(_profilePrefix.length)] = days;
-      }
-    }
-
     const AppSettings fallback = AppSettings();
+    final SmartPostponeSettings smartFallback =
+        fallback.postpone.defaultProfile;
+
     return AppSettings(
       studyDay: StudyDaySettings(
         zoneId: stored['study.zone_id'] ?? fallback.studyDay.zoneId,
@@ -536,119 +908,46 @@ final class AppSettings {
         ),
       ),
       queue: QueueSettings(
-        maxCards: _int(
-          stored['queue.max_cards'],
-          fallback.queue.maxCards,
+        topicPercent: _int(
+          stored['queue.topic_percent'],
+          fallback.queue.topicPercent,
           min: 0,
-          max: 100000,
-        ),
-        maxNewCards: _int(
-          stored['queue.max_new_cards'],
-          fallback.queue.maxNewCards,
-          min: 0,
-          max: 100000,
-        ),
-        maxTopics: _int(
-          stored['queue.max_topics'],
-          fallback.queue.maxTopics,
-          min: 0,
-          max: 100000,
-        ),
-        cardsPerTopic: _int(
-          stored['queue.cards_per_topic'],
-          fallback.queue.cardsPerTopic,
-          min: 1,
           max: 100,
         ),
-        minTopicEvery: _int(
-          stored['queue.min_topic_every'],
-          fallback.queue.minTopicEvery,
-          min: 1,
-          max: 1000,
-        ),
-        randomization: _double(
-          stored['queue.randomization'],
-          fallback.queue.randomization,
+        itemRandomization: _int(
+          stored['queue.item_randomization'],
+          fallback.queue.itemRandomization,
           min: 0,
-          max: 1,
+          max: 100,
         ),
-        protectedPercentile: _double(
-          stored['queue.protected_percentile'],
-          fallback.queue.protectedPercentile,
+        topicRandomization: _int(
+          stored['queue.topic_randomization'],
+          fallback.queue.topicRandomization,
           min: 0,
-          max: 0.5,
+          max: 100,
         ),
-        autoPostpone: _bool(
-          stored['queue.auto_postpone'],
-          fallback.queue.autoPostpone,
+        autoSort: _bool(stored['queue.auto_sort'], fallback.queue.autoSort),
+        randomizeFinalDrill: _bool(
+          stored['queue.randomize_final_drill'],
+          fallback.queue.randomizeFinalDrill,
         ),
-        studyMoreStep: _int(
-          stored['queue.study_more_step'],
-          fallback.queue.studyMoreStep,
-          min: 1,
-          max: 10000,
+        confirmStageTransitions: _bool(
+          stored['queue.confirm_stage_transitions'],
+          fallback.queue.confirmStageTransitions,
         ),
       ),
-      topics: TopicSchedulerSettings(
-        baseAFactor: _double(
-          stored['topic.base_a_factor'],
-          fallback.topics.baseAFactor,
+      remember: RememberSettings(
+        firstIntervalLowDays: _int(
+          stored['remember.first_interval_low_days'],
+          fallback.remember.firstIntervalLowDays,
           min: 1,
-          max: 10,
+          max: 365,
         ),
-        priorityFloor: _double(
-          stored['topic.priority_floor'],
-          fallback.topics.priorityFloor,
-          min: 0.1,
-          max: 3,
-        ),
-        prioritySpan: _double(
-          stored['topic.priority_span'],
-          fallback.topics.prioritySpan,
+        firstIntervalHighDays: _int(
+          stored['remember.first_interval_high_days'],
+          fallback.remember.firstIntervalHighDays,
           min: 0,
-          max: 3,
-        ),
-        minAFactor: _double(
-          stored['topic.min_a_factor'],
-          fallback.topics.minAFactor,
-          min: 0.5,
-          max: 3,
-        ),
-        maxAFactor: _double(
-          stored['topic.max_a_factor'],
-          fallback.topics.maxAFactor,
-          min: 1,
-          max: 20,
-        ),
-        sourceFirstIntervalSpan: _int(
-          stored['topic.source_first_span'],
-          fallback.topics.sourceFirstIntervalSpan,
-          min: 0,
-          max: 3650,
-        ),
-        sourceFirstIntervalMax: _int(
-          stored['topic.source_first_max'],
-          fallback.topics.sourceFirstIntervalMax,
-          min: 1,
-          max: 3650,
-        ),
-        extractFirstIntervalSpan: _int(
-          stored['topic.extract_first_span'],
-          fallback.topics.extractFirstIntervalSpan,
-          min: 0,
-          max: 3650,
-        ),
-        extractFirstIntervalMax: _int(
-          stored['topic.extract_first_max'],
-          fallback.topics.extractFirstIntervalMax,
-          min: 1,
-          max: 3650,
-        ),
-        extractFinishPromptAfter: _int(
-          stored['topic.extract_finish_prompt_after'],
-          fallback.topics.extractFinishPromptAfter,
-          min: 1,
-          max: 100,
+          max: 365,
         ),
       ),
       cards: CardSettings(
@@ -658,11 +957,11 @@ final class AppSettings {
           min: 0.7,
           max: 0.99,
         ),
-        learningStepMinutes: _readIntListOr(
+        learningStepMinutes: _positiveIntListOr(
           stored['card.learning_steps'],
           fallback.cards.learningStepMinutes,
         ),
-        relearningStepMinutes: _readIntListOr(
+        relearningStepMinutes: _positiveIntListOr(
           stored['card.relearning_steps'],
           fallback.cards.relearningStepMinutes,
         ),
@@ -688,59 +987,210 @@ final class AppSettings {
         ),
       ),
       postpone: PostponeSettings(
-        laterMinFraction: _double(
-          stored['postpone.later_min_fraction'],
-          fallback.postpone.laterMinFraction,
-          min: 0,
-          max: 5,
+        autoEnabled: _bool(
+          stored['postpone.auto_enabled'],
+          fallback.postpone.autoEnabled,
         ),
-        laterMaxFraction: _double(
-          stored['postpone.later_max_fraction'],
-          fallback.postpone.laterMaxFraction,
-          min: 0,
-          max: 5,
+        namedProfiles: _namedProfilesOr(
+          stored['postpone.named_profiles'],
+          fallback.postpone.namedProfiles,
         ),
-        laterMaxDays: _int(
-          stored['postpone.later_max_days'],
-          fallback.postpone.laterMaxDays,
+        branchProfileAssignments: _branchAssignmentsOr(
+          stored['postpone.branch_profiles'],
+          fallback.postpone.branchProfileAssignments,
+        ),
+        defaultProfile: SmartPostponeSettings(
+          rootElementId: _int(
+            stored['postpone.default.root_element_id'],
+            smartFallback.rootElementId,
+            min: 0,
+            max: 0xFFFFFFFF,
+          ),
+          scope: _enumValue(
+            stored['postpone.default.scope'],
+            SmartPostponeScope.values,
+            smartFallback.scope,
+          ),
+          method: _enumValue(
+            stored['postpone.default.method'],
+            SmartPostponeMethod.values,
+            smartFallback.method,
+          ),
+          profileName:
+              stored['postpone.default.profile_name'] ??
+              smartFallback.profileName,
+          subbranchMode: _enumValue(
+            stored['postpone.default.subbranch_mode'],
+            SmartPostponeSubbranchMode.values,
+            smartFallback.subbranchMode,
+          ),
+          protectedCount: _int(
+            stored['postpone.default.protected_count'],
+            smartFallback.protectedCount,
+            min: 1,
+            max: 20000,
+          ),
+          includeNonOutstanding: _bool(
+            stored['postpone.default.include_non_outstanding'],
+            smartFallback.includeNonOutstanding,
+          ),
+          simulate: _bool(
+            stored['postpone.default.simulate'],
+            smartFallback.simulate,
+          ),
+          itemDelayPercent: _int(
+            stored['postpone.default.item_delay_percent'],
+            smartFallback.itemDelayPercent,
+            min: 1,
+            max: 400,
+          ),
+          topicDelayPercent: _int(
+            stored['postpone.default.topic_delay_percent'],
+            smartFallback.topicDelayPercent,
+            min: 1,
+            max: 1900,
+          ),
+          itemMaximumDelayDays: _int(
+            stored['postpone.default.item_maximum_delay_days'],
+            smartFallback.itemMaximumDelayDays,
+            min: 1,
+            max: 300,
+          ),
+          topicMaximumDelayDays: _int(
+            stored['postpone.default.topic_maximum_delay_days'],
+            smartFallback.topicMaximumDelayDays,
+            min: 1,
+            max: 500,
+          ),
+          itemMinimumDelayDays: _int(
+            stored['postpone.default.item_minimum_delay_days'],
+            smartFallback.itemMinimumDelayDays,
+            min: 1,
+            max: 30,
+          ),
+          topicMinimumDelayDays: _int(
+            stored['postpone.default.topic_minimum_delay_days'],
+            smartFallback.topicMinimumDelayDays,
+            min: 1,
+            max: 100,
+          ),
+          skipItems: _bool(
+            stored['postpone.default.skip_items'],
+            smartFallback.skipItems,
+          ),
+          skipTopics: _bool(
+            stored['postpone.default.skip_topics'],
+            smartFallback.skipTopics,
+          ),
+          itemAgeCutoffDays: _int(
+            stored['postpone.default.item_age_cutoff_days'],
+            smartFallback.itemAgeCutoffDays,
+            min: 2,
+            max: 4000,
+          ),
+          topicAgeCutoffDays: _int(
+            stored['postpone.default.topic_age_cutoff_days'],
+            smartFallback.topicAgeCutoffDays,
+            min: 2,
+            max: 4000,
+          ),
+          itemForgettingIndexCutoff: _int(
+            stored['postpone.default.item_forgetting_index_cutoff'],
+            smartFallback.itemForgettingIndexCutoff,
+            min: 3,
+            max: 20,
+          ),
+          topicAFactorCutoff: _double(
+            stored['postpone.default.topic_a_factor_cutoff'],
+            smartFallback.topicAFactorCutoff,
+            min: 1.01,
+            max: 6,
+          ),
+          itemPostponeCountCutoff: _int(
+            stored['postpone.default.item_postpone_count_cutoff'],
+            smartFallback.itemPostponeCountCutoff,
+            min: 1,
+            max: 255,
+          ),
+          topicPostponeCountCutoff: _int(
+            stored['postpone.default.topic_postpone_count_cutoff'],
+            smartFallback.topicPostponeCountCutoff,
+            min: 1,
+            max: 255,
+          ),
+          itemPriorityThreshold: _double(
+            stored['postpone.default.item_priority_threshold'],
+            smartFallback.itemPriorityThreshold,
+            min: 0.01,
+            max: 100,
+          ),
+          topicPriorityThreshold: _double(
+            stored['postpone.default.topic_priority_threshold'],
+            smartFallback.topicPriorityThreshold,
+            min: 0.0001,
+            max: 100,
+          ),
+          modifyItemByForgettingIndex: _bool(
+            stored['postpone.default.modify_item_by_forgetting_index'],
+            smartFallback.modifyItemByForgettingIndex,
+          ),
+          modifyTopicByAFactor: _bool(
+            stored['postpone.default.modify_topic_by_a_factor'],
+            smartFallback.modifyTopicByAFactor,
+          ),
+        ),
+      ),
+      mercy: MercySettings(
+        mode: _enumValue(
+          stored['mercy.mode'],
+          MercyMode.values,
+          fallback.mercy.mode,
+        ),
+        reschedulingDays: _int(
+          stored['mercy.rescheduling_days'],
+          fallback.mercy.reschedulingDays,
           min: 1,
-          max: 36500,
+          max: 3650,
         ),
-        autoBaseFraction: _double(
-          stored['postpone.auto_base_fraction'],
-          fallback.postpone.autoBaseFraction,
-          min: 0,
-          max: 5,
-        ),
-        autoPriorityMultiplier: _double(
-          stored['postpone.auto_priority_multiplier'],
-          fallback.postpone.autoPriorityMultiplier,
-          min: 0,
-          max: 50,
-        ),
-        autoDispersal: _double(
-          stored['postpone.auto_dispersal'],
-          fallback.postpone.autoDispersal,
-          min: 0,
-          max: 0.9,
-        ),
-        autoMaxDays: _int(
-          stored['postpone.auto_max_days'],
-          fallback.postpone.autoMaxDays,
+        gatheringDays: _int(
+          stored['mercy.gathering_days'],
+          fallback.mercy.gatheringDays,
           min: 1,
-          max: 36500,
+          max: 3650,
         ),
-        mercyHorizonDays: _int(
-          stored['postpone.mercy_horizon_days'],
-          fallback.postpone.mercyHorizonDays,
+        dailyCap: _int(
+          stored['mercy.daily_cap'],
+          fallback.mercy.dailyCap,
           min: 1,
-          max: 365,
+          max: 5000,
         ),
-        mercyDailyCap: _int(
-          stored['postpone.mercy_daily_cap'],
-          fallback.postpone.mercyDailyCap,
-          min: 1,
-          max: 100000,
+        includeFuture: _bool(
+          stored['mercy.include_future'],
+          fallback.mercy.includeFuture,
+        ),
+        importanceWeight: _weight(
+          stored['mercy.importance_weight'],
+          fallback.mercy.importanceWeight,
+        ),
+        latenessWeight: _weight(
+          stored['mercy.lateness_weight'],
+          fallback.mercy.latenessWeight,
+        ),
+        investmentWeight: _weight(
+          stored['mercy.investment_weight'],
+          fallback.mercy.investmentWeight,
+        ),
+        easinessWeight: _weight(
+          stored['mercy.easiness_weight'],
+          fallback.mercy.easinessWeight,
+        ),
+        recencyWeight: _weight(
+          stored['mercy.recency_weight'],
+          fallback.mercy.recencyWeight,
+        ),
+        intervalFactorMatrix: _matrixOr(
+          stored['mercy.interval_factor_matrix'],
+          fallback.mercy.intervalFactorMatrix,
         ),
       ),
       reader: ReaderSettings(
@@ -749,12 +1199,6 @@ final class AppSettings {
           fallback.reader.reminderWords,
           min: 0,
           max: 100000,
-        ),
-        defaultLaterDays: _int(
-          stored['reader.default_later_days'],
-          fallback.reader.defaultLaterDays,
-          min: 1,
-          max: 3650,
         ),
       ),
       diagnostics: DiagnosticsSettings(
@@ -779,110 +1223,121 @@ final class AppSettings {
           fallback.diagnostics.showContentInPanel,
         ),
       ),
-      intervalProfiles: Map<String, List<int>>.unmodifiable(profiles),
     );
   }
 
-  /// The shipped topic interval sequences. The final value repeats forever.
-  static const Map<String, List<int>> defaultIntervalProfileDays =
-      <String, List<int>>{
-        'focused': <int>[1, 2, 3, 5, 7, 10, 14, 21, 30],
-        'normal': <int>[1, 3, 7, 14, 30, 60, 120, 240, 365],
-        'slow': <int>[7, 14, 30, 60, 120, 240, 365, 730],
-        'extract': <int>[1, 3, 7, 14, 30, 60, 120],
-      };
-
-  /// Timezone and rollover.
   final StudyDaySettings studyDay;
-
-  /// Caps, mixing, and sorting.
   final QueueSettings queue;
-
-  /// The A-factor topic model.
-  final TopicSchedulerSettings topics;
-
-  /// FSRS and item behaviour.
+  final RememberSettings remember;
   final CardSettings cards;
-
-  /// The three postponement mechanisms.
   final PostponeSettings postpone;
-
-  /// Reader preferences.
+  final MercySettings mercy;
   final ReaderSettings reader;
-
-  /// Structured logging and the developer panel.
   final DiagnosticsSettings diagnostics;
 
-  /// Editable interval sequences, keyed by profile id.
-  final Map<String, List<int>> intervalProfiles;
-
-  /// Flat storage form. Every value round-trips through [AppSettings.fromMap].
-  Map<String, String> toMap() => <String, String>{
-    'study.zone_id': studyDay.zoneId,
-    'study.rollover_minutes': '${studyDay.rolloverMinutes}',
-    'queue.max_cards': '${queue.maxCards}',
-    'queue.max_new_cards': '${queue.maxNewCards}',
-    'queue.max_topics': '${queue.maxTopics}',
-    'queue.cards_per_topic': '${queue.cardsPerTopic}',
-    'queue.min_topic_every': '${queue.minTopicEvery}',
-    'queue.randomization': '${queue.randomization}',
-    'queue.protected_percentile': '${queue.protectedPercentile}',
-    'queue.auto_postpone': '${queue.autoPostpone}',
-    'queue.study_more_step': '${queue.studyMoreStep}',
-    'topic.base_a_factor': '${topics.baseAFactor}',
-    'topic.priority_floor': '${topics.priorityFloor}',
-    'topic.priority_span': '${topics.prioritySpan}',
-    'topic.min_a_factor': '${topics.minAFactor}',
-    'topic.max_a_factor': '${topics.maxAFactor}',
-    'topic.source_first_span': '${topics.sourceFirstIntervalSpan}',
-    'topic.source_first_max': '${topics.sourceFirstIntervalMax}',
-    'topic.extract_first_span': '${topics.extractFirstIntervalSpan}',
-    'topic.extract_first_max': '${topics.extractFirstIntervalMax}',
-    'topic.extract_finish_prompt_after': '${topics.extractFinishPromptAfter}',
-    'card.desired_retention': '${cards.desiredRetention}',
-    'card.learning_steps': cards.learningStepMinutes.join(','),
-    'card.relearning_steps': cards.relearningStepMinutes.join(','),
-    'card.maximum_interval_days': '${cards.maximumIntervalDays}',
-    'card.enable_fuzzing': '${cards.enableFuzzing}',
-    'card.leech_lapses': '${cards.leechLapses}',
-    'card.bury_siblings': '${cards.burySiblings}',
-    'postpone.later_min_fraction': '${postpone.laterMinFraction}',
-    'postpone.later_max_fraction': '${postpone.laterMaxFraction}',
-    'postpone.later_max_days': '${postpone.laterMaxDays}',
-    'postpone.auto_base_fraction': '${postpone.autoBaseFraction}',
-    'postpone.auto_priority_multiplier': '${postpone.autoPriorityMultiplier}',
-    'postpone.auto_dispersal': '${postpone.autoDispersal}',
-    'postpone.auto_max_days': '${postpone.autoMaxDays}',
-    'postpone.mercy_horizon_days': '${postpone.mercyHorizonDays}',
-    'postpone.mercy_daily_cap': '${postpone.mercyDailyCap}',
-    'reader.reminder_words': '${reader.reminderWords}',
-    'reader.default_later_days': '${reader.defaultLaterDays}',
-    'diagnostics.log_enabled': '${diagnostics.logEnabled}',
-    'diagnostics.log_max_bytes': '${diagnostics.logMaxBytes}',
-    'diagnostics.log_retained_files': '${diagnostics.logRetainedFiles}',
-    'diagnostics.show_content': '${diagnostics.showContentInPanel}',
-    for (final MapEntry<String, List<int>> entry in intervalProfiles.entries)
-      '$_profilePrefix${entry.key}': entry.value.join(','),
-  };
+  /// Flat storage form. It contains no keys from the replaced scheduler.
+  Map<String, String> toMap() {
+    final SmartPostponeSettings smart = postpone.defaultProfile;
+    return <String, String>{
+      'study.zone_id': studyDay.zoneId,
+      'study.rollover_minutes': '${studyDay.rolloverMinutes}',
+      'queue.topic_percent': '${queue.topicPercent}',
+      'queue.item_randomization': '${queue.itemRandomization}',
+      'queue.topic_randomization': '${queue.topicRandomization}',
+      'queue.auto_sort': '${queue.autoSort}',
+      'queue.randomize_final_drill': '${queue.randomizeFinalDrill}',
+      'queue.confirm_stage_transitions': '${queue.confirmStageTransitions}',
+      'remember.first_interval_low_days': '${remember.firstIntervalLowDays}',
+      'remember.first_interval_high_days': '${remember.firstIntervalHighDays}',
+      'card.desired_retention': '${cards.desiredRetention}',
+      'card.learning_steps': cards.learningStepMinutes.join(','),
+      'card.relearning_steps': cards.relearningStepMinutes.join(','),
+      'card.maximum_interval_days': '${cards.maximumIntervalDays}',
+      'card.enable_fuzzing': '${cards.enableFuzzing}',
+      'card.leech_lapses': '${cards.leechLapses}',
+      'card.bury_siblings': '${cards.burySiblings}',
+      'postpone.auto_enabled': '${postpone.autoEnabled}',
+      'postpone.named_profiles': _encodeNamedProfiles(postpone.namedProfiles),
+      'postpone.branch_profiles': _encodeBranchAssignments(
+        postpone.branchProfileAssignments,
+      ),
+      'postpone.default.root_element_id': '${smart.rootElementId}',
+      'postpone.default.scope': smart.scope.name,
+      'postpone.default.method': smart.method.name,
+      'postpone.default.profile_name': smart.profileName,
+      'postpone.default.subbranch_mode': smart.subbranchMode.name,
+      'postpone.default.protected_count': '${smart.protectedCount}',
+      'postpone.default.include_non_outstanding':
+          '${smart.includeNonOutstanding}',
+      'postpone.default.simulate': '${smart.simulate}',
+      'postpone.default.item_delay_percent': '${smart.itemDelayPercent}',
+      'postpone.default.topic_delay_percent': '${smart.topicDelayPercent}',
+      'postpone.default.item_maximum_delay_days':
+          '${smart.itemMaximumDelayDays}',
+      'postpone.default.topic_maximum_delay_days':
+          '${smart.topicMaximumDelayDays}',
+      'postpone.default.item_minimum_delay_days':
+          '${smart.itemMinimumDelayDays}',
+      'postpone.default.topic_minimum_delay_days':
+          '${smart.topicMinimumDelayDays}',
+      'postpone.default.skip_items': '${smart.skipItems}',
+      'postpone.default.skip_topics': '${smart.skipTopics}',
+      'postpone.default.item_age_cutoff_days': '${smart.itemAgeCutoffDays}',
+      'postpone.default.topic_age_cutoff_days': '${smart.topicAgeCutoffDays}',
+      'postpone.default.item_forgetting_index_cutoff':
+          '${smart.itemForgettingIndexCutoff}',
+      'postpone.default.topic_a_factor_cutoff': '${smart.topicAFactorCutoff}',
+      'postpone.default.item_postpone_count_cutoff':
+          '${smart.itemPostponeCountCutoff}',
+      'postpone.default.topic_postpone_count_cutoff':
+          '${smart.topicPostponeCountCutoff}',
+      'postpone.default.item_priority_threshold':
+          '${smart.itemPriorityThreshold}',
+      'postpone.default.topic_priority_threshold':
+          '${smart.topicPriorityThreshold}',
+      'postpone.default.modify_item_by_forgetting_index':
+          '${smart.modifyItemByForgettingIndex}',
+      'postpone.default.modify_topic_by_a_factor':
+          '${smart.modifyTopicByAFactor}',
+      'mercy.mode': mercy.mode.name,
+      'mercy.rescheduling_days': '${mercy.reschedulingDays}',
+      'mercy.gathering_days': '${mercy.gatheringDays}',
+      'mercy.daily_cap': '${mercy.dailyCap}',
+      'mercy.include_future': '${mercy.includeFuture}',
+      'mercy.importance_weight': '${mercy.importanceWeight}',
+      'mercy.lateness_weight': '${mercy.latenessWeight}',
+      'mercy.investment_weight': '${mercy.investmentWeight}',
+      'mercy.easiness_weight': '${mercy.easinessWeight}',
+      'mercy.recency_weight': '${mercy.recencyWeight}',
+      // Empty explicitly clears a previously imported optional matrix.
+      'mercy.interval_factor_matrix':
+          mercy.intervalFactorMatrix?.join(',') ?? '',
+      'reader.reminder_words': '${reader.reminderWords}',
+      'diagnostics.log_enabled': '${diagnostics.logEnabled}',
+      'diagnostics.log_max_bytes': '${diagnostics.logMaxBytes}',
+      'diagnostics.log_retained_files': '${diagnostics.logRetainedFiles}',
+      'diagnostics.show_content': '${diagnostics.showContentInPanel}',
+    };
+  }
 
   AppSettings copyWith({
     StudyDaySettings? studyDay,
     QueueSettings? queue,
-    TopicSchedulerSettings? topics,
+    RememberSettings? remember,
     CardSettings? cards,
     PostponeSettings? postpone,
+    MercySettings? mercy,
     ReaderSettings? reader,
     DiagnosticsSettings? diagnostics,
-    Map<String, List<int>>? intervalProfiles,
   }) => AppSettings(
     studyDay: studyDay ?? this.studyDay,
     queue: queue ?? this.queue,
-    topics: topics ?? this.topics,
+    remember: remember ?? this.remember,
     cards: cards ?? this.cards,
     postpone: postpone ?? this.postpone,
+    mercy: mercy ?? this.mercy,
     reader: reader ?? this.reader,
     diagnostics: diagnostics ?? this.diagnostics,
-    intervalProfiles: intervalProfiles ?? this.intervalProfiles,
   );
 
   @override
@@ -890,49 +1345,45 @@ final class AppSettings {
       other is AppSettings &&
       other.studyDay == studyDay &&
       other.queue == queue &&
-      other.topics == topics &&
+      other.remember == remember &&
       other.cards == cards &&
       other.postpone == postpone &&
+      other.mercy == mercy &&
       other.reader == reader &&
-      other.diagnostics == diagnostics &&
-      _sameProfiles(other.intervalProfiles, intervalProfiles);
+      other.diagnostics == diagnostics;
 
   @override
   int get hashCode => Object.hash(
     studyDay,
     queue,
-    topics,
+    remember,
     cards,
     postpone,
+    mercy,
     reader,
     diagnostics,
-    intervalProfiles.length,
   );
 }
 
-const String _profilePrefix = 'profile.days.';
+const Object _notProvided = Object();
 
 bool _sameInts(List<int> a, List<int> b) {
   if (a.length != b.length) return false;
-  for (var i = 0; i < a.length; i++) {
-    if (a[i] != b[i]) return false;
+  for (var index = 0; index < a.length; index += 1) {
+    if (a[index] != b[index]) return false;
   }
   return true;
 }
 
-bool _sameProfiles(Map<String, List<int>> a, Map<String, List<int>> b) {
-  if (a.length != b.length) return false;
-  for (final MapEntry<String, List<int>> entry in a.entries) {
-    final List<int>? other = b[entry.key];
-    if (other == null || !_sameInts(entry.value, other)) return false;
-  }
-  return true;
+bool _sameNullableInts(List<int>? a, List<int>? b) {
+  if (a == null || b == null) return a == b;
+  return _sameInts(a, b);
 }
 
 int _int(String? raw, int fallback, {required int min, required int max}) {
   final int? parsed = raw == null ? null : int.tryParse(raw.trim());
   if (parsed == null) return fallback;
-  return parsed < min ? min : (parsed > max ? max : parsed);
+  return parsed.clamp(min, max);
 }
 
 double _double(
@@ -942,9 +1393,12 @@ double _double(
   required double max,
 }) {
   final double? parsed = raw == null ? null : double.tryParse(raw.trim());
-  if (parsed == null || parsed.isNaN) return fallback;
-  return parsed < min ? min : (parsed > max ? max : parsed);
+  if (parsed == null || !parsed.isFinite) return fallback;
+  return parsed.clamp(min, max);
 }
+
+double _weight(String? raw, double fallback) =>
+    _double(raw, fallback, min: 0, max: 1000000);
 
 bool _bool(String? raw, bool fallback) => switch (raw?.trim().toLowerCase()) {
   'true' || '1' || 'yes' => true,
@@ -952,13 +1406,157 @@ bool _bool(String? raw, bool fallback) => switch (raw?.trim().toLowerCase()) {
   _ => fallback,
 };
 
-List<int> _readIntList(String raw) => <int>[
-  for (final String part in raw.split(','))
-    if (int.tryParse(part.trim()) case final int value when value > 0) value,
-];
+T _enumValue<T extends Enum>(String? raw, List<T> values, T fallback) {
+  final String? normalized = raw?.trim();
+  if (normalized == null) return fallback;
+  for (final T value in values) {
+    if (value.name == normalized) return value;
+  }
+  return fallback;
+}
 
-List<int> _readIntListOr(String? raw, List<int> fallback) {
+List<int> _positiveIntListOr(String? raw, List<int> fallback) {
   if (raw == null) return fallback;
-  final List<int> parsed = _readIntList(raw);
-  return parsed.isEmpty ? fallback : parsed;
+  final List<String> parts = raw.split(',');
+  if (parts.isEmpty) return fallback;
+  final values = <int>[];
+  for (final String part in parts) {
+    final int? value = int.tryParse(part.trim());
+    if (value == null || value <= 0) return fallback;
+    values.add(value);
+  }
+  return values.isEmpty ? fallback : List<int>.unmodifiable(values);
+}
+
+List<int>? _matrixOr(String? raw, List<int>? fallback) {
+  if (raw == null) return fallback;
+  if (raw.trim().isEmpty) return null;
+  final List<String> parts = raw.split(',');
+  if (parts.length != 400) return fallback;
+  final values = <int>[];
+  for (final String part in parts) {
+    final int? value = int.tryParse(part.trim());
+    if (value == null || value < 0 || value > 0xFFFF) return fallback;
+    values.add(value);
+  }
+  return List<int>.unmodifiable(values);
+}
+
+bool _sameMap<K, V>(Map<K, V> a, Map<K, V> b) {
+  if (a.length != b.length) return false;
+  for (final MapEntry<K, V> entry in a.entries) {
+    if (!b.containsKey(entry.key) || b[entry.key] != entry.value) return false;
+  }
+  return true;
+}
+
+/// Order-independent hash so two equal maps built in different insertion
+/// orders — which decoding routinely produces — cannot disagree.
+int _mapHash<K, V>(Map<K, V> map) {
+  var accumulated = 0;
+  for (final MapEntry<K, V> entry in map.entries) {
+    accumulated ^= Object.hash(entry.key, entry.value);
+  }
+  return Object.hash(map.length, accumulated);
+}
+
+int _jsonInt(Object? raw, int fallback, {required int min, required int max}) {
+  final int? value = raw is int
+      ? raw
+      : raw is num
+      ? raw.round()
+      : null;
+  if (value == null || value < min || value > max) return fallback;
+  return value;
+}
+
+double _jsonDouble(
+  Object? raw,
+  double fallback, {
+  required double min,
+  required double max,
+}) {
+  if (raw is! num) return fallback;
+  final double value = raw.toDouble();
+  if (value.isNaN || value < min || value > max) return fallback;
+  return value;
+}
+
+bool _jsonBool(Object? raw, bool fallback) => raw is bool ? raw : fallback;
+
+T _jsonEnum<T extends Enum>(Object? raw, List<T> values, T fallback) {
+  if (raw is! String) return fallback;
+  for (final T value in values) {
+    if (value.name == raw) return value;
+  }
+  return fallback;
+}
+
+/// Encodes managed profiles as a JSON object keyed by profile name.
+///
+/// The empty string is written for an empty registry so a stored value always
+/// exists and clearing the last profile is durable rather than a missing key
+/// that decoding would read as "keep the fallback".
+String _encodeNamedProfiles(Map<String, SmartPostponeSettings> profiles) {
+  if (profiles.isEmpty) return '';
+  final List<String> names = profiles.keys.toList()..sort();
+  return jsonEncode(<String, Object?>{
+    for (final String name in names) name: profiles[name]!.toJson(),
+  });
+}
+
+Map<String, SmartPostponeSettings> _namedProfilesOr(
+  String? raw,
+  Map<String, SmartPostponeSettings> fallback,
+) {
+  if (raw == null) return fallback;
+  if (raw.trim().isEmpty) return const <String, SmartPostponeSettings>{};
+  final Object? decoded = _tryDecodeJson(raw);
+  if (decoded is! Map<String, Object?>) return fallback;
+  final profiles = <String, SmartPostponeSettings>{};
+  for (final MapEntry<String, Object?> entry in decoded.entries) {
+    final String name = entry.key.trim();
+    if (name.isEmpty || name == PostponeSettings.defaultProfileName) continue;
+    final Object? record = entry.value;
+    if (record is! Map<String, Object?>) continue;
+    // The map key is authoritative, so a record whose stored name drifted
+    // from its key cannot resurrect a profile under a second name.
+    profiles[name] = SmartPostponeSettings.fromJson(
+      record,
+    ).copyWith(profileName: name);
+  }
+  return Map<String, SmartPostponeSettings>.unmodifiable(profiles);
+}
+
+/// Encodes branch assignments as `rootElementId=profileName` pairs.
+String _encodeBranchAssignments(Map<int, String> assignments) {
+  if (assignments.isEmpty) return '';
+  final List<int> roots = assignments.keys.toList()..sort();
+  return jsonEncode(<String, Object?>{
+    for (final int root in roots) '$root': assignments[root],
+  });
+}
+
+Map<int, String> _branchAssignmentsOr(String? raw, Map<int, String> fallback) {
+  if (raw == null) return fallback;
+  if (raw.trim().isEmpty) return const <int, String>{};
+  final Object? decoded = _tryDecodeJson(raw);
+  if (decoded is! Map<String, Object?>) return fallback;
+  final assignments = <int, String>{};
+  for (final MapEntry<String, Object?> entry in decoded.entries) {
+    final int? root = int.tryParse(entry.key);
+    final Object? name = entry.value;
+    if (root == null || root < 0 || root > 0xFFFFFFFF) continue;
+    if (name is! String || name.trim().isEmpty) continue;
+    assignments[root] = name.trim();
+  }
+  return Map<int, String>.unmodifiable(assignments);
+}
+
+Object? _tryDecodeJson(String raw) {
+  try {
+    return jsonDecode(raw);
+  } on FormatException {
+    return null;
+  }
 }

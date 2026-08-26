@@ -113,7 +113,7 @@ final class PostponeElement extends AppCommand {
     super.operationId, {
     required this.ref,
     this.until,
-    this.kind = DeferralKind.manual,
+    this.isAutomatic = false,
     super.timestampUtc,
   });
 
@@ -123,14 +123,11 @@ final class PostponeElement extends AppCommand {
   /// interval — a fixed one day just returns it tomorrow into the same queue.
   final StudyDay? until;
 
-  final DeferralKind kind;
-}
-
-/// Declare a source finished. Reaching the end of the text does not do this.
-final class FinishSource extends AppCommand {
-  FinishSource(super.operationId, {required this.sourceId, super.timestampUtc});
-
-  final String sourceId;
+  /// Whether overload handling issued this, rather than the user.
+  ///
+  /// It selects the log's event type and nothing else: SM20 records both as
+  /// the same low-level reschedule.
+  final bool isAutomatic;
 }
 
 /// Restore the exact canonical snapshot before the latest topic encounter.
@@ -145,13 +142,6 @@ final class UndoLastTopicEncounter extends AppCommand {
   final ElementRef ref;
 }
 
-/// Explicitly finish either a source or an extract. Descendants are untouched.
-final class FinishTopic extends AppCommand {
-  FinishTopic(super.operationId, {required this.ref, super.timestampUtc});
-
-  final ElementRef ref;
-}
-
 /// Keep the content, stop scheduling it.
 final class DismissElement extends AppCommand {
   DismissElement(super.operationId, {required this.ref, super.timestampUtc});
@@ -159,16 +149,12 @@ final class DismissElement extends AppCommand {
   final ElementRef ref;
 }
 
-/// Temporarily remove an element from scheduling.
-final class SuspendElement extends AppCommand {
-  SuspendElement(super.operationId, {required this.ref, super.timestampUtc});
-
-  final ElementRef ref;
-}
-
-/// Return a suspended, dismissed, or finished element to the queue.
-final class ReactivateElement extends AppCommand {
-  ReactivateElement(super.operationId, {required this.ref, super.timestampUtc});
+/// Undismiss: return a dismissed element to the pending store.
+///
+/// SM20 restores the status byte and nothing else — the schedule and the
+/// priority Dismiss cleared stay cleared.
+final class UndismissSource extends AppCommand {
+  UndismissSource(super.operationId, {required this.ref, super.timestampUtc});
 
   final ElementRef ref;
 }

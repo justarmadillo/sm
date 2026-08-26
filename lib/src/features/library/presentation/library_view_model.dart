@@ -65,7 +65,7 @@ final class LibraryUiState {
       if (_isDue(entry)) entry,
   ];
 
-  /// Everything else, including finished and dismissed sources.
+  /// Everything else, including dismissed sources.
   List<LibraryEntry> get later => <LibraryEntry>[
     for (final entry in entries)
       if (!_isDue(entry)) entry,
@@ -95,9 +95,9 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
   Future<LibraryUiState> _load() async {
     final entries = await ref.read(libraryQueryProvider).listEntries();
     final today = await ref.read(readerHandlersProvider).today();
-    final effectiveDue = await ref
-        .read(effectiveDueQueryProvider)
-        .forTopics(<TopicState>[for (final entry in entries) entry.topic]);
+    final effectiveDue = await ref.read(effectiveDueQueryProvider).forTopics(
+      <TopicState>[for (final entry in entries) entry.topic],
+    );
     return LibraryUiState(
       entries: entries,
       today: today,
@@ -146,12 +146,15 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
     success: (Source source) => 'Pace set to ${pace.name}',
   );
 
-  /// Returns a finished, dismissed, or suspended source to the queue.
-  Future<void> reactivate(ElementRef ref_) => _command<Object>(
+  /// Undismiss: returns a dismissed source to the pending store.
+  ///
+  /// It does not restore the schedule or the priority Dismiss cleared, so the
+  /// message deliberately does not promise a due date.
+  Future<void> undismiss(ElementRef ref_) => _command<Object>(
     (OperationId operation) => ref
         .read(readerHandlersProvider)
-        .reactivate(ReactivateElement(operation, ref: ref_)),
-    success: (_) => 'Back in the queue, due today',
+        .undismiss(UndismissSource(operation, ref: ref_)),
+    success: (_) => 'Undismissed, back in the pending store',
   );
 
   /// Stops scheduling a source without deleting it.

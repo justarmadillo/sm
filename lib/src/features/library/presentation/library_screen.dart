@@ -373,9 +373,7 @@ class _LifecycleChip extends StatelessWidget {
     final (String label, Color color) = switch (lifecycle) {
       ElementLifecycle.active when isDue => ('Due', AppColors.accent),
       ElementLifecycle.active => ('Scheduled', AppColors.muted),
-      ElementLifecycle.finished => ('Finished', AppColors.muted),
       ElementLifecycle.dismissed => ('Dismissed', AppColors.muted),
-      ElementLifecycle.suspended => ('Suspended', AppColors.softMarker),
       ElementLifecycle.deleted => ('Deleted', AppColors.muted),
     };
 
@@ -418,8 +416,8 @@ class _SourceMenu extends ConsumerWidget {
           case 'rename':
             final title = await _promptForTitle(context, entry.source.title);
             if (title != null) await model.rename(entry.source.id, title);
-          case 'reactivate':
-            await model.reactivate(elementRef);
+          case 'undismiss':
+            await model.undismiss(elementRef);
           case 'dismiss':
             await model.dismiss(elementRef);
           case 'delete':
@@ -465,8 +463,8 @@ class _SourceMenu extends ConsumerWidget {
           )
         else
           const PopupMenuItem<String>(
-            value: 'reactivate',
-            child: Text('Return to queue'),
+            value: 'undismiss',
+            child: Text('Undismiss'),
           ),
         const PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
       ],

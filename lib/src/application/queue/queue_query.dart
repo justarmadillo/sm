@@ -19,6 +19,7 @@ import '../../domain/content/source.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/queue_policy.dart';
+import '../../domain/scheduling/sm20_numeric.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../ports/repositories.dart';
 import '../scheduling/scheduling_context.dart';
@@ -30,6 +31,7 @@ import 'queue_handlers.dart';
 final class QueueEntry {
   const QueueEntry({
     required this.candidate,
+    required this.lane,
     required this.actionLabel,
     required this.title,
     required this.preview,
@@ -38,6 +40,7 @@ final class QueueEntry {
   });
 
   final QueueCandidate candidate;
+  final QueueLane lane;
   final String actionLabel;
   final String title;
   final String preview;
@@ -58,14 +61,16 @@ final class QueueProjection {
     required this.entries,
     required this.counters,
     required this.today,
-    this.deferredThisRun = 0,
+    required this.requiresStageConfirmation,
+    this.automaticallyPostponedThisRun = 0,
   });
 
   /// An empty day.
   static QueueProjection emptyOn(StudyDay today) => QueueProjection(
     entries: const <QueueEntry>[],
-    counters: QueuePlan.empty.counters,
+    counters: QueuePlan.empty(Sm20PrngState(0)).counters,
     today: today,
+    requiresStageConfirmation: false,
   );
 
   final List<QueueEntry> entries;
@@ -75,10 +80,12 @@ final class QueueProjection {
   final QueueCounters counters;
 
   final StudyDay today;
+  final bool requiresStageConfirmation;
 
-  /// How many elements this load deferred. Non-zero only on the first build
-  /// of a study day.
-  final int deferredThisRun;
+  QueueLane? get lane => entries.firstOrNull?.lane;
+
+  /// How many elements today's automatic Default-profile pass postponed.
+  final int automaticallyPostponedThisRun;
 
   bool get isEmpty => entries.isEmpty;
 }
@@ -105,10 +112,7 @@ final class QueueQuery {
 
   /// Runs admission and projects the resulting queue.
   ///
-  /// [extraAdmissions] raises every cap for this build only, which is what a
-  /// Study More press asks for: more work now, without quietly persisting a
-  /// bigger daily limit the user never chose.
-  Future<QueueProjection> load({int extraAdmissions = 0}) async {
+  Future<QueueProjection> load() async {
     final StudyDay today = await _context.today();
     final Result<AdmissionOutcome> outcome = await _handlers.runDailyAdmission(
       RunDailyAdmission(
@@ -116,7 +120,6 @@ final class QueueQuery {
         // across refreshes, restarts, and crashes.
         OperationId(dailyAdmissionOperationId(today)),
         day: today,
-        extraAdmissions: extraAdmissions,
         timestampUtc: _clock.nowUtc(),
       ),
     );
@@ -129,17 +132,34 @@ final class QueueQuery {
     final QueueCounters counters = plan.counters;
 
     final PriorityScale scale = await _context.priorityScale();
-    final int leechLapses = (await _context.settings()).cards.leechLapses;
+    final settings = await _context.settings();
+    final int leechLapses = settings.cards.leechLapses;
+    final Map<ElementRef, QueueLane> lanes = <ElementRef, QueueLane>{
+      for (final ScoredCandidate value in plan.scored) value.ref: value.lane,
+    };
     final entries = <QueueEntry>[];
     for (final QueueCandidate candidate in plan.entries) {
-      final QueueEntry? entry = await _project(candidate, scale, leechLapses);
+      final QueueEntry? entry = await _project(
+        candidate,
+        lanes[candidate.ref] ??
+            (candidate.isCard
+                ? QueueLane.outstandingItem
+                : QueueLane.outstandingTopic),
+        scale,
+        leechLapses,
+      );
       if (entry != null) entries.add(entry);
     }
     return QueueProjection(
       entries: List<QueueEntry>.unmodifiable(entries),
       counters: counters,
       today: today,
-      deferredThisRun: value.deferred,
+      requiresStageConfirmation:
+          settings.queue.confirmStageTransitions &&
+          scale.total > 100 &&
+          (entries.firstOrNull?.lane == QueueLane.finalDrill ||
+              entries.firstOrNull?.lane == QueueLane.pending),
+      automaticallyPostponedThisRun: value.automaticallyPostponed,
     );
   }
 
@@ -147,23 +167,29 @@ final class QueueQuery {
   Future<QueueCounters> counters() async {
     final StudyDay today = await _context.today();
     final QueuePolicy policy = await _context.queuePolicy();
+    final runtime = await _context.runtimeState();
     return policy
         .build(
           candidates: await _handlers.loadCandidates(today),
           nowUtc: _clock.nowUtc(),
           today: today,
+          prng: Sm20Prng(seed: runtime.prngSeed),
+          combinedOrder: runtime.outstanding,
+          outstandingItemMembership: runtime.outstandingItems.toSet(),
+          sort: false,
         )
         .counters;
   }
 
   Future<QueueEntry?> _project(
     QueueCandidate candidate,
+    QueueLane lane,
     PriorityScale scale,
     int leechLapses,
   ) => switch (candidate.ref.type) {
-    ElementType.source => _sourceEntry(candidate, scale),
-    ElementType.extract => _extractEntry(candidate, scale),
-    ElementType.card => _cardEntry(candidate, scale, leechLapses),
+    ElementType.source => _sourceEntry(candidate, lane, scale),
+    ElementType.extract => _extractEntry(candidate, lane, scale),
+    ElementType.card => _cardEntry(candidate, lane, scale, leechLapses),
   };
 
   double? _percentOf(QueueCandidate candidate, PriorityScale scale) =>
@@ -171,13 +197,15 @@ final class QueueQuery {
 
   Future<QueueEntry?> _sourceEntry(
     QueueCandidate candidate,
+    QueueLane lane,
     PriorityScale scale,
   ) async {
     final Source? source = await _content.findSource(candidate.ref.id);
     if (source == null) return null;
     return QueueEntry(
       candidate: candidate,
-      actionLabel: 'Read',
+      lane: lane,
+      actionLabel: _actionLabel(lane, 'Read'),
       title: source.title,
       preview: _excerpt(source.markdown),
       priorityPercent: _percentOf(candidate, scale),
@@ -186,6 +214,7 @@ final class QueueQuery {
 
   Future<QueueEntry?> _extractEntry(
     QueueCandidate candidate,
+    QueueLane lane,
     PriorityScale scale,
   ) async {
     final Extract? extract = await _content.findExtract(candidate.ref.id);
@@ -195,7 +224,8 @@ final class QueueQuery {
     );
     return QueueEntry(
       candidate: candidate,
-      actionLabel: 'Process',
+      lane: lane,
+      actionLabel: _actionLabel(lane, 'Process'),
       title: source?.title ?? 'Extract',
       preview: _excerpt(extract.markdown),
       priorityPercent: _percentOf(candidate, scale),
@@ -215,6 +245,7 @@ final class QueueQuery {
 
   Future<QueueEntry?> _cardEntry(
     QueueCandidate candidate,
+    QueueLane lane,
     PriorityScale scale,
     int leechLapses,
   ) async {
@@ -228,7 +259,8 @@ final class QueueQuery {
     final int lapses = candidate.card?.memory.lapses ?? 0;
     return QueueEntry(
       candidate: candidate,
-      actionLabel: 'Review',
+      lane: lane,
+      actionLabel: _actionLabel(lane, 'Review'),
       title: source?.title ?? 'Card',
       preview: _excerpt(question),
       priorityPercent: _percentOf(candidate, scale),
@@ -240,6 +272,12 @@ final class QueueQuery {
   /// not need a second handle for schedule lookups.
   LearningRepository get learning => _learning;
 }
+
+String _actionLabel(QueueLane lane, String ordinary) => switch (lane) {
+  QueueLane.finalDrill => 'Drill',
+  QueueLane.pending => 'Learn',
+  _ => ordinary,
+};
 
 String _excerpt(String markdown, {int maximum = 180}) {
   final String collapsed = markdown.replaceAll(RegExp(r'\s+'), ' ').trim();

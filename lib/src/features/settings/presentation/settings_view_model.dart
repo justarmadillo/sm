@@ -2,8 +2,8 @@
 ///
 /// Edits are held as a draft and written on Save, so a half-typed number never
 /// reaches a scheduler. Saving invalidates the providers that captured the old
-/// configuration, because a queue built under the previous caps would keep
-/// showing them until something else happened to rebuild it.
+/// configuration, because an Outstanding order built under the previous merge
+/// and randomization settings remains authoritative until it is rebuilt.
 library;
 
 import 'package:flutter/foundation.dart';

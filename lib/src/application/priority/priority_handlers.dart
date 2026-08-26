@@ -22,8 +22,8 @@ import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/schedule_adjustment.dart';
 import '../../domain/scheduling/scheduler_event.dart';
+import '../../domain/scheduling/topic_scheduler.dart';
 import '../app_command.dart';
 import '../ports/repositories.dart';
 import '../ports/transaction_runner.dart';
@@ -94,7 +94,10 @@ final class PriorityHandlers {
     if (schedule == null) return _missing<ElementSchedule>(command.ref);
 
     final PriorityScale scale = await _context.priorityScale();
-    final PriorityRank rank = scale.rankAtPercent(command.percent);
+    final PriorityRank rank = scale.rankForSetPriority(
+      schedule.priority,
+      command.percent,
+    );
     return _apply(command, schedule, rank, scale, kPrioritySetKind);
   });
 
@@ -129,128 +132,270 @@ final class PriorityHandlers {
         if (schedule == null) return _missing<ElementSchedule>(command.ref);
 
         final PriorityScale scale = await _context.priorityScale();
-        final PriorityRank rank = scale.stepped(
+        final double current = scale.percentageOf(schedule.priority);
+        final double target =
+            current +
+            (command.increase ? -0.1 : 0.1) *
+                (command.places < 1 ? 1 : command.places);
+        final PriorityRank rank = scale.rankForSetPriority(
           schedule.priority,
-          increase: command.increase,
-          places: command.places,
+          target,
         );
         return _apply(command, schedule, rank, scale, kPrioritySetKind);
       });
 
-  /// Spreads a percent range across many elements in one transaction.
-  Future<Result<int>> spread(SpreadPriority command) =>
-      _run<int>(command, kPrioritySpreadKind, () async {
-        if (command.refs.isEmpty) {
-          return const Err<int>(
-            ValidationFailure('choose at least one element to spread'),
-          );
-        }
-        final double from = command.fromPercent.clamp(0, 100);
-        final double to = command.toPercent.clamp(0, 100);
-        if (from > to) {
-          return const Err<int>(
-            ValidationFailure('the range must run from most to least urgent'),
-          );
-        }
+  /// Applies Increase, Decrease, Spread, or Adjust exactly in subset order.
+  Future<Result<int>> batch(
+    BatchPriority command,
+  ) => _run<int>(command, kPrioritySpreadKind, () async {
+    if (command.refs.isEmpty) {
+      return const Err<int>(ValidationFailure('choose an element subset'));
+    }
+    if (!command.lowPercent.isFinite ||
+        !command.highPercent.isFinite ||
+        !command.changePercent.isFinite) {
+      return const Err<int>(
+        ValidationFailure('priority values must be finite'),
+      );
+    }
 
-        final PriorityScale scale = await _context.priorityScale();
-        // Anchor the spread on the ranks that currently bound the range, then
-        // generate evenly spaced keys strictly inside them. Rewriting only the
-        // named elements keeps the rest of the collection where it was.
-        final PriorityRank low = scale.rankAtPercent(from);
-        final PriorityRank high = scale.rankAtPercent(to);
-        final List<PriorityRank> ranks = low < high
-            ? PriorityRank.spread(
-                count: command.refs.length,
-                before: low,
-                after: high,
-              )
-            : PriorityRank.spread(count: command.refs.length, before: low);
+    var low = command.lowPercent;
+    var high = command.highPercent;
+    var change = command.changePercent;
+    final bool remapsRange =
+        command.mode == Sm20BatchPriorityMode.spread ||
+        command.mode == Sm20BatchPriorityMode.adjust;
+    if (!remapsRange && !command.limitChanges) {
+      low = 0;
+      high = 100;
+    }
+    if (remapsRange) {
+      change = 0;
+      if (low == high) {
+        low -= 0.1;
+        high += 0.1;
+      }
+    }
+    low = low.clamp(0, 99);
+    high = high.clamp(0.0001, 100);
+    change = change.clamp(0, 1000);
+    if (low > high) {
+      final double swap = low;
+      low = high;
+      high = swap;
+    }
 
-        final schedules = <ElementSchedule>[];
-        final entries = <RevlogEntry>[];
-        final DateTime now = command.timestampUtc;
-        for (var index = 0; index < command.refs.length; index++) {
-          final ElementRef ref = command.refs[index];
-          final ElementSchedule? schedule = await _learning.findSchedule(ref);
-          if (schedule == null) continue;
-          final PriorityRank rank = ranks[index];
-          schedules.add(
-            schedule.copyWith(
-              priority: rank,
-              revision: schedule.revision + 1,
-              updatedAtUtc: now,
-            ),
-          );
-          entries.add(
-            _journal.build(
-              operationId: command.operationId.value,
-              ref: ref,
-              eventType: RevlogEventType.priorityChange,
-              atUtc: now,
-              before: RevlogSnapshot(
-                priorityKey: schedule.priority.orderKey,
-                pressure: scale.pressureOf(schedule.priority),
-                lifecycle: schedule.lifecycle.index,
-              ),
-              after: RevlogSnapshot(
-                priorityKey: rank.orderKey,
-                lifecycle: schedule.lifecycle.index,
-              ),
-              metadata: <String, Object?>{
-                'spread_from': from,
-                'spread_to': to,
-                'position': index,
-                'of': command.refs.length,
-              },
-            ),
-          );
-        }
-        if (schedules.isEmpty) {
-          return const Err<int>(
-            ValidationFailure('none of those elements has a schedule'),
-          );
-        }
+    var scale = await _context.priorityScale();
+    final int available =
+        scale.positionForPercentage(high) -
+        scale.positionForPercentage(low) +
+        1;
+    if (command.refs.length > available) {
+      return Err<int>(
+        ValidationFailure(
+          'the selected range has only $available priority slots',
+        ),
+      );
+    }
 
-        await _learning.saveSchedules(schedules);
-        await _journal.appendAll(entries);
-        for (var index = 0; index < schedules.length; index++) {
-          final ElementSchedule after = schedules[index];
-          // `before` has already been replaced; reconstruct the only changed
-          // coordinates for the immutable audit snapshot.
-          final ElementSchedule auditBefore = after.copyWith(
-            priority: entries[index].before.priorityKey == null
-                ? after.priority
-                : PriorityRank(entries[index].before.priorityKey!),
-            revision: after.revision - 1,
-          );
-          await _appendSchedulerPriority(
-            command,
-            auditBefore,
-            after,
-            metadata: <String, Object?>{
-              'spread_from': from,
-              'spread_to': to,
-              'position': index,
-              'of': schedules.length,
-            },
-          );
-        }
-        await _learning.appendActivity(
-          ActivityRecord(
-            id: _ids.newId(),
-            operationId: command.operationId.value,
-            kind: kPrioritySpreadKind,
-            atUtc: now,
-            metadata: <String, Object?>{
-              'count': schedules.length,
-              'from': from,
-              'to': to,
-            },
-          ),
+    final records =
+        <({ElementRef ref, ElementSchedule? schedule, int status})>[];
+    final Set<ElementRef> seen = <ElementRef>{};
+    for (final ElementRef ref in command.refs) {
+      if (!seen.add(ref)) {
+        return const Err<int>(
+          ValidationFailure('the priority subset contains duplicates'),
         );
-        return Ok<int>(schedules.length);
-      });
+      }
+      final ElementSchedule? schedule = await _learning.findSchedule(ref);
+      records.add((
+        ref: ref,
+        schedule: schedule,
+        status: await _sm20Status(ref, schedule),
+      ));
+    }
+
+    var oldMinimum = 100.0;
+    var oldMaximum = 0.0;
+    if (command.mode == Sm20BatchPriorityMode.adjust) {
+      for (final record in records) {
+        if (record.status != Sm20ElementStatus.memorized.index ||
+            record.schedule == null) {
+          continue;
+        }
+        final double percent = scale.percentageOf(record.schedule!.priority);
+        if (percent < oldMinimum) oldMinimum = percent;
+        if (percent > oldMaximum) oldMaximum = percent;
+      }
+    }
+
+    final double requestedStep = command.refs.length == 1
+        ? 0
+        : (high - low) / (command.refs.length - 1);
+    final double populationStep = scale.total == 0 ? 0 : 100 / scale.total;
+    final double spreadStep = requestedStep < populationStep
+        ? populationStep
+        : requestedStep;
+
+    final schedules = <ElementSchedule>[];
+    final changes = <({ElementSchedule before, ElementSchedule after})>[];
+    final entries = <RevlogEntry>[];
+    final DateTime now = command.timestampUtc;
+    var sourcePosition = 1;
+    for (final record in records) {
+      if (record.status == Sm20ElementStatus.deleted.index) continue;
+      final double? spreadTarget = command.mode == Sm20BatchPriorityMode.spread
+          ? (low + (sourcePosition - 1) * spreadStep).clamp(0, high)
+          : null;
+      final int currentSourcePosition = sourcePosition;
+      if (command.mode == Sm20BatchPriorityMode.spread) sourcePosition++;
+
+      final ElementSchedule? schedule = record.schedule;
+      if (schedule == null ||
+          (record.status != Sm20ElementStatus.pending.index &&
+              record.status != Sm20ElementStatus.memorized.index)) {
+        continue;
+      }
+      final double current = scale.percentageOf(schedule.priority);
+      final double calculated = switch (command.mode) {
+        Sm20BatchPriorityMode.increase => _increaseTarget(
+          current,
+          change,
+          low,
+          high,
+        ),
+        Sm20BatchPriorityMode.decrease => _decreaseTarget(
+          current,
+          change,
+          low,
+          high,
+        ),
+        Sm20BatchPriorityMode.spread => spreadTarget!,
+        Sm20BatchPriorityMode.adjust =>
+          oldMaximum == oldMinimum
+              ? low
+              : low +
+                    (high - low) *
+                        (current - oldMinimum) /
+                        (oldMaximum - oldMinimum),
+      };
+      final double target = calculated > high ? high : calculated;
+      final PriorityRank rank = scale.rankForSetPriority(
+        schedule.priority,
+        target,
+      );
+      final ElementSchedule updated = schedule.copyWith(
+        priority: rank,
+        revision: schedule.revision + 1,
+        updatedAtUtc: now,
+      );
+      schedules.add(updated);
+      changes.add((before: schedule, after: updated));
+      entries.add(
+        _journal.build(
+          operationId: command.operationId.value,
+          ref: schedule.ref,
+          eventType: RevlogEventType.priorityChange,
+          atUtc: now,
+          before: RevlogSnapshot(
+            priorityKey: schedule.priority.orderKey,
+            pressure: current / 100,
+            lifecycle: schedule.lifecycle.index,
+          ),
+          after: RevlogSnapshot(
+            priorityKey: rank.orderKey,
+            lifecycle: schedule.lifecycle.index,
+          ),
+          metadata: <String, Object?>{
+            'mode': command.mode.name,
+            'low': low,
+            'high': high,
+            'change': change,
+            'source_position': currentSourcePosition,
+            'of': command.refs.length,
+          },
+        ),
+      );
+      scale = scale.replacing(schedule.priority, rank);
+    }
+    if (schedules.isEmpty) {
+      return const Err<int>(
+        ValidationFailure('none of those elements is pending or memorized'),
+      );
+    }
+
+    await _learning.saveSchedules(schedules);
+    await _journal.appendAll(entries);
+    for (final changeRecord in changes) {
+      await _appendSchedulerPriority(
+        command,
+        changeRecord.before,
+        changeRecord.after,
+        metadata: <String, Object?>{
+          'mode': command.mode.name,
+          'low': low,
+          'high': high,
+          'change': change,
+        },
+      );
+    }
+    await _learning.appendActivity(
+      ActivityRecord(
+        id: _ids.newId(),
+        operationId: command.operationId.value,
+        kind: kPrioritySpreadKind,
+        atUtc: now,
+        metadata: <String, Object?>{
+          'count': schedules.length,
+          'mode': command.mode.name,
+          'low': low,
+          'high': high,
+          'change': change,
+        },
+      ),
+    );
+    return Ok<int>(schedules.length);
+  });
+
+  Future<int> _sm20Status(ElementRef ref, ElementSchedule? schedule) async {
+    if (schedule == null || schedule.lifecycle == ElementLifecycle.deleted) {
+      return Sm20ElementStatus.deleted.index;
+    }
+    if (ref.type.isTopic) {
+      return (await _learning.findTopic(ref))?.status.index ??
+          Sm20ElementStatus.deleted.index;
+    }
+    if (schedule.lifecycle != ElementLifecycle.active) {
+      return Sm20ElementStatus.dismissed.index;
+    }
+    final CardState? card = await _learning.findCardState(ref.id);
+    if (card == null) return Sm20ElementStatus.deleted.index;
+    return card.memory.reps == 0
+        ? Sm20ElementStatus.pending.index
+        : Sm20ElementStatus.memorized.index;
+  }
+
+  double _increaseTarget(
+    double current,
+    double change,
+    double low,
+    double high,
+  ) {
+    var value = (current * change / 100).clamp(low, high).toDouble();
+    if (value > current) value = current;
+    return value > high ? high : value;
+  }
+
+  double _decreaseTarget(
+    double current,
+    double change,
+    double low,
+    double high,
+  ) {
+    var value = (current * change / 100).clamp(low, high).toDouble();
+    if (value < current) value = current;
+    return value > high ? high : value;
+  }
 
   Future<Result<ElementSchedule>> _apply(
     AppCommand command,
@@ -363,12 +508,6 @@ final class PriorityHandlers {
     ElementSchedule after, {
     Map<String, Object?>? metadata,
   }) async {
-    final ScheduleAdjustmentSet adjustments = ScheduleAdjustmentSet(
-      await _learning.listAdjustmentsFor(before.ref),
-    );
-    final ScheduleAdjustmentSnapshot snapshot = adjustments.snapshotFor(
-      <ElementRef>{before.ref},
-    );
     final calendar = await _context.calendar();
     final CardState? card = before.ref.type == ElementType.card
         ? await _learning.findCardState(before.ref.id)
@@ -387,8 +526,6 @@ final class PriorityHandlers {
       stateAfter: _scheduleJson(after),
       algorithmicDueBefore: algorithmicDue,
       algorithmicDueAfter: algorithmicDue,
-      adjustmentsBefore: snapshot,
-      adjustmentsAfter: snapshot,
       metadata: metadata,
     );
   }

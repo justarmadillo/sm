@@ -1,17 +1,4 @@
-/// Preview, apply, and exact undo for one Mercy batch.
-///
-/// Mercy is the recovery tool, not the daily valve, and the difference is
-/// enforced here: nothing is written until the user has seen the exact
-/// calendar being proposed and confirmed it, and the confirmation is checked
-/// against live revisions before a single row moves. A preview computed
-/// against a collection that has since changed is refused rather than applied
-/// approximately, because a bulk operation that silently redistributes the
-/// wrong material is worse than one that asks again.
-///
-/// The whole batch is presentation state. Canonical FSRS memory, topic
-/// intervals, and last-review instants are read to build the audit envelope
-/// and are never written, so a Mercy batch can be reversed exactly and can
-/// never contaminate a future parameter optimizer.
+/// Canonical preview, apply, and undo transactions for SM20 Mercy.
 library;
 
 import 'dart:math' as math;
@@ -23,66 +10,51 @@ import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/mercy.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/queue_policy.dart';
-import '../../domain/scheduling/schedule_adjustment.dart';
+import '../../domain/scheduling/revlog.dart';
+import '../../domain/scheduling/scheduler_event.dart';
+import '../../domain/scheduling/sm20_collection_state.dart';
+import '../../domain/scheduling/sm20_numeric.dart';
 import '../../domain/scheduling/study_day.dart';
+import '../../domain/scheduling/topic_scheduler.dart';
 import '../../domain/settings/app_settings.dart';
 import '../ports/repositories.dart';
 import '../ports/transaction_runner.dart';
 import '../queue/queue_commands.dart';
 import '../queue/queue_handlers.dart';
 import 'mercy_workflow.dart';
-import 'schedule_adjustment_service.dart';
 import 'scheduling_context.dart';
+import 'scheduling_journal.dart';
 
-/// Activity kinds, kept distinct so history can tell the three steps apart.
 const String kMercyPreviewedKind = 'mercy.previewed';
 const String kMercyAppliedKind = 'mercy.applied';
 const String kMercyUndoneKind = 'mercy.undone';
 
-/// `[Product decision]` Provisional criteria weights.
-///
-/// Priority remains dominant — the band width is what stops any criterion
-/// from reordering the collection globally — and within a band the most
-/// overdue work is placed first. SuperMemo's real multi-criteria formula is
-/// undocumented, so these are visible, versioned, and deliberately few.
-const double kMercyPriorityBandWidth = 0.10;
-const double kMercyLatenessWeight = 1.0;
-const double kMercyStableRandomWeight = 0.25;
-
-/// Handles the Mercy conversation end to end.
+/// Handles the app's durable confirmation wrapper around SM20 Mercy.
 final class MercyHandlers {
   MercyHandlers({
     required LearningRepository learning,
     required TransferRepository transfer,
     required TransactionRunner transactions,
     required SchedulingContext context,
-    required ScheduleAdjustmentService adjustments,
     required QueueHandlers queue,
     required IdGenerator ids,
   }) : _learning = learning,
        _transfer = transfer,
        _transactions = transactions,
        _context = context,
-       _adjustments = adjustments,
        _queue = queue,
-       _ids = ids;
+       _ids = ids,
+       _journal = SchedulingJournal(learning: learning, ids: ids);
 
   final LearningRepository _learning;
   final TransferRepository _transfer;
   final TransactionRunner _transactions;
   final SchedulingContext _context;
-  final ScheduleAdjustmentService _adjustments;
   final QueueHandlers _queue;
   final IdGenerator _ids;
+  final SchedulingJournal _journal;
 
-  static const MercyWorkflow _workflow = MercyWorkflow();
-
-  /// Computes and durably records a proposal. Writes no adjustment.
-  ///
-  /// The preview row is persisted rather than held in memory because the user
-  /// may close the app between seeing a plan and accepting it, and an apply
-  /// that reconstructed the plan from scratch would silently be a different
-  /// plan.
+  /// Computes and stores the exact assignment list. No element is changed.
   Future<Result<StoredMercyBatch>> preview(PreviewMercy command) async {
     try {
       return await _transactions.run<Result<StoredMercyBatch>>(() async {
@@ -90,112 +62,179 @@ final class MercyHandlers {
             .findMercyBatchByPreviewOperation(command.operationId.value);
         if (replayed != null) return Ok<StoredMercyBatch>(replayed);
 
-        final AppSettings settings = await _context.settings();
-        final StudyDayCalendar calendar = await _context.calendar();
-        final PriorityScale scale = await _context.priorityScale();
-        final int horizon = math.max(
-          1,
-          command.horizonDays ?? settings.postpone.mercyHorizonDays,
-        );
-        final int dailyCap = math.max(
-          1,
-          command.dailyCap ?? settings.postpone.mercyDailyCap,
-        );
+        final AppSettings app = await _context.settings();
+        final MercySettings settings = app.mercy;
+        // A collection that has never customized its matrix falls back to
+        // SM20's own starting table rather than refusing to run.
+        final Sm20MercyMatrix matrix = Sm20MercyMatrix.fromSettings(settings);
 
-        final List<QueueCandidate> candidates = await _queue.loadCandidates(
+        final StudyDayCalendar calendar = await _context.calendar();
+        final PriorityScale priorityScale = await _context.priorityScale();
+        final Sm20CollectionState runtime = await _context.runtimeState();
+        final StudyDay learningStart = runtime.learningStartDay ?? command.day;
+        final List<QueueCandidate> loaded = await _queue.loadCandidates(
           command.day,
         );
-        if (candidates.isEmpty) {
+        final Map<ElementRef, QueueCandidate> byRef =
+            <ElementRef, QueueCandidate>{
+              for (final QueueCandidate value in loaded) value.ref: value,
+            };
+
+        final bool includeFuture =
+            command.includeFuture ?? settings.includeFuture;
+        var reschedulingDays =
+            command.reschedulingDays ?? settings.reschedulingDays;
+        var gatheringDays = command.gatheringDays ?? settings.gatheringDays;
+        final Sm20ScheduledCounts scheduledCounts = Sm20ScheduledCounts(
+          <StudyDay, int>{
+            for (final QueueCandidate value in loaded)
+              _scheduledDay(value, calendar): 0,
+          }..updateAll(
+            (StudyDay day, int _) => loaded
+                .where(
+                  (QueueCandidate value) =>
+                      _isScheduled(value) &&
+                      _scheduledDay(value, calendar) == day,
+                )
+                .length,
+          ),
+        );
+        final Sm20MercyCapacity capacity =
+            !command.solveFromDailyCap || command.elementsPerDay == null
+            ? const Sm20MercyCapacityPlanner().afterHorizonEdit(
+                today: command.day,
+                collectionLearningStartDay: learningStart,
+                reschedulingDays: reschedulingDays,
+                gatheringDays: gatheringDays,
+                includeFuture: includeFuture,
+                scheduledCounts: scheduledCounts,
+                subsetCandidateCount: command.subset?.length,
+              )
+            : const Sm20MercyCapacityPlanner().afterDailyCapEdit(
+                today: command.day,
+                collectionLearningStartDay: learningStart,
+                elementsPerDay: command.elementsPerDay!,
+                gatheringDays: gatheringDays,
+                includeFuture: includeFuture,
+                scheduledCounts: scheduledCounts,
+                subsetCandidateCount: command.subset?.length,
+              );
+        if (capacity.reschedulingDays < 1) {
           return const Err<StoredMercyBatch>(
             ValidationFailure('there is nothing for Mercy to redistribute'),
           );
         }
+        reschedulingDays = capacity.reschedulingDays;
+        gatheringDays = capacity.gatheringDays;
 
-        final List<MercyCandidate> mercyCandidates = <MercyCandidate>[];
-        for (final QueueCandidate candidate in candidates) {
-          mercyCandidates.add(
-            await _toMercyCandidate(
-              candidate,
-              calendar: calendar,
-              scale: scale,
-              settings: settings,
-              today: command.day,
-            ),
-          );
+        final Map<ElementRef, String> canonical = <ElementRef, String>{};
+        final List<Sm20MercyCandidate> candidates = <Sm20MercyCandidate>[];
+        if (command.subset case final List<ElementRef> subset) {
+          for (final ElementRef ref in subset) {
+            final QueueCandidate? value = byRef[ref];
+            if (value == null) {
+              candidates.add(
+                Sm20MercyCandidate(
+                  ref: ref,
+                  priority: PriorityRank.middle,
+                  scheduledDay: command.day,
+                  lastReviewDay: null,
+                  repetitionCount: 0,
+                  lapseCount: 0,
+                  isScheduled: false,
+                  isDeleted: true,
+                ),
+              );
+              continue;
+            }
+            candidates.add(
+              _candidate(value, calendar: calendar, canonical: canonical),
+            );
+          }
+        } else {
+          for (final QueueCandidate value in loaded) {
+            candidates.add(
+              _candidate(value, calendar: calendar, canonical: canonical),
+            );
+          }
         }
 
-        final ScheduleAdjustmentSet adjustments = ScheduleAdjustmentSet(
-          await _learning.listActiveAdjustments(
-            elements: <ElementRef>{
-              for (final MercyCandidate candidate in mercyCandidates)
-                candidate.ref,
-            },
-          ),
-        );
-
-        final MercyPreviewRequest request = MercyPreviewRequest(
+        final Sm20Prng prng = Sm20Prng(seed: runtime.prngSeed);
+        final Sm20MercyPlan plan = const Sm20MercyEngine().plan(
+          candidates: candidates,
+          gatherMode: command.subset == null
+              ? Sm20MercyGatherMode.collection
+              : Sm20MercyGatherMode.subset,
           today: command.day,
-          scope: command.branchRootId == null
-              ? const MercyCollectionScope()
-              : MercyBranchScope(command.branchRootId!),
-          collectingPeriod: _collectingPeriod(command, horizon: horizon),
-          includeFutureRepetitions: command.includeFutureRepetitions,
-          destinationPolicy: MercyDailyCapacity(
-            cardsPerDay: dailyCap,
-            topicsPerDay: math.min(dailyCap, settings.queue.maxTopics),
-          ),
-          destinationWindow: _destinationWindow(
-            today: command.day,
-            horizon: horizon,
-            calendar: calendar,
-            candidates: mercyCandidates,
-          ),
-          criteriaPolicy: MercyCriteriaPolicy(
-            priorityBandWidth: kMercyPriorityBandWidth,
-            deterministicSeed:
-                '${(await _transfer.currentIdentity()).datasetId}'
-                '|${command.day}',
-            repetitionLatenessWeight: kMercyLatenessWeight,
-            stableRandomWeight: kMercyStableRandomWeight,
-          ),
-          protectionRules: MercyProtectionRules(
-            includeProtected: command.includeProtected,
-            overrideManualLater: command.overrideManualLater,
-          ),
-          candidates: mercyCandidates,
-          adjustments: adjustments,
-          priorMercyBatchCountInPeriod: await _learning
-              .countAppliedMercyBatchesSince(
-                command.day.addDays(-horizon.clamp(1, 90)),
-              ),
+          collectionLearningStartDay: learningStart,
+          gatheringDays: gatheringDays,
+          reschedulingDays: reschedulingDays,
+          mode: command.mode ?? settings.mode,
+          matrix: matrix,
+          weights: Sm20MercyWeights.fromSettings(settings),
+          priorityScale: priorityScale,
+          prng: prng,
         );
-
-        final MercyPreview preview = MercyPlanner(
-          calendar: calendar,
-        ).preview(request);
+        final MercyPreview preview = MercyPreview.fromPlan(
+          plan: plan,
+          today: command.day,
+          collectionLearningStartDay: learningStart,
+          gatheringDays: gatheringDays,
+          mode: command.mode ?? settings.mode,
+          gatherMode: command.subset == null
+              ? Sm20MercyGatherMode.collection
+              : Sm20MercyGatherMode.subset,
+          prngSeedBefore: runtime.prngSeed,
+          canonicalStates: canonical,
+        );
         final StoredMercyBatch batch = StoredMercyBatch(
           batchId: _ids.newId(),
           previewOperationId: command.operationId.value,
-          policyVersion: preview.policyVersion,
+          policyVersion: kSm20MercyPolicyVersion,
           previewJson: preview.toJson(),
           createdAtUtc: command.timestampUtc,
         );
         await _learning.saveMercyBatch(batch);
-        await _learning.appendActivity(
-          ActivityRecord(
+        await _context.saveRuntimeState(
+          runtime.copyWith(
+            prngSeed: plan.prngState.seed,
+            learningStartDay: runtime.learningStartDay ?? command.day,
+          ),
+        );
+        await _learning.appendSchedulerEvent(
+          SchedulerEvent(
             id: _ids.newId(),
             operationId: command.operationId.value,
-            kind: kMercyPreviewedKind,
-            atUtc: command.timestampUtc,
+            eventType: SchedulerEventType.mercyPreviewed,
+            occurredAtUtc: command.timestampUtc,
+            studyDay: command.day,
+            policyVersion: kSm20MercyPolicyVersion,
+            batchId: batch.batchId,
             metadata: <String, Object?>{
-              'batch_id': batch.batchId,
               'selected': preview.selectedCount,
-              'input_candidates': preview.inputCandidateCount,
+              'gathered': preview.gatheredCount,
+              'rescheduling_days': preview.reschedulingDays,
+              'gathering_days': preview.gatheringDays,
+              'mode': preview.mode.index,
+              'random_draws': preview.randomDraws,
             },
           ),
         );
+        await _activity(
+          command.operationId.value,
+          kMercyPreviewedKind,
+          command.timestampUtc,
+          <String, Object?>{
+            'batch_id': batch.batchId,
+            'selected': preview.selectedCount,
+            'gathered': preview.gatheredCount,
+          },
+        );
+        await _transfer.advanceGeneration();
         return Ok<StoredMercyBatch>(batch);
       });
+    } on RangeError catch (error) {
+      return Err<StoredMercyBatch>(ValidationFailure('$error'));
     } on ArgumentError catch (error) {
       return Err<StoredMercyBatch>(ValidationFailure('$error'));
     } on StateError catch (error) {
@@ -211,8 +250,7 @@ final class MercyHandlers {
     }
   }
 
-  /// Commits a previewed batch, or refuses it as stale. Returns the number of
-  /// elements moved.
+  /// Applies every assignment through the canonical low-level rescheduler.
   Future<Result<int>> apply(ApplyMercy command) async {
     try {
       return await _transactions.run<Result<int>>(() async {
@@ -221,7 +259,7 @@ final class MercyHandlers {
           kMercyAppliedKind,
         )) {
           return const Err<int>(
-            ConflictFailure('that Mercy batch has already been applied'),
+            ConflictFailure('that Mercy operation was already applied'),
           );
         }
         final StoredMercyBatch? stored = await _learning.findMercyBatch(
@@ -238,77 +276,257 @@ final class MercyHandlers {
         }
         if (stored.appliedAtUtc != null) {
           return const Err<int>(
-            ConflictFailure('that Mercy batch has already been applied'),
+            ConflictFailure('that Mercy batch was already applied'),
+          );
+        }
+        final MercyPreview preview = stored.preview;
+        if (preview.today != command.day) {
+          return const Err<int>(
+            ConflictFailure('that Mercy preview belongs to another study day'),
           );
         }
 
-        final AppSettings settings = await _context.settings();
-        final StudyDayCalendar calendar = await _context.calendar();
-        final PriorityScale scale = await _context.priorityScale();
-        final List<QueueCandidate> candidates = await _queue.loadCandidates(
-          command.day,
-        );
-        final List<MercyCandidate> current = <MercyCandidate>[];
-        for (final QueueCandidate candidate in candidates) {
-          current.add(
-            await _toMercyCandidate(
-              candidate,
-              calendar: calendar,
-              scale: scale,
-              settings: settings,
-              today: command.day,
-            ),
+        final Map<ElementRef, TopicState> topics = await _learning
+            .findTopics(<ElementRef>[
+              for (final MercyPreviewItem item in preview.items)
+                if (item.ref.type.isTopic) item.ref,
+            ]);
+        final Map<String, CardState> cards = await _learning
+            .findCardStates(<String>[
+              for (final MercyPreviewItem item in preview.items)
+                if (item.ref.type == ElementType.card) item.ref.id,
+            ]);
+        final List<ElementRef> changed = <ElementRef>[];
+        for (final MercyPreviewItem item in preview.items) {
+          String? current;
+          if (item.ref.type == ElementType.card) {
+            final CardState? value = cards[item.ref.id];
+            if (value != null) current = encodeMercyCardState(value);
+          } else {
+            final TopicState? value = topics[item.ref];
+            if (value != null) current = encodeMercyTopicState(value);
+          }
+          if (current != item.canonicalBefore) changed.add(item.ref);
+        }
+        if (changed.isNotEmpty) {
+          throw StaleMercyPreview(
+            'elements changed after the Mercy preview',
+            changed: changed,
           );
         }
-        final ScheduleAdjustmentSet active = ScheduleAdjustmentSet(
-          await _learning.listActiveAdjustments(
-            elements: <ElementRef>{
-              for (final MercyCandidate candidate in current) candidate.ref,
+
+        final StudyDayCalendar calendar = await _context.calendar();
+        final PriorityScale scale = await _context.priorityScale();
+        final TopicScheduler topicScheduler = await _context.topicScheduler();
+        final CardScheduler cardScheduler = await _context.cardScheduler();
+        final String batchEventId = _ids.newId();
+        final List<SchedulerEvent> events = <SchedulerEvent>[];
+        final List<RevlogEntry> revlog = <RevlogEntry>[];
+        final List<MercyAppliedItemSnapshot> snapshots =
+            <MercyAppliedItemSnapshot>[];
+
+        for (final MercyPreviewItem item in preview.items) {
+          final String itemOperation =
+              '${command.operationId.value}:item:${item.ref.type.name}:${item.ref.id}';
+          final String eventId = _ids.newId();
+          if (item.ref.type == ElementType.card) {
+            final CardState before = cards[item.ref.id]!;
+            final CardState moved = cardScheduler.rescheduleElement(
+              before,
+              targetDay: item.toDay,
+              today: command.day,
+            );
+            final CardState after = moved.copyWith(
+              schedule: moved.schedule.copyWith(
+                updatedAtUtc: command.timestampUtc,
+              ),
+            );
+            if (!await _learning.compareAndSwapCardState(
+              expected: before,
+              replacement: after,
+            )) {
+              throw StaleMercyPreview('card changed during Mercy apply');
+            }
+            final String beforeJson = encodeMercyCardState(before);
+            final String afterJson = encodeMercyCardState(after);
+            snapshots.add(
+              MercyAppliedItemSnapshot(
+                ref: item.ref,
+                beforeState: beforeJson,
+                afterState: afterJson,
+                fromDay: item.fromDay,
+                toDay: item.toDay,
+                appliedEventId: eventId,
+              ),
+            );
+            events.add(
+              _itemEvent(
+                id: eventId,
+                operationId: itemOperation,
+                type: SchedulerEventType.mercyApplied,
+                command: command,
+                stored: stored,
+                ref: item.ref,
+                schedulerName: after.memory.schedulerName,
+                schedulerVersion: after.memory.schedulerVersion,
+                beforeState: beforeJson,
+                afterState: afterJson,
+                dueBefore: SchedulerEvent.encodeUtcDue(before.memory.dueAtUtc),
+                dueAfter: SchedulerEvent.encodeUtcDue(after.memory.dueAtUtc),
+                item: item,
+              ),
+            );
+            revlog.add(
+              _journal.build(
+                operationId: itemOperation,
+                ref: item.ref,
+                eventType: RevlogEventType.mercy,
+                atUtc: command.timestampUtc,
+                before: _journal.cardSnapshot(
+                  before,
+                  pressure: scale.pressureOf(before.schedule.priority),
+                ),
+                after: _journal.cardSnapshot(
+                  after,
+                  pressure: scale.pressureOf(after.schedule.priority),
+                ),
+                scheduledDays: after.memory.scheduledDays,
+                postponeCount: after.memory.postponeCount,
+                schedulerVersion: after.memory.schedulerVersion,
+                parametersVersion: after.memory.parametersVersion,
+                metadata: _itemMetadata(item),
+              ),
+            );
+          } else {
+            final TopicState before = topics[item.ref]!;
+            final TopicTransition moved = topicScheduler.rescheduleElement(
+              before,
+              targetDay: item.toDay,
+              today: command.day,
+            );
+            final TopicState after = moved.state.copyWith(
+              schedule: moved.state.schedule.copyWith(
+                updatedAtUtc: command.timestampUtc,
+              ),
+            );
+            if (!await _learning.compareAndSwapTopic(
+              expected: before,
+              replacement: after,
+            )) {
+              throw StaleMercyPreview('topic changed during Mercy apply');
+            }
+            final String beforeJson = encodeMercyTopicState(before);
+            final String afterJson = encodeMercyTopicState(after);
+            snapshots.add(
+              MercyAppliedItemSnapshot(
+                ref: item.ref,
+                beforeState: beforeJson,
+                afterState: afterJson,
+                fromDay: item.fromDay,
+                toDay: item.toDay,
+                appliedEventId: eventId,
+              ),
+            );
+            events.add(
+              _itemEvent(
+                id: eventId,
+                operationId: itemOperation,
+                type: SchedulerEventType.mercyApplied,
+                command: command,
+                stored: stored,
+                ref: item.ref,
+                schedulerName: after.schedulerName,
+                schedulerVersion: after.schedulerVersion,
+                beforeState: beforeJson,
+                afterState: afterJson,
+                dueBefore: SchedulerEvent.encodeStudyDayDue(
+                  before.schedule.algorithmicDueDay,
+                ),
+                dueAfter: SchedulerEvent.encodeStudyDayDue(
+                  after.schedule.algorithmicDueDay,
+                ),
+                item: item,
+              ),
+            );
+            revlog.add(
+              _journal.build(
+                operationId: itemOperation,
+                ref: item.ref,
+                eventType: RevlogEventType.mercy,
+                atUtc: command.timestampUtc,
+                before: _journal.topicSnapshot(
+                  before,
+                  calendar: calendar,
+                  pressure: scale.pressureOf(before.schedule.priority),
+                ),
+                after: _journal.topicSnapshot(
+                  after,
+                  calendar: calendar,
+                  pressure: scale.pressureOf(after.schedule.priority),
+                ),
+                scheduledDays: after.intervalDays,
+                postponeCount: after.totalPostponementCount,
+                schedulerVersion: after.schedulerVersion,
+                metadata: _itemMetadata(item),
+              ),
+            );
+          }
+        }
+
+        events.insert(
+          0,
+          SchedulerEvent(
+            id: batchEventId,
+            operationId: command.operationId.value,
+            eventType: SchedulerEventType.mercyApplied,
+            occurredAtUtc: command.timestampUtc,
+            studyDay: command.day,
+            policyVersion: stored.policyVersion,
+            batchId: stored.batchId,
+            metadata: <String, Object?>{
+              'item_count': snapshots.length,
+              'rescheduling_days': preview.reschedulingDays,
+              'gathering_days': preview.gatheringDays,
+              'mode': preview.mode.index,
             },
           ),
         );
+        await _learning.appendSchedulerEvents(events);
+        await _journal.appendAll(revlog);
 
-        final MercyApplyPlan plan = _workflow.planApply(
-          preview: stored.preview,
-          currentCandidates: current,
-          currentAdjustments: active,
+        final Sm20CollectionState runtime = await _context.runtimeState();
+        await _context.saveRuntimeState(
+          _runtimeAfterMercy(runtime, preview.items, today: command.day),
+        );
+        final MercyAppliedBatchSnapshot undo = MercyAppliedBatchSnapshot(
           batchId: stored.batchId,
-          operationId: command.operationId.value,
-          occurredAtUtc: command.timestampUtc,
+          appliedEventId: batchEventId,
+          policyVersion: stored.policyVersion,
           studyDay: command.day,
+          items: List<MercyAppliedItemSnapshot>.unmodifiable(snapshots),
         );
-
-        await _learning.saveAdjustments(
-          plan.adjustmentMutation.after.adjustments.toList(growable: false),
-        );
-        await _learning.appendSchedulerEvents(plan.auditEvents);
         await _learning.saveMercyBatch(
           stored.copyWith(
             applyOperationId: command.operationId.value,
-            appliedSnapshotJson: encodeMercyAppliedBatch(plan.undoSnapshot),
+            appliedSnapshotJson: encodeMercyAppliedBatch(undo),
             appliedAtUtc: command.timestampUtc,
           ),
         );
-        await _learning.appendActivity(
-          ActivityRecord(
-            id: _ids.newId(),
-            operationId: command.operationId.value,
-            kind: kMercyAppliedKind,
-            atUtc: command.timestampUtc,
-            metadata: <String, Object?>{
-              'batch_id': stored.batchId,
-              'moved': plan.preview.selectedCount,
-            },
-          ),
+        await _activity(
+          command.operationId.value,
+          kMercyAppliedKind,
+          command.timestampUtc,
+          <String, Object?>{
+            'batch_id': stored.batchId,
+            'moved': snapshots.length,
+          },
         );
         await _transfer.advanceGeneration();
-        return Ok<int>(plan.preview.selectedCount);
+        return Ok<int>(snapshots.length);
       });
     } on StaleMercyPreview catch (error) {
       return Err<int>(
-        ConflictFailure(
-          '${error.message}. Preview it again before applying.',
-        ),
+        ConflictFailure('${error.message}. Preview Mercy again.'),
       );
     } on ArgumentError catch (error) {
       return Err<int>(ValidationFailure('$error'));
@@ -325,7 +543,7 @@ final class MercyHandlers {
     }
   }
 
-  /// Restores exactly the adjustment set that preceded an applied batch.
+  /// Restores the exact canonical states replaced by the most recent batch.
   Future<Result<int>> undo(UndoMercy command) async {
     try {
       return await _transactions.run<Result<int>>(() async {
@@ -334,7 +552,7 @@ final class MercyHandlers {
           kMercyUndoneKind,
         )) {
           return const Err<int>(
-            ConflictFailure('that undo has already been recorded'),
+            ConflictFailure('that undo was already applied'),
           );
         }
         final StoredMercyBatch? stored = await _learning.findMercyBatch(
@@ -354,42 +572,224 @@ final class MercyHandlers {
             ConflictFailure('that Mercy batch was already undone'),
           );
         }
-
         final MercyAppliedBatchSnapshot applied = stored.appliedSnapshot;
-        final ScheduleAdjustmentSet active = ScheduleAdjustmentSet(
-          await _learning.listActiveAdjustments(
-            elements: applied.appliedAdjustments.elements.toSet(),
+        final Map<ElementRef, TopicState> topics = await _learning
+            .findTopics(<ElementRef>[
+              for (final MercyAppliedItemSnapshot item in applied.items)
+                if (item.ref.type.isTopic) item.ref,
+            ]);
+        final Map<String, CardState> cards = await _learning
+            .findCardStates(<String>[
+              for (final MercyAppliedItemSnapshot item in applied.items)
+                if (item.ref.type == ElementType.card) item.ref.id,
+            ]);
+        final List<ElementRef> changed = <ElementRef>[];
+        for (final MercyAppliedItemSnapshot item in applied.items) {
+          String? current;
+          if (item.ref.type == ElementType.card) {
+            final CardState? value = cards[item.ref.id];
+            if (value != null) current = encodeMercyCardState(value);
+          } else {
+            final TopicState? value = topics[item.ref];
+            if (value != null) current = encodeMercyTopicState(value);
+          }
+          if (current != item.afterState) changed.add(item.ref);
+        }
+        if (changed.isNotEmpty) {
+          throw StaleMercyPreview(
+            'elements changed after Mercy was applied',
+            changed: changed,
+          );
+        }
+
+        final StudyDayCalendar calendar = await _context.calendar();
+        final PriorityScale scale = await _context.priorityScale();
+        final List<SchedulerEvent> events = <SchedulerEvent>[];
+        final List<RevlogEntry> revlog = <RevlogEntry>[];
+        for (final MercyAppliedItemSnapshot item in applied.items) {
+          final String itemOperation =
+              '${command.operationId.value}:item:${item.ref.type.name}:${item.ref.id}';
+          if (item.ref.type == ElementType.card) {
+            final CardState current = cards[item.ref.id]!;
+            final CardState prior = decodeMercyCardState(item.beforeState);
+            final CardState restored = CardState(
+              schedule: prior.schedule.copyWith(
+                revision: current.schedule.revision + 1,
+                updatedAtUtc: command.timestampUtc,
+              ),
+              memory: _memoryWithRevision(
+                prior.memory,
+                current.memory.revision + 1,
+              ),
+            );
+            if (!await _learning.compareAndSwapCardState(
+              expected: current,
+              replacement: restored,
+            )) {
+              throw StaleMercyPreview('card changed during Mercy undo');
+            }
+            final String restoredJson = encodeMercyCardState(restored);
+            events.add(
+              SchedulerEvent(
+                id: _ids.newId(),
+                operationId: itemOperation,
+                element: item.ref,
+                eventType: SchedulerEventType.mercyUndone,
+                occurredAtUtc: command.timestampUtc,
+                studyDay: command.day,
+                schedulerName: restored.memory.schedulerName,
+                schedulerVersion: restored.memory.schedulerVersion,
+                policyVersion: applied.policyVersion,
+                stateBefore: item.afterState,
+                stateAfter: restoredJson,
+                algorithmicDueBefore: SchedulerEvent.encodeUtcDue(
+                  current.memory.dueAtUtc,
+                ),
+                algorithmicDueAfter: SchedulerEvent.encodeUtcDue(
+                  restored.memory.dueAtUtc,
+                ),
+                undoesEventId: item.appliedEventId,
+                batchId: applied.batchId,
+              ),
+            );
+            revlog.add(
+              _journal.build(
+                operationId: itemOperation,
+                ref: item.ref,
+                eventType: RevlogEventType.undo,
+                atUtc: command.timestampUtc,
+                before: _journal.cardSnapshot(
+                  current,
+                  pressure: scale.pressureOf(current.schedule.priority),
+                ),
+                after: _journal.cardSnapshot(
+                  restored,
+                  pressure: scale.pressureOf(restored.schedule.priority),
+                ),
+                scheduledDays: restored.memory.scheduledDays,
+                postponeCount: restored.memory.postponeCount,
+                schedulerVersion: restored.memory.schedulerVersion,
+                parametersVersion: restored.memory.parametersVersion,
+                metadata: <String, Object?>{
+                  'undoes_mercy_batch': applied.batchId,
+                },
+              ),
+            );
+          } else {
+            final TopicState current = topics[item.ref]!;
+            final TopicState prior = decodeMercyTopicState(item.beforeState);
+            final TopicState restored = prior.copyWith(
+              revision: current.revision + 1,
+              schedule: prior.schedule.copyWith(
+                revision: current.schedule.revision + 1,
+                updatedAtUtc: command.timestampUtc,
+              ),
+            );
+            if (!await _learning.compareAndSwapTopic(
+              expected: current,
+              replacement: restored,
+            )) {
+              throw StaleMercyPreview('topic changed during Mercy undo');
+            }
+            final String restoredJson = encodeMercyTopicState(restored);
+            events.add(
+              SchedulerEvent(
+                id: _ids.newId(),
+                operationId: itemOperation,
+                element: item.ref,
+                eventType: SchedulerEventType.mercyUndone,
+                occurredAtUtc: command.timestampUtc,
+                studyDay: command.day,
+                schedulerName: restored.schedulerName,
+                schedulerVersion: restored.schedulerVersion,
+                policyVersion: applied.policyVersion,
+                stateBefore: item.afterState,
+                stateAfter: restoredJson,
+                algorithmicDueBefore: SchedulerEvent.encodeStudyDayDue(
+                  current.schedule.algorithmicDueDay,
+                ),
+                algorithmicDueAfter: SchedulerEvent.encodeStudyDayDue(
+                  restored.schedule.algorithmicDueDay,
+                ),
+                undoesEventId: item.appliedEventId,
+                batchId: applied.batchId,
+              ),
+            );
+            revlog.add(
+              _journal.build(
+                operationId: itemOperation,
+                ref: item.ref,
+                eventType: RevlogEventType.undo,
+                atUtc: command.timestampUtc,
+                before: _journal.topicSnapshot(
+                  current,
+                  calendar: calendar,
+                  pressure: scale.pressureOf(current.schedule.priority),
+                ),
+                after: _journal.topicSnapshot(
+                  restored,
+                  calendar: calendar,
+                  pressure: scale.pressureOf(restored.schedule.priority),
+                ),
+                scheduledDays: restored.intervalDays,
+                postponeCount: restored.totalPostponementCount,
+                schedulerVersion: restored.schedulerVersion,
+                metadata: <String, Object?>{
+                  'undoes_mercy_batch': applied.batchId,
+                },
+              ),
+            );
+          }
+        }
+        events.insert(
+          0,
+          SchedulerEvent(
+            id: _ids.newId(),
+            operationId: command.operationId.value,
+            eventType: SchedulerEventType.mercyUndone,
+            occurredAtUtc: command.timestampUtc,
+            studyDay: command.day,
+            policyVersion: applied.policyVersion,
+            undoesEventId: applied.appliedEventId,
+            batchId: applied.batchId,
+            metadata: <String, Object?>{'item_count': applied.items.length},
           ),
         );
-        final MercyUndoPlan plan = _workflow.planUndo(
-          applied: applied,
-          currentAdjustments: active,
-          operationId: command.operationId.value,
-          occurredAtUtc: command.timestampUtc,
-          studyDay: command.day,
-        );
+        await _learning.appendSchedulerEvents(events);
+        await _journal.appendAll(revlog);
 
-        await _learning.saveAdjustments(
-          plan.adjustmentMutation.after.adjustments.toList(growable: false),
+        final Sm20CollectionState runtime = await _context.runtimeState();
+        final List<MercyPreviewItem> original = <MercyPreviewItem>[
+          for (var index = 0; index < applied.items.length; index += 1)
+            MercyPreviewItem(
+              ref: applied.items[index].ref,
+              fromDay: applied.items[index].toDay,
+              toDay: applied.items[index].fromDay,
+              score: 0,
+              sourceIndex: index,
+              orderedIndex: index,
+              scheduleRevision: 0,
+              schedulerRevision: 0,
+              canonicalBefore: '',
+            ),
+        ];
+        await _context.saveRuntimeState(
+          _runtimeAfterMercy(runtime, original, today: command.day),
         );
-        await _learning.appendSchedulerEvents(plan.auditEvents);
         await _learning.saveMercyBatch(
           stored.copyWith(
             undoOperationId: command.operationId.value,
             undoneAtUtc: command.timestampUtc,
           ),
         );
-        await _learning.appendActivity(
-          ActivityRecord(
-            id: _ids.newId(),
-            operationId: command.operationId.value,
-            kind: kMercyUndoneKind,
-            atUtc: command.timestampUtc,
-            metadata: <String, Object?>{
-              'batch_id': stored.batchId,
-              'restored': applied.items.length,
-            },
-          ),
+        await _activity(
+          command.operationId.value,
+          kMercyUndoneKind,
+          command.timestampUtc,
+          <String, Object?>{
+            'batch_id': applied.batchId,
+            'restored': applied.items.length,
+          },
         );
         await _transfer.advanceGeneration();
         return Ok<int>(applied.items.length);
@@ -411,110 +811,181 @@ final class MercyHandlers {
     }
   }
 
-  /// The batch that could still be undone, if any.
   Future<StoredMercyBatch?> lastAppliedBatch() =>
       _learning.findLastAppliedMercyBatch();
 
-  MercyCollectingPeriod _collectingPeriod(
-    PreviewMercy command, {
-    required int horizon,
-  }) {
-    // Collecting backwards from today by default reaches every outstanding
-    // repetition; including future work extends the window forward so a
-    // repetition can also be pulled earlier, which a lower bound could never
-    // express.
-    final int back = command.collectingPeriodDays ?? 3650;
-    return MercyCollectingPeriod(
-      start: command.day.addDays(-math.max(0, back)),
-      end: command.includeFutureRepetitions
-          ? command.day.addDays(horizon)
-          : command.day,
-    );
-  }
-
-  MercyDestinationWindow _destinationWindow({
-    required StudyDay today,
-    required int horizon,
+  Sm20MercyCandidate _candidate(
+    QueueCandidate value, {
     required StudyDayCalendar calendar,
-    required List<MercyCandidate> candidates,
+    required Map<ElementRef, String> canonical,
   }) {
-    final Map<int, int> cardLoad = <int, int>{};
-    final Map<int, int> topicLoad = <int, int>{};
-    for (final MercyCandidate candidate in candidates) {
-      final int key = candidate.currentEffectiveDueDay.epochDay;
-      final Map<int, int> target = candidate.ref.type == ElementType.card
-          ? cardLoad
-          : topicLoad;
-      target[key] = (target[key] ?? 0) + 1;
+    if (value.card case final CardState card) {
+      canonical[value.ref] = encodeMercyCardState(card);
+      final StudyDay? last = card.memory.lastReviewAtUtc == null
+          ? null
+          : calendar.dayOf(card.memory.lastReviewAtUtc!);
+      return Sm20MercyCandidate(
+        ref: value.ref,
+        priority: card.schedule.priority,
+        scheduledDay: calendar.dayOf(card.memory.dueAtUtc),
+        lastReviewDay: last,
+        repetitionCount: card.memory.reps,
+        lapseCount: card.memory.lapses,
+        storedInterval: math.max(
+          0,
+          sm20RoundEven(card.memory.scheduledDays ?? 0),
+        ),
+        isScheduled: card.memory.reps > 0,
+        isDeleted: card.schedule.lifecycle == ElementLifecycle.deleted,
+        revision: math.max(card.schedule.revision, card.memory.revision),
+      );
     }
-    return MercyDestinationWindow(
-      days: <MercyDestinationDay>[
-        for (var offset = 1; offset <= horizon; offset++)
-          (() {
-            final StudyDay day = today.addDays(offset);
-            return MercyDestinationDay(
-              day: day,
-              cardScheduledForAtUtc: calendar.startOfDayUtc(day),
-              beforeCardLoad: cardLoad[day.epochDay] ?? 0,
-              beforeTopicLoad: topicLoad[day.epochDay] ?? 0,
-            );
-          })(),
-      ],
+    final TopicState topic = value.topic!;
+    canonical[value.ref] = encodeMercyTopicState(topic);
+    return Sm20MercyCandidate(
+      ref: value.ref,
+      priority: topic.schedule.priority,
+      scheduledDay: topic.schedule.algorithmicDueDay,
+      lastReviewDay: topic.lastReviewDay,
+      repetitionCount: topic.repetitionCount,
+      lapseCount: topic.lapseCount,
+      storedInterval: topic.storedInterval,
+      isScheduled: topic.status == Sm20ElementStatus.memorized,
+      isDeleted:
+          topic.status == Sm20ElementStatus.deleted ||
+          topic.schedule.lifecycle == ElementLifecycle.deleted,
+      revision: math.max(topic.schedule.revision, topic.revision),
     );
   }
 
-  Future<MercyCandidate> _toMercyCandidate(
-    QueueCandidate candidate, {
-    required StudyDayCalendar calendar,
-    required PriorityScale scale,
-    required AppSettings settings,
-    required StudyDay today,
-  }) async {
-    final ElementSchedule schedule = candidate.schedule;
-    final PriorityPosition? position = scale.positionOf(schedule.priority);
-    final double priorityFraction = position?.fraction ?? 0.5;
-    final bool isProtected =
-        position != null &&
-        settings.queue.protectedPercentile > 0 &&
-        position.index <
-            (scale.total * settings.queue.protectedPercentile).ceil();
-    final CardState? card = candidate.card;
-    final StudyDay effectiveDay = card != null
-        ? calendar.dayOf(
-            candidate.effectiveCardDueAtUtc ?? card.memory.dueAtUtc,
-          )
-        : candidate.effectiveTopicDueDay ?? schedule.algorithmicDueDay;
-
-    return MercyCandidate(
-      ref: candidate.ref,
-      revision: math.max(1, schedule.revision),
-      currentEffectiveDueDay: effectiveDay,
-      priorityFraction: priorityFraction,
-      canonical: await _adjustments.canonicalSnapshotOf(candidate.ref),
-      branchIds: <String>{
-        if (schedule.rootId != null) schedule.rootId!,
-        candidate.ref.id,
-      },
-      criteria: MercyCriterionValues(
-        repetitionLateness: _lateness(candidate, effectiveDay, today),
-        investment: card == null
-            ? 0
-            : math.min(1, card.memory.reps / 20).toDouble(),
-      ),
-      isProtected: isProtected,
-      isDueIntradayStep: candidate.isIntradayStep,
-      isLifecycleEligible: schedule.lifecycle.isSchedulable,
-    );
-  }
-
-  double _lateness(
-    QueueCandidate candidate,
-    StudyDay effectiveDay,
-    StudyDay today,
-  ) {
-    final int late = effectiveDay.daysUntil(today);
-    if (late <= 0) return 0;
-    final double interval = math.max(1, candidate.scheduledDays);
-    return math.min(1, late / interval).toDouble();
-  }
+  Future<void> _activity(
+    String operationId,
+    String kind,
+    DateTime atUtc,
+    Map<String, Object?> metadata,
+  ) => _learning.appendActivity(
+    ActivityRecord(
+      id: _ids.newId(),
+      operationId: operationId,
+      kind: kind,
+      atUtc: atUtc,
+      metadata: metadata,
+    ),
+  );
 }
+
+bool _isScheduled(QueueCandidate value) => value.card != null
+    ? value.card!.memory.reps > 0
+    : value.topic!.status == Sm20ElementStatus.memorized;
+
+StudyDay _scheduledDay(QueueCandidate value, StudyDayCalendar calendar) =>
+    value.card != null
+    ? calendar.dayOf(value.card!.memory.dueAtUtc)
+    : value.topic!.schedule.algorithmicDueDay;
+
+SchedulerEvent _itemEvent({
+  required String id,
+  required String operationId,
+  required SchedulerEventType type,
+  required ApplyMercy command,
+  required StoredMercyBatch stored,
+  required ElementRef ref,
+  required String schedulerName,
+  required String schedulerVersion,
+  required String beforeState,
+  required String afterState,
+  required String dueBefore,
+  required String dueAfter,
+  required MercyPreviewItem item,
+}) => SchedulerEvent(
+  id: id,
+  operationId: operationId,
+  element: ref,
+  eventType: type,
+  occurredAtUtc: command.timestampUtc,
+  studyDay: command.day,
+  schedulerName: schedulerName,
+  schedulerVersion: schedulerVersion,
+  policyVersion: stored.policyVersion,
+  stateBefore: beforeState,
+  stateAfter: afterState,
+  algorithmicDueBefore: dueBefore,
+  algorithmicDueAfter: dueAfter,
+  batchId: stored.batchId,
+  metadata: _itemMetadata(item),
+);
+
+Map<String, Object?> _itemMetadata(MercyPreviewItem item) => <String, Object?>{
+  'from_study_day': item.fromDay.epochDay,
+  'to_study_day': item.toDay.epochDay,
+  'zone_id': item.toDay.zoneId,
+  'score': item.score,
+  'source_index': item.sourceIndex,
+  'ordered_index': item.orderedIndex,
+};
+
+Sm20CollectionState _runtimeAfterMercy(
+  Sm20CollectionState runtime,
+  Iterable<MercyPreviewItem> assignments, {
+  required StudyDay today,
+}) {
+  final List<MercyPreviewItem> values = assignments.toList();
+  final Set<ElementRef> scope = <ElementRef>{
+    for (final MercyPreviewItem value in values) value.ref,
+  };
+  final List<ElementRef> dueNow = <ElementRef>[
+    for (final MercyPreviewItem value in values)
+      if (value.toDay <= today) value.ref,
+  ];
+  final Set<ElementRef> dueItems = <ElementRef>{
+    for (final ElementRef ref in dueNow)
+      if (ref.type == ElementType.card) ref,
+  };
+  final Set<ElementRef> dueTopics = dueNow.toSet()..removeAll(dueItems);
+  return runtime.copyWith(
+    outstanding: <ElementRef>[
+      ...dueNow,
+      for (final ElementRef ref in runtime.outstanding)
+        if (!scope.contains(ref)) ref,
+    ],
+    outstandingItems: <ElementRef>[
+      for (final ElementRef ref in dueNow)
+        if (dueItems.contains(ref)) ref,
+      for (final ElementRef ref in runtime.outstandingItems)
+        if (!scope.contains(ref)) ref,
+    ],
+    outstandingTopics: <ElementRef>[
+      for (final ElementRef ref in dueNow)
+        if (dueTopics.contains(ref)) ref,
+      for (final ElementRef ref in runtime.outstandingTopics)
+        if (!scope.contains(ref)) ref,
+    ],
+    finalDrill: <ElementRef>[
+      for (final ElementRef ref in runtime.finalDrill)
+        if (!scope.contains(ref)) ref,
+    ],
+    pending: <ElementRef>[
+      for (final ElementRef ref in runtime.pending)
+        if (!scope.contains(ref)) ref,
+    ],
+  );
+}
+
+CardMemory _memoryWithRevision(CardMemory value, int revision) => CardMemory(
+  cardId: value.cardId,
+  state: value.state,
+  step: value.step,
+  stability: value.stability,
+  difficulty: value.difficulty,
+  reps: value.reps,
+  lapses: value.lapses,
+  lastReviewAtUtc: value.lastReviewAtUtc,
+  dueAtUtc: value.dueAtUtc,
+  originalDueAtUtc: value.originalDueAtUtc,
+  schedulerVersion: value.schedulerVersion,
+  parametersVersion: value.parametersVersion,
+  postponeCount: value.postponeCount,
+  scheduledDays: value.scheduledDays,
+  schedulerName: value.schedulerName,
+  revision: revision,
+);

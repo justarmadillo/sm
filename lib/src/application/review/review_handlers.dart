@@ -22,18 +22,14 @@ import '../../core/tracing.dart';
 import '../../domain/content/card.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/overload.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/schedule_adjustment.dart';
-import '../../domain/scheduling/schedule_adjustment_codec.dart';
 import '../../domain/scheduling/scheduler_event.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/settings/app_settings.dart';
 import '../app_command.dart';
 import '../ports/repositories.dart';
 import '../ports/transaction_runner.dart';
-import '../scheduling/schedule_adjustment_service.dart';
 import '../scheduling/scheduling_context.dart';
 import '../scheduling/scheduling_journal.dart';
 import 'review_commands.dart';
@@ -49,12 +45,6 @@ const String kCardEditedKind = 'card.edited';
 
 /// Activity kind recorded when a card's eligibility is moved.
 const String kCardPostponedKind = 'card.postponed';
-
-/// `[Product decision]` How far a Snooze moves a card that is mid-learning.
-///
-/// Short on purpose: the point is to step past one card without losing the
-/// learning step it is in the middle of.
-const Duration kIntradaySnooze = Duration(minutes: 10);
 
 /// Activity kind recorded when siblings are pushed off the day.
 const String kSiblingsBuriedKind = 'card.siblings_buried';
@@ -95,7 +85,6 @@ final class ReviewHandlers {
        _context = context,
        _clock = clock,
        _ids = ids,
-       _adjustments = ScheduleAdjustmentService(learning: learning, ids: ids),
        _journal = SchedulingJournal(learning: learning, ids: ids),
        _diagnostics = diagnostics;
 
@@ -106,7 +95,6 @@ final class ReviewHandlers {
   final SchedulingContext _context;
   final Clock _clock;
   final IdGenerator _ids;
-  final ScheduleAdjustmentService _adjustments;
   final SchedulingJournal _journal;
   final DiagnosticSink _diagnostics;
 
@@ -153,15 +141,7 @@ final class ReviewHandlers {
         if (command.isPractice) {
           return _logPractice(command, before, reviewedAt, pressure);
         }
-        final ScheduleAdjustmentSet activeAdjustments = ScheduleAdjustmentSet(
-          await _learning.listAdjustmentsFor(before.ref),
-        );
-        if (!const EffectiveDueService().isCardDue(
-          card: before.ref,
-          algorithmicDueAtUtc: before.memory.dueAtUtc,
-          nowUtc: reviewedAt,
-          adjustments: activeAdjustments,
-        )) {
+        if (!before.memory.isDueAt(reviewedAt)) {
           return const Err<ReviewOutcome>(
             ConflictFailure('that card is not due yet'),
           );
@@ -183,12 +163,6 @@ final class ReviewHandlers {
           );
         }
         await _learning.appendReview(transition.record);
-        final ScheduleAdjustmentMutation adjustmentMutation = await _adjustments
-            .clearAfterCanonicalTransition(
-              element: before.ref,
-              atUtc: reviewedAt,
-              operationId: command.operationId.value,
-            );
         await _journal.append(
           operationId: command.operationId.value,
           ref: ElementRef(id: command.cardId, type: ElementType.card),
@@ -231,8 +205,6 @@ final class ReviewHandlers {
           algorithmicDueAfter: SchedulerEvent.encodeUtcDue(
             transition.state.memory.dueAtUtc,
           ),
-          adjustmentsBefore: adjustmentMutation.beforeSnapshot,
-          adjustmentsAfter: adjustmentMutation.afterSnapshot,
           metadata: <String, Object?>{
             'rating': command.rating.value,
             'buried_siblings': buried,
@@ -255,11 +227,7 @@ final class ReviewHandlers {
             },
           ),
         );
-        await _learning.consumePresentationPlanEntry(
-          day: calendar.dayOf(reviewedAt),
-          ref: before.ref,
-          atUtc: reviewedAt,
-        );
+        await _removeFromQueues(before.ref);
         await _transfer.advanceGeneration();
         _diagnostics.record(
           DiagnosticEvent(
@@ -399,13 +367,6 @@ final class ReviewHandlers {
         }
         final CardState restored = scheduler.undo(current, record);
         final StudyDayCalendar calendar = await _context.calendar();
-        final ScheduleAdjustmentSnapshot priorAdjustments =
-            originalEvent.adjustmentsBefore == null
-            ? ScheduleAdjustmentSnapshot(
-                elements: <ElementRef>{current.ref},
-                activeAdjustments: const <ScheduleAdjustment>[],
-              )
-            : decodeAdjustmentSnapshot(originalEvent.adjustmentsBefore!);
         if (!await _learning.compareAndSwapCardState(
           expected: current,
           replacement: restored,
@@ -414,14 +375,6 @@ final class ReviewHandlers {
             ConflictFailure('the card changed before undo committed'),
           );
         }
-        final ScheduleAdjustmentMutation adjustmentMutation = await _adjustments
-            .restoreSnapshot(
-              snapshot: priorAdjustments,
-              atUtc: command.timestampUtc,
-              studyDay: calendar.dayOf(command.timestampUtc),
-              operationId: command.operationId.value,
-            );
-
         await _journal.append(
           operationId: command.operationId.value,
           ref: ElementRef(id: record.cardId, type: ElementType.card),
@@ -451,8 +404,6 @@ final class ReviewHandlers {
           algorithmicDueAfter: SchedulerEvent.encodeUtcDue(
             restored.memory.dueAtUtc,
           ),
-          adjustmentsBefore: adjustmentMutation.beforeSnapshot,
-          adjustmentsAfter: adjustmentMutation.afterSnapshot,
           undoesEventId: originalEvent.id,
           metadata: <String, Object?>{
             'undone_operation': record.operationId,
@@ -469,6 +420,7 @@ final class ReviewHandlers {
             metadata: <String, Object?>{'rating': record.rating.value},
           ),
         );
+        await _restoreToOutstanding(restored);
         await _transfer.advanceGeneration();
         return Ok<CardState>(restored);
       });
@@ -576,65 +528,52 @@ final class ReviewHandlers {
 
         final StudyDayCalendar calendar = await _context.calendar();
         final StudyDay today = calendar.dayOf(command.timestampUtc);
-
-        // A card mid-learning is not a candidate for a day-scale Later: its
-        // next step is minutes away and pushing it to tomorrow abandons a
-        // repetition the user has already started. Unless they name a date
-        // themselves, the answer is a short Snooze — an exact-UTC lower bound
-        // that moves eligibility by minutes and reviews nothing.
-        final bool snoozing =
-            state.memory.isIntradayStep && command.until == null;
-
-        StudyDay until = today;
-        PostponeDecision? decision;
-        DateTime notBeforeAtUtc;
-        if (snoozing) {
-          notBeforeAtUtc = command.timestampUtc.add(kIntradaySnooze);
-          until = calendar.dayOf(notBeforeAtUtc);
-        } else if (command.until != null) {
-          until = command.until!;
-          notBeforeAtUtc = calendar.startOfDayUtc(until);
-        } else {
-          final OverloadValve valve = await _context.overloadValve();
-          decision = valve.later(
-            intervalDays: _intervalOf(state),
-            seed: '${command.operationId.value}:${command.cardId}',
+        final runtime = await _context.runtimeState();
+        final bool alreadyOutstanding = runtime.outstanding.contains(state.ref);
+        final StudyDay until = command.until ?? today;
+        final bool sameDayGuard =
+            command.until == null &&
+            !alreadyOutstanding &&
+            state.memory.lastReviewAtUtc != null &&
+            calendar.dayOf(state.memory.lastReviewAtUtc!) == today;
+        final CardScheduler scheduler = await _context.cardScheduler();
+        final CardState after = command.until == null && alreadyOutstanding
+            ? state
+            : sameDayGuard
+            ? state
+            : scheduler.rescheduleElement(
+                state,
+                targetDay: until,
+                today: today,
+              );
+        if (after != state &&
+            !await _learning.compareAndSwapCardState(
+              expected: state,
+              replacement: after,
+            )) {
+          return const Err<CardState>(
+            ConflictFailure('the card changed before Later committed'),
           );
-          until = today.addDays(decision.delayDays);
-          notBeforeAtUtc = calendar.startOfDayUtc(until);
         }
-
-        final ScheduleAdjustmentReason reason =
-            command.kind == DeferralKind.automatic
-            ? ScheduleAdjustmentReason.autoOverflow
-            : ScheduleAdjustmentReason.manualLater;
-        final AdjustmentApplication applied = await _adjustments.setLowerBound(
-          element: state.ref,
-          reason: reason,
-          operationId: command.operationId.value,
-          atUtc: command.timestampUtc,
-          studyDay: today,
-          notBeforeAtUtc: notBeforeAtUtc,
-          replaceSameReason: true,
+        await _placeInOutstanding(
+          state.ref,
+          include: !state.memory.isNew && until <= today,
         );
         await _journal.append(
           operationId: command.operationId.value,
           ref: ElementRef(id: command.cardId, type: ElementType.card),
-          eventType: command.kind == DeferralKind.automatic
+          eventType: command.isAutomatic
               ? RevlogEventType.autoPostpone
               : RevlogEventType.postpone,
           atUtc: command.timestampUtc,
           before: _journal.cardSnapshot(state),
-          after: _journal.cardSnapshot(state),
+          after: _journal.cardSnapshot(after),
           scheduledDays: _intervalOf(state),
           postponeCount: state.memory.postponeCount,
           metadata: <String, Object?>{
             'until': until.toString(),
-            'not_before_at_utc': notBeforeAtUtc.millisecondsSinceEpoch,
-            'adjustment_reason': reason.wireName,
-            if (snoozing) 'snooze_minutes': kIntradaySnooze.inMinutes,
-            if (applied.alreadyApplied) 'idempotent_replay': true,
-            if (decision != null) ...decision.toMetadata(),
+            'queue_only': command.until == null && alreadyOutstanding,
+            if (sameDayGuard) 'same_day_guard': true,
           },
         );
         await _learning.appendActivity(
@@ -646,13 +585,12 @@ final class ReviewHandlers {
             ref: ElementRef(id: command.cardId, type: ElementType.card),
             metadata: <String, Object?>{
               'until': until.toString(),
-              'kind': command.kind.name,
-              if (snoozing) 'snooze_minutes': kIntradaySnooze.inMinutes,
+              'automatic': command.isAutomatic,
             },
           ),
         );
         await _transfer.advanceGeneration();
-        return Ok<CardState>(state);
+        return Ok<CardState>(after);
       });
     } on Object catch (error, stackTrace) {
       return Err<CardState>(
@@ -696,12 +634,6 @@ final class ReviewHandlers {
       parametersVersion: state.memory.parametersVersion,
       metadata: const <String, Object?>{'practice': true},
     );
-    final ScheduleAdjustmentSet adjustments = ScheduleAdjustmentSet(
-      await _learning.listAdjustmentsFor(state.ref),
-    );
-    final ScheduleAdjustmentSnapshot snapshot = adjustments.snapshotFor(
-      <ElementRef>{state.ref},
-    );
     final StudyDayCalendar calendar = await _context.calendar();
     await _journal.appendScheduler(
       operationId: command.operationId.value,
@@ -716,8 +648,6 @@ final class ReviewHandlers {
       stateAfter: state.memory.canonicalFsrsJson(),
       algorithmicDueBefore: SchedulerEvent.encodeUtcDue(state.memory.dueAtUtc),
       algorithmicDueAfter: SchedulerEvent.encodeUtcDue(state.memory.dueAtUtc),
-      adjustmentsBefore: snapshot,
-      adjustmentsAfter: snapshot,
       metadata: const <String, Object?>{'practice': true},
     );
     await _learning.appendActivity(
@@ -749,7 +679,8 @@ final class ReviewHandlers {
 
     final StudyDayCalendar calendar = await _context.calendar();
     final StudyDay today = calendar.dayOf(command.timestampUtc);
-    final DateTime tomorrowStart = calendar.startOfDayUtc(today.addDays(1));
+    final StudyDay tomorrow = today.addDays(1);
+    final CardScheduler scheduler = await _context.cardScheduler();
 
     final entries = <RevlogEntry>[];
     for (final Card sibling in siblings) {
@@ -759,27 +690,21 @@ final class ReviewHandlers {
       // A sibling already inside a learning step is mid-repetition; pushing
       // it to tomorrow would abandon work the user has started.
       if (state.memory.isIntradayStep) continue;
-      final ScheduleAdjustmentSet active = ScheduleAdjustmentSet(
-        await _learning.listAdjustmentsFor(state.ref),
+      if (!state.memory.isDueAt(command.timestampUtc)) {
+        continue;
+      }
+      final CardState after = scheduler.rescheduleElement(
+        state,
+        targetDay: tomorrow,
+        today: today,
       );
-      if (!const EffectiveDueService().isCardDue(
-        card: state.ref,
-        algorithmicDueAtUtc: state.memory.dueAtUtc,
-        nowUtc: command.timestampUtc,
-        adjustments: active,
+      if (!await _learning.compareAndSwapCardState(
+        expected: state,
+        replacement: after,
       )) {
         continue;
       }
-
-      final AdjustmentApplication applied = await _adjustments.setLowerBound(
-        element: state.ref,
-        reason: ScheduleAdjustmentReason.siblingBury,
-        operationId: command.operationId.value,
-        atUtc: command.timestampUtc,
-        studyDay: today,
-        notBeforeAtUtc: tomorrowStart,
-      );
-      if (applied.alreadyApplied) continue;
+      await _placeInOutstanding(state.ref, include: false);
       entries.add(
         _journal.build(
           operationId: command.operationId.value,
@@ -787,11 +712,11 @@ final class ReviewHandlers {
           eventType: RevlogEventType.bury,
           atUtc: command.timestampUtc,
           before: _journal.cardSnapshot(state),
-          after: _journal.cardSnapshot(state),
+          after: _journal.cardSnapshot(after),
           postponeCount: state.memory.postponeCount,
           metadata: <String, Object?>{
             'sibling_of': command.cardId,
-            'until': today.addDays(1).toString(),
+            'until': tomorrow.toString(),
           },
         ),
       );
@@ -819,6 +744,77 @@ final class ReviewHandlers {
     final double days =
         state.memory.originalDueAtUtc.difference(last).inMinutes / 1440;
     return days < 1 ? 1 : days;
+  }
+
+  Future<void> _removeFromQueues(ElementRef ref) async {
+    final runtime = await _context.runtimeState();
+    await _context.saveRuntimeState(
+      runtime.copyWith(
+        outstanding: runtime.outstanding
+            .where((ElementRef value) => value != ref)
+            .toList(),
+        outstandingItems: runtime.outstandingItems
+            .where((ElementRef value) => value != ref)
+            .toList(),
+        outstandingTopics: runtime.outstandingTopics
+            .where((ElementRef value) => value != ref)
+            .toList(),
+        finalDrill: runtime.finalDrill
+            .where((ElementRef value) => value != ref)
+            .toList(),
+        pending: runtime.pending
+            .where((ElementRef value) => value != ref)
+            .toList(),
+      ),
+    );
+  }
+
+  Future<void> _placeInOutstanding(
+    ElementRef ref, {
+    required bool include,
+    bool atFront = false,
+  }) async {
+    final runtime = await _context.runtimeState();
+    final List<ElementRef> outstanding = runtime.outstanding
+        .where((ElementRef value) => value != ref)
+        .toList();
+    final List<ElementRef> items = runtime.outstandingItems
+        .where((ElementRef value) => value != ref)
+        .toList();
+    if (include) {
+      if (atFront) {
+        outstanding.insert(0, ref);
+        items.insert(0, ref);
+      } else {
+        outstanding.add(ref);
+        items.add(ref);
+      }
+    }
+    await _context.saveRuntimeState(
+      runtime.copyWith(outstanding: outstanding, outstandingItems: items),
+    );
+  }
+
+  Future<void> _restoreToOutstanding(CardState state) async {
+    if (!state.memory.isNew) {
+      await _placeInOutstanding(state.ref, include: true, atFront: true);
+      return;
+    }
+    final runtime = await _context.runtimeState();
+    final List<ElementRef> pending =
+        runtime.pending.where((ElementRef value) => value != state.ref).toList()
+          ..insert(0, state.ref);
+    await _context.saveRuntimeState(
+      runtime.copyWith(
+        pending: pending,
+        outstanding: runtime.outstanding
+            .where((ElementRef value) => value != state.ref)
+            .toList(),
+        outstandingItems: runtime.outstandingItems
+            .where((ElementRef value) => value != state.ref)
+            .toList(),
+      ),
+    );
   }
 
   UnexpectedFailure _fail(

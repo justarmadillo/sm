@@ -141,7 +141,6 @@ final class CardMemory {
     required DateTime? lastReviewAtUtc,
     required DateTime dueAtUtc,
     required DateTime originalDueAtUtc,
-    required DateTime? deferredUntilUtc,
     required String schedulerVersion,
     required String parametersVersion,
     int postponeCount = 0,
@@ -156,9 +155,6 @@ final class CardMemory {
     _requireUtc(originalDueAtUtc, 'originalDueAtUtc');
     if (lastReviewAtUtc != null) {
       _requireUtc(lastReviewAtUtc, 'lastReviewAtUtc');
-    }
-    if (deferredUntilUtc != null) {
-      _requireUtc(deferredUntilUtc, 'deferredUntilUtc');
     }
     if (reps < 0 || lapses < 0 || lapses > reps) {
       throw ArgumentError('review counters are inconsistent');
@@ -205,7 +201,6 @@ final class CardMemory {
       lastReviewAtUtc: lastReviewAtUtc,
       dueAtUtc: dueAtUtc,
       originalDueAtUtc: originalDueAtUtc,
-      deferredUntilUtc: deferredUntilUtc,
       schedulerVersion: schedulerVersion,
       parametersVersion: parametersVersion,
       postponeCount: postponeCount,
@@ -226,7 +221,6 @@ final class CardMemory {
     required this.lastReviewAtUtc,
     required this.dueAtUtc,
     required this.originalDueAtUtc,
-    required this.deferredUntilUtc,
     required this.schedulerVersion,
     required this.parametersVersion,
     required this.postponeCount,
@@ -252,7 +246,6 @@ final class CardMemory {
     lastReviewAtUtc: null,
     dueAtUtc: dueAtUtc,
     originalDueAtUtc: dueAtUtc,
-    deferredUntilUtc: null,
     schedulerVersion: schedulerVersion,
     parametersVersion: parametersVersion,
   );
@@ -269,7 +262,6 @@ final class CardMemory {
     lastReviewAtUtc: _instantOrNull(map['last_review_at_utc_ms']),
     dueAtUtc: _instant(_required<int>(map, 'due_at_utc_ms')),
     originalDueAtUtc: _instant(_required<int>(map, 'original_due_at_utc_ms')),
-    deferredUntilUtc: _instantOrNull(map['deferred_until_utc_ms']),
     schedulerVersion: _required<String>(map, 'scheduler_version'),
     parametersVersion: _required<String>(map, 'parameters_version'),
     postponeCount: (map['postpone_count'] as int?) ?? 0,
@@ -300,7 +292,6 @@ final class CardMemory {
   final DateTime? lastReviewAtUtc;
   final DateTime dueAtUtc;
   final DateTime originalDueAtUtc;
-  final DateTime? deferredUntilUtc;
   final String schedulerVersion;
   final String parametersVersion;
 
@@ -326,28 +317,39 @@ final class CardMemory {
   /// has actually begun bypasses admission limits and sibling burying.
   bool get isIntradayStep => !isNew && state != CardLearningState.review;
 
-  /// The instant at which the card is actually eligible.
-  DateTime get effectiveDueAtUtc {
-    final DateTime? deferred = deferredUntilUtc;
-    if (deferred == null || !deferred.isAfter(dueAtUtc)) return dueAtUtc;
-    return deferred;
-  }
-
   /// Whether the card may be reviewed at [instantUtc].
+  ///
+  /// The canonical due instant is the only one there is: SM20 has no deferral
+  /// overlay, so a postponement rewrites this value through a low-level
+  /// reschedule rather than shadowing it.
   bool isDueAt(DateTime instantUtc) {
     _requireUtc(instantUtc, 'instantUtc');
-    return !effectiveDueAtUtc.isAfter(instantUtc);
+    return !dueAtUtc.isAfter(instantUtc);
   }
 
-  /// The same memory pushed to [untilUtc], or with the push taken back.
+  /// Replaces the canonical item repetition without recording a review.
   ///
-  /// Deliberately the *only* mutation a postponement is allowed to make.
-  /// Stability, difficulty, reps, and above all [lastReviewAtUtc] are
-  /// untouched: the next real review computes its elapsed time from the true
-  /// last review, and overwriting that would destroy the retention signal the
-  /// whole schedule rests on.
-  CardMemory deferredTo(DateTime? untilUtc) {
-    if (untilUtc != null) _requireUtc(untilUtc, 'untilUtc');
+  /// This is the item-side projection of SM20's low-level rescheduler. Memory
+  /// strength/difficulty and review counters are preserved; the due instant,
+  /// stored interval, optional last-review correction, and postponement count
+  /// are the only mutable fields.
+  CardMemory lowLevelRescheduled({
+    required DateTime targetDueAtUtc,
+    required double actualIntervalDays,
+    required DateTime? adjustedLastReviewAtUtc,
+    required bool intervalGrew,
+  }) {
+    _requireUtc(targetDueAtUtc, 'targetDueAtUtc');
+    if (adjustedLastReviewAtUtc != null) {
+      _requireUtc(adjustedLastReviewAtUtc, 'adjustedLastReviewAtUtc');
+    }
+    if (!actualIntervalDays.isFinite || actualIntervalDays < 0) {
+      throw ArgumentError.value(
+        actualIntervalDays,
+        'actualIntervalDays',
+        'must be finite and non-negative',
+      );
+    }
     return CardMemory(
       cardId: cardId,
       state: state,
@@ -356,16 +358,15 @@ final class CardMemory {
       difficulty: difficulty,
       reps: reps,
       lapses: lapses,
-      lastReviewAtUtc: lastReviewAtUtc,
-      dueAtUtc: dueAtUtc,
-      originalDueAtUtc: originalDueAtUtc,
-      deferredUntilUtc: untilUtc,
+      lastReviewAtUtc: adjustedLastReviewAtUtc,
+      dueAtUtc: targetDueAtUtc,
+      originalDueAtUtc: targetDueAtUtc,
       schedulerVersion: schedulerVersion,
       parametersVersion: parametersVersion,
-      postponeCount: untilUtc == null ? postponeCount : postponeCount + 1,
-      scheduledDays: scheduledDays,
+      postponeCount: postponeCount + (intervalGrew ? 1 : 0),
+      scheduledDays: actualIntervalDays,
       schedulerName: schedulerName,
-      revision: revision,
+      revision: revision + 1,
     );
   }
 
@@ -381,7 +382,6 @@ final class CardMemory {
     'last_review_at_utc_ms': lastReviewAtUtc?.millisecondsSinceEpoch,
     'due_at_utc_ms': dueAtUtc.millisecondsSinceEpoch,
     'original_due_at_utc_ms': originalDueAtUtc.millisecondsSinceEpoch,
-    'deferred_until_utc_ms': deferredUntilUtc?.millisecondsSinceEpoch,
     'scheduler_version': schedulerVersion,
     'parameters_version': parametersVersion,
     'postpone_count': postponeCount,
@@ -419,7 +419,6 @@ final class CardMemory {
       other.lastReviewAtUtc == lastReviewAtUtc &&
       other.dueAtUtc == dueAtUtc &&
       other.originalDueAtUtc == originalDueAtUtc &&
-      other.deferredUntilUtc == deferredUntilUtc &&
       other.schedulerVersion == schedulerVersion &&
       other.parametersVersion == parametersVersion &&
       other.postponeCount == postponeCount &&
@@ -439,7 +438,6 @@ final class CardMemory {
     lastReviewAtUtc,
     dueAtUtc,
     originalDueAtUtc,
-    deferredUntilUtc,
     schedulerVersion,
     parametersVersion,
     postponeCount,
@@ -484,7 +482,6 @@ final class CardState {
       other.schedule.ref == schedule.ref &&
       other.schedule.lifecycle == schedule.lifecycle &&
       other.schedule.dueDay == schedule.dueDay &&
-      other.schedule.deferredUntil == schedule.deferredUntil &&
       other.schedule.priority == schedule.priority &&
       other.memory == memory;
 
@@ -493,7 +490,6 @@ final class CardState {
     schedule.ref,
     schedule.lifecycle,
     schedule.dueDay,
-    schedule.deferredUntil,
     schedule.priority,
     memory,
   );
@@ -501,7 +497,7 @@ final class CardState {
   @override
   String toString() =>
       'CardState(${schedule.ref} ${memory.state.name} '
-      'due=${memory.effectiveDueAtUtc})';
+      'due=${memory.dueAtUtc})';
 }
 
 /// Lossless append-only description of one review.
@@ -667,7 +663,6 @@ final class CardScheduler implements FsrsAdapter {
       lastReviewAtUtc: result.card.lastReview,
       dueAtUtc: result.card.due,
       originalDueAtUtc: result.card.due,
-      deferredUntilUtc: null,
       schedulerVersion: settings.schedulerVersion,
       parametersVersion: settings.parametersVersion,
       postponeCount: state.memory.postponeCount,
@@ -679,7 +674,6 @@ final class CardScheduler implements FsrsAdapter {
     final ElementSchedule schedule = state.schedule.copyWith(
       dueDay: dueDay,
       originalDueDay: dueDay,
-      clearDeferral: true,
       revision: state.schedule.revision + 1,
     );
     final CardState next = CardState(schedule: schedule, memory: memory);
@@ -697,44 +691,59 @@ final class CardScheduler implements FsrsAdapter {
     return CardReviewTransition(state: next, record: record);
   }
 
-  /// Pushes a card's eligibility to [untilUtc] without reviewing it.
-  ///
-  /// **Legacy.** Deferral is a typed `ScheduleAdjustment` now, written by
-  /// `ScheduleAdjustmentService`, because Mercy has to be able to move work
-  /// earlier as well as later and one nullable column cannot express that.
-  /// The schema v7 migration retired the columns this writes, so it survives
-  /// only to keep proving the invariant it always protected: a postponement
-  /// never touches the algorithmic due, the memory values, or the last-review
-  /// instant. Marked visible-for-testing so that wiring it back into the
-  /// application fails analysis rather than quietly creating a second,
-  /// invisible deferral mechanism.
-  @visibleForTesting
-  CardState postpone(
+  /// SM20's low-level item reschedule transaction.
+  CardState rescheduleElement(
     CardState state, {
-    required DateTime untilUtc,
-    DeferralKind kind = DeferralKind.manual,
+    required StudyDay targetDay,
+    required StudyDay today,
   }) {
-    _requireUtc(untilUtc, 'untilUtc');
-    final StudyDay untilDay = calendar.dayOf(untilUtc);
-    return CardState(
-      schedule: state.schedule.copyWith(
-        deferredUntil: untilDay,
-        deferralKind: kind,
-      ),
-      memory: state.memory.deferredTo(untilUtc),
-    );
-  }
+    final DateTime targetUtc = calendar.startOfDayUtc(targetDay);
+    final DateTime? priorLast = state.memory.lastReviewAtUtc;
+    if (priorLast == null) {
+      final int remaining = math.max(today.daysUntil(targetDay), 0);
+      return state.copyWith(
+        schedule: state.schedule.copyWith(
+          dueDay: targetDay,
+          originalDueDay: targetDay,
+          revision: state.schedule.revision + 1,
+        ),
+        memory: state.memory.lowLevelRescheduled(
+          targetDueAtUtc: targetUtc,
+          actualIntervalDays: remaining.toDouble(),
+          adjustedLastReviewAtUtc: null,
+          intervalGrew: false,
+        ),
+      );
+    }
 
-  /// The same card with an automatic deferral taken back.
-  ///
-  /// Raising a daily limit or choosing Study More recalls what the app
-  /// deferred; what the user deferred stays deferred, because that was a
-  /// decision rather than a capacity problem.
-  CardState recallAutomaticDeferral(CardState state) {
-    if (state.schedule.deferralKind != DeferralKind.automatic) return state;
-    return CardState(
-      schedule: state.schedule.withAutomaticDeferralRecalled(),
-      memory: state.memory.deferredTo(null),
+    final StudyDay lastDay = calendar.dayOf(priorLast);
+    final int oldInterval = math.max(
+      (state.memory.scheduledDays ??
+              lastDay.daysUntil(calendar.dayOf(state.memory.dueAtUtc)))
+          .round(),
+      1,
+    );
+    late final int actualInterval;
+    late final DateTime adjustedLast;
+    if (targetDay > lastDay) {
+      actualInterval = lastDay.daysUntil(targetDay);
+      adjustedLast = priorLast;
+    } else {
+      actualInterval = 1;
+      adjustedLast = calendar.startOfDayUtc(targetDay.addDays(-1));
+    }
+    return state.copyWith(
+      schedule: state.schedule.copyWith(
+        dueDay: targetDay,
+        originalDueDay: targetDay,
+        revision: state.schedule.revision + 1,
+      ),
+      memory: state.memory.lowLevelRescheduled(
+        targetDueAtUtc: targetUtc,
+        actualIntervalDays: actualInterval.toDouble(),
+        adjustedLastReviewAtUtc: adjustedLast,
+        intervalGrew: actualInterval > oldInterval,
+      ),
     );
   }
 
@@ -771,7 +780,6 @@ final class CardScheduler implements FsrsAdapter {
       lastReviewAtUtc: prior.lastReviewAtUtc,
       dueAtUtc: prior.dueAtUtc,
       originalDueAtUtc: prior.originalDueAtUtc,
-      deferredUntilUtc: prior.deferredUntilUtc,
       schedulerVersion: prior.schedulerVersion,
       parametersVersion: prior.parametersVersion,
       postponeCount: prior.postponeCount,
@@ -784,7 +792,6 @@ final class CardScheduler implements FsrsAdapter {
       schedule: current.schedule.copyWith(
         dueDay: dueDay,
         originalDueDay: calendar.dayOf(restored.originalDueAtUtc),
-        clearDeferral: true,
         revision: current.schedule.revision + 1,
       ),
       memory: restored,

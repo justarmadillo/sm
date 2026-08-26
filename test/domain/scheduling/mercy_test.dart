@@ -1,444 +1,417 @@
-library;
-
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/domain/scheduling/mercy.dart';
-import 'package:incremental_reader/src/domain/scheduling/schedule_adjustment.dart';
-import 'package:incremental_reader/src/domain/scheduling/scheduler_event.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:test/test.dart';
 
 void main() {
-  const StudyDayCalendar calendar = StudyDayCalendar(zone: FixedOffsetZone.utc);
-  const MercyPlanner planner = MercyPlanner(calendar: calendar);
+  group('Mercy matrix and score', () {
+    test('requires the live 20 by 20 UInt16 matrix', () {
+      expect(
+        () => Sm20MercyMatrix(List<int>.filled(399, 1000)),
+        throwsArgumentError,
+      );
+      expect(
+        () => Sm20MercyMatrix(<int>[...List<int>.filled(399, 1000), 0x10000]),
+        throwsRangeError,
+      );
+      final Sm20MercyMatrix matrix = _matrix();
+      expect(matrix.valueAt(0, 0), 2000);
+      expect(matrix.valueAt(6, 1), 1500);
+      expect(matrix.valueAt(6, 2), 1250);
+    });
 
-  group('Mercy candidate boundaries', () {
-    test(
-      'scope, period, future, steps, lifecycle, and protection are explicit',
-      () {
-        final List<MercyCandidate> candidates = <MercyCandidate>[
-          _candidate('selected', due: 10, branches: const <String>{'branch-a'}),
-          _candidate('outside', due: 10, branches: const <String>{'branch-b'}),
-          _candidate('future', due: 11, branches: const <String>{'branch-a'}),
-          _candidate('old', due: 8, branches: const <String>{'branch-a'}),
-          _candidate(
-            'step',
-            due: 10,
-            branches: const <String>{'branch-a'},
-            isStep: true,
-          ),
-          _candidate(
-            'protected',
-            due: 10,
-            branches: const <String>{'branch-a'},
-            isProtected: true,
-          ),
-          _candidate(
-            'inactive',
-            due: 10,
-            branches: const <String>{'branch-a'},
-            isEligible: false,
-          ),
-        ];
-        final MercyPreview preview = planner.preview(
-          _request(
-            candidates: candidates,
-            scope: MercyBranchScope('branch-a'),
-            today: 10,
-            collectingStart: 9,
-            collectingEnd: 11,
-            includeFuture: false,
-            beforeCards: const <int>[5, 1],
-            beforeTopics: const <int>[0, 0],
-            capacity: MercyDailyCapacity(cardsPerDay: 10, topicsPerDay: 10),
-          ),
-        );
+    test('uses matrix row 6, fixed FI 3, and exact five-part score', () {
+      final Sm20MercyCandidate candidate = _candidate(
+        'scored',
+        rank: 'B',
+        scheduled: 100,
+        lastReview: 90,
+        repetitions: 3,
+        lapses: 2,
+      );
+      final Sm20MercyScore score = const Sm20MercyEngine().scoreCandidate(
+        candidate,
+        today: _day(100),
+        reschedulingDays: 5,
+        matrix: _matrix(),
+        weights: const Sm20MercyWeights(),
+        priorityPercent: 25,
+      );
 
-        expect(
-          preview.assignments.map((MercyAssignment value) => value.element.id),
-          <String>['selected'],
-        );
-        expect(preview.exclusionCounts, <MercyExclusionReason, int>{
-          MercyExclusionReason.outsideScope: 1,
-          MercyExclusionReason.futureRepetitionNotSelected: 1,
-          MercyExclusionReason.outsideCollectingPeriod: 1,
-          MercyExclusionReason.dueIntradayStep: 1,
-          MercyExclusionReason.protected: 1,
-          MercyExclusionReason.lifecycleIneligible: 1,
-        });
-      },
-    );
+      expect(score.investmentBase, 3.75);
+      expect(score.recency, closeTo(0.7357142857142858, 1e-15));
+      expect(score.investment, closeTo(0.2546439628482972, 1e-15));
+      expect(score.importance, 0.75);
+      expect(score.lateness, closeTo(0.4554112554112555, 1e-15));
+      expect(score.easiness, closeTo(0.3967099567099567, 1e-15));
+      expect(score.value, 579854);
+    });
 
-    test(
-      'subset scope touches no candidate outside the immutable coordinates',
-      () {
-        final MercyCandidate selected = _candidate('selected', due: 10);
-        final MercyCandidate untouched = _candidate('untouched', due: 10);
-        final MercyPreview preview = planner.preview(
-          _request(
-            candidates: <MercyCandidate>[selected, untouched],
-            scope: MercySubsetScope(<ElementRef>{selected.ref}),
-            beforeCards: const <int>[2, 0],
-            beforeTopics: const <int>[0, 0],
-          ),
-        );
+    test('caps repetition count at twenty in the matrix product', () {
+      final List<int> values = List<int>.filled(400, 1000);
+      values[0] = 2000;
+      for (var column = 1; column < 20; column += 1) {
+        values[6 * 20 + column] = 1100;
+      }
+      final Sm20MercyEngine engine = const Sm20MercyEngine();
+      final Sm20MercyScore twenty = engine.scoreCandidate(
+        _candidate('twenty', repetitions: 20, lastReview: 0),
+        today: _day(100),
+        reschedulingDays: 1,
+        matrix: Sm20MercyMatrix(values),
+        weights: const Sm20MercyWeights(),
+        priorityPercent: 50,
+      );
+      final Sm20MercyScore above = engine.scoreCandidate(
+        _candidate('above', repetitions: 200, lastReview: 0),
+        today: _day(100),
+        reschedulingDays: 1,
+        matrix: Sm20MercyMatrix(values),
+        weights: const Sm20MercyWeights(),
+        priorityPercent: 50,
+      );
 
-        expect(preview.assignments.single.element, selected.ref);
-        expect(
-          preview.exclusions.single,
-          isA<MercyExclusion>()
-              .having(
-                (MercyExclusion value) => value.element,
-                'element',
-                untouched.ref,
-              )
-              .having(
-                (MercyExclusion value) => value.reason,
-                'reason',
-                MercyExclusionReason.outsideScope,
-              ),
-        );
-      },
-    );
+      expect(above.investmentBase, twenty.investmentBase);
+      expect(above.value, twenty.value);
+    });
   });
 
-  group('Mercy assignment', () {
-    test('uses separate capacity ledgers and puts higher priority earlier', () {
-      final List<MercyCandidate> candidates = <MercyCandidate>[
-        _candidate('card-low', due: 10, priority: 0.80),
-        _candidate('card-high', due: 10, priority: 0.05),
-        _candidate(
-          'topic-low',
-          due: 10,
-          priority: 0.70,
-          type: ElementType.source,
-        ),
-        _candidate(
-          'topic-high',
-          due: 10,
-          priority: 0.02,
-          type: ElementType.extract,
-        ),
+  group('Mercy gathering, ordering, and assignment', () {
+    test('collection gathering is items first, topics second, in horizon', () {
+      final List<Sm20MercyCandidate> source = <Sm20MercyCandidate>[
+        _candidate('topic-1', type: ElementType.source, scheduled: 100),
+        _candidate('item-1', scheduled: 99),
+        _candidate('topic-2', type: ElementType.extract, scheduled: 101),
+        _candidate('item-future', scheduled: 102),
+        _candidate('item-pending', scheduled: 100, isScheduled: false),
+        _candidate('item-deleted', scheduled: 100, isDeleted: true),
+        _candidate('item-old', scheduled: 89),
       ];
-      final MercyPreview preview = planner.preview(
-        _request(
-          candidates: candidates,
-          beforeCards: const <int>[2, 0],
-          beforeTopics: const <int>[2, 0],
-          capacity: MercyDailyCapacity(cardsPerDay: 1, topicsPerDay: 1),
-        ),
-      );
-      final Map<String, MercyAssignment> byId = <String, MercyAssignment>{
-        for (final MercyAssignment value in preview.assignments)
-          value.element.id: value,
-      };
-
-      expect(byId['card-high']!.toDay, _day(10));
-      expect(byId['card-low']!.toDay, _day(11));
-      expect(byId['topic-high']!.toDay, _day(10));
-      expect(byId['topic-low']!.toDay, _day(11));
-      expect(preview.afterLoad[0].cards, 1);
-      expect(preview.afterLoad[0].topics, 1);
-      expect(preview.afterLoad[1].cards, 1);
-      expect(preview.afterLoad[1].topics, 1);
-    });
-
-    test(
-      'horizon selection balances both days without a shared domain cap',
-      () {
-        final List<MercyCandidate> candidates = <MercyCandidate>[
-          for (var index = 0; index < 4; index++)
-            _candidate('card-$index', due: 10, priority: index / 10),
-        ];
-        final MercyPreview preview = planner.preview(
-          _request(
-            candidates: candidates,
-            beforeCards: const <int>[4, 0],
-            beforeTopics: const <int>[0, 0],
-            capacity: const MercyDestinationHorizon(),
-          ),
-        );
-
-        expect(
-          preview.assignments
-              .where((MercyAssignment value) => value.toDay == _day(10))
-              .map((MercyAssignment value) => value.element.id),
-          <String>['card-0', 'card-1'],
-        );
-        expect(
-          preview.afterLoad.map((MercyDailyLoad value) => value.cards),
-          <int>[2, 2],
-        );
-      },
-    );
-
-    test('reports capacity exclusions without changing the before load', () {
-      final MercyPreview preview = planner.preview(
-        _request(
-          candidates: <MercyCandidate>[_candidate('card', due: 10)],
-          beforeCards: const <int>[1],
-          beforeTopics: const <int>[0],
-          capacity: MercyDailyCapacity(cardsPerDay: 0, topicsPerDay: 0),
-        ),
+      final Sm20MercyPlan plan = _plan(
+        candidates: source,
+        gatherMode: Sm20MercyGatherMode.collection,
+        gatheringDays: 2,
+        reschedulingDays: 2,
+        mode: MercyMode.sourceOrder,
+        learningStart: 90,
       );
 
-      expect(preview.assignments, isEmpty);
-      expect(preview.exclusionCounts, <MercyExclusionReason, int>{
-        MercyExclusionReason.noDestinationCapacity: 1,
-      });
-      expect(preview.beforeLoad.single.cards, 1);
-      expect(preview.afterLoad.single.cards, 1);
+      expect(
+        plan.gathered.map((Sm20MercyCandidate value) => value.ref.id),
+        <String>['item-1', 'topic-1', 'topic-2'],
+      );
     });
 
-    test('exact assignments can move work earlier and later', () {
-      final List<MercyCandidate> candidates = <MercyCandidate>[
-        _candidate('future-high', due: 12, priority: 0.01),
-        _candidate('today-low', due: 10, priority: 0.90),
+    test('assignment reverses each exact ceil(N/R) block', () {
+      final List<Sm20MercyCandidate> source = <Sm20MercyCandidate>[
+        for (var index = 0; index < 5; index += 1)
+          _candidate('$index', rank: 'R$index'),
       ];
-      final MercyPreview preview = planner.preview(
-        _request(
-          candidates: candidates,
-          today: 10,
-          collectingEnd: 12,
-          includeFuture: true,
-          beforeCards: const <int>[1, 0, 1],
-          beforeTopics: const <int>[0, 0, 0],
-          capacity: MercyDailyCapacity(cardsPerDay: 1, topicsPerDay: 1),
-        ),
+      final Sm20MercyPlan plan = _plan(
+        candidates: source,
+        reschedulingDays: 2,
+        mode: MercyMode.sourceOrder,
       );
-      final Map<String, MercyAssignment> byId = <String, MercyAssignment>{
-        for (final MercyAssignment value in preview.assignments)
-          value.element.id: value,
-      };
 
-      expect(byId['future-high']!.movesEarlier, isTrue);
-      expect(byId['future-high']!.toDay, _day(10));
-      expect(byId['today-low']!.movesLater, isTrue);
-      expect(byId['today-low']!.toDay, _day(11));
+      expect(plan.blockSize, 3);
+      expect(
+        plan.assignments.map((Sm20MercyAssignment value) => value.ref.id),
+        <String>['2', '1', '0', '4', '3'],
+      );
+      expect(
+        plan.assignments.map((Sm20MercyAssignment value) => value.targetDay),
+        <StudyDay>[_day(100), _day(100), _day(100), _day(101), _day(101)],
+      );
     });
 
-    test('manual Later survives as a floor while auto-overflow does not', () {
-      final MercyCandidate card = _candidate('card', due: 13);
-      final ScheduleAdjustment manual = _cardBound(
-        id: 'manual',
-        element: card.ref,
-        reason: ScheduleAdjustmentReason.manualLater,
-        day: 12,
-      );
-      final ScheduleAdjustment automatic = _cardBound(
-        id: 'auto',
-        element: card.ref,
-        reason: ScheduleAdjustmentReason.autoOverflow,
-        day: 13,
-      );
-      final ScheduleAdjustmentSet adjustments = ScheduleAdjustmentSet(
-        <ScheduleAdjustment>[manual, automatic],
-      );
-      final MercyPreview preserved = planner.preview(
-        _request(
-          candidates: <MercyCandidate>[card],
-          today: 10,
-          collectingEnd: 13,
-          includeFuture: true,
-          beforeCards: const <int>[0, 0, 0],
-          beforeTopics: const <int>[0, 0, 0],
-          adjustments: adjustments,
-        ),
-      );
-      final MercyPreview overridden = planner.preview(
-        _request(
-          candidates: <MercyCandidate>[card],
-          today: 10,
-          collectingEnd: 13,
-          includeFuture: true,
-          beforeCards: const <int>[0, 0, 0],
-          beforeTopics: const <int>[0, 0, 0],
-          adjustments: adjustments,
-          protection: const MercyProtectionRules(overrideManualLater: true),
-        ),
-      );
-
-      expect(preserved.assignments.single.toDay, _day(12));
-      expect(overridden.assignments.single.toDay, _day(10));
-    });
-
-    test('selected criteria operate only inside a bounded priority band', () {
-      final List<MercyCandidate> candidates = <MercyCandidate>[
-        _candidate(
-          'slightly-higher',
-          due: 10,
-          priority: 0.11,
-          criteria: const MercyCriterionValues(repetitionLateness: 0),
-        ),
-        _candidate(
-          'urgent-same-band',
-          due: 10,
-          priority: 0.19,
-          criteria: const MercyCriterionValues(repetitionLateness: 1),
-        ),
-        _candidate(
-          'urgent-lower-band',
-          due: 10,
-          priority: 0.21,
-          criteria: const MercyCriterionValues(repetitionLateness: 1),
-        ),
+    test('score modes use exact descending heap keys', () {
+      final List<Sm20MercyCandidate> source = <Sm20MercyCandidate>[
+        _candidate('middle', rank: 'B'),
+        _candidate('least', rank: 'C'),
+        _candidate('most', rank: 'A'),
       ];
-      final MercyPreview preview = planner.preview(
-        _request(
-          candidates: candidates,
-          beforeCards: const <int>[3, 0],
-          beforeTopics: const <int>[0, 0],
-          criteria: MercyCriteriaPolicy(
-            priorityBandWidth: 0.1,
-            deterministicSeed: 'fixture',
-            repetitionLatenessWeight: 1,
-          ),
+      final PriorityScale scale = PriorityScale(
+        source.map((Sm20MercyCandidate value) => value.priority),
+      );
+      Sm20MercyPlan run(MercyMode mode) => _plan(
+        candidates: source,
+        reschedulingDays: 1,
+        mode: mode,
+        scale: scale,
+        weights: const Sm20MercyWeights(
+          importance: 1,
+          lateness: 0,
+          investment: 0,
+          easiness: 0,
+          recency: 0,
         ),
       );
 
       expect(
-        preview.assignments.map((MercyAssignment value) => value.element.id),
-        <String>['urgent-same-band', 'slightly-higher', 'urgent-lower-band'],
+        run(MercyMode.highScoreFirst).ordered.map((value) => value!.ref.id),
+        <String>['most', 'middle', 'least'],
       );
-      expect(preview.policyVersion, kMercyPolicyVersion);
+      expect(
+        run(MercyMode.lowScoreFirst).ordered.map((value) => value!.ref.id),
+        <String>['least', 'middle', 'most'],
+      );
+      expect(
+        run(MercyMode.sourceOrder).ordered.map((value) => value!.ref.id),
+        <String>['middle', 'least', 'most'],
+      );
     });
+
+    test(
+      'mode 3 uses N fixed-range draws and retains deleted placeholders',
+      () {
+        final List<Sm20MercyCandidate> source = <Sm20MercyCandidate>[
+          _candidate('a'),
+          _candidate('deleted', isDeleted: true),
+          _candidate('b'),
+          _candidate('c'),
+        ];
+        final List<String?> expected = <String?>['a', null, 'b', 'c'];
+        final Sm20Prng expectedPrng = Sm20Prng(seed: 0x12345678);
+        for (var index = 0; index < expected.length; index += 1) {
+          final int other = expectedPrng.nextInt(expected.length);
+          final String? value = expected[index];
+          expected[index] = expected[other];
+          expected[other] = value;
+        }
+        final Sm20Prng actualPrng = Sm20Prng(seed: 0x12345678);
+        final Sm20MercyPlan plan = _plan(
+          candidates: source,
+          mode: MercyMode.random,
+          prng: actualPrng,
+        );
+
+        expect(plan.randomDraws, 4);
+        expect(actualPrng.state, expectedPrng.state);
+        expect(
+          plan.ordered.map((Sm20MercyCandidate? value) => value?.ref.id),
+          expected,
+        );
+        expect(plan.deletedPlaceholderCount, 1);
+        expect(plan.assignments, hasLength(3));
+        expect(
+          plan.assignments.map((Sm20MercyAssignment value) => value.ref.id),
+          isNot(contains('deleted')),
+        );
+      },
+    );
   });
 
-  test(
-    'identical inputs produce byte-identical previews and revision tokens',
-    () {
-      final MercyPreviewRequest request = _request(
-        candidates: <MercyCandidate>[
-          _candidate('a', due: 10, priority: 0.4),
-          _candidate('b', due: 10, priority: 0.4),
-        ],
-        beforeCards: const <int>[2, 0],
-        beforeTopics: const <int>[0, 0],
-        priorMercyCount: 1,
-        criteria: MercyCriteriaPolicy(
-          priorityBandWidth: 0.1,
-          deterministicSeed: 'stable-seed',
-          stableRandomWeight: 1,
+  group('Mercy capacity planner', () {
+    test('R/G edits enforce horizon relation and recompute N and C', () {
+      final Sm20ScheduledCounts counts = _counts(<int, int>{
+        98: 3,
+        99: 2,
+        100: 4,
+        101: 1,
+        102: 5,
+      });
+      final Sm20MercyCapacity nonfuture = const Sm20MercyCapacityPlanner()
+          .afterHorizonEdit(
+            today: _day(100),
+            collectionLearningStartDay: _day(98),
+            reschedulingDays: 3,
+            gatheringDays: 10,
+            includeFuture: false,
+            scheduledCounts: counts,
+          );
+      final Sm20MercyCapacity future = const Sm20MercyCapacityPlanner()
+          .afterHorizonEdit(
+            today: _day(100),
+            collectionLearningStartDay: _day(98),
+            reschedulingDays: 3,
+            gatheringDays: 2,
+            includeFuture: true,
+            scheduledCounts: counts,
+          );
+      final Sm20MercyCapacity gatheringEdited = const Sm20MercyCapacityPlanner()
+          .afterHorizonEdit(
+            today: _day(100),
+            collectionLearningStartDay: _day(98),
+            reschedulingDays: 5,
+            gatheringDays: 2,
+            includeFuture: true,
+            scheduledCounts: counts,
+            editedField: Sm20MercyHorizonField.gatheringDays,
+          );
+
+      expect(nonfuture.candidateCount, 15);
+      expect(nonfuture.elementsPerDay, 5);
+      expect(nonfuture.gatheringDays, 3);
+      expect(future.candidateCount, 15);
+      expect(future.elementsPerDay, 5);
+      expect(future.gatheringDays, 3);
+      expect(gatheringEdited.reschedulingDays, 2);
+      expect(gatheringEdited.gatheringDays, 2);
+      expect(gatheringEdited.candidateCount, 10);
+      expect(gatheringEdited.elementsPerDay, 5);
+    });
+
+    test('nonfuture daily-cap solver follows balance and allocation loop', () {
+      final Sm20MercyCapacity result = const Sm20MercyCapacityPlanner()
+          .afterDailyCapEdit(
+            today: _day(100),
+            collectionLearningStartDay: _day(98),
+            elementsPerDay: 3,
+            gatheringDays: 1,
+            includeFuture: false,
+            scheduledCounts: _counts(<int, int>{98: 3, 99: 2, 100: 4, 101: 1}),
+          );
+
+      expect(result.candidateCount, 10);
+      expect(result.reschedulingDays, 4);
+      expect(result.gatheringDays, 4);
+    });
+
+    test('future solver adds scheduled counts beyond gathering horizon', () {
+      final Sm20MercyCapacity result = const Sm20MercyCapacityPlanner()
+          .afterDailyCapEdit(
+            today: _day(100),
+            collectionLearningStartDay: _day(98),
+            elementsPerDay: 3,
+            gatheringDays: 2,
+            includeFuture: true,
+            scheduledCounts: _counts(<int, int>{
+              98: 3,
+              99: 2,
+              100: 4,
+              101: 1,
+              102: 5,
+            }),
+          );
+
+      expect(result.candidateCount, 15);
+      expect(result.reschedulingDays, 5);
+      expect(result.gatheringDays, 5);
+    });
+
+    test('subset nonfuture path uses ceil(N/C) without collection ledger', () {
+      final Sm20MercyCapacity result = const Sm20MercyCapacityPlanner()
+          .afterDailyCapEdit(
+            today: _day(100),
+            collectionLearningStartDay: _day(0),
+            elementsPerDay: 7,
+            gatheringDays: 1,
+            includeFuture: false,
+            scheduledCounts: Sm20ScheduledCounts(const <StudyDay, int>{}),
+            subsetCandidateCount: 15,
+          );
+
+      expect(result.candidateCount, 15);
+      expect(result.reschedulingDays, 3);
+      expect(result.gatheringDays, 3);
+    });
+
+    test('control caps and long-horizon warning use exact boundaries', () {
+      expect(
+        () => const Sm20MercyCapacityPlanner().afterDailyCapEdit(
+          today: _day(100),
+          collectionLearningStartDay: _day(0),
+          elementsPerDay: 5001,
+          gatheringDays: 1,
+          includeFuture: false,
+          scheduledCounts: Sm20ScheduledCounts(const <StudyDay, int>{}),
         ),
+        throwsRangeError,
       );
-
-      final MercyPreview first = planner.preview(request);
-      final MercyPreview second = planner.preview(request);
-      final MercyPreview restored = MercyPreview.fromJson(first.toJson());
-      expect(second.toJson(), first.toJson());
-      expect(restored.toJson(), first.toJson());
-      expect(second.confirmationToken.digest, first.confirmationToken.digest);
-      expect(first.warnings, <MercyWarning>[
-        MercyWarning.repeatedMercyMayHideChronicOverload,
-      ]);
-      expect(first.confirmationToken.candidateRevisions, hasLength(2));
-    },
-  );
+      expect(
+        const Sm20MercyCapacity(
+          candidateCount: 1,
+          elementsPerDay: 1,
+          reschedulingDays: 1825,
+          gatheringDays: 1825,
+          includeFuture: false,
+        ).warnsAboutLongHorizon,
+        isFalse,
+      );
+      expect(
+        const Sm20MercyCapacity(
+          candidateCount: 1,
+          elementsPerDay: 1,
+          reschedulingDays: 1826,
+          gatheringDays: 1825,
+          includeFuture: false,
+        ).warnsAboutLongHorizon,
+        isTrue,
+      );
+    });
+  });
 }
 
-MercyPreviewRequest _request({
-  required List<MercyCandidate> candidates,
-  List<int> beforeCards = const <int>[1, 0],
-  List<int> beforeTopics = const <int>[0, 0],
-  MercyScope scope = const MercyCollectionScope(),
-  int today = 10,
-  int collectingStart = 9,
-  int collectingEnd = 10,
-  bool includeFuture = false,
-  MercyDestinationPolicy? capacity,
-  ScheduleAdjustmentSet? adjustments,
-  MercyProtectionRules protection = const MercyProtectionRules(),
-  MercyCriteriaPolicy? criteria,
-  int priorMercyCount = 0,
-}) {
-  if (beforeCards.length != beforeTopics.length) {
-    throw ArgumentError('fixture ledgers must have the same length');
-  }
-  return MercyPreviewRequest(
-    today: _day(today),
-    scope: scope,
-    collectingPeriod: MercyCollectingPeriod(
-      start: _day(collectingStart),
-      end: _day(collectingEnd),
-    ),
-    includeFutureRepetitions: includeFuture,
-    destinationPolicy:
-        capacity ?? MercyDailyCapacity(cardsPerDay: 10, topicsPerDay: 10),
-    destinationWindow: MercyDestinationWindow(
-      days: <MercyDestinationDay>[
-        for (var index = 0; index < beforeCards.length; index++)
-          MercyDestinationDay(
-            day: _day(10 + index),
-            cardScheduledForAtUtc: DateTime.utc(2026, 3, 10 + index, 5),
-            beforeCardLoad: beforeCards[index],
-            beforeTopicLoad: beforeTopics[index],
-          ),
-      ],
-    ),
-    criteriaPolicy:
-        criteria ??
-        MercyCriteriaPolicy(
-          priorityBandWidth: 0.01,
-          deterministicSeed: 'fixture',
-        ),
-    protectionRules: protection,
-    candidates: candidates,
-    adjustments: adjustments ?? ScheduleAdjustmentSet.empty,
-    priorMercyBatchCountInPeriod: priorMercyCount,
-  );
-}
-
-MercyCandidate _candidate(
-  String id, {
-  required int due,
-  ElementType type = ElementType.card,
-  int revision = 1,
-  double priority = 0.5,
-  Set<String> branches = const <String>{},
-  MercyCriterionValues criteria = const MercyCriterionValues(),
-  bool isProtected = false,
-  bool isStep = false,
-  bool isEligible = true,
-}) {
-  final ElementRef ref = ElementRef(id: id, type: type);
-  return MercyCandidate(
-    ref: ref,
-    revision: revision,
-    currentEffectiveDueDay: _day(due),
-    priorityFraction: priority,
-    canonical: MercyCanonicalSnapshot(
-      serializedState: '{"id":"$id"}',
-      algorithmicDue: type == ElementType.card
-          ? SchedulerEvent.encodeUtcDue(DateTime.utc(2026, 3, due, 5))
-          : SchedulerEvent.encodeStudyDayDue(_day(due)),
-      schedulerName: type == ElementType.card
-          ? 'dart-fsrs'
-          : 'topic_afactor_v1',
-      schedulerVersion: 'fixture-v1',
-    ),
-    branchIds: branches,
-    criteria: criteria,
-    isProtected: isProtected,
-    isDueIntradayStep: isStep,
-    isLifecycleEligible: isEligible,
-  );
-}
-
-ScheduleAdjustment _cardBound({
-  required String id,
-  required ElementRef element,
-  required ScheduleAdjustmentReason reason,
-  required int day,
-}) => ScheduleAdjustment(
-  id: id,
-  element: element,
-  mode: ScheduleAdjustmentMode.lowerBound,
-  reason: reason,
-  notBeforeAtUtc: DateTime.utc(2026, 3, day, 12),
-  operationId: 'set-$id',
-  policyVersion: 'adjustments-v1',
-  createdAtUtc: DateTime.utc(2026, 3, 9, 12),
-  createdStudyDay: _day(9),
+Sm20MercyPlan _plan({
+  required Iterable<Sm20MercyCandidate> candidates,
+  Sm20MercyGatherMode gatherMode = Sm20MercyGatherMode.subset,
+  int gatheringDays = 1,
+  int reschedulingDays = 1,
+  MercyMode mode = MercyMode.highScoreFirst,
+  int learningStart = 0,
+  PriorityScale? scale,
+  Sm20MercyWeights weights = const Sm20MercyWeights(),
+  Sm20Prng? prng,
+}) => const Sm20MercyEngine().plan(
+  candidates: candidates,
+  gatherMode: gatherMode,
+  today: _day(100),
+  collectionLearningStartDay: _day(learningStart),
+  gatheringDays: gatheringDays,
+  reschedulingDays: reschedulingDays,
+  mode: mode,
+  matrix: _matrix(),
+  weights: weights,
+  priorityScale:
+      scale ??
+      PriorityScale(
+        candidates.map((Sm20MercyCandidate value) => value.priority),
+      ),
+  prng: prng ?? Sm20Prng(seed: 0),
 );
 
-StudyDay _day(int day) =>
-    StudyDay(year: 2026, month: 3, day: day, zoneId: 'UTC');
+Sm20MercyCandidate _candidate(
+  String id, {
+  ElementType type = ElementType.card,
+  String rank = 'M',
+  int scheduled = 100,
+  int? lastReview = 90,
+  int repetitions = 1,
+  int lapses = 0,
+  bool isScheduled = true,
+  bool isDeleted = false,
+}) => Sm20MercyCandidate(
+  ref: ElementRef(id: id, type: type),
+  priority: PriorityRank(rank),
+  scheduledDay: _day(scheduled),
+  lastReviewDay: lastReview == null ? null : _day(lastReview),
+  repetitionCount: repetitions,
+  lapseCount: lapses,
+  storedInterval: 10,
+  isScheduled: isScheduled,
+  isDeleted: isDeleted,
+);
+
+Sm20MercyMatrix _matrix() {
+  final List<int> values = List<int>.filled(400, 1000);
+  values[0] = 2000;
+  values[6 * 20 + 1] = 1500;
+  values[6 * 20 + 2] = 1250;
+  return Sm20MercyMatrix(values);
+}
+
+Sm20ScheduledCounts _counts(Map<int, int> values) =>
+    Sm20ScheduledCounts(<StudyDay, int>{
+      for (final MapEntry<int, int> entry in values.entries)
+        _day(entry.key): entry.value,
+    });
+
+StudyDay _day(int epochDay) => const StudyDay(
+  year: 1970,
+  month: 1,
+  day: 1,
+  zoneId: 'UTC',
+).addDays(epochDay);

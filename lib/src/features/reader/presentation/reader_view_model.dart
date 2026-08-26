@@ -460,17 +460,26 @@ final class ReaderViewModel
     return due;
   }
 
-  /// Declares the source finished. Never happens automatically at the end.
-  Future<void> finish() async {
+  /// Dismisses the source: stops scheduling it, keeps the content.
+  ///
+  /// SM20 has no Finish. Dismiss is the command that means "I am done with
+  /// this", and it clears the repetition state and sends priority to 100 as
+  /// the executable does — never automatically at the end of the text.
+  Future<void> dismiss() async {
     final current = state.valueOrNull;
     if (current == null || !current.canCommitProgress) return;
     await _command<TopicState>(
       (OperationId operation) => ref
           .read(readerHandlersProvider)
-          .finishSource(FinishSource(operation, sourceId: current.source.id)),
+          .dismiss(
+            DismissElement(
+              operation,
+              ref: ElementRef(id: current.source.id, type: ElementType.source),
+            ),
+          ),
       apply: (ReaderUiState s, TopicState topic) =>
           s.copyWith(topic: topic, isDone: true),
-      success: (_) => 'Finished. It stays in the Library.',
+      success: (_) => 'Dismissed. It stays in the Library.',
     );
   }
 

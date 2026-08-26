@@ -2,7 +2,6 @@
 library;
 
 import '../../domain/scheduling/card_scheduler.dart';
-import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../app_command.dart';
 
@@ -72,7 +71,7 @@ final class PostponeCard extends AppCommand {
     super.operationId, {
     required this.cardId,
     this.until,
-    this.kind = DeferralKind.manual,
+    this.isAutomatic = false,
     super.timestampUtc,
   });
 
@@ -82,5 +81,6 @@ final class PostponeCard extends AppCommand {
   /// interval — a fixed +1 day just returns it tomorrow into the same queue.
   final StudyDay? until;
 
-  final DeferralKind kind;
+  /// Whether overload handling issued this, rather than the user.
+  final bool isAutomatic;
 }

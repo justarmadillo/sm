@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:drift/drift.dart' hide isNull;
 import 'package:incremental_reader/src/data/database/app_database.dart';
 import 'package:incremental_reader/src/data/database/connection.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:test/test.dart';
 
@@ -33,7 +34,7 @@ void main() {
     return database;
   }
 
-  group('fresh v6 scheduler schema', () {
+  group('current scheduler schema', () {
     test('review history restricts parent deletion', () async {
       final AppDatabase database = await open();
       addTearDown(database.close);
@@ -64,124 +65,22 @@ void main() {
       );
     });
 
-    test('adjustment constraints and partial indexes enforce typed state',
-        () async {
+    test('retired scheduler tables are absent', () async {
       final AppDatabase database = await open();
       addTearDown(database.close);
 
-      // Auto-indexes created by UNIQUE constraints have no SQL of their own.
-      final Map<String, String> indexes = <String, String>{
-        for (final QueryRow row in await database.customSelect(
-          "SELECT name, sql FROM sqlite_master WHERE type = 'index' "
-          "AND tbl_name = 'schedule_adjustments' AND sql IS NOT NULL",
-        ).get())
-          row.read<String>('name'): row.read<String>('sql'),
-      };
-      expect(indexes, contains('idx_adjustments_active_exact'));
-      expect(
-        indexes['idx_adjustments_active_exact'],
-        contains('WHERE mode = 1 AND cleared_at_utc IS NULL'),
-      );
-      expect(indexes, contains('idx_adjustments_operation_reason'));
-
-      Future<void> insert({
-        required String id,
-        required String operationId,
-        required int elementType,
-        required int mode,
-        required int reason,
-        int? notBeforeAtUtc,
-        int? notBeforeStudyDay,
-        int? scheduledForAtUtc,
-        int? scheduledForStudyDay,
-      }) => database.customStatement(
-        'INSERT INTO schedule_adjustments (id, element_id, element_type, '
-        'mode, reason, not_before_at_utc, not_before_study_day, '
-        'scheduled_for_at_utc, scheduled_for_study_day, zone_id, '
-        'operation_id, policy_version, created_at_utc, created_study_day, '
-        'created_zone_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        <Object?>[
-          id,
-          'element',
-          elementType,
-          mode,
-          reason,
-          notBeforeAtUtc,
-          notBeforeStudyDay,
-          scheduledForAtUtc,
-          scheduledForStudyDay,
-          elementType == 2 ? null : 'Europe/Berlin',
-          operationId,
-          'schedule_adjustments_v1',
-          1000,
-          20000,
-          'Europe/Berlin',
-        ],
-      );
-
-      await insert(
-        id: 'exact-1',
-        operationId: 'op-exact-1',
-        elementType: 2,
-        mode: 1,
-        reason: 4,
-        scheduledForAtUtc: 2000,
-      );
-      await expectLater(
-        insert(
-          id: 'exact-2',
-          operationId: 'op-exact-2',
-          elementType: 2,
-          mode: 1,
-          reason: 4,
-          scheduledForAtUtc: 3000,
-        ),
-        throwsA(isA<Object>()),
-        reason: 'an element may have at most one active exact override',
-      );
-      await database.customStatement(
-        'UPDATE schedule_adjustments SET cleared_at_utc = 1500, '
-        "cleared_by_operation_id = 'clear-op' WHERE id = 'exact-1'",
-      );
-      await insert(
-        id: 'exact-2',
-        operationId: 'op-exact-2',
-        elementType: 2,
-        mode: 1,
-        reason: 4,
-        scheduledForAtUtc: 3000,
-      );
-
-      await expectLater(
-        insert(
-          id: 'wrong-domain',
-          operationId: 'op-wrong-domain',
-          elementType: 0,
-          mode: 0,
-          reason: 0,
-          notBeforeAtUtc: 4000,
-        ),
-        throwsA(isA<Object>()),
-        reason: 'topics use StudyDay values rather than UTC instants',
-      );
-      await expectLater(
-        insert(
-          id: 'wrong-shape',
-          operationId: 'op-wrong-shape',
-          elementType: 2,
-          mode: 1,
-          reason: 4,
-          notBeforeAtUtc: 4000,
-        ),
-        throwsA(isA<Object>()),
-        reason: 'an exact override cannot persist a lower-bound value',
-      );
+      final List<QueryRow> tables = await database
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name IN ('schedule_adjustments', 'daily_presentation_plans')",
+          )
+          .get();
+      expect(tables, isEmpty);
     });
   });
 
-  group('v5 to v6 scheduler migration', () {
-    test('preserves canonical schedules and imports append-only history',
-        () async {
+  group('legacy collection migration', () {
+    test('preserves canonical schedules and imports append-only history', () async {
       await _createV5Fixture(databaseFile);
 
       final AppDatabase migrated = await open();
@@ -197,53 +96,100 @@ void main() {
       expect(await migrated.isHealthy(), isTrue);
       expect(await migrated.foreignKeysValid(), isTrue);
 
-      final List<QueryRow> topics = await migrated.customSelect(
-        'SELECT t.element_id, t.step_index, t.interval_days, t.a_factor, '
-        't.algorithm_due_day, t.scheduler_kind, t.scheduler_version, '
-        's.due_day, s.original_due_day, s.legacy_due_provenance '
-        'FROM topic_states t JOIN element_schedules s '
-        'ON s.element_id = t.element_id AND s.element_type = t.element_type '
-        'ORDER BY t.element_id',
-      ).get();
+      final List<QueryRow> topics = await migrated
+          .customSelect(
+            'SELECT t.element_id, t.status, t.repetition_count, '
+            't.stored_interval, t.a_factor_raw, t.last_interval_ratio_raw, '
+            't.last_review_day, t.recent_postponement_count, '
+            't.total_postponement_count, '
+            's.due_day, s.original_due_day, s.legacy_due_provenance '
+            'FROM topic_states t JOIN element_schedules s '
+            'ON s.element_id = t.element_id AND s.element_type = t.element_type '
+            'ORDER BY t.element_id',
+          )
+          .get();
       expect(topics, hasLength(3));
 
       final QueryRow source = topics.singleWhere(
         (QueryRow row) => row.read<String>('element_id') == 's1',
       );
-      expect(source.read<int>('step_index'), 5);
-      expect(source.read<double>('interval_days'), 12.75);
-      expect(source.read<double>('a_factor'), 3.4);
-      expect(source.read<int>('algorithm_due_day'), 20001);
+      expect(source.read<int>('status'), 1);
+      expect(source.read<int>('repetition_count'), 5);
+      expect(source.read<int>('stored_interval'), 13);
+      expect(
+        _real48Value(source.read<String>('a_factor_raw')),
+        closeTo(3.4, 1e-10),
+      );
+      expect(source.read<String>('last_interval_ratio_raw'), '000000000000');
+      expect(source.read<int>('last_review_day'), 19990);
+      expect(source.read<int>('recent_postponement_count'), 2);
+      expect(source.read<int>('total_postponement_count'), 2);
       expect(source.read<int>('due_day'), 20001);
       expect(source.read<int>('original_due_day'), 20001);
-      expect(source.read<String>('scheduler_kind'), 'legacy_sequence');
-      expect(source.read<String>('scheduler_version'), 'legacy_sequence/1');
 
       final QueryRow extract = topics.singleWhere(
         (QueryRow row) => row.read<String>('element_id') == 'x1',
       );
-      expect(extract.read<int>('step_index'), 3);
-      expect(extract.read<double>('interval_days'), 7.25);
-      expect(extract.read<double>('a_factor'), 2.2);
-      expect(extract.read<int>('algorithm_due_day'), 20003);
+      expect(extract.read<int>('status'), 1);
+      expect(extract.read<int>('repetition_count'), 3);
+      expect(extract.read<int>('stored_interval'), 7);
+      expect(
+        _real48Value(extract.read<String>('a_factor_raw')),
+        closeTo(2.2, 1e-10),
+      );
+      expect(extract.read<int>('recent_postponement_count'), 1);
+      expect(extract.read<int>('total_postponement_count'), 1);
+      expect(extract.read<int>('due_day'), 20003);
 
       final QueryRow damaged = topics.singleWhere(
         (QueryRow row) => row.read<String>('element_id') == 's-damaged',
       );
-      expect(damaged.read<int>('algorithm_due_day'), 20100);
+      expect(damaged.read<int>('status'), 1);
+      expect(damaged.read<int>('repetition_count'), 8);
+      expect(
+        damaged.read<int>('stored_interval'),
+        92,
+        reason: 'the one-time conversion uses nearest-even SM20 rounding',
+      );
       expect(damaged.read<int>('due_day'), 20100);
       expect(damaged.read<int>('original_due_day'), 19999);
       expect(
         damaged.read<int>('legacy_due_provenance'),
         1,
-        reason: 'a contradictory legacy canonical due must be flagged rather '
+        reason:
+            'a contradictory legacy canonical due must be flagged rather '
             'than silently presented as trustworthy history',
       );
 
+      final Set<String> topicColumns = <String>{
+        for (final QueryRow row
+            in await migrated
+                .customSelect('PRAGMA table_info(topic_states)')
+                .get())
+          row.read<String>('name'),
+      };
+      expect(
+        topicColumns,
+        containsAll(<String>{
+          'status',
+          'repetition_count',
+          'stored_interval',
+          'a_factor_raw',
+        }),
+      );
+      expect(
+        topicColumns,
+        isNot(contains(anyOf('profile_id', 'scheduler_kind', 'interval_days'))),
+        reason: 'the runtime schema keeps only the SM20 scheduler',
+      );
+
       final Map<String, (String?, int?)> parents = <String, (String?, int?)>{
-        for (final QueryRow row in await migrated.customSelect(
-          'SELECT id, parent_element_id, parent_element_type FROM cards',
-        ).get())
+        for (final QueryRow row
+            in await migrated
+                .customSelect(
+                  'SELECT id, parent_element_id, parent_element_type FROM cards',
+                )
+                .get())
           row.read<String>('id'): (
             row.read<String?>('parent_element_id'),
             row.read<int?>('parent_element_type'),
@@ -253,9 +199,11 @@ void main() {
       expect(parents['c-source'], ('s1', 0));
       expect(parents['c-standalone'], (null, null));
 
-      final QueryRow reviewedMemory = await migrated.customSelect(
-        "SELECT * FROM card_memories WHERE card_id = 'c-extract'",
-      ).getSingle();
+      final QueryRow reviewedMemory = await migrated
+          .customSelect(
+            "SELECT * FROM card_memories WHERE card_id = 'c-extract'",
+          )
+          .getSingle();
       expect(reviewedMemory.read<double>('stability'), 17.125);
       expect(reviewedMemory.read<double>('difficulty'), 4.875);
       expect(reviewedMemory.read<int>('state'), 2);
@@ -282,9 +230,11 @@ void main() {
         },
       );
 
-      final QueryRow newMemory = await migrated.customSelect(
-        "SELECT * FROM card_memories WHERE card_id = 'c-source'",
-      ).getSingle();
+      final QueryRow newMemory = await migrated
+          .customSelect(
+            "SELECT * FROM card_memories WHERE card_id = 'c-source'",
+          )
+          .getSingle();
       expect(newMemory.read<int>('state'), 1);
       expect(newMemory.read<int>('step'), 0);
       expect(newMemory.read<double?>('stability'), isNull);
@@ -312,123 +262,119 @@ void main() {
         'review-practice',
       ]);
 
-      final List<QueryRow> imported = await migrated.customSelect(
-        'SELECT * FROM scheduler_events ORDER BY id',
-      ).get();
+      final List<QueryRow> imported = await migrated
+          .customSelect('SELECT * FROM scheduler_events ORDER BY id')
+          .get();
       expect(imported, hasLength(2));
       final QueryRow graded = imported.singleWhere(
-        (QueryRow row) => row.read<String>('id') ==
-            'migrated-review:review-graded',
+        (QueryRow row) =>
+            row.read<String>('id') == 'migrated-review:review-graded',
       );
       expect(graded.read<String>('operation_id'), 'legacy-op-graded');
       expect(graded.read<String>('event_type'), 'card_reviewed');
       expect(graded.read<String>('policy_version'), 'legacy_import_v1');
       expect(graded.read<String>('study_day_zone_id'), 'Europe/Berlin');
-      expect(graded.read<String>('algorithmic_due_before'), 'utc:1700100000000');
+      expect(
+        graded.read<String>('algorithmic_due_before'),
+        'utc:1700100000000',
+      );
       expect(graded.read<String>('algorithmic_due_after'), 'utc:1701234567890');
       expect(
         jsonDecode(graded.read<String>('metadata_json')),
         containsPair('snapshot_completeness', 'review_state_only'),
       );
       expect(
-        imported.singleWhere(
-          (QueryRow row) => row.read<String>('id') ==
-              'migrated-review:review-practice',
-        ).read<String>('event_type'),
+        imported
+            .singleWhere(
+              (QueryRow row) =>
+                  row.read<String>('id') == 'migrated-review:review-practice',
+            )
+            .read<String>('event_type'),
         'practice_reviewed',
       );
 
-      // Dropping a legacy deferral would silently release work the user had
-      // pushed away, so v7 converts each one into the lower bound it always
-      // meant and labels its provenance rather than claiming it was typed all
-      // along. The retired columns are cleared so only one mechanism defers.
-      final List<QueryRow> adjustments = await migrated
-          .customSelect('SELECT * FROM schedule_adjustments ORDER BY id')
+      // Compatibility storage is intentionally discarded: SM20 owns the
+      // canonical schedule directly, with no adjustment or presentation-plan
+      // table left alongside it.
+      final List<QueryRow> retiredTables = await migrated
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name IN ('schedule_adjustments', 'daily_presentation_plans')",
+          )
           .get();
-      expect(adjustments, hasLength(2));
-      for (final QueryRow row in adjustments) {
-        expect(row.read<int>('mode'), 0);
-        expect(row.read<String>('policy_version'), 'legacy_deferral_import_v1');
-        expect(row.read<int?>('cleared_at_utc'), isNull);
-      }
-      final QueryRow topicBound = adjustments.singleWhere(
-        (QueryRow row) => row.read<String>('element_id') == 'x1',
-      );
-      expect(topicBound.read<int>('reason'), 0, reason: 'manual Later');
-      expect(topicBound.read<int>('not_before_study_day'), 20010);
-      expect(topicBound.read<int?>('not_before_at_utc'), isNull);
+      expect(retiredTables, isEmpty);
 
-      final QueryRow cardBound = adjustments.singleWhere(
-        (QueryRow row) => row.read<String>('element_id') == 'c-extract',
-      );
-      expect(cardBound.read<int>('not_before_at_utc'), 1702000000000);
-      expect(cardBound.read<int?>('not_before_study_day'), isNull);
-
+      // The deferral overlay is retired outright rather than cleared: SM20
+      // rewrites the canonical due date, so a second stored date could only
+      // ever contradict it. The columns must be gone, not merely empty.
+      Future<List<String>> columnsOf(String table) async => <String>[
+        for (final QueryRow row
+            in await migrated.customSelect('PRAGMA table_info($table)').get())
+          row.read<String>('name'),
+      ];
       expect(
-        await migrated
-            .customSelect(
-              'SELECT * FROM element_schedules '
-              'WHERE deferred_until IS NOT NULL OR deferral_kind <> 0',
-            )
-            .get(),
-        isEmpty,
+        await columnsOf('element_schedules'),
+        isNot(anyOf(contains('deferred_until'), contains('deferral_kind'))),
       );
       expect(
-        await migrated
-            .customSelect(
-              'SELECT * FROM card_memories WHERE deferred_until_utc IS NOT NULL',
-            )
-            .get(),
-        isEmpty,
+        await columnsOf('card_memories'),
+        isNot(contains('deferred_until_utc')),
       );
     });
 
-    test('produces stable total priority order and upgraded FK parity',
-        () async {
-      await _createV5Fixture(databaseFile);
-      AppDatabase migrated = await open();
+    test(
+      'produces stable total priority order and upgraded FK parity',
+      () async {
+        await _createV5Fixture(databaseFile);
+        AppDatabase migrated = await open();
 
-      Future<Map<String, String>> priorities(AppDatabase database) async =>
-          <String, String>{
-            for (final QueryRow row in await database.customSelect(
-              'SELECT element_id, priority_key FROM element_schedules '
-              'ORDER BY priority_key',
-            ).get())
-              row.read<String>('element_id'): row.read<String>('priority_key'),
-          };
+        Future<Map<String, String>> priorities(
+          AppDatabase database,
+        ) async => <String, String>{
+          for (final QueryRow row
+              in await database
+                  .customSelect(
+                    'SELECT element_id, priority_key FROM element_schedules '
+                    'ORDER BY priority_key',
+                  )
+                  .get())
+            row.read<String>('element_id'): row.read<String>('priority_key'),
+        };
 
-      final Map<String, String> beforeRestart = await priorities(migrated);
-      expect(beforeRestart.keys, <String>[
-        'c-extract',
-        's-damaged',
-        's1',
-        'x1',
-        'c-source',
-        'c-standalone',
-      ]);
-      expect(beforeRestart.values.toSet(), hasLength(beforeRestart.length));
+        final Map<String, String> beforeRestart = await priorities(migrated);
+        expect(beforeRestart.keys, <String>[
+          'c-extract',
+          's-damaged',
+          's1',
+          'x1',
+          'c-source',
+          'c-standalone',
+        ]);
+        expect(beforeRestart.values.toSet(), hasLength(beforeRestart.length));
 
-      final Map<String, String> reviewFk = await _foreignKeyActions(
-        migrated,
-        'review_events',
-      );
-      final Map<String, String> memoryFk = await _foreignKeyActions(
-        migrated,
-        'card_memories',
-      );
-      expect(reviewFk['card_id'], 'RESTRICT');
-      expect(
-        memoryFk['card_id'],
-        'RESTRICT',
-        reason: 'an upgraded collection must have the same scheduler '
-            'integrity constraints as a fresh v6 collection',
-      );
+        final Map<String, String> reviewFk = await _foreignKeyActions(
+          migrated,
+          'review_events',
+        );
+        final Map<String, String> memoryFk = await _foreignKeyActions(
+          migrated,
+          'card_memories',
+        );
+        expect(reviewFk['card_id'], 'RESTRICT');
+        expect(
+          memoryFk['card_id'],
+          'RESTRICT',
+          reason:
+              'an upgraded collection must have the same scheduler '
+              'integrity constraints as a fresh v6 collection',
+        );
 
-      await migrated.close();
-      migrated = await open();
-      addTearDown(migrated.close);
-      expect(await priorities(migrated), beforeRestart);
-    });
+        await migrated.close();
+        migrated = await open();
+        addTearDown(migrated.close);
+        expect(await priorities(migrated), beforeRestart);
+      },
+    );
   });
 }
 
@@ -436,9 +382,8 @@ Future<Map<String, String>> _foreignKeyActions(
   AppDatabase database,
   String table,
 ) async => <String, String>{
-  for (final QueryRow row in await database
-      .customSelect('PRAGMA foreign_key_list($table)')
-      .get())
+  for (final QueryRow row
+      in await database.customSelect('PRAGMA foreign_key_list($table)').get())
     row.read<String>('from'): row.read<String>('on_delete'),
 };
 
@@ -495,9 +440,7 @@ Future<void> _createV5Fixture(File file) async {
       // The indexes a v5 collection really carries. A table rebuild replays
       // every index attached to the table, so a fixture without them cannot
       // reproduce what upgrading a real file does.
-      legacy.execute(
-        'CREATE INDEX idx_cards_extract ON cards (extract_id)',
-      );
+      legacy.execute('CREATE INDEX idx_cards_extract ON cards (extract_id)');
       legacy.execute('CREATE INDEX idx_cards_source ON cards (source_id)');
       legacy.execute(_v5SchedulesSql);
       legacy.execute(_v5TopicStatesSql);
@@ -689,3 +632,8 @@ const String _v5ReviewEventsSql = '''
     operation_id TEXT NOT NULL
   )
 ''';
+
+double _real48Value(String hex) => DelphiReal48.fromBytes(<int>[
+  for (var offset = 0; offset < hex.length; offset += 2)
+    int.parse(hex.substring(offset, offset + 2), radix: 16),
+]).value;

@@ -17,8 +17,6 @@ import '../../core/ids.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/schedule_adjustment.dart';
-import '../../domain/scheduling/schedule_adjustment_codec.dart';
 import '../../domain/scheduling/scheduler_event.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
@@ -54,7 +52,7 @@ final class SchedulingJournal {
   /// Snapshot of a card as it stands now.
   RevlogSnapshot cardSnapshot(CardState state, {double? pressure}) =>
       RevlogSnapshot(
-        dueAtUtc: state.memory.effectiveDueAtUtc,
+        dueAtUtc: state.memory.dueAtUtc,
         stability: state.memory.stability,
         difficulty: state.memory.difficulty,
         learningState: state.memory.state.value,
@@ -123,8 +121,6 @@ final class SchedulingJournal {
     String? stateAfter,
     String? algorithmicDueBefore,
     String? algorithmicDueAfter,
-    ScheduleAdjustmentSnapshot? adjustmentsBefore,
-    ScheduleAdjustmentSnapshot? adjustmentsAfter,
     String? undoesEventId,
     String? batchId,
     Map<String, Object?>? metadata,
@@ -143,12 +139,6 @@ final class SchedulingJournal {
       stateAfter: stateAfter,
       algorithmicDueBefore: algorithmicDueBefore,
       algorithmicDueAfter: algorithmicDueAfter,
-      adjustmentsBefore: adjustmentsBefore == null
-          ? null
-          : encodeAdjustmentSnapshot(adjustmentsBefore),
-      adjustmentsAfter: adjustmentsAfter == null
-          ? null
-          : encodeAdjustmentSnapshot(adjustmentsAfter),
       undoesEventId: undoesEventId,
       batchId: batchId,
       metadata: metadata,

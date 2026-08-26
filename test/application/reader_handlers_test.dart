@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:collection/collection.dart';
 import 'package:incremental_reader/src/application/ports/repositories.dart';
 import 'package:incremental_reader/src/application/reader/reader_commands.dart';
 import 'package:incremental_reader/src/application/reader/reader_handlers.dart';
@@ -13,7 +12,6 @@ import 'package:incremental_reader/src/domain/content/source.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
 import 'package:incremental_reader/src/domain/scheduling/queue_policy.dart';
-import 'package:incremental_reader/src/domain/scheduling/schedule_adjustment.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:test/test.dart';
@@ -43,28 +41,16 @@ extension _Fixtures on AppHarness {
   }
 
   Future<TopicStateSnapshot> topicOf(String sourceId) async {
-    final ElementRef ref = ElementRef(
-      id: sourceId,
-      type: ElementType.source,
-    );
+    final ElementRef ref = ElementRef(id: sourceId, type: ElementType.source);
     final topic = await learning.findTopic(ref);
-    final List<ScheduleAdjustment> adjustments = await learning
-        .listActiveAdjustments(elements: <ElementRef>{ref});
+    // There is no overlay to resolve any more: SM20 rewrites the canonical
+    // due date, so the stored schedule is the whole answer.
     return TopicStateSnapshot(
       dueDay: topic!.schedule.algorithmicDueDay.toString(),
-      effectiveDueDay: const EffectiveDueService()
-          .topicDueStudyDay(
-            topic: ref,
-            algorithmicDueStudyDay: topic.schedule.algorithmicDueDay,
-            adjustments: ScheduleAdjustmentSet(adjustments),
-          )
-          .toString(),
-      stepIndex: topic.stepIndex,
+      storedInterval: topic.storedInterval,
+      repetitionCountOrZero: topic.repetitionCount,
+      status: topic.status,
       lifecycle: topic.schedule.lifecycle,
-      adjustmentReasons: <ScheduleAdjustmentReason>{
-        for (final ScheduleAdjustment adjustment in adjustments)
-          adjustment.reason,
-      },
     );
   }
 
@@ -76,13 +62,8 @@ extension _Fixtures on AppHarness {
       studyDay,
     )) {
       if (candidate.ref != ref) continue;
-      return candidate.isEligible(
-        nowUtc: DateTime.utc(
-          studyDay.year,
-          studyDay.month,
-          studyDay.day,
-          23,
-        ),
+      return candidate.isDue(
+        nowUtc: DateTime.utc(studyDay.year, studyDay.month, studyDay.day, 23),
         today: studyDay,
       );
     }
@@ -94,44 +75,40 @@ extension _Fixtures on AppHarness {
 final class TopicStateSnapshot {
   const TopicStateSnapshot({
     required this.dueDay,
-    required this.effectiveDueDay,
-    required this.stepIndex,
+    required this.storedInterval,
+    required this.repetitionCountOrZero,
+    required this.status,
     required this.lifecycle,
-    required this.adjustmentReasons,
   });
 
   final String dueDay;
-  final String effectiveDueDay;
-  final int stepIndex;
+  final int storedInterval;
+  final int repetitionCountOrZero;
+  final Sm20ElementStatus status;
   final ElementLifecycle lifecycle;
-  final Set<ScheduleAdjustmentReason> adjustmentReasons;
 
   @override
   bool operator ==(Object other) =>
       other is TopicStateSnapshot &&
       other.dueDay == dueDay &&
-      other.effectiveDueDay == effectiveDueDay &&
-      other.stepIndex == stepIndex &&
-      other.lifecycle == lifecycle &&
-      const SetEquality<ScheduleAdjustmentReason>().equals(
-        other.adjustmentReasons,
-        adjustmentReasons,
-      );
+      other.storedInterval == storedInterval &&
+      other.repetitionCountOrZero == repetitionCountOrZero &&
+      other.status == status &&
+      other.lifecycle == lifecycle;
 
   @override
   int get hashCode => Object.hash(
     dueDay,
-    effectiveDueDay,
-    stepIndex,
+    storedInterval,
+    repetitionCountOrZero,
+    status,
     lifecycle,
-    const SetEquality<ScheduleAdjustmentReason>().hash(adjustmentReasons),
   );
 
   @override
   String toString() =>
-      'due=$dueDay effective=$effectiveDueDay '
-      'step=$stepIndex ${lifecycle.name} '
-      '${adjustmentReasons.map((ScheduleAdjustmentReason r) => r.wireName)}';
+      'due=$dueDay interval=$storedInterval reps=$repetitionCountOrZero '
+      '${status.name} ${lifecycle.name}';
 }
 
 void main() {
@@ -157,7 +134,9 @@ void main() {
 
       final snapshot = await harness.topicOf(source.id);
       expect(snapshot.dueDay, '2026-03-05');
-      expect(snapshot.stepIndex, 0);
+      // A freshly imported source is Pending with no interval yet.
+      expect(snapshot.storedInterval, 0);
+      expect(snapshot.status, Sm20ElementStatus.pending);
       expect(snapshot.lifecycle, ElementLifecycle.active);
     });
 
@@ -314,13 +293,20 @@ void main() {
       expect(result.isOk, isTrue);
       final snapshot = await harness.topicOf(source.id);
       expect(snapshot.dueDay, '2026-03-06');
-      expect(snapshot.stepIndex, 1);
+      // The first repetition memorizes the topic and stores the interval it
+      // chose, which is what puts the due day one day out.
+      expect(snapshot.status, Sm20ElementStatus.memorized);
+      expect(snapshot.storedInterval, 1);
 
       final logged = (await harness.learning.recentActivity()).firstWhere(
         (ActivityRecord r) => r.kind == 'topic.encounter_completed',
       );
       expect(logged.durationMs, 90000);
-      expect(logged.metadata!['interval_days'], 1);
+      // SM20 records what the repetition actually decided: the interval it
+      // came from, the one it selected, and the A on both sides.
+      expect(logged.metadata!['stored_interval'], 1);
+      expect(logged.metadata!['old_interval'], 0);
+      expect(logged.metadata!['next_due'], '2026-03-06');
     });
 
     test('is exactly-once for a retried operation id', () async {
@@ -343,7 +329,11 @@ void main() {
       expect(retry.unwrap().schedule.dueDay, first.unwrap().schedule.dueDay);
 
       final snapshot = await harness.topicOf(source.id);
-      expect(snapshot.stepIndex, 1, reason: 'the retry must not advance again');
+      expect(
+        snapshot.repetitionCountOrZero,
+        1,
+        reason: 'the retry must not advance again',
+      );
       expect(snapshot.dueDay, first.unwrap().schedule.dueDay.toString());
       expect(
         (await harness.learning.recentActivity()).where(
@@ -366,7 +356,7 @@ void main() {
       );
 
       final snapshot = await harness.topicOf(source.id);
-      expect(snapshot.stepIndex, 2);
+      expect(snapshot.repetitionCountOrZero, 2);
       expect(snapshot.dueDay, '2026-03-08');
     });
 
@@ -387,7 +377,7 @@ void main() {
   });
 
   group('Later', () {
-    test('moves eligibility without advancing the sequence', () async {
+    test('rewrites the canonical due without advancing the sequence', () async {
       final source = await harness.importFixture();
       final ref = ElementRef(id: source.id, type: ElementType.source);
 
@@ -400,20 +390,24 @@ void main() {
       );
 
       final snapshot = await harness.topicOf(source.id);
+      // SM20 has no deferral overlay. Later is the section 8.1 low-level
+      // reschedule, so it moves the canonical due date itself — and that is
+      // the point: there is no second, shadow due date to disagree with it.
+      expect(snapshot.dueDay, '2026-03-08');
+      // What it must not do is count as a repetition.
       expect(
-        snapshot.stepIndex,
-        0,
-        reason: 'Later moves eligibility and nothing else',
+        snapshot.status,
+        Sm20ElementStatus.memorized,
+        reason: 'a nonmemorized element is admitted by the reschedule',
       );
+      final TopicState topic = (await harness.learning.findTopic(
+        ElementRef(id: source.id, type: ElementType.source),
+      ))!;
       expect(
-        snapshot.dueDay,
-        '2026-03-05',
-        reason: 'the canonical due is what Later must leave alone',
+        topic.aFactor,
+        closeTo(1.2, 1e-9),
+        reason: 'a low-level reschedule never touches A',
       );
-      expect(snapshot.effectiveDueDay, '2026-03-08');
-      expect(snapshot.adjustmentReasons, <ScheduleAdjustmentReason>{
-        ScheduleAdjustmentReason.manualLater,
-      });
     });
 
     test('a postponed source drops out of today and returns later', () async {
@@ -438,16 +432,21 @@ void main() {
 
   group('lifecycle', () {
     test(
-      'Finish removes a source from the queue but keeps its content',
+      'Dismiss removes a source from the queue but keeps its content',
       () async {
+        // SM20 knows pending, memorized, dismissed and deleted. There is no
+        // Finish: stopping a source while keeping it is exactly Dismiss.
         final source = await harness.importFixture();
-        await harness.reader.finishSource(
-          FinishSource(harness.nextOperation(), sourceId: source.id),
+        await harness.reader.dismiss(
+          DismissElement(
+            harness.nextOperation(),
+            ref: ElementRef(id: source.id, type: ElementType.source),
+          ),
         );
 
         expect(
           (await harness.topicOf(source.id)).lifecycle,
-          ElementLifecycle.finished,
+          ElementLifecycle.dismissed,
         );
         expect(
           await harness.isEligibleOn(
@@ -460,33 +459,30 @@ void main() {
       },
     );
 
-    test(
-      'reactivating a finished source makes it due today at its step',
-      () async {
-        final source = await harness.importFixture();
-        final ref = ElementRef(id: source.id, type: ElementType.source);
-        await harness.reader.completeEncounter(
-          CompleteTopicEncounter(harness.nextOperation(), ref: ref),
-        );
-        await harness.reader.finishSource(
-          FinishSource(harness.nextOperation(), sourceId: source.id),
-        );
+    test('Undismiss restores only the status byte, not the schedule', () async {
+      final source = await harness.importFixture();
+      final ref = ElementRef(id: source.id, type: ElementType.source);
+      await harness.reader.completeEncounter(
+        CompleteTopicEncounter(harness.nextOperation(), ref: ref),
+      );
+      await harness.reader.dismiss(
+        DismissElement(harness.nextOperation(), ref: ref),
+      );
 
-        clock.advance(const Duration(days: 10));
-        await harness.reader.reactivate(
-          ReactivateElement(harness.nextOperation(), ref: ref),
-        );
+      clock.advance(const Duration(days: 10));
+      await harness.reader.undismiss(
+        UndismissSource(harness.nextOperation(), ref: ref),
+      );
 
-        final snapshot = await harness.topicOf(source.id);
-        expect(snapshot.lifecycle, ElementLifecycle.active);
-        expect(
-          snapshot.dueDay,
-          '2026-03-06',
-          reason: 'reactivation restores the schedule; it does not rewrite it',
-        );
-        expect(snapshot.stepIndex, 1, reason: 'a pause is not a reset');
-      },
-    );
+      final snapshot = await harness.topicOf(source.id);
+      expect(snapshot.lifecycle, ElementLifecycle.active);
+      // Section 9.7: Undismiss changes the status byte and nothing else. It
+      // deliberately does not put back the interval, the repetition count,
+      // or the priority that Dismiss cleared, so the element returns as
+      // Pending rather than resuming where it left off.
+      expect(snapshot.status, Sm20ElementStatus.pending);
+      expect(snapshot.storedInterval, 0);
+    });
 
     test('changing pace is content metadata and reschedules nothing', () async {
       final source = await harness.importFixture();
@@ -504,12 +500,10 @@ void main() {
       );
 
       final topic = await harness.learning.findTopic(ref);
-      expect(
-        topic!.schedulerKind,
-        TopicSchedulerKind.topicAFactorV1,
-        reason: 'a legacy pace control must not migrate a scheduler family',
-      );
-      expect(topic.stepIndex, 1);
+      // Pace is content metadata. It must leave every scheduling field alone,
+      // and SM20 has only one scheduler family to be in.
+      expect(topic!.repetitionCount, 1);
+      expect(topic.status, Sm20ElementStatus.memorized);
       expect(
         (await harness.content.findSource(source.id))!.pace,
         ReadingPace.slow,

@@ -1,355 +1,308 @@
 library;
 
 import 'package:incremental_reader/src/application/scheduling/mercy_workflow.dart';
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/domain/scheduling/mercy.dart';
-import 'package:incremental_reader/src/domain/scheduling/schedule_adjustment.dart';
-import 'package:incremental_reader/src/domain/scheduling/scheduler_event.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
 import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:test/test.dart';
 
 void main() {
-  const StudyDayCalendar calendar = StudyDayCalendar(zone: FixedOffsetZone.utc);
-  const MercyPlanner planner = MercyPlanner(calendar: calendar);
-  const MercyWorkflow workflow = MercyWorkflow();
+  group('MercyPreview persistence', () {
+    test('round-trips the exact canonical engine plan', () {
+      const ElementRef topicRef = ElementRef(
+        id: 'topic-1',
+        type: ElementType.source,
+      );
+      const ElementRef cardRef = ElementRef(
+        id: 'card-1',
+        type: ElementType.card,
+      );
+      final Sm20MercyCandidate topic = _candidate(
+        ref: topicRef,
+        scheduledDay: _day(8),
+        revision: 7,
+      );
+      final Sm20MercyCandidate card = _candidate(
+        ref: cardRef,
+        scheduledDay: _day(9),
+        revision: 11,
+      );
+      final Sm20MercyScore topicScore = _score(800000);
+      final Sm20MercyScore cardScore = _score(700000);
+      final Sm20MercyPlan plan = Sm20MercyPlan(
+        gathered: <Sm20MercyCandidate>[card, topic],
+        ordered: <Sm20MercyCandidate?>[topic, card],
+        assignments: <Sm20MercyAssignment>[
+          Sm20MercyAssignment(
+            candidate: topic,
+            score: topicScore,
+            sourceIndex: 1,
+            orderedIndex: 0,
+            targetDay: _day(10),
+          ),
+          Sm20MercyAssignment(
+            candidate: card,
+            score: cardScore,
+            sourceIndex: 0,
+            orderedIndex: 1,
+            targetDay: _day(11),
+          ),
+        ],
+        scores: <ElementRef, Sm20MercyScore>{
+          topicRef: topicScore,
+          cardRef: cardScore,
+        },
+        reschedulingDays: 2,
+        blockSize: 1,
+        randomDraws: 2,
+        prngState: Sm20PrngState(0x10203040),
+        deletedPlaceholderCount: 0,
+      );
 
-  test('apply matches preview and changes presentation state only', () {
-    final MercyCandidate candidate = _candidate(revision: 7, effectiveDay: 13);
-    final ScheduleAdjustment manual = _bound(
-      id: 'manual',
-      reason: ScheduleAdjustmentReason.manualLater,
-      day: 12,
-    );
-    final ScheduleAdjustment automatic = _bound(
-      id: 'automatic',
-      reason: ScheduleAdjustmentReason.autoOverflow,
-      day: 13,
-    );
-    final ScheduleAdjustment oldExact = _exact(
-      id: 'old-exact',
-      reason: ScheduleAdjustmentReason.manualReschedule,
-      day: 11,
-    );
-    final ScheduleAdjustmentSet before = ScheduleAdjustmentSet(
-      <ScheduleAdjustment>[manual, automatic, oldExact],
-    );
-    final MercyPreview preview = planner.preview(
-      _request(candidate: candidate, adjustments: before),
-    );
+      final MercyPreview preview = MercyPreview.fromPlan(
+        plan: plan,
+        today: _day(10),
+        collectionLearningStartDay: _day(1),
+        gatheringDays: 10,
+        mode: MercyMode.random,
+        gatherMode: Sm20MercyGatherMode.collection,
+        prngSeedBefore: 0x01020304,
+        canonicalStates: <ElementRef, String>{
+          topicRef: '{"kind":"topic"}',
+          cardRef: '{"kind":"card"}',
+        },
+      );
 
-    final MercyApplyPlan plan = workflow.planApply(
-      preview: preview,
-      currentCandidates: <MercyCandidate>[candidate],
-      currentAdjustments: before,
+      final String encoded = preview.toJson();
+      final MercyPreview decoded = MercyPreview.fromJson(encoded);
+
+      expect(decoded.toJson(), encoded);
+      expect(decoded.selectedCount, 2);
+      expect(decoded.selectedCardCount, 1);
+      expect(decoded.selectedTopicCount, 1);
+      expect(decoded.gatheredCount, 2);
+      expect(decoded.mode, MercyMode.random);
+      expect(decoded.gatherMode, Sm20MercyGatherMode.collection);
+      expect(decoded.prngSeedBefore, 0x01020304);
+      expect(decoded.prngSeedAfter, 0x10203040);
+      expect(decoded.items.first.scheduleRevision, 7);
+      expect(decoded.items.first.canonicalBefore, '{"kind":"topic"}');
+      expect(
+        decoded.afterLoad
+            .map(
+              (MercyDailyLoad load) =>
+                  (load.day, load.cards, load.topics, load.total),
+            )
+            .toList(),
+        <(StudyDay, int, int, int)>[(_day(10), 0, 1, 1), (_day(11), 1, 0, 1)],
+      );
+    });
+
+    test(
+      'retains deleted subset placeholders without inventing assignments',
+      () {
+        const ElementRef missing = ElementRef(
+          id: 'missing',
+          type: ElementType.extract,
+        );
+        final Sm20MercyCandidate placeholder = _candidate(
+          ref: missing,
+          scheduledDay: _day(10),
+          isScheduled: false,
+          isDeleted: true,
+        );
+        final MercyPreview preview = MercyPreview.fromPlan(
+          plan: Sm20MercyPlan(
+            gathered: <Sm20MercyCandidate>[placeholder],
+            ordered: const <Sm20MercyCandidate?>[null],
+            assignments: const <Sm20MercyAssignment>[],
+            scores: const <ElementRef, Sm20MercyScore>{},
+            reschedulingDays: 1,
+            blockSize: 1,
+            randomDraws: 0,
+            prngState: Sm20PrngState(9),
+            deletedPlaceholderCount: 1,
+          ),
+          today: _day(10),
+          collectionLearningStartDay: _day(1),
+          gatheringDays: 10,
+          mode: MercyMode.sourceOrder,
+          gatherMode: Sm20MercyGatherMode.subset,
+          prngSeedBefore: 9,
+          canonicalStates: const <ElementRef, String>{},
+        );
+
+        expect(preview.gatheredCount, 1);
+        expect(preview.selectedCount, 0);
+        expect(preview.deletedPlaceholderCount, 1);
+        expect(preview.afterLoad, isEmpty);
+        expect(
+          MercyPreview.fromJson(preview.toJson()).deletedPlaceholderCount,
+          1,
+        );
+      },
+    );
+  });
+
+  group('canonical state tokens', () {
+    test('topic state round-trips losslessly', () {
+      final TopicState topic = TopicState(
+        schedule: _schedule(
+          const ElementRef(id: 'topic-state', type: ElementType.extract),
+          dueDay: _day(17),
+          revision: 13,
+        ),
+        status: Sm20ElementStatus.memorized,
+        repetitionCount: 14,
+        lapseCount: 3,
+        storedInterval: 19,
+        lastReviewDay: _day(7),
+        aFactorRaw: DelphiReal48.fromBytes(const <int>[
+          0x81,
+          0x9a,
+          0x99,
+          0x99,
+          0x99,
+          0x19,
+        ]),
+        lastIntervalRatioRaw: DelphiReal48.fromDouble(1.75),
+        historyBlockId: 23,
+        recentPostponementCount: 2,
+        totalPostponementCount: 5,
+        learningControl: 4,
+        encountersSinceLastCard: 6,
+        revision: 17,
+      );
+
+      final String encoded = encodeMercyTopicState(topic);
+      final TopicState decoded = decodeMercyTopicState(encoded);
+
+      expect(encodeMercyTopicState(decoded), encoded);
+      expect(decoded.schedule.ref, topic.schedule.ref);
+      expect(decoded.schedule.priority, topic.schedule.priority);
+      expect(decoded.schedule.dueDay, topic.schedule.dueDay);
+      expect(decoded.status, topic.status);
+      expect(decoded.aFactorRaw, topic.aFactorRaw);
+      expect(decoded.lastIntervalRatioRaw, topic.lastIntervalRatioRaw);
+      expect(decoded.revision, 17);
+    });
+
+    test('card state round-trips losslessly', () {
+      final CardState card = CardState(
+        schedule: _schedule(
+          const ElementRef(id: 'card-state', type: ElementType.card),
+          dueDay: _day(15),
+          revision: 9,
+        ),
+        memory: CardMemory(
+          cardId: 'card-state',
+          state: CardLearningState.review,
+          step: null,
+          stability: 12.5,
+          difficulty: 6.25,
+          reps: 8,
+          lapses: 2,
+          lastReviewAtUtc: DateTime.utc(2026, 3, 3, 9),
+          dueAtUtc: DateTime.utc(2026, 3, 15, 9),
+          originalDueAtUtc: DateTime.utc(2026, 3, 15, 9),
+          schedulerVersion: kCardSchedulerVersion,
+          parametersVersion: kCardParametersVersion,
+          postponeCount: 4,
+          scheduledDays: 12,
+          revision: 12,
+        ),
+      );
+
+      final String encoded = encodeMercyCardState(card);
+      final CardState decoded = decodeMercyCardState(encoded);
+
+      expect(encodeMercyCardState(decoded), encoded);
+      expect(decoded, card);
+      expect(decoded.memory.reps, 8);
+      expect(decoded.memory.postponeCount, 4);
+    });
+  });
+
+  test('applied batch snapshot round-trips exact before/after tokens', () {
+    final MercyAppliedBatchSnapshot snapshot = MercyAppliedBatchSnapshot(
       batchId: 'batch-1',
-      operationId: 'apply-1',
-      occurredAtUtc: DateTime.utc(2026, 3, 10, 8),
+      appliedEventId: 'event-batch',
+      policyVersion: kSm20MercyPolicyVersion,
       studyDay: _day(10),
-    );
-
-    expect(plan.changesCanonicalSchedulerState, isFalse);
-    expect(plan.preview.assignments.single.toDay, _day(12));
-    expect(plan.priorAdjustments.activeAdjustments, hasLength(3));
-    expect(
-      plan.adjustmentMutation.after
-          .activeFor(candidate.ref)
-          .map((ScheduleAdjustment value) => value.reason),
-      <ScheduleAdjustmentReason>[
-        ScheduleAdjustmentReason.manualLater,
-        ScheduleAdjustmentReason.mercy,
+      items: <MercyAppliedItemSnapshot>[
+        MercyAppliedItemSnapshot(
+          ref: const ElementRef(id: 'topic-1', type: ElementType.source),
+          beforeState: '{"due":10}',
+          afterState: '{"due":12}',
+          fromDay: _day(10),
+          toDay: _day(12),
+          appliedEventId: 'event-item',
+        ),
       ],
-      reason: 'manual Later survives; auto-overflow and old exact do not',
-    );
-    expect(plan.auditEvents, hasLength(3));
-    expect(plan.auditEvents[0].eventType, SchedulerEventType.mercyPreviewed);
-    expect(plan.auditEvents[1].eventType, SchedulerEventType.mercyApplied);
-    final SchedulerEvent itemEvent = plan.auditEvents[2];
-    expect(itemEvent.element, candidate.ref);
-    expect(itemEvent.stateAfter, itemEvent.stateBefore);
-    expect(itemEvent.algorithmicDueAfter, itemEvent.algorithmicDueBefore);
-    expect(itemEvent.stateAfter, candidate.canonical.serializedState);
-    expect(itemEvent.batchId, 'batch-1');
-  });
-
-  test(
-    'stale candidate revision rejects apply before producing a mutation',
-    () {
-      final MercyCandidate previewed = _candidate(revision: 1);
-      final ScheduleAdjustmentSet adjustments = ScheduleAdjustmentSet.empty;
-      final MercyPreview preview = planner.preview(
-        _request(candidate: previewed, adjustments: adjustments),
-      );
-
-      expect(
-        () => workflow.planApply(
-          preview: preview,
-          currentCandidates: <MercyCandidate>[_candidate(revision: 2)],
-          currentAdjustments: adjustments,
-          batchId: 'batch-stale',
-          operationId: 'apply-stale',
-          occurredAtUtc: DateTime.utc(2026, 3, 10, 8),
-          studyDay: _day(10),
-        ),
-        throwsA(
-          isA<StaleMercyPreview>().having(
-            (StaleMercyPreview value) => value.changed,
-            'changed',
-            <ElementRef>[previewed.ref],
-          ),
-        ),
-      );
-      expect(adjustments, ScheduleAdjustmentSet.empty);
-    },
-  );
-
-  test(
-    'stale adjustment state rejects apply even when revision is unchanged',
-    () {
-      final MercyCandidate candidate = _candidate(revision: 1);
-      final MercyPreview preview = planner.preview(
-        _request(
-          candidate: candidate,
-          adjustments: ScheduleAdjustmentSet.empty,
-        ),
-      );
-      final ScheduleAdjustmentSet changed = ScheduleAdjustmentSet.empty
-          .addLowerBound(
-            _bound(
-              id: 'later-after-preview',
-              reason: ScheduleAdjustmentReason.manualLater,
-              day: 12,
-            ),
-          )
-          .after;
-
-      expect(
-        () => workflow.planApply(
-          preview: preview,
-          currentCandidates: <MercyCandidate>[candidate],
-          currentAdjustments: changed,
-          batchId: 'batch-stale-adjustment',
-          operationId: 'apply-stale-adjustment',
-          occurredAtUtc: DateTime.utc(2026, 3, 10, 8),
-          studyDay: _day(10),
-        ),
-        throwsA(isA<StaleMercyPreview>()),
-      );
-    },
-  );
-
-  test('batch undo restores the exact prior semantic set append-only', () {
-    final MercyCandidate candidate = _candidate(revision: 3, effectiveDay: 13);
-    final List<ScheduleAdjustment> originals = <ScheduleAdjustment>[
-      _bound(
-        id: 'manual',
-        reason: ScheduleAdjustmentReason.manualLater,
-        day: 12,
-      ),
-      _bound(
-        id: 'automatic',
-        reason: ScheduleAdjustmentReason.autoOverflow,
-        day: 13,
-      ),
-      _exact(
-        id: 'reschedule',
-        reason: ScheduleAdjustmentReason.manualReschedule,
-        day: 11,
-      ),
-    ];
-    final ScheduleAdjustmentSet before = ScheduleAdjustmentSet(originals);
-    final MercyPreview preview = planner.preview(
-      _request(candidate: candidate, adjustments: before),
-    );
-    final MercyApplyPlan applied = workflow.planApply(
-      preview: preview,
-      currentCandidates: <MercyCandidate>[candidate],
-      currentAdjustments: before,
-      batchId: 'batch-undo',
-      operationId: 'apply-undo-fixture',
-      occurredAtUtc: DateTime.utc(2026, 3, 10, 8),
-      studyDay: _day(10),
     );
 
-    final MercyUndoPlan undo = workflow.planUndo(
-      applied: applied.undoSnapshot,
-      currentAdjustments: applied.adjustmentMutation.after,
-      operationId: 'undo-1',
-      occurredAtUtc: DateTime.utc(2026, 3, 10, 9),
-      studyDay: _day(10),
-    );
+    final String encoded = encodeMercyAppliedBatch(snapshot);
+    final MercyAppliedBatchSnapshot decoded = decodeMercyAppliedBatch(encoded);
 
-    expect(undo.changesCanonicalSchedulerState, isFalse);
-    final List<ScheduleAdjustment> restored = undo.adjustmentMutation.after
-        .activeFor(candidate.ref);
-    expect(restored, hasLength(3));
-    for (final ScheduleAdjustment original in originals) {
-      expect(
-        restored,
-        contains(
-          predicate<ScheduleAdjustment>(
-            (ScheduleAdjustment value) => _sameSemanticValue(value, original),
-          ),
-        ),
-      );
-    }
-    expect(
-      restored.any(
-        (ScheduleAdjustment value) =>
-            value.reason == ScheduleAdjustmentReason.mercy,
-      ),
-      isFalse,
-    );
-    for (final ScheduleAdjustment original in originals) {
-      expect(
-        undo.adjustmentMutation.after.adjustments.any(
-          (ScheduleAdjustment value) => value.id == original.id,
-        ),
-        isTrue,
-        reason: 'original adjustment history must not be deleted',
-      );
-    }
-    expect(undo.auditEvents, hasLength(2));
-    expect(undo.auditEvents.first.eventType, SchedulerEventType.mercyUndone);
-    expect(
-      undo.auditEvents.first.undoesEventId,
-      applied.undoSnapshot.appliedEventId,
-    );
-    expect(
-      undo.auditEvents.last.undoesEventId,
-      applied.undoSnapshot.items.single.appliedEventId,
-    );
-  });
-
-  test('undo fails stale instead of erasing a later user adjustment', () {
-    final MercyCandidate candidate = _candidate(revision: 1);
-    final MercyPreview preview = planner.preview(
-      _request(candidate: candidate, adjustments: ScheduleAdjustmentSet.empty),
-    );
-    final MercyApplyPlan applied = workflow.planApply(
-      preview: preview,
-      currentCandidates: <MercyCandidate>[candidate],
-      currentAdjustments: ScheduleAdjustmentSet.empty,
-      batchId: 'batch-stale-undo',
-      operationId: 'apply-stale-undo',
-      occurredAtUtc: DateTime.utc(2026, 3, 10, 8),
-      studyDay: _day(10),
-    );
-    final ScheduleAdjustmentSet changed = applied.adjustmentMutation.after
-        .addLowerBound(
-          _bound(
-            id: 'later-after-apply',
-            reason: ScheduleAdjustmentReason.manualLater,
-            day: 12,
-            createdAt: DateTime.utc(2026, 3, 10, 9),
-          ),
-        )
-        .after;
-
-    expect(
-      () => workflow.planUndo(
-        applied: applied.undoSnapshot,
-        currentAdjustments: changed,
-        operationId: 'undo-stale',
-        occurredAtUtc: DateTime.utc(2026, 3, 10, 10),
-        studyDay: _day(10),
-      ),
-      throwsA(isA<StaleMercyPreview>()),
-    );
+    expect(encodeMercyAppliedBatch(decoded), encoded);
+    expect(decoded.batchId, 'batch-1');
+    expect(decoded.policyVersion, kSm20MercyPolicyVersion);
+    expect(decoded.items.single.beforeState, '{"due":10}');
+    expect(decoded.items.single.afterState, '{"due":12}');
   });
 }
 
-MercyPreviewRequest _request({
-  required MercyCandidate candidate,
-  required ScheduleAdjustmentSet adjustments,
-}) => MercyPreviewRequest(
-  today: _day(10),
-  scope: const MercyCollectionScope(),
-  collectingPeriod: MercyCollectingPeriod(start: _day(9), end: _day(13)),
-  includeFutureRepetitions: true,
-  destinationPolicy: MercyDailyCapacity(cardsPerDay: 1, topicsPerDay: 1),
-  destinationWindow: MercyDestinationWindow(
-    days: <MercyDestinationDay>[
-      for (var day = 10; day <= 12; day++)
-        MercyDestinationDay(
-          day: _day(day),
-          cardScheduledForAtUtc: DateTime.utc(2026, 3, day, 5),
-          beforeCardLoad:
-              candidate.ref.type == ElementType.card &&
-                  candidate.currentEffectiveDueDay == _day(day)
-              ? 1
-              : 0,
-          beforeTopicLoad: 0,
-        ),
-    ],
-  ),
-  criteriaPolicy: MercyCriteriaPolicy(
-    priorityBandWidth: 0.05,
-    deterministicSeed: 'workflow-fixture',
-  ),
-  protectionRules: const MercyProtectionRules(),
-  candidates: <MercyCandidate>[candidate],
-  adjustments: adjustments,
+Sm20MercyCandidate _candidate({
+  required ElementRef ref,
+  required StudyDay scheduledDay,
+  int revision = 1,
+  bool isScheduled = true,
+  bool isDeleted = false,
+}) => Sm20MercyCandidate(
+  ref: ref,
+  priority: PriorityRank.middle,
+  scheduledDay: scheduledDay,
+  lastReviewDay: _day(3),
+  repetitionCount: 4,
+  lapseCount: 1,
+  storedInterval: 5,
+  revision: revision,
+  isScheduled: isScheduled,
+  isDeleted: isDeleted,
 );
 
-MercyCandidate _candidate({int revision = 1, int effectiveDay = 10}) {
-  const ElementRef ref = ElementRef(id: 'card-1', type: ElementType.card);
-  return MercyCandidate(
-    ref: ref,
-    revision: revision,
-    currentEffectiveDueDay: _day(effectiveDay),
-    priorityFraction: 0.2,
-    canonical: MercyCanonicalSnapshot(
-      serializedState: '{"state":"review","revision":$revision}',
-      algorithmicDue: SchedulerEvent.encodeUtcDue(DateTime.utc(2026, 3, 10, 5)),
-      schedulerName: 'dart-fsrs',
-      schedulerVersion: 'dart-fsrs/2.0.1+FSRS-6',
-    ),
-  );
-}
-
-ScheduleAdjustment _bound({
-  required String id,
-  required ScheduleAdjustmentReason reason,
-  required int day,
-  DateTime? createdAt,
-}) => ScheduleAdjustment(
-  id: id,
-  element: const ElementRef(id: 'card-1', type: ElementType.card),
-  mode: ScheduleAdjustmentMode.lowerBound,
-  reason: reason,
-  notBeforeAtUtc: DateTime.utc(2026, 3, day, 12),
-  operationId: 'set-$id',
-  policyVersion: 'adjustments-v1',
-  createdAtUtc: createdAt ?? DateTime.utc(2026, 3, 9, 12),
-  createdStudyDay: _day(createdAt?.day ?? 9),
+Sm20MercyScore _score(int value) => Sm20MercyScore(
+  value: value,
+  recency: 0.1,
+  investment: 0.2,
+  importance: 0.3,
+  lateness: 0.4,
+  easiness: 0.5,
+  investmentBase: 2,
 );
 
-ScheduleAdjustment _exact({
-  required String id,
-  required ScheduleAdjustmentReason reason,
-  required int day,
-}) => ScheduleAdjustment(
-  id: id,
-  element: const ElementRef(id: 'card-1', type: ElementType.card),
-  mode: ScheduleAdjustmentMode.exactOverride,
-  reason: reason,
-  scheduledForAtUtc: DateTime.utc(2026, 3, day, 5),
-  operationId: 'set-$id',
-  policyVersion: 'adjustments-v1',
-  createdAtUtc: DateTime.utc(2026, 3, 9, 12),
-  createdStudyDay: _day(9),
+ElementSchedule _schedule(
+  ElementRef ref, {
+  required StudyDay dueDay,
+  required int revision,
+}) => ElementSchedule(
+  ref: ref,
+  priority: const PriorityRank('Q'),
+  lifecycle: ElementLifecycle.active,
+  dueDay: dueDay,
+  originalDueDay: dueDay,
+  rootId: 'root-1',
+  parentElementId: 'parent-1',
+  ordinal: 5,
+  createdAtUtc: DateTime.utc(2026, 3, 1, 8),
+  updatedAtUtc: DateTime.utc(2026, 3, 2, 8),
+  revision: revision,
 );
-
-bool _sameSemanticValue(ScheduleAdjustment left, ScheduleAdjustment right) =>
-    left.element == right.element &&
-    left.mode == right.mode &&
-    left.reason == right.reason &&
-    left.notBeforeAtUtc == right.notBeforeAtUtc &&
-    left.notBeforeStudyDay == right.notBeforeStudyDay &&
-    left.scheduledForAtUtc == right.scheduledForAtUtc &&
-    left.scheduledForStudyDay == right.scheduledForStudyDay &&
-    left.batchId == right.batchId &&
-    left.policyVersion == right.policyVersion;
 
 StudyDay _day(int day) =>
     StudyDay(year: 2026, month: 3, day: day, zoneId: 'UTC');

@@ -22,11 +22,8 @@ import '../../domain/content/reader_anchor.dart';
 import '../../domain/content/source.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/presentation_plan.dart';
 import '../../domain/scheduling/priority_rank.dart';
-import '../../domain/scheduling/queue_policy.dart';
 import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/schedule_adjustment.dart';
 import '../../domain/scheduling/scheduler_event.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
@@ -456,9 +453,7 @@ final class DriftLearningRepository implements LearningRepository {
         await (_database.select(_database.cardMemories)
               ..where(
                 ($CardMemoriesTable table) =>
-                    table.dueAtUtc.isSmallerOrEqualValue(nowMs) &
-                    (table.deferredUntilUtc.isNull() |
-                        table.deferredUntilUtc.isSmallerOrEqualValue(nowMs)),
+                    table.dueAtUtc.isSmallerOrEqualValue(nowMs),
               )
               ..orderBy(<OrderClauseGenerator<$CardMemoriesTable>>[
                 ($CardMemoriesTable table) => OrderingTerm.asc(table.dueAtUtc),
@@ -588,14 +583,15 @@ final class DriftLearningRepository implements LearningRepository {
     final rows = await _database
         .customSelect(
           'SELECT s.element_id, s.element_type, s.priority_key, s.lifecycle, '
-          's.due_day, s.original_due_day, s.deferred_until, s.deferral_kind, '
+          's.due_day, s.original_due_day, '
           's.root_id, s.parent_element_id, s.ordinal, s.created_at_utc, '
           's.updated_at_utc, s.revision AS schedule_revision, '
-          's.legacy_due_provenance, s.zone_id, t.profile_id, t.step_index, '
-          't.interval_days, '
-          't.a_factor, t.yield_ewma, t.encounters, t.postpone_count, '
-          't.encounters_since_last_card, t.last_encounter_day, '
-          't.scheduler_kind, t.scheduler_version, t.policy_input_snapshot, '
+          's.legacy_due_provenance, s.zone_id, t.status, '
+          't.repetition_count, t.lapse_count, t.stored_interval, '
+          't.last_review_day, t.a_factor_raw, t.last_interval_ratio_raw, '
+          't.history_block_id, t.recent_postponement_count, '
+          't.total_postponement_count, t.learning_control, '
+          't.encounters_since_last_card, '
           't.revision AS topic_revision '
           'FROM element_schedules s '
           'JOIN topic_states t ON t.element_id = s.element_id '
@@ -614,8 +610,7 @@ final class DriftLearningRepository implements LearningRepository {
         type: ElementType.values[row.read<int>('element_type')],
       );
       final zoneId = row.read<String>('zone_id');
-      final deferred = row.read<int?>('deferred_until');
-      final lastEncounter = row.read<int?>('last_encounter_day');
+      final lastReview = row.read<int?>('last_review_day');
       final createdAt = row.read<int?>('created_at_utc');
       final updatedAt = row.read<int?>('updated_at_utc');
       result[ref] = TopicState(
@@ -628,10 +623,6 @@ final class DriftLearningRepository implements LearningRepository {
             row.read<int>('original_due_day'),
             zoneId,
           ),
-          deferredUntil: deferred == null
-              ? null
-              : studyDayFromEpochDay(deferred, zoneId),
-          deferralKind: DeferralKind.values[row.read<int>('deferral_kind')],
           rootId: row.read<String?>('root_id'),
           parentElementId: row.read<String?>('parent_element_id'),
           ordinal: row.read<int?>('ordinal'),
@@ -641,25 +632,22 @@ final class DriftLearningRepository implements LearningRepository {
           legacyDueProvenance: LegacyDueProvenance
               .values[row.read<int>('legacy_due_provenance')],
         ),
-        profileId: row.read<String>('profile_id'),
-        stepIndex: row.read<int>('step_index'),
-        intervalDays: row.read<double>('interval_days'),
-        aFactor: row.read<double>('a_factor'),
-        yieldEwma: row.read<double>('yield_ewma'),
-        encounters: row.read<int>('encounters'),
-        postponeCount: row.read<int>('postpone_count'),
-        encountersSinceLastCard: row.read<int>('encounters_since_last_card'),
-        lastEncounterDay: lastEncounter == null
+        status: Sm20ElementStatus.values[row.read<int>('status')],
+        repetitionCount: row.read<int>('repetition_count'),
+        lapseCount: row.read<int>('lapse_count'),
+        storedInterval: row.read<int>('stored_interval'),
+        lastReviewDay: lastReview == null
             ? null
-            : studyDayFromEpochDay(lastEncounter, zoneId),
-        schedulerKind: TopicSchedulerKind.parse(
-          row.read<String>('scheduler_kind'),
+            : studyDayFromEpochDay(lastReview, zoneId),
+        aFactorRaw: real48FromHex(row.read<String>('a_factor_raw')),
+        lastIntervalRatioRaw: real48FromHex(
+          row.read<String>('last_interval_ratio_raw'),
         ),
-        schedulerVersion: row.read<String>('scheduler_version'),
-        policyInputSnapshot: row.read<String?>('policy_input_snapshot') == null
-            ? null
-            : jsonDecode(row.read<String>('policy_input_snapshot'))
-                  as Map<String, Object?>,
+        historyBlockId: row.read<int>('history_block_id'),
+        recentPostponementCount: row.read<int>('recent_postponement_count'),
+        totalPostponementCount: row.read<int>('total_postponement_count'),
+        learningControl: row.read<int>('learning_control'),
+        encountersSinceLastCard: row.read<int>('encounters_since_last_card'),
         revision: row.read<int>('topic_revision'),
       );
     }
@@ -873,86 +861,6 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
-  Future<List<ScheduleAdjustment>> listAdjustmentsFor(
-    ElementRef ref, {
-    bool includeCleared = false,
-  }) async {
-    final rows =
-        await (_database.select(_database.scheduleAdjustments)
-              ..where(
-                ($ScheduleAdjustmentsTable table) =>
-                    table.elementId.equals(ref.id) &
-                    table.elementType.equals(ref.type.index) &
-                    (includeCleared
-                        ? const CustomExpression<bool>('1')
-                        : table.clearedAtUtc.isNull()),
-              )
-              ..orderBy(<OrderClauseGenerator<$ScheduleAdjustmentsTable>>[
-                ($ScheduleAdjustmentsTable table) =>
-                    OrderingTerm.asc(table.createdAtUtc),
-                ($ScheduleAdjustmentsTable table) => OrderingTerm.asc(table.id),
-              ]))
-            .get();
-    return <ScheduleAdjustment>[
-      for (final row in rows) scheduleAdjustmentFromRow(row),
-    ];
-  }
-
-  @override
-  Future<List<ScheduleAdjustment>> listActiveAdjustments({
-    Set<ElementRef>? elements,
-    Set<ScheduleAdjustmentReason>? reasons,
-  }) async {
-    if (elements != null && elements.isEmpty) return <ScheduleAdjustment>[];
-    if (reasons != null && reasons.isEmpty) return <ScheduleAdjustment>[];
-    final query = _database.select(_database.scheduleAdjustments)
-      ..where(
-        ($ScheduleAdjustmentsTable table) =>
-            table.clearedAtUtc.isNull() &
-            (reasons == null
-                ? const CustomExpression<bool>('1')
-                : table.reason.isIn(
-                    reasons
-                        .map((ScheduleAdjustmentReason reason) => reason.index)
-                        .toList(),
-                  )),
-      )
-      ..orderBy(<OrderClauseGenerator<$ScheduleAdjustmentsTable>>[
-        ($ScheduleAdjustmentsTable table) => OrderingTerm.asc(table.elementId),
-        ($ScheduleAdjustmentsTable table) =>
-            OrderingTerm.asc(table.createdAtUtc),
-        ($ScheduleAdjustmentsTable table) => OrderingTerm.asc(table.id),
-      ]);
-    final rows = await query.get();
-    return <ScheduleAdjustment>[
-      for (final row in rows)
-        if (elements == null ||
-            elements.contains(
-              ElementRef(
-                id: row.elementId,
-                type: ElementType.values[row.elementType],
-              ),
-            ))
-          scheduleAdjustmentFromRow(row),
-    ];
-  }
-
-  @override
-  Future<void> saveAdjustment(ScheduleAdjustment adjustment) => _database
-      .into(_database.scheduleAdjustments)
-      .insertOnConflictUpdate(scheduleAdjustmentToCompanion(adjustment));
-
-  @override
-  Future<void> saveAdjustments(List<ScheduleAdjustment> adjustments) async {
-    if (adjustments.isEmpty) return;
-    // Preserve transition order: clear replaced exact/upserted rows before
-    // inserting their replacement so the active uniqueness constraints hold.
-    for (final adjustment in adjustments) {
-      await saveAdjustment(adjustment);
-    }
-  }
-
-  @override
   Future<Map<RevlogEventType, int>> countRevlogOn(StudyDay day) async {
     // Day boundaries come from the caller's calendar, so the log is bucketed
     // by the same study day the scheduler used rather than by UTC midnight.
@@ -1066,9 +974,8 @@ final class DriftLearningRepository implements LearningRepository {
                     table.undoneAtUtc.isNull(),
               )
               ..orderBy(<OrderClauseGenerator<$MercyBatchesTable>>[
-                ($MercyBatchesTable table) => OrderingTerm.desc(
-                  table.appliedAtUtc,
-                ),
+                ($MercyBatchesTable table) =>
+                    OrderingTerm.desc(table.appliedAtUtc),
               ]))
             .get();
     return <StoredMercyBatch>[for (final row in rows) _toMercyBatch(row)];
@@ -1080,13 +987,11 @@ final class DriftLearningRepository implements LearningRepository {
         await (_database.select(_database.mercyBatches)
               ..where(
                 ($MercyBatchesTable table) =>
-                    table.appliedAtUtc.isNotNull() &
-                    table.undoneAtUtc.isNull(),
+                    table.appliedAtUtc.isNotNull() & table.undoneAtUtc.isNull(),
               )
               ..orderBy(<OrderClauseGenerator<$MercyBatchesTable>>[
-                ($MercyBatchesTable table) => OrderingTerm.desc(
-                  table.appliedAtUtc,
-                ),
+                ($MercyBatchesTable table) =>
+                    OrderingTerm.desc(table.appliedAtUtc),
               ])
               ..limit(1))
             .getSingleOrNull();
@@ -1122,55 +1027,6 @@ final class DriftLearningRepository implements LearningRepository {
         : fromEpochMs(row.appliedAtUtc!),
     undoneAtUtc: row.undoneAtUtc == null ? null : fromEpochMs(row.undoneAtUtc!),
   );
-
-  @override
-  Future<StoredPresentationPlan?> findPresentationPlan(StudyDay day) async {
-    final row =
-        await (_database.select(_database.dailyPresentationPlans)..where(
-              ($DailyPresentationPlansTable table) =>
-                  table.studyDay.equals(day.epochDay) &
-                  table.zoneId.equals(day.zoneId),
-            ))
-            .getSingleOrNull();
-    if (row == null) return null;
-    return StoredPresentationPlan(
-      identity: PresentationPlanIdentity.fromJson(row.identityJson),
-      remainingEntries: StoredPresentationPlan.decodeEntries(
-        row.remainingEntriesJson,
-      ),
-      mergeCursor: QueueMergeCursor(ordinaryCardsSinceTopic: row.mergeCursor),
-      createdAtUtc: fromEpochMs(row.createdAtUtc),
-      updatedAtUtc: fromEpochMs(row.updatedAtUtc),
-    );
-  }
-
-  @override
-  Future<void> savePresentationPlan(StoredPresentationPlan plan) => _database
-      .into(_database.dailyPresentationPlans)
-      .insertOnConflictUpdate(
-        DailyPresentationPlansCompanion.insert(
-          studyDay: plan.identity.studyDay.epochDay,
-          zoneId: plan.identity.studyDay.zoneId,
-          identityJson: plan.identity.toJson(),
-          remainingEntriesJson: plan.entriesJson(),
-          mergeCursor: Value<int>(plan.mergeCursor.ordinaryCardsSinceTopic),
-          createdAtUtc: toEpochMs(plan.createdAtUtc),
-          updatedAtUtc: toEpochMs(plan.updatedAtUtc),
-        ),
-      );
-
-  @override
-  Future<StoredPresentationPlan?> consumePresentationPlanEntry({
-    required StudyDay day,
-    required ElementRef ref,
-    required DateTime atUtc,
-  }) async {
-    final StoredPresentationPlan? current = await findPresentationPlan(day);
-    if (current == null) return null;
-    final StoredPresentationPlan next = current.consume(ref, atUtc);
-    if (!identical(next, current)) await savePresentationPlan(next);
-    return next;
-  }
 
   @override
   Future<SchedulerEvent?> findLastSchedulerEvent(
@@ -1260,25 +1116,6 @@ final class DriftLearningRepository implements LearningRepository {
     for (final topic in topics) {
       await saveTopic(topic);
     }
-  }
-
-  @override
-  Future<List<ElementSchedule>> listAutomaticDeferrals({
-    required StudyDay from,
-  }) async {
-    final rows =
-        await (_database.select(_database.elementSchedules)
-              ..where(
-                ($ElementSchedulesTable t) =>
-                    t.lifecycle.equals(ElementLifecycle.active.index) &
-                    t.deferralKind.equals(DeferralKind.automatic.index) &
-                    t.deferredUntil.isBiggerOrEqualValue(from.epochDay),
-              )
-              ..orderBy(<OrderClauseGenerator<$ElementSchedulesTable>>[
-                ($ElementSchedulesTable t) => OrderingTerm.asc(t.priorityKey),
-              ]))
-            .get();
-    return <ElementSchedule>[for (final row in rows) scheduleFromRow(row)];
   }
 
   @override

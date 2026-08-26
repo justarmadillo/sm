@@ -198,25 +198,18 @@ class ElementSchedules extends Table {
   /// Sortable relative priority. Lower sorts as more important.
   TextColumn get priorityKey => text().withLength(min: 1, max: 128)();
 
-  /// Index into the lifecycle enum.
-  IntColumn get lifecycle => integer().check(lifecycle.isBetweenValues(0, 4))();
+  /// Index into the lifecycle enum: active (0), dismissed (1), deleted (2).
+  ///
+  /// The retired suspended and finished states are gone: SM20 knows only
+  /// pending, memorized, dismissed, and deleted, and both of those states
+  /// meant nothing more than "not scheduled, content kept".
+  IntColumn get lifecycle => integer().check(lifecycle.isBetweenValues(0, 2))();
 
   /// Days since the Unix epoch.
   IntColumn get dueDay => integer()();
 
   /// What the scheduler chose, preserved across postponement.
   IntColumn get originalDueDay => integer()();
-
-  /// Where auto-postpone or a manual Later moved the element to.
-  IntColumn get deferredUntil => integer().nullable()();
-
-  /// Index into the deferral-kind enum: none, manual, automatic.
-  ///
-  /// Recalling same-day overload deferrals must not undo what the user
-  /// deliberately pushed away, so the two are distinguishable in storage.
-  IntColumn get deferralKind => integer()
-      .check(deferralKind.isBetweenValues(0, 2))
-      .withDefault(const Constant(0))();
 
   /// Source at the root of this element's provenance, denormalized.
   ///
@@ -252,14 +245,9 @@ class ElementSchedules extends Table {
     elementId,
     elementType,
   };
-
-  @override
-  List<String> get customConstraints => <String>[
-    'CHECK ((deferred_until IS NULL) = (deferral_kind = 0))',
-  ];
 }
 
-/// Topic pacing state for sources and extracts.
+/// Exact SM20 scheduling state for sources and extracts.
 @DataClassName('TopicStateRow')
 class TopicStates extends Table {
   TextColumn get elementId => text()();
@@ -267,61 +255,52 @@ class TopicStates extends Table {
   IntColumn get elementType =>
       integer().check(elementType.isBetweenValues(0, 1))();
 
-  /// Which configured interval sequence paces this topic in profile mode.
-  TextColumn get profileId => text()();
+  /// SM20 record status: pending, memorized, dismissed, or deleted.
+  IntColumn get status => integer().check(status.isBetweenValues(0, 3))();
 
-  /// Position in that sequence. The final value repeats.
-  IntColumn get stepIndex =>
-      integer().check(stepIndex.isBiggerOrEqualValue(0))();
-
-  /// Current interval in days, carried unrounded so that an A-factor only
-  /// slightly above 1.0 still accumulates instead of being rounded away on
-  /// every encounter.
-  RealColumn get intervalDays => real()
-      .check(intervalDays.isBiggerOrEqualValue(0))
+  IntColumn get repetitionCount => integer()
+      .check(repetitionCount.isBetweenValues(0, 65535))
       .withDefault(const Constant(0))();
 
-  /// The A-factor last applied. Zero until the first encounter computes one.
-  RealColumn get aFactor => real()
-      .check(aFactor.isBiggerOrEqualValue(0))
+  IntColumn get lapseCount => integer()
+      .check(lapseCount.isBetweenValues(0, 65535))
       .withDefault(const Constant(0))();
 
-  /// Smoothed extraction density, in extracts per thousand words read.
-  RealColumn get yieldEwma => real()
-      .check(yieldEwma.isBiggerOrEqualValue(0))
+  IntColumn get storedInterval => integer()
+      .check(storedInterval.isBetweenValues(0, 44530))
       .withDefault(const Constant(0))();
 
-  /// Completed encounters so far.
-  IntColumn get encounters => integer()
-      .check(encounters.isBiggerOrEqualValue(0))
+  /// Signed collection day. Null before the first review.
+  IntColumn get lastReviewDay => integer().nullable()();
+
+  /// Raw little-endian Delphi Real48 bytes, encoded as twelve hex characters.
+  TextColumn get aFactorRaw =>
+      text().withDefault(const Constant('819a99999919'))();
+
+  /// Raw little-endian Delphi Real48 interval-ratio bytes.
+  TextColumn get lastIntervalRatioRaw =>
+      text().withDefault(const Constant('000000000000'))();
+
+  IntColumn get historyBlockId => integer()
+      .check(historyBlockId.isBiggerOrEqualValue(0))
       .withDefault(const Constant(0))();
 
-  /// Deferrals so far, manual and automatic together. Diagnostic only: a high
-  /// count means the element is being avoided and probably wants a lower
-  /// priority rather than another postponement.
-  IntColumn get postponeCount => integer()
-      .check(postponeCount.isBiggerOrEqualValue(0))
+  IntColumn get recentPostponementCount => integer()
+      .check(recentPostponementCount.isBiggerOrEqualValue(0))
+      .withDefault(const Constant(0))();
+
+  IntColumn get totalPostponementCount => integer()
+      .check(totalPostponementCount.isBiggerOrEqualValue(0))
+      .withDefault(const Constant(0))();
+
+  IntColumn get learningControl => integer()
+      .check(learningControl.isBetweenValues(0, 255))
       .withDefault(const Constant(0))();
 
   /// Encounters since the last card was formulated from this element.
   IntColumn get encountersSinceLastCard => integer()
       .check(encountersSinceLastCard.isBiggerOrEqualValue(0))
       .withDefault(const Constant(0))();
-
-  /// Day of the last completed encounter, in days since the Unix epoch.
-  IntColumn get lastEncounterDay => integer().nullable()();
-
-  /// Canonical topic due in its local StudyDay domain. The common due column
-  /// remains only as a compatibility projection for older read models.
-  IntColumn get algorithmDueDay => integer().nullable()();
-
-  TextColumn get schedulerKind =>
-      text().withDefault(const Constant('topic_afactor_v1'))();
-
-  TextColumn get schedulerVersion =>
-      text().withDefault(const Constant('topic_afactor_v1/1'))();
-
-  TextColumn get policyInputSnapshot => text().nullable()();
 
   IntColumn get revision => integer()
       .check(revision.isBiggerOrEqualValue(1))
@@ -332,6 +311,14 @@ class TopicStates extends Table {
     elementId,
     elementType,
   };
+
+  @override
+  List<String> get customConstraints => <String>[
+    'CHECK (length(a_factor_raw) = 12 AND '
+        "a_factor_raw NOT GLOB '*[^0-9a-fA-F]*')",
+    'CHECK (length(last_interval_ratio_raw) = 12 AND '
+        "last_interval_ratio_raw NOT GLOB '*[^0-9a-fA-F]*')",
+  ];
 }
 
 /// FSRS memory state for cards, one row per card.
@@ -366,8 +353,6 @@ class CardMemories extends Table {
   IntColumn get dueAtUtc => integer()();
 
   IntColumn get originalDueAtUtc => integer()();
-
-  IntColumn get deferredUntilUtc => integer().nullable()();
 
   /// Deferrals so far. Never a review, so it lives apart from [reps].
   IntColumn get postponeCount => integer()
@@ -409,50 +394,6 @@ class CardMemories extends Table {
   ];
 }
 
-/// Presentation-only calendar constraints and overrides.
-@DataClassName('ScheduleAdjustmentRow')
-class ScheduleAdjustments extends Table {
-  TextColumn get id => text()();
-  TextColumn get elementId => text()();
-  IntColumn get elementType =>
-      integer().check(elementType.isBetweenValues(0, 2))();
-  IntColumn get mode => integer().check(mode.isBetweenValues(0, 1))();
-  IntColumn get reason => integer().check(reason.isBetweenValues(0, 4))();
-  IntColumn get notBeforeAtUtc => integer().nullable()();
-  IntColumn get notBeforeStudyDay => integer().nullable()();
-  IntColumn get scheduledForAtUtc => integer().nullable()();
-  IntColumn get scheduledForStudyDay => integer().nullable()();
-  TextColumn get zoneId => text().nullable()();
-  TextColumn get operationId => text()();
-  TextColumn get batchId => text().nullable()();
-  TextColumn get policyVersion => text()();
-  IntColumn get createdAtUtc => integer()();
-  IntColumn get createdStudyDay => integer()();
-  TextColumn get createdZoneId => text()();
-  IntColumn get clearedAtUtc => integer().nullable()();
-  TextColumn get clearedByOperationId => text().nullable()();
-
-  @override
-  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
-
-  @override
-  List<String> get customConstraints => <String>[
-    'CHECK ((cleared_at_utc IS NULL) = (cleared_by_operation_id IS NULL))',
-    'CHECK ((mode = 0 AND '
-        '((not_before_at_utc IS NOT NULL) + '
-        '(not_before_study_day IS NOT NULL)) = 1 AND '
-        'scheduled_for_at_utc IS NULL AND scheduled_for_study_day IS NULL) '
-        'OR (mode = 1 AND '
-        '((scheduled_for_at_utc IS NOT NULL) + '
-        '(scheduled_for_study_day IS NOT NULL)) = 1 AND '
-        'not_before_at_utc IS NULL AND not_before_study_day IS NULL))',
-    'CHECK ((element_type = 2 AND not_before_study_day IS NULL AND '
-        'scheduled_for_study_day IS NULL) OR '
-        '(element_type IN (0, 1) AND not_before_at_utc IS NULL AND '
-        'scheduled_for_at_utc IS NULL))',
-  ];
-}
-
 /// Complete append-only scheduler audit envelope.
 @DataClassName('SchedulerEventRow')
 class SchedulerEvents extends Table {
@@ -471,29 +412,12 @@ class SchedulerEvents extends Table {
   TextColumn get stateAfter => text().nullable()();
   TextColumn get algorithmicDueBefore => text().nullable()();
   TextColumn get algorithmicDueAfter => text().nullable()();
-  TextColumn get adjustmentsBefore => text().nullable()();
-  TextColumn get adjustmentsAfter => text().nullable()();
   TextColumn get undoesEventId => text().nullable()();
   TextColumn get batchId => text().nullable()();
   TextColumn get metadataJson => text().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
-}
-
-/// Cached deterministic remaining presentation plan for one StudyDay.
-@DataClassName('DailyPresentationPlanRow')
-class DailyPresentationPlans extends Table {
-  IntColumn get studyDay => integer()();
-  TextColumn get zoneId => text()();
-  TextColumn get identityJson => text()();
-  TextColumn get remainingEntriesJson => text()();
-  IntColumn get mergeCursor => integer().withDefault(const Constant(0))();
-  IntColumn get createdAtUtc => integer()();
-  IntColumn get updatedAtUtc => integer()();
-
-  @override
-  Set<Column<Object>> get primaryKey => <Column<Object>>{studyDay, zoneId};
 }
 
 /// Durable Mercy preview/apply data needed for stale detection and exact undo.
@@ -505,11 +429,8 @@ class MercyBatches extends Table {
   TextColumn get undoOperationId => text().nullable()();
   TextColumn get policyVersion => text()();
   TextColumn get previewJson => text()();
-  TextColumn get priorAdjustmentsJson => text().nullable()();
 
-  /// Serialized applied-batch snapshot: the exact prior and applied adjustment
-  /// sets plus per-item canonical state. Undo restores from this and nothing
-  /// else, which is what makes it exact rather than a recomputation.
+  /// Exact per-element canonical states needed to validate and undo an apply.
   TextColumn get appliedSnapshotJson => text().nullable()();
   IntColumn get createdAtUtc => integer()();
   IntColumn get appliedAtUtc => integer().nullable()();

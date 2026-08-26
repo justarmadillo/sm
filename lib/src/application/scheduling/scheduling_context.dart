@@ -14,17 +14,19 @@
 library;
 
 import '../../core/clock.dart';
+import '../../core/result.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/interval_profile.dart';
-import '../../domain/scheduling/overload.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/queue_policy.dart';
+import '../../domain/scheduling/sm20_collection_state.dart';
+import '../../domain/scheduling/sm20_numeric.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../../domain/settings/app_settings.dart';
 import '../ports/repositories.dart';
 import '../settings/settings_store.dart';
+import '../settings/sm20_runtime_store.dart';
 
 /// Resolves a stored zone identifier into offset rules.
 ///
@@ -38,20 +40,31 @@ final class SchedulingContext {
   SchedulingContext({
     required SettingsStore settings,
     required LearningRepository learning,
+    required Sm20RuntimeStore runtime,
     required Clock clock,
     required TimeZoneResolver resolveZone,
   }) : _settings = settings,
        _learning = learning,
+       _runtime = runtime,
        _clock = clock,
        _resolveZone = resolveZone;
 
   final SettingsStore _settings;
   final LearningRepository _learning;
+  final Sm20RuntimeStore _runtime;
   final Clock _clock;
   final TimeZoneResolver _resolveZone;
 
   /// The user's current configuration.
   Future<AppSettings> settings() => _settings.load();
+
+  /// Persists a complete canonical settings value.
+  ///
+  /// Scheduler transactions use this when executable behavior changes a
+  /// setting itself, such as disabling automatic postponement after a stale
+  /// collection is reopened.
+  Future<Result<AppSettings>> saveSettings(AppSettings settings) =>
+      _settings.save(settings);
 
   /// The study-day rules: home zone plus rollover.
   Future<StudyDayCalendar> calendar() async {
@@ -65,17 +78,24 @@ final class SchedulingContext {
   /// The study day the clock currently falls in.
   Future<StudyDay> today() async => (await calendar()).dayOf(_clock.nowUtc());
 
-  /// The interval sequences as the user has edited them.
-  Future<IntervalProfiles> profiles() async =>
-      IntervalProfiles.fromDays((await settings()).intervalProfiles);
-
-  /// The topic state machine, configured.
+  /// The topic state machine bound to the persisted global Delphi PRNG.
   Future<TopicScheduler> topicScheduler() async {
+    final Sm20CollectionState state = await runtimeState();
+    return TopicScheduler(prng: Sm20Prng(seed: state.prngSeed));
+  }
+
+  Future<Sm20CollectionState> runtimeState() async {
     final AppSettings current = await settings();
-    return TopicScheduler(
-      IntervalProfiles.fromDays(current.intervalProfiles),
-      settings: current.topics,
-    );
+    return _runtime.load(zoneId: current.studyDay.zoneId);
+  }
+
+  Future<void> saveRuntimeState(Sm20CollectionState state) =>
+      _runtime.save(state);
+
+  /// Persists the one global random stream after a stochastic transaction.
+  Future<void> savePrngState(Sm20PrngState state) async {
+    final Sm20CollectionState runtime = await runtimeState();
+    await saveRuntimeState(runtime.copyWith(prngSeed: state.seed));
   }
 
   /// The FSRS adapter, configured.
@@ -90,10 +110,6 @@ final class SchedulingContext {
       settings: CardSchedulerSettings.fromUserSettings(current.cards),
     );
   }
-
-  /// The postponement arithmetic, configured.
-  Future<OverloadValve> overloadValve() async =>
-      OverloadValve(settings: (await settings()).postpone);
 
   /// The collection's live priority order.
   Future<PriorityScale> priorityScale() async =>

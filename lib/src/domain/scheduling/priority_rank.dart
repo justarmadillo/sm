@@ -14,6 +14,8 @@ library;
 
 import 'package:meta/meta.dart';
 
+import 'sm20_numeric.dart';
+
 /// Digits of the order-key alphabet, in ascending ASCII order.
 const String orderKeyDigits =
     '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
@@ -184,6 +186,23 @@ final class PriorityScale {
   /// collection — the only honest answer when nothing has been ranked yet.
   double pressureOf(PriorityRank rank) => positionOf(rank)?.pressure ?? 0.5;
 
+  /// SM20 rank-derived percentage for [rank].
+  double percentageOf(PriorityRank rank) => positionOf(rank)?.percent ?? 100;
+
+  /// SM20 one-based position for a percentage in the current population.
+  int positionForPercentage(double percent) {
+    if (_keys.isEmpty) return 1;
+    final double value = percent.isFinite ? percent.clamp(0, 100) : 100;
+    return sm20RoundEven((value / 100) * (_keys.length - 1)) + 1;
+  }
+
+  /// SM20 percentage for a one-based position in the current population.
+  double percentageForPosition(int position) {
+    if (_keys.length <= 1 || position < 2) return 0;
+    final int pos = position.clamp(1, _keys.length);
+    return 100 * (pos - 1) / (_keys.length - 1);
+  }
+
   /// The same order with [rank] inserted.
   ///
   /// Used when creating an element: its priority pressure is a question about
@@ -194,6 +213,16 @@ final class PriorityScale {
     final int index = _lowerBound(rank);
     keys.insert(index, rank);
     return PriorityScale.sorted(keys);
+  }
+
+  /// Returns the order after replacing one exact rank and re-sorting it.
+  PriorityScale replacing(PriorityRank before, PriorityRank after) {
+    final List<PriorityRank> keys = <PriorityRank>[..._keys];
+    final int index = keys.indexOf(before);
+    if (index >= 0) keys.removeAt(index);
+    keys.add(after);
+    keys.sort();
+    return PriorityScale.sorted(List<PriorityRank>.unmodifiable(keys));
   }
 
   /// The rank [places] positions above or below [rank].
@@ -230,15 +259,60 @@ final class PriorityScale {
   PriorityRank rankAtPercent(double percent) {
     final double clamped = percent.isNaN ? 50 : percent.clamp(0, 100);
     if (_keys.isEmpty) return PriorityRank.middle;
-    // Insert *before* the element currently sitting at this percent, so 0%
-    // means "ahead of everything" and 100% means "behind everything".
-    final int index = ((clamped / 100) * _keys.length).round().clamp(
-      0,
-      _keys.length,
-    );
+    final int insertionPosition = clamped == 100
+        ? _keys.length + 1
+        : sm20RoundEven((clamped / 100) * _keys.length) + 1;
+    final int index = (insertionPosition - 1).clamp(0, _keys.length);
     final PriorityRank? before = index == 0 ? null : _keys[index - 1];
-    final PriorityRank? after = index >= _keys.length ? null : _keys[index];
+    final PriorityRank? after = index == _keys.length ? null : _keys[index];
     return PriorityRank.between(before, after);
+  }
+
+  /// Exact Set Priority insertion after removing [current] first.
+  PriorityRank rankForSetPriority(PriorityRank current, double percent) {
+    final double target = percent.isFinite ? percent.clamp(0, 100) : 100;
+    final List<PriorityRank> remaining = <PriorityRank>[..._keys];
+    final int currentIndex = remaining.indexOf(current);
+    if (currentIndex >= 0) remaining.removeAt(currentIndex);
+    final int count = remaining.length;
+    final int insertionPosition = target == 100
+        ? count + 1
+        : sm20RoundEven((target / 100) * count) + 1;
+    final int index = (insertionPosition - 1).clamp(0, count);
+    return PriorityRank.between(
+      index == 0 ? null : remaining[index - 1],
+      index == count ? null : remaining[index],
+    );
+  }
+
+  /// Executable-derived interval relationship drift, including its forced
+  /// one-rank movement when percentage quantization hides the calculated move.
+  PriorityRank adjustedForInterval(
+    PriorityRank current, {
+    required int oldInterval,
+    required int newInterval,
+    required bool bulk,
+  }) {
+    if (_keys.isEmpty) return current;
+    final int old = oldInterval < 1 ? 1 : oldInterval;
+    final int next = newInterval;
+    if (old == next) return current;
+
+    var correction = 80 * (1 - mathMin(old, next) / mathMax(old, next));
+    if (bulk) correction /= 3;
+    final double scale = (100 - correction) / 100;
+    final double currentPercent = percentageOf(current);
+    double target = next < old
+        ? currentPercent * scale
+        : currentPercent / scale;
+    final int oldPosition = positionOf(current)?.displayPosition ?? 1;
+    var targetPosition = positionForPercentage(target);
+    if (targetPosition == oldPosition) {
+      targetPosition += next < old ? -1 : 1;
+      targetPosition = targetPosition.clamp(1, _keys.length);
+      target = percentageForPosition(targetPosition);
+    }
+    return rankForSetPriority(current, target);
   }
 
   /// The rank immediately more important than [rank], for the Alt+P dialog's
@@ -284,6 +358,10 @@ final class PriorityScale {
     return low;
   }
 }
+
+double mathMin(num a, num b) => a < b ? a.toDouble() : b.toDouble();
+
+double mathMax(num a, num b) => a > b ? a.toDouble() : b.toDouble();
 
 /// The order key strictly between [a] and [b].
 ///

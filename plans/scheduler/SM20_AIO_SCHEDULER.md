@@ -240,6 +240,18 @@ Identified scheduling-record offsets in the record used by these paths are:
 +0x6D  learning-control byte       UInt8; Forget writes 8
 ```
 
+Records are a flat array of stride `118` (`0x76`) bytes with no file header,
+so record `n` begins at `n * 118` in `info/ElementInfo.dat`. Confirmed against
+two collections written by the executable: a 118-byte file holding one record
+and a 472-byte file holding four, with A landing on `+0x1C` in every one.
+
+The type byte at `+0x00` is not fully enumerated by the paths above. Type `0`
+is a topic, `1` an item, and `2` an extract, as section 10.3 assumes. Type `4`
+is observed on the collection root, which the executable creates with status
+`2` and never schedules; section 10.3 already treats `4` as topic-family. That
+last mapping rests on a single observed record rather than on an identified
+routine.
+
 The due date is represented by the collection's repetition schedule as well
 as by the invariant `last_review + interval` after ordinary scheduling. Queue
 membership is separate from the due schedule.
@@ -1057,6 +1069,52 @@ than 100 elements, entering Final Drill or Pending prompts the user; otherwise
 the transition is implicitly accepted. Optional Final Drill randomization uses
 the fixed-size swap routine in section 9.6.
 
+#### Manual stage and queue commands
+
+The fallback ordering above is the default route, not the only one. The Learn
+menu enters both fallback stages directly and can reorder or empty the stored
+queues, so a clone that implements only the automatic chain has no way to reach
+a drill while Outstanding still holds work. The executable's embedded menu
+resources identify them:
+
+`Learn -> Stages` lists all three stages explicitly, numbered, and greys out
+the ones whose queue is empty:
+
+```text
+1. Outstanding material
+2. New material          (disabled when Pending is empty)
+3. Final drill           Ctrl+F4
+```
+
+Stage 1 is the way back. Without it a user who entered a fallback stage would
+be held there until its queue emptied, so a clone that offers only the two
+fallback entries is not merely incomplete, it is a trap.
+
+| Menu item | Caption | Embedded hint |
+|---|---|---|
+| `MIFinalDrill2` | `Final &drill` | Go through the final revision of the material repeated recently (with a keyboard shortcut) |
+| `MICutDrills` | `&Cut drills` | Eliminate items scheduled for final drill |
+| `MIRandomLearning` | `Ran&dom learning` | Learn new elements by randomly reviewing pending elements in the collection |
+| `MIRandomizeRepetitions` | `Randomi&ze repetitions` | Randomize the sequence of outstanding items |
+| `MIRandomizeDrill` | `Randomize drill` | prompts `Do you want to randomize final drill?`, reports `Final drill randomized` |
+| `MIRandomizePending` | `Randomize pending` | prompts `Do you want to randomize pending queue?`, reports `Pending queue randomized` |
+
+`Final drill` is bound to Ctrl+F4 and presents the Final Drill queue at once.
+`Random learning` presents Pending the same way. Both select which stored queue
+is shown and write only the learning mode; neither creates, schedules, or
+grades anything, and an empty target stage is refused rather than entered —
+the executable answers `Nothing more to learn`.
+
+`Cut drills` clears Final Drill membership only. Due date, interval, A,
+priority, and both repetition counters are untouched, because drill membership
+never contributed to any of them; the command is confirmed with
+`Delete Final Drill?`.
+
+The three randomizations all use the section 9.6 fixed-size swap on one stored
+queue and therefore consume one PRNG draw per element from the single shared
+stream. A manual reshuffle consequently shifts every later stochastic decision,
+which is the executable's behavior rather than a defect.
+
 No Anki-like mandatory learning/relearning step array or step-injection rule
 was found in the topic daily merge. Pending is not admitted according to a
 time-capacity budget. It becomes a separate stage after Outstanding and Final
@@ -1497,6 +1555,33 @@ Let `M` be the runtime 20 by 20 unsigned-16-bit interval-factor matrix, with
 values scaled by 1000. This matrix is collection/runtime state and must be
 exported; its values are not fixed by the executable.
 
+A newly created collection's matrix is nevertheless deterministic, and is the
+first 800 bytes of `info/sm8opt.dat`. Two collections created independently by
+this executable ship that file byte-identical, which makes the starting table a
+property of the program rather than of one collection. Outside column zero
+every cell is:
+
+```text
+M[row][column] = round_even(1000 * (1.2 + 0.3 * row / column))
+```
+
+evaluated in float64 and not on the exact rational. Three cells that are ties
+over the rationals arrive just below one — `1537.4999999999998` at `[9][8]`
+and `[18][16]`, `1612.4999999999998` at `[11][8]` — and therefore round down,
+while the twelve genuine ties settle on the even value. Column zero follows no
+such rule and is the series:
+
+```text
+2484 2347 2217 2094 1978 1868 1765 1667 1575 1487
+1405 1327 1254 1184 1119 1057  998  943  890  841
+```
+
+A clone that starts a fresh collection can therefore generate this matrix
+rather than import one. Only a clone migrating an existing collection must
+extract it. This says nothing about how the matrix evolves once the collection
+is used: no examined collection carried enough repetition history to observe a
+rewrite, so the runtime-state description above stands.
+
 ```text
 E   = M[0][0] / 1000
 rep = min(repetition_count, 20)
@@ -1717,6 +1802,9 @@ postpone counters through the low-level rescheduler.
 | Add to Outstanding, accepted | unchanged | target `0.9*P` | unchanged | unchanged | insert/move | 0 |
 | Add all, reviewed Today | unchanged | target `0.9*P` | `last_review=Today-1` | interval/ratio 1, due Today | insert/move | 0 |
 | Add to Final Drill | unchanged | unchanged | unchanged | unchanged | append iff absent | 0 |
+| Final drill / Random learning | unchanged | unchanged | unchanged | unchanged | select presented stage | 0 |
+| Cut drills | unchanged | unchanged | unchanged | unchanged | clear Final Drill | 0 |
+| Randomize repetitions / drill / pending | unchanged | unchanged | unchanged | unchanged | replace one queue order | queue count |
 | Reset history | unchanged | unchanged | unchanged | unchanged | unchanged; history block only | 0 |
 | Smart Postpone, normal memorized | unchanged | unchanged | unchanged | postpone | result lists | 2 per eligible element |
 | Smart Postpone, forced pass | unchanged | unchanged | unchanged | postpone | result lists | 0 |
@@ -1839,19 +1927,24 @@ Before migrating real data, verify at least:
 10. PRNG draw counts for every stochastic branch, especially queue extraction,
     normal Smart Postpone, Advance rejection/success, and fixed-size
     randomization.
-11. A copied collection fixture containing the real Mercy matrix, profiles,
+11. The fresh-collection interval-factor matrix: generate all 400 cells by the
+    section 12.1 rule and compare the full 800 bytes against `info/sm8opt.dat`
+    from a collection the executable created. This is cheap, needs no live SM20
+    run, and is what catches a rounding rule that is right on paper and wrong
+    in float64.
+12. A copied collection fixture containing the real Mercy matrix, profiles,
     all-element rank order, and queue files; compare every mutated byte after
     one operation in SM20 and the port.
-12. Browser batch-priority fixtures with mixed pending, memorized, dismissed,
+13. Browser batch-priority fixtures with mixed pending, memorized, dismissed,
     and deleted records; verify sequential reinsertions, dismissed Spread gaps,
     the memorized-only Adjust range scan, and exact-capacity rejection.
-13. Remember/Forget/Dismiss/Undismiss fixtures comparing the status byte,
+14. Remember/Forget/Dismiss/Undismiss fixtures comparing the status byte,
     `+0x0C..+0x12`, raw A/ratio bytes, history ID, postponement counters,
     priority rank, due calendar, and all affected queues.
-14. Add-to-Outstanding fixtures for absent, earlier-position, later-position,
+15. Add-to-Outstanding fixtures for absent, earlier-position, later-position,
     reviewed-today, and Add-all cases, including insertion spacing and the
     `0.9` priority target.
-15. Smart Postpone fixtures at every equality boundary, both normal and forced
+16. Smart Postpone fixtures at every equality boundary, both normal and forced
     methods, and all eight combinations of the three Adjust modifier boxes;
     verify that the boxes do not change selected elements, delays, writes, or
     PRNG consumption.

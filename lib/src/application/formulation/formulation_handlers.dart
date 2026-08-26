@@ -177,9 +177,11 @@ final class FormulationHandlers {
           }
         }
         await _content.insertCards(cards);
+        final List<ElementRef> createdRefs = <ElementRef>[];
         for (var cardIndex = 0; cardIndex < cards.length; cardIndex++) {
           final Card card = cards[cardIndex];
           final ref = ElementRef(id: card.id, type: ElementType.card);
+          createdRefs.add(ref);
           final CardState state = CardState(
             schedule: ElementSchedule(
               ref: ref,
@@ -221,6 +223,18 @@ final class FormulationHandlers {
             },
           );
         }
+        final runtime = await _context.runtimeState();
+        final Set<ElementRef> createdSet = createdRefs.toSet();
+        await _context.saveRuntimeState(
+          runtime.copyWith(
+            pending: <ElementRef>[
+              ...runtime.pending.where(
+                (ElementRef value) => !createdSet.contains(value),
+              ),
+              ...createdRefs,
+            ],
+          ),
+        );
 
         // The parent is not rescheduled, converted, or removed — formulating
         // is capture, not completion. The one thing it does change is the

@@ -12,8 +12,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
 import '../../../app/toast.dart';
+import '../../../application/priority/priority_commands.dart';
 import '../../../application/priority/priority_query.dart';
+import '../../../application/queue/queue_commands.dart';
 import '../../../domain/scheduling/element.dart';
+import '../../../domain/scheduling/sm20_advance.dart';
+import '../../queue/presentation/smart_postpone_dialog.dart';
 import 'priority_dialog.dart';
 import 'priority_view_model.dart';
 
@@ -103,8 +107,12 @@ class _Body extends ConsumerWidget {
                 key: ValueKey<String>('${state.entries[index].ref}'),
                 entry: state.entries[index],
                 index: index,
-                onSpread: () =>
-                    _promptSpread(context, ref, state.entries[index]),
+                onBatchPriority: () =>
+                    _promptBatchPriority(context, ref, state.entries[index]),
+                onSmartPostpone: () =>
+                    _confirmSmartPostpone(context, state.entries[index]),
+                onLearningCommand: (_LearningCommand command) =>
+                    _runLearningCommand(context, state.entries[index], command),
               ),
             ),
           ),
@@ -113,29 +121,138 @@ class _Body extends ConsumerWidget {
     ),
   );
 
-  Future<void> _promptSpread(
+  /// Runs one browser Learning command against a single element.
+  ///
+  /// The three commands that destroy scheduling state confirm first, and the
+  /// prompt says exactly what is cleared — Undismiss does not bring a schedule
+  /// back, so a user who expected it to would otherwise lose one silently.
+  Future<void> _runLearningCommand(
+    BuildContext context,
+    PriorityEntry entry,
+    _LearningCommand command,
+  ) async {
+    final List<ElementRef> refs = <ElementRef>[entry.ref];
+    if (command.isDestructive) {
+      final bool confirmed =
+          await showDialog<bool>(
+            context: context,
+            builder: (BuildContext context) => AlertDialog(
+              title: Text('${command.label}?'),
+              content: Text(command.warning),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(command.label),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!confirmed || !context.mounted) return;
+    }
+
+    switch (command) {
+      case _LearningCommand.remember:
+        await model.remember(refs);
+      case _LearningCommand.forget:
+        await model.forget(refs);
+      case _LearningCommand.dismiss:
+        await model.dismiss(refs);
+      case _LearningCommand.undismiss:
+        await model.undismiss(refs);
+      case _LearningCommand.done:
+        await model.done(refs);
+      case _LearningCommand.addToFinalDrill:
+        await model.addToFinalDrill(refs);
+      case _LearningCommand.addToOutstanding:
+        final int? every = await _promptForSpacing(context);
+        if (every != null) {
+          await model.addToOutstanding(refs, everyWhich: every);
+        }
+      case _LearningCommand.addAll:
+        final int? everyAll = await _promptForSpacing(context);
+        if (everyAll != null) {
+          await model.addToOutstanding(
+            refs,
+            everyWhich: everyAll,
+            rescheduleSameDay: true,
+          );
+        }
+      case _LearningCommand.resetHistory:
+        await model.resetHistory(refs);
+      case _LearningCommand.setAFactor:
+        final double? value = await _promptForDouble(
+          context,
+          title: 'Set A',
+          hint:
+              'Stores the A-factor directly. It changes no interval, due '
+              'date, priority, or repetition count.',
+          initial: 1.10,
+          min: 1.01,
+          max: 3,
+        );
+        if (value != null) await model.setAFactor(refs, value);
+      case _LearningCommand.modifyAFactor:
+        final double? multiplier = await _promptForDouble(
+          context,
+          title: 'Modify A',
+          hint: 'Rescales A around 1.01: A = 1.01 + m × (A − 1.01).',
+          initial: 1,
+          min: 0.20,
+          max: 2,
+        );
+        if (multiplier != null) await model.modifyAFactor(refs, multiplier);
+    }
+  }
+
+  /// Simulates Smart Postpone over one branch, then applies what was shown.
+  ///
+  /// A branch run reaches elements the Outstanding queue never offers, so it
+  /// is confirmed against the same decision list the queue's own run shows.
+  Future<void> _confirmSmartPostpone(
+    BuildContext context,
+    PriorityEntry entry,
+  ) async {
+    final String? sourceId = entry.schedule.rootId;
+    if (sourceId == null) {
+      showToast(context, 'That element has no article branch', isError: true);
+      return;
+    }
+    final AppliedSmartPostpone? simulated = await model.smartPostpone(
+      simulate: true,
+      branchSourceId: sourceId,
+    );
+    if (simulated == null || !context.mounted) return;
+    if (!await confirmSmartPostpone(context, simulated.result)) return;
+    await model.smartPostpone(simulate: false, branchSourceId: sourceId);
+  }
+
+  Future<void> _promptBatchPriority(
     BuildContext context,
     WidgetRef ref,
     PriorityEntry entry,
   ) async {
     final String? sourceId = entry.schedule.rootId;
     if (sourceId == null) {
-      showToast(
-        context,
-        'That element has no article to spread',
-        isError: true,
-      );
+      showToast(context, 'That element has no article branch', isError: true);
       return;
     }
-    final (double, double)? range = await showDialog<(double, double)>(
+    final _PriorityBatchDraft? draft = await showDialog<_PriorityBatchDraft>(
       context: context,
-      builder: (BuildContext context) => const _SpreadDialog(),
+      builder: (BuildContext context) => const _PriorityBatchDialog(),
     );
-    if (range == null) return;
-    await model.spreadBranch(
+    if (draft == null) return;
+    await model.batchBranch(
       sourceId: sourceId,
-      fromPercent: range.$1,
-      toPercent: range.$2,
+      mode: draft.mode,
+      lowPercent: draft.low,
+      highPercent: draft.high,
+      changePercent: draft.change,
+      limitChanges: draft.limitChanges,
     );
   }
 }
@@ -156,6 +273,20 @@ class _FilterBar extends StatelessWidget {
           style: const TextStyle(fontSize: 13, color: AppColors.muted),
         ),
         const Spacer(),
+        TextButton.icon(
+          onPressed: state.isBusy || state.entries.isEmpty
+              ? null
+              : () => _confirmSmartPostpone(context),
+          icon: const Icon(Icons.schedule_send, size: 16),
+          label: const Text('Smart Postpone these'),
+        ),
+        TextButton.icon(
+          onPressed: state.isBusy || state.entries.isEmpty
+              ? null
+              : () => _promptAdvance(context),
+          icon: const Icon(Icons.fast_forward, size: 16),
+          label: const Text('Advance these'),
+        ),
         for (final (String label, Set<ElementType> types)
             in <(String, Set<ElementType>)>[
               ('All', <ElementType>{}),
@@ -177,6 +308,30 @@ class _FilterBar extends StatelessWidget {
     ),
   );
 
+  /// Advance over exactly the rows the browser is showing.
+  Future<void> _promptAdvance(BuildContext context) async {
+    final _AdvanceDraft? draft = await showDialog<_AdvanceDraft>(
+      context: context,
+      builder: (BuildContext context) => const _AdvanceDialog(),
+    );
+    if (draft == null) return;
+    await model.advance(
+      <ElementRef>[for (final PriorityEntry entry in state.entries) entry.ref],
+      scope: draft.scope,
+      horizonDays: draft.horizonDays,
+    );
+  }
+
+  /// Runs the browser scope over exactly the filtered rows on screen.
+  Future<void> _confirmSmartPostpone(BuildContext context) async {
+    final AppliedSmartPostpone? simulated = await model.smartPostpone(
+      simulate: true,
+    );
+    if (simulated == null || !context.mounted) return;
+    if (!await confirmSmartPostpone(context, simulated.result)) return;
+    await model.smartPostpone(simulate: false);
+  }
+
   bool _sameSet(Set<ElementType> a, Set<ElementType> b) =>
       a.length == b.length && a.containsAll(b);
 }
@@ -185,13 +340,17 @@ class _Row extends ConsumerWidget {
   const _Row({
     required this.entry,
     required this.index,
-    required this.onSpread,
+    required this.onBatchPriority,
+    required this.onSmartPostpone,
+    required this.onLearningCommand,
     super.key,
   });
 
   final PriorityEntry entry;
   final int index;
-  final VoidCallback onSpread;
+  final VoidCallback onBatchPriority;
+  final VoidCallback onSmartPostpone;
+  final ValueChanged<_LearningCommand> onLearningCommand;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -277,9 +436,28 @@ class _Row extends ConsumerWidget {
               icon: const Icon(Icons.tune, size: 17),
             ),
             IconButton(
-              tooltip: 'Spread this article’s elements',
-              onPressed: onSpread,
-              icon: const Icon(Icons.linear_scale, size: 17),
+              tooltip: 'Batch priority for this article',
+              onPressed: onBatchPriority,
+              icon: const Icon(Icons.tune_outlined, size: 17),
+            ),
+            IconButton(
+              tooltip: 'Smart Postpone this article',
+              onPressed: onSmartPostpone,
+              icon: const Icon(Icons.schedule_send_outlined, size: 17),
+            ),
+            PopupMenuButton<_LearningCommand>(
+              tooltip: 'Learning commands',
+              onSelected: onLearningCommand,
+              itemBuilder: (BuildContext context) =>
+                  <PopupMenuEntry<_LearningCommand>>[
+                    for (final _LearningCommand command
+                        in _LearningCommand.values)
+                      PopupMenuItem<_LearningCommand>(
+                        value: command,
+                        child: Text(command.label),
+                      ),
+                  ],
+              icon: const Icon(Icons.more_vert, size: 17),
             ),
           ],
         ),
@@ -288,48 +466,303 @@ class _Row extends ConsumerWidget {
   }
 }
 
-class _SpreadDialog extends StatefulWidget {
-  const _SpreadDialog();
+final class _PriorityBatchDraft {
+  const _PriorityBatchDraft({
+    required this.mode,
+    required this.low,
+    required this.high,
+    required this.change,
+    required this.limitChanges,
+  });
 
-  @override
-  State<_SpreadDialog> createState() => _SpreadDialogState();
+  final Sm20BatchPriorityMode mode;
+  final double low;
+  final double high;
+  final double change;
+  final bool limitChanges;
 }
 
-class _SpreadDialogState extends State<_SpreadDialog> {
-  RangeValues _range = const RangeValues(20, 80);
+class _PriorityBatchDialog extends StatefulWidget {
+  const _PriorityBatchDialog();
+
+  @override
+  State<_PriorityBatchDialog> createState() => _PriorityBatchDialogState();
+}
+
+class _PriorityBatchDialogState extends State<_PriorityBatchDialog> {
+  Sm20BatchPriorityMode _mode = Sm20BatchPriorityMode.spread;
+  final TextEditingController _low = TextEditingController(text: '20');
+  final TextEditingController _high = TextEditingController(text: '80');
+  final TextEditingController _change = TextEditingController(text: '0');
+  bool _limitChanges = true;
+  String? _error;
+
+  @override
+  void dispose() {
+    _low.dispose();
+    _high.dispose();
+    _change.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Spread priorities'),
+    title: const Text('Batch priority'),
     content: SizedBox(
-      width: 420,
+      width: 460,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           const Text(
-            'Every element under this article is spread evenly across the '
-            'chosen range, keeping its current order. Worth doing once an '
-            'article is finished: its extracts and cards inherited the '
-            'article’s priority, which is almost always higher than they '
-            'deserve on their own.',
+            'The operation follows the branch’s stored order. Each element is '
+            'removed and reinserted immediately, so earlier changes can shift '
+            'the live percentage used by later elements.',
             style: TextStyle(fontSize: 12, color: AppColors.muted, height: 1.5),
           ),
-          const SizedBox(height: 18),
-          RangeSlider(
-            values: _range,
-            max: 100,
-            divisions: 100,
-            labels: RangeLabels(
-              '${_range.start.round()}%',
-              '${_range.end.round()}%',
-            ),
-            onChanged: (RangeValues value) => setState(() => _range = value),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<Sm20BatchPriorityMode>(
+            initialValue: _mode,
+            decoration: const InputDecoration(labelText: 'Operation'),
+            items: <DropdownMenuItem<Sm20BatchPriorityMode>>[
+              for (final Sm20BatchPriorityMode mode
+                  in Sm20BatchPriorityMode.values)
+                DropdownMenuItem<Sm20BatchPriorityMode>(
+                  value: mode,
+                  child: Text(
+                    '${mode.name[0].toUpperCase()}${mode.name.substring(1)}',
+                  ),
+                ),
+            ],
+            onChanged: (Sm20BatchPriorityMode? value) {
+              if (value == null) return;
+              setState(() {
+                _mode = value;
+                _change.text = switch (value) {
+                  Sm20BatchPriorityMode.increase => '50',
+                  Sm20BatchPriorityMode.decrease => '150',
+                  Sm20BatchPriorityMode.spread ||
+                  Sm20BatchPriorityMode.adjust => '0',
+                };
+              });
+            },
           ),
-          Text(
-            '${_range.start.round()}% to ${_range.end.round()}%',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 13, color: AppColors.text),
+          const SizedBox(height: 12),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  controller: _low,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Low priority %',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _high,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'High priority %',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_mode == Sm20BatchPriorityMode.increase ||
+              _mode == Sm20BatchPriorityMode.decrease) ...<Widget>[
+            const SizedBox(height: 12),
+            TextField(
+              controller: _change,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Change %',
+                helperText: 'Increase starts at 50; Decrease starts at 150.',
+              ),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Limit changes to the selected range'),
+              value: _limitChanges,
+              onChanged: (bool value) => setState(() => _limitChanges = value),
+            ),
+          ],
+          if (_error != null)
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+        ],
+      ),
+    ),
+    actions: <Widget>[
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(onPressed: _submit, child: const Text('Apply')),
+    ],
+  );
+
+  void _submit() {
+    final double? low = double.tryParse(_low.text.trim());
+    final double? high = double.tryParse(_high.text.trim());
+    final double? change = double.tryParse(_change.text.trim());
+    if (low == null || high == null || change == null) {
+      setState(() => _error = 'Enter valid numeric values.');
+      return;
+    }
+    Navigator.of(context).pop(
+      _PriorityBatchDraft(
+        mode: _mode,
+        low: low,
+        high: high,
+        change: change,
+        limitChanges: _limitChanges,
+      ),
+    );
+  }
+}
+
+/// SM20's browser Learning commands for one element.
+enum _LearningCommand {
+  remember('Remember'),
+  forget('Forget'),
+  dismiss('Dismiss'),
+  undismiss('Undismiss'),
+  done('Done'),
+  addToFinalDrill('Add to drill'),
+  addToOutstanding('Add to outstanding'),
+  addAll('Add all'),
+  resetHistory('Reset history'),
+  setAFactor('Set A…'),
+  modifyAFactor('Modify A…');
+
+  const _LearningCommand(this.label);
+
+  final String label;
+
+  /// Whether the command destroys scheduling state and deserves a prompt.
+  bool get isDestructive =>
+      this == _LearningCommand.forget ||
+      this == _LearningCommand.dismiss ||
+      this == _LearningCommand.done;
+
+  String get warning => switch (this) {
+    _LearningCommand.forget =>
+      'Forget clears the repetition count, interval, and postponement '
+          'counters and returns the element to the pending store. The '
+          'A-factor and priority survive; the schedule does not.',
+    _LearningCommand.dismiss =>
+      'Dismiss stops scheduling, clears the repetition state, and sets '
+          'priority to 100%. Undismiss later restores the status only — not '
+          'the schedule or the priority.',
+    _LearningCommand.done =>
+      'Done removes the element from scheduling, every queue, and the '
+          'priority population.',
+    _ => '',
+  };
+}
+
+/// The Advance dialog: scope plus a horizon in days.
+class _AdvanceDialog extends StatefulWidget {
+  const _AdvanceDialog();
+
+  @override
+  State<_AdvanceDialog> createState() => _AdvanceDialogState();
+}
+
+class _AdvanceDraft {
+  const _AdvanceDraft({required this.scope, required this.horizonDays});
+
+  final Sm20AdvanceScope scope;
+  final int horizonDays;
+}
+
+class _AdvanceDialogState extends State<_AdvanceDialog> {
+  Sm20AdvanceScope _scope = Sm20AdvanceScope.topics;
+  late final TextEditingController _days = TextEditingController(
+    text: '$kSm20AdvanceDefaultDays',
+  );
+
+  @override
+  void dispose() {
+    _days.dispose();
+    super.dispose();
+  }
+
+  int? get _horizon {
+    final int? value = int.tryParse(_days.text.trim());
+    if (value == null) return null;
+    return value < _scope.minimumDays || value > kSm20AdvanceMaximumDays
+        ? null
+        : value;
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Advance'),
+    content: SizedBox(
+      width: 380,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Text(
+            'Advance pulls future work closer to today. For a topic it is a '
+            'real forced repetition, so the A-factor and priority adapt; for '
+            'a card it only moves the due date. Elements whose interval is '
+            'already inside the horizon are left alone.',
+            style: TextStyle(fontSize: 12, color: AppColors.muted),
+          ),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<Sm20AdvanceScope>(
+            initialValue: _scope,
+            decoration: const InputDecoration(
+              labelText: 'Elements',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            items: const <DropdownMenuItem<Sm20AdvanceScope>>[
+              DropdownMenuItem<Sm20AdvanceScope>(
+                value: Sm20AdvanceScope.topics,
+                child: Text('Topics'),
+              ),
+              DropdownMenuItem<Sm20AdvanceScope>(
+                value: Sm20AdvanceScope.items,
+                child: Text('Items'),
+              ),
+              DropdownMenuItem<Sm20AdvanceScope>(
+                value: Sm20AdvanceScope.all,
+                child: Text('All elements'),
+              ),
+            ],
+            onChanged: (Sm20AdvanceScope? value) {
+              if (value == null) return;
+              setState(() => _scope = value);
+            },
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _days,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'Days',
+              helperText:
+                  '${_scope.minimumDays}–$kSm20AdvanceMaximumDays; '
+                  'items need at least two.',
+              isDense: true,
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: (_) => setState(() {}),
           ),
         ],
       ),
@@ -340,9 +773,151 @@ class _SpreadDialogState extends State<_SpreadDialog> {
         child: const Text('Cancel'),
       ),
       FilledButton(
-        onPressed: () => Navigator.of(context).pop((_range.start, _range.end)),
-        child: const Text('Spread'),
+        onPressed: _horizon == null
+            ? null
+            : () => Navigator.of(
+                context,
+              ).pop(_AdvanceDraft(scope: _scope, horizonDays: _horizon!)),
+        child: const Text('Advance'),
       ),
     ],
   );
+}
+
+/// A single numeric prompt, used by Set A and Modify A.
+Future<double?> _promptForDouble(
+  BuildContext context, {
+  required String title,
+  required String hint,
+  required double initial,
+  required double min,
+  required double max,
+}) async {
+  final TextEditingController controller = TextEditingController(
+    text: '$initial',
+  );
+  try {
+    return await showDialog<double>(
+      context: context,
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setState) {
+          final double? value = double.tryParse(controller.text.trim());
+          final bool valid = value != null && value >= min && value <= max;
+          return AlertDialog(
+            title: Text(title),
+            content: SizedBox(
+              width: 340,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    hint,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      helperText: '$min–$max',
+                      isDense: true,
+                      border: const OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: valid
+                    ? () => Navigator.of(context).pop(value)
+                    : null,
+                child: const Text('Apply'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  } finally {
+    controller.dispose();
+  }
+}
+
+
+/// SM20's `Every which element?` prompt for batch Add to Outstanding.
+///
+/// The spacing is not cosmetic: section 9.7 seeds the first insertion at
+/// `min(3, s)` and advances the target by `s` after each success, so it
+/// decides where in the queue the selection lands. Defaulting it silently
+/// would hide a choice the executable always asks for.
+Future<int?> _promptForSpacing(BuildContext context) async {
+  final TextEditingController controller = TextEditingController(text: '5');
+  try {
+    return await showDialog<int>(
+      context: context,
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setState) {
+          final int? value = int.tryParse(controller.text.trim());
+          final bool valid = value != null && value >= 1 && value <= 100;
+          return AlertDialog(
+            title: const Text('Every which element?'),
+            content: SizedBox(
+              width: 340,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Text(
+                    'Spacing between insertions in the Outstanding queue. '
+                    'The first lands at position min(3, s), and each further '
+                    'element is placed s positions later. Every successful '
+                    'insertion also multiplies that priority target by 0.9.',
+                    style: TextStyle(fontSize: 12, color: AppColors.muted),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      helperText: '1–100',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: valid
+                    ? () => Navigator.of(context).pop(value)
+                    : null,
+                child: const Text('OK'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  } finally {
+    controller.dispose();
+  }
 }

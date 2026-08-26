@@ -7,6 +7,7 @@
 /// how the running app changes them too.
 library;
 
+import 'package:incremental_reader/src/application/browser/browser_handlers.dart';
 import 'package:incremental_reader/src/application/diagnostics/diagnostics_query.dart';
 import 'package:incremental_reader/src/application/diagnostics/scheduler_metrics_query.dart';
 import 'package:incremental_reader/src/application/extraction/extraction_handlers.dart';
@@ -19,10 +20,10 @@ import 'package:incremental_reader/src/application/reader/reader_handlers.dart';
 import 'package:incremental_reader/src/application/review/review_handlers.dart';
 import 'package:incremental_reader/src/application/scheduling/effective_due_query.dart';
 import 'package:incremental_reader/src/application/scheduling/mercy_handlers.dart';
-import 'package:incremental_reader/src/application/scheduling/schedule_adjustment_service.dart';
 import 'package:incremental_reader/src/application/scheduling/scheduling_context.dart';
 import 'package:incremental_reader/src/application/search/search_query.dart';
 import 'package:incremental_reader/src/application/settings/settings_store.dart';
+import 'package:incremental_reader/src/application/settings/sm20_runtime_store.dart';
 import 'package:incremental_reader/src/core/clock.dart';
 import 'package:incremental_reader/src/core/ids.dart';
 import 'package:incremental_reader/src/core/tracing.dart';
@@ -53,9 +54,11 @@ final class AppHarness {
     );
     transactions = DriftTransactionRunner(this.database);
     settingsStore = SettingsStore(settings);
+    runtimeStore = Sm20RuntimeStore(settings);
     context = SchedulingContext(
       settings: settingsStore,
       learning: learning,
+      runtime: runtimeStore,
       clock: this.clock,
       // A fixed zone by default: a test that wants a DST transition supplies
       // its own rules rather than depending on where the machine is.
@@ -75,6 +78,7 @@ final class AppHarness {
   late final DriftTransferRepository transfer;
   late final DriftTransactionRunner transactions;
   late final SettingsStore settingsStore;
+  late final Sm20RuntimeStore runtimeStore;
   late final SchedulingContext context;
 
   /// Collects every diagnostic event the handlers emit.
@@ -148,15 +152,21 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
+  late final BrowserHandlers browser = BrowserHandlers(
+    learning: learning,
+    transfer: transfer,
+    transactions: transactions,
+    context: context,
+    clock: clock,
+    ids: FakeIdGenerator(prefix: 'browser-$operationPrefix'),
+    diagnostics: diagnostics,
+  );
+
   late final MercyHandlers mercy = MercyHandlers(
     learning: learning,
     transfer: transfer,
     transactions: transactions,
     context: context,
-    adjustments: ScheduleAdjustmentService(
-      learning: learning,
-      ids: FakeIdGenerator(prefix: 'adjust-$operationPrefix'),
-    ),
     queue: queue,
     ids: FakeIdGenerator(prefix: 'mercy-$operationPrefix'),
   );
@@ -197,7 +207,6 @@ final class AppHarness {
     content: content,
     search: search,
     context: context,
-    effectiveDue: effectiveDue,
   );
 
   int _operations = 0;

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
 import '../../../app/toast.dart';
+import '../../../application/queue/queue_commands.dart';
 import '../../../application/queue/queue_query.dart';
 import '../../../application/scheduling/mercy_workflow.dart';
 import '../../../domain/scheduling/element.dart';
@@ -20,6 +21,7 @@ import '../../reader/presentation/reader_screen.dart';
 import '../../reader/presentation/reader_view_model.dart';
 import '../../review/presentation/review_screen.dart';
 import 'queue_view_model.dart';
+import 'smart_postpone_dialog.dart';
 import 'study_route_result.dart';
 
 Future<void> openStudyQueue(BuildContext context, WidgetRef ref) async {
@@ -217,11 +219,7 @@ class _QueueBody extends StatelessWidget {
   );
 }
 
-/// Today's capacity, and the two ways to change it.
-///
-/// Shown rather than hidden because an oversubscribed collection is the normal
-/// state of incremental reading, and the user can only prioritize honestly if
-/// they can see how much the valve is shedding on their behalf.
+/// SM20's current queue stage and its type counts.
 class _LoadPanel extends StatelessWidget {
   const _LoadPanel({
     required this.state,
@@ -250,37 +248,20 @@ class _LoadPanel extends StatelessWidget {
               spacing: 20,
               runSpacing: 6,
               children: <Widget>[
+                _StageBadge(lane: state.projection.lane),
                 _Metric(label: 'due', value: '${counters.dueTotal}'),
-                _Metric(label: 'admitted', value: '${counters.admittedTotal}'),
-                _Metric(
-                  label: 'new cards',
-                  value: '${counters.admittedNewCards}',
-                ),
-                if (counters.overflowTotal > 0)
-                  _Metric(
-                    label: 'deferred',
-                    value: '${counters.overflowTotal}',
-                    hint:
-                        'Lowest-priority excess, pushed out to protect the '
-                        'day. The top ${counters.protectedElements} '
-                        'protected elements were never eligible for this.',
-                  ),
-                _Metric(
-                  label: 'protection',
-                  value: '${counters.protectionPercent.toStringAsFixed(0)}%',
-                  hint:
-                      'How deep into the collection today reached. Nothing '
-                      'below this percentile is safe from being forgotten.',
-                ),
+                _Metric(label: 'items', value: '${counters.dueCards}'),
+                _Metric(label: 'topics', value: '${counters.dueTopics}'),
               ],
             ),
           ),
-          if (state.hasDeferrals)
-            TextButton.icon(
-              onPressed: isRunning || state.isBusy ? null : model.studyMore,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Study more'),
-            ),
+          TextButton.icon(
+            onPressed: isRunning || state.isBusy
+                ? null
+                : () => _confirmSmartPostpone(context),
+            icon: const Icon(Icons.schedule_send, size: 16),
+            label: const Text('Smart Postpone'),
+          ),
           TextButton.icon(
             onPressed: isRunning || state.isBusy
                 ? null
@@ -295,6 +276,7 @@ class _LoadPanel extends StatelessWidget {
             icon: const Icon(Icons.undo, size: 16),
             label: const Text('Undo Mercy'),
           ),
+          _LearnMenu(model: model, enabled: !(isRunning || state.isBusy)),
         ],
       ),
     );
@@ -312,11 +294,11 @@ class _LoadPanel extends StatelessWidget {
           builder: (BuildContext context) => AlertDialog(
             title: const Text('Spread the backlog?'),
             content: const Text(
-              'Mercy redistributes outstanding work across the next few weeks '
-              'in one operation, best priority first. Nothing is reviewed, no '
-              'interval changes, and no memory state moves — only the dates '
-              'you become eligible. You will see the exact plan before '
-              'anything is written, and it can be undone as one batch.',
+              'Mercy gathers scheduled work and redistributes it across its '
+              'configured target horizon. It performs no repetitions and '
+              'does not change priority or repetition history; it applies '
+              'canonical low-level reschedules. You will see the exact plan '
+              'before anything is written, and it can be undone as one batch.',
             ),
             actions: <Widget>[
               TextButton(
@@ -342,7 +324,7 @@ class _LoadPanel extends StatelessWidget {
         context: context,
         builder: (BuildContext context) => AlertDialog(
           title: const Text('Nothing to spread'),
-          content: Text(_exclusionSummary(preview)),
+          content: Text(_planSummary(preview)),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -374,7 +356,7 @@ class _LoadPanel extends StatelessWidget {
                     '${preview.selectedTopicCount == 1 ? '' : 's'}.',
                   ),
                   const SizedBox(height: 8),
-                  Text(_exclusionSummary(preview)),
+                  Text(_planSummary(preview)),
                   const SizedBox(height: 12),
                   const Text('Proposed load per day:'),
                   const SizedBox(height: 4),
@@ -411,37 +393,57 @@ class _LoadPanel extends StatelessWidget {
     if (apply) await model.applyMercy(batch);
   }
 
-  String _exclusionSummary(MercyPreview preview) {
-    if (preview.exclusions.isEmpty) {
-      return 'Every candidate considered was eligible.';
+  String _planSummary(MercyPreview preview) {
+    if (preview.selectedCount == 0) {
+      if (preview.deletedPlaceholderCount > 0) {
+        final int missing = preview.deletedPlaceholderCount;
+        final String subject = missing == 1
+            ? 'reference no longer exists'
+            : 'references no longer exist';
+        return '$missing selected subset $subject, so there is nothing to '
+            'reschedule.';
+      }
+      if (preview.gatherMode == Sm20MercyGatherMode.subset) {
+        return 'The supplied subset is empty.';
+      }
+      return 'No scheduled elements fell inside the '
+          '${preview.gatheringDays}-day gathering window.';
     }
-    final List<String> parts = <String>[
-      for (final MapEntry<MercyExclusionReason, int> entry
-          in preview.exclusionCounts.entries)
-        '${entry.value} ${_exclusionLabel(entry.key)}',
-    ];
-    return 'Left alone: ${parts.join(', ')}.';
+    final int missing = preview.deletedPlaceholderCount;
+    final String placeholders = missing == 0
+        ? ''
+        : ' $missing missing subset '
+              '${missing == 1 ? 'reference remains' : 'references remain'} as '
+              '${missing == 1 ? 'an empty ordering slot' : 'empty ordering slots'}.';
+    final String source = preview.gatherMode == Sm20MercyGatherMode.subset
+        ? 'from the supplied subset'
+        : 'from the ${preview.gatheringDays}-day gathering window';
+    return '${preview.selectedCount} scheduled '
+        '${preview.selectedCount == 1 ? 'element was' : 'elements were'} '
+        'redistributed $source across ${preview.reschedulingDays} target '
+        '${preview.reschedulingDays == 1 ? 'day' : 'days'}.$placeholders';
   }
 
-  String _exclusionLabel(MercyExclusionReason reason) => switch (reason) {
-    MercyExclusionReason.outsideScope => 'outside the scope',
-    MercyExclusionReason.lifecycleIneligible => 'not active',
-    MercyExclusionReason.outsideCollectingPeriod => 'outside the period',
-    MercyExclusionReason.futureRepetitionNotSelected => 'not yet due',
-    MercyExclusionReason.dueIntradayStep => 'mid-learning',
-    MercyExclusionReason.protected => 'protected',
-    MercyExclusionReason.preservedLowerBoundBeyondDestination =>
-      'held by your own Later',
-    MercyExclusionReason.noDestinationCapacity => 'no room in the horizon',
-  };
+  /// Smart Postpone is simulated first, always.
+  ///
+  /// The simulation consumes no randomness and writes nothing, so the list the
+  /// user approves is the engine's own decision set rather than a preview
+  /// built by different code. The real run re-evaluates against live state.
+  Future<void> _confirmSmartPostpone(BuildContext context) async {
+    final AppliedSmartPostpone? simulated = await model.smartPostpone(
+      simulate: true,
+    );
+    if (simulated == null || !context.mounted) return;
+    if (!await confirmSmartPostpone(context, simulated.result)) return;
+    await model.smartPostpone(simulate: false);
+  }
 }
 
 class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value, this.hint});
+  const _Metric({required this.label, required this.value});
 
   final String label;
   final String value;
-  final String? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -461,7 +463,7 @@ class _Metric extends StatelessWidget {
         ),
       ],
     );
-    return hint == null ? content : Tooltip(message: hint!, child: content);
+    return content;
   }
 }
 
@@ -616,21 +618,6 @@ class _QueueEmpty extends StatelessWidget {
                 : '$completed item${completed == 1 ? '' : 's'} completed.',
             style: const TextStyle(color: AppColors.muted),
           ),
-          if (state.hasDeferrals) ...<Widget>[
-            const SizedBox(height: 18),
-            Text(
-              '${state.counters.overflowTotal} lower-priority '
-              'element${state.counters.overflowTotal == 1 ? '' : 's'} were '
-              'deferred to protect today.',
-              style: const TextStyle(fontSize: 12, color: AppColors.muted),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: state.isBusy ? null : model.studyMore,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Study more'),
-            ),
-          ],
         ],
       ),
     );
@@ -653,5 +640,124 @@ class _QueueError extends StatelessWidget {
         OutlinedButton(onPressed: onRetry, child: const Text('Try again')),
       ],
     ),
+  );
+}
+
+/// Which stage the queue is presenting.
+///
+/// Without this the three stages are indistinguishable on screen, and a user
+/// whose Outstanding queue has emptied into the final drill has no way to tell
+/// why work they already answered today has come back.
+class _StageBadge extends StatelessWidget {
+  const _StageBadge({required this.lane});
+
+  final QueueLane? lane;
+
+  @override
+  Widget build(BuildContext context) {
+    final (String label, Color color) = switch (lane) {
+      QueueLane.finalDrill => ('final drill', AppColors.accent),
+      QueueLane.pending => ('pending', AppColors.softMarker),
+      _ => ('outstanding', AppColors.muted),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: 12)),
+    );
+  }
+}
+
+/// The Learn menu's stage and randomization commands.
+///
+/// SM20 reaches the fallback stages automatically, but it also lets the user
+/// enter them directly, so these are commands rather than states to wait for.
+class _LearnMenu extends StatelessWidget {
+  const _LearnMenu({required this.model, required this.enabled});
+
+  final QueueViewModel model;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<String>(
+    enabled: enabled,
+    tooltip: 'Learning stages',
+    icon: const Icon(Icons.playlist_play, size: 18),
+    onSelected: (String value) async {
+      switch (value) {
+        case 'outstanding':
+          await model.enterStage(Sm20StageRequest.outstanding);
+        case 'final_drill':
+          await model.enterStage(Sm20StageRequest.finalDrill);
+        case 'random_learning':
+          await model.enterStage(Sm20StageRequest.randomLearning);
+        case 'cut_drills':
+          if (!context.mounted) return;
+          // Cutting the drill throws away a selection the user built by
+          // hand, and nothing else restores it, so it is confirmed.
+          final bool wanted =
+              await showDialog<bool>(
+                context: context,
+                builder: (BuildContext context) => AlertDialog(
+                  title: const Text('Cut drills?'),
+                  content: const Text(
+                    'This removes every element scheduled for the final '
+                    'drill. Schedules, intervals, A-factors and priorities '
+                    'are untouched: only drill membership is cleared.',
+                  ),
+                  actions: <Widget>[
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Keep'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Cut drills'),
+                    ),
+                  ],
+                ),
+              ) ??
+              false;
+          if (wanted) await model.cutDrills();
+        case 'randomize_outstanding':
+          await model.randomizeQueue(Sm20RandomizableQueue.outstanding);
+        case 'randomize_drill':
+          await model.randomizeQueue(Sm20RandomizableQueue.finalDrill);
+        case 'randomize_pending':
+          await model.randomizeQueue(Sm20RandomizableQueue.pending);
+      }
+    },
+    itemBuilder: (BuildContext context) => const <PopupMenuEntry<String>>[
+      PopupMenuItem<String>(
+        value: 'outstanding',
+        child: Text('1. Outstanding material'),
+      ),
+      PopupMenuItem<String>(
+        value: 'random_learning',
+        child: Text('2. New material'),
+      ),
+      PopupMenuItem<String>(
+        value: 'final_drill',
+        child: Text('3. Final drill'),
+      ),
+      PopupMenuDivider(),
+      PopupMenuItem<String>(value: 'cut_drills', child: Text('Cut drills')),
+      PopupMenuDivider(),
+      PopupMenuItem<String>(
+        value: 'randomize_outstanding',
+        child: Text('Randomize repetitions'),
+      ),
+      PopupMenuItem<String>(
+        value: 'randomize_drill',
+        child: Text('Randomize final drill'),
+      ),
+      PopupMenuItem<String>(
+        value: 'randomize_pending',
+        child: Text('Randomize pending queue'),
+      ),
+    ],
   );
 }

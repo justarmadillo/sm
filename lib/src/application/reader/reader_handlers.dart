@@ -29,18 +29,15 @@ import '../../domain/content/extract.dart';
 import '../../domain/content/reader_anchor.dart';
 import '../../domain/content/source.dart';
 import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/overload.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/schedule_adjustment.dart';
-import '../../domain/scheduling/schedule_adjustment_codec.dart';
 import '../../domain/scheduling/scheduler_event.dart';
+import '../../domain/scheduling/sm20_numeric.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../app_command.dart';
 import '../ports/repositories.dart';
 import '../ports/transaction_runner.dart';
-import '../scheduling/schedule_adjustment_service.dart';
 import '../scheduling/scheduling_context.dart';
 import '../scheduling/scheduling_journal.dart';
 import 'reader_commands.dart';
@@ -53,6 +50,14 @@ const String kMarkerMovedKind = 'reader.marker_moved';
 
 /// Activity kind recorded when a topic's interval is set by hand.
 const String kTopicRescheduledKind = 'topic.rescheduled';
+
+/// Activity kind for a completed topic encounter.
+///
+/// The idempotency guard in `_run` looks the operation up by this exact kind,
+/// so the row written on success has to carry it. Logging the domain event's
+/// own name here instead would leave the guard permanently unsatisfied and
+/// let a retried Done commit a second repetition.
+const String kTopicEncounterCompletedKind = 'topic.encounter_completed';
 
 /// Handlers for reading, marking, and pacing sources.
 final class ReaderHandlers {
@@ -74,7 +79,6 @@ final class ReaderHandlers {
        _context = context,
        _clock = clock,
        _ids = ids,
-       _adjustments = ScheduleAdjustmentService(learning: learning, ids: ids),
        _journal = SchedulingJournal(learning: learning, ids: ids),
        _diagnostics = diagnostics;
 
@@ -86,7 +90,6 @@ final class ReaderHandlers {
   final SchedulingContext _context;
   final Clock _clock;
   final IdGenerator _ids;
-  final ScheduleAdjustmentService _adjustments;
   final SchedulingJournal _journal;
   final DiagnosticSink _diagnostics;
 
@@ -150,9 +153,7 @@ final class ReaderHandlers {
     final TopicScheduler scheduler = await _context.topicScheduler();
     final TopicState topic = scheduler.createFor(
       ref: ref,
-      profileId: command.pace.name,
       today: day,
-      pressure: pressure,
       buildSchedule: (StudyDay due) => ElementSchedule(
         ref: ref,
         priority: rank,
@@ -167,6 +168,15 @@ final class ReaderHandlers {
 
     await _content.insertSource(source, document);
     await _learning.insertTopic(topic);
+    final runtime = await _context.runtimeState();
+    await _context.saveRuntimeState(
+      runtime.copyWith(
+        pending: <ElementRef>[
+          ...runtime.pending.where((ElementRef value) => value != ref),
+          ref,
+        ],
+      ),
+    );
     await _search.upsertDocument(
       SearchDocument(
         ref: ref,
@@ -270,7 +280,7 @@ final class ReaderHandlers {
   /// Done: grows the topic's interval exactly once.
   Future<Result<TopicState>> completeEncounter(
     CompleteTopicEncounter command,
-  ) => _run<TopicState>(command, 'topic.encounter_completed', () async {
+  ) => _run<TopicState>(command, kTopicEncounterCompletedKind, () async {
     final TopicState? topic = await _learning.findTopic(command.ref);
     if (topic == null) return _missingSchedule<TopicState>(command.ref.id);
 
@@ -284,7 +294,7 @@ final class ReaderHandlers {
       topic,
       day,
       encounter: encounter,
-      pressure: pressure,
+      priorityScale: scale,
     );
     if (!transition.isChange) {
       // The domain refused: the element is already finished, dismissed, or
@@ -301,12 +311,27 @@ final class ReaderHandlers {
         ConflictFailure('the topic changed before Done committed'),
       );
     }
-    final ScheduleAdjustmentMutation adjustmentMutation = await _adjustments
-        .clearAfterCanonicalTransition(
-          element: command.ref,
-          atUtc: command.timestampUtc,
-          operationId: command.operationId.value,
-        );
+    final runtime = await _context.runtimeState();
+    await _context.saveRuntimeState(
+      runtime.copyWith(
+        prngSeed: transition.prngState.seed,
+        outstanding: runtime.outstanding
+            .where((ElementRef value) => value != command.ref)
+            .toList(),
+        outstandingItems: runtime.outstandingItems
+            .where((ElementRef value) => value != command.ref)
+            .toList(),
+        outstandingTopics: runtime.outstandingTopics
+            .where((ElementRef value) => value != command.ref)
+            .toList(),
+        finalDrill: runtime.finalDrill
+            .where((ElementRef value) => value != command.ref)
+            .toList(),
+        pending: runtime.pending
+            .where((ElementRef value) => value != command.ref)
+            .toList(),
+      ),
+    );
     for (final TopicEvent event in transition.events) {
       await _journal.append(
         operationId: command.operationId.value,
@@ -332,16 +357,19 @@ final class ReaderHandlers {
         durationMs: command.foregroundMs,
         postponeCount: topic.postponeCount,
         metadata: <String, Object?>{
-          if (event is TopicEncounterCompleted) ...<String, Object?>{
-            'interval_days': event.intervalDays,
-            'exact_interval_days': event.exactIntervalDays,
+          if (event is TopicRepetitionCommitted) ...<String, Object?>{
+            'interval_days': event.storedInterval,
+            'selected_interval': event.selectedInterval,
             'next_due': event.nextDueDay.toString(),
-            ...?event.aFactor?.toMetadata(),
+            'a_before': event.oldAFactor,
+            'a_after': event.newAFactor,
+            'priority_before': event.priorityBefore,
+            'priority_after': event.priorityAfter,
+            'random_draws': event.randomDraws,
           },
           if (event is TopicLifecycleChanged) ...<String, Object?>{
             'from': event.from.name,
             'to': event.to.name,
-            'automatic': event.automatic,
           },
           'words_read': encounter.wordsRead,
           'extracts_created': encounter.extractsCreated,
@@ -350,10 +378,15 @@ final class ReaderHandlers {
       );
       await _log(
         command,
-        event.kind,
+        kTopicEncounterCompletedKind,
         ref: command.ref,
         durationMs: command.foregroundMs,
-        metadata: _metadataFor(event),
+        // The specific domain event stays in the row, it just no longer
+        // decides the kind the retry guard searches for.
+        metadata: <String, Object?>{
+          ...?_metadataFor(event),
+          'event': event.kind,
+        },
       );
     }
     await _journal.appendScheduler(
@@ -363,7 +396,7 @@ final class ReaderHandlers {
       atUtc: command.timestampUtc,
       studyDay: day,
       policyVersion: transition.state.schedulerVersion,
-      schedulerName: transition.state.schedulerKind.storageName,
+      schedulerName: transition.state.schedulerName,
       schedulerVersion: transition.state.schedulerVersion,
       stateBefore: _topicStateJson(topic),
       stateAfter: _topicStateJson(transition.state),
@@ -373,27 +406,17 @@ final class ReaderHandlers {
       algorithmicDueAfter: SchedulerEvent.encodeStudyDayDue(
         transition.state.schedule.algorithmicDueDay,
       ),
-      adjustmentsBefore: adjustmentMutation.beforeSnapshot,
-      adjustmentsAfter: adjustmentMutation.afterSnapshot,
       metadata: <String, Object?>{
         'words_read': encounter.wordsRead,
         'extracts_created': encounter.extractsCreated,
         'foreground_ms': command.foregroundMs,
       },
     );
-    await _learning.consumePresentationPlanEntry(
-      day: day,
-      ref: command.ref,
-      atUtc: command.timestampUtc,
-    );
     return Ok<TopicState>(transition.state);
   });
 
-  /// Later: moves eligibility without growing anything.
-  ///
-  /// When no target day is given the delay scales with the element's own
-  /// interval. A fixed one day would simply return the element tomorrow into
-  /// an equally full queue, which is why it is not the default.
+  /// SM20 Later Today: queue-only when already Outstanding; otherwise it
+  /// performs Jump Interval 0 without priority adaptation.
   Future<Result<TopicState>> postpone(PostponeElement command) =>
       _run<TopicState>(command, 'topic.postponed', () async {
         final TopicState? topic = await _learning.findTopic(command.ref);
@@ -401,49 +424,63 @@ final class ReaderHandlers {
 
         final StudyDay day = await today();
         final StudyDayCalendar calendar = await _context.calendar();
-
-        StudyDay until;
-        PostponeDecision? decision;
-        if (command.until != null) {
-          until = command.until!;
-        } else {
-          final OverloadValve valve = await _context.overloadValve();
-          decision = valve.later(
-            intervalDays: topic.intervalDays,
-            seed: '${command.operationId.value}:${command.ref}',
+        final TopicScheduler scheduler = await _context.topicScheduler();
+        final PriorityScale scale = await _context.priorityScale();
+        final runtime = await _context.runtimeState();
+        final bool alreadyOutstanding = runtime.outstanding.contains(topic.ref);
+        final TopicTransition transition = command.until == null
+            ? scheduler.laterToday(
+                topic,
+                today: day,
+                alreadyOutstanding: alreadyOutstanding,
+                priorityScale: scale,
+              )
+            : scheduler.rescheduleElement(
+                topic,
+                targetDay: command.until!,
+                today: day,
+              );
+        if (transition.isChange &&
+            !await _learning.compareAndSwapTopic(
+              expected: topic,
+              replacement: transition.state,
+            )) {
+          return const Err<TopicState>(
+            ConflictFailure('the topic changed before Later committed'),
           );
-          until = day.addDays(decision.delayDays);
         }
-
-        final ScheduleAdjustmentReason reason =
-            command.kind == DeferralKind.automatic
-            ? ScheduleAdjustmentReason.autoOverflow
-            : ScheduleAdjustmentReason.manualLater;
-        final AdjustmentApplication applied = await _adjustments.setLowerBound(
-          element: topic.ref,
-          reason: reason,
-          operationId: command.operationId.value,
-          atUtc: command.timestampUtc,
-          studyDay: day,
-          notBeforeStudyDay: until,
-          replaceSameReason: true,
+        final outstanding = <ElementRef>[
+          for (final ElementRef ref in runtime.outstanding)
+            if (ref != topic.ref) ref,
+          if (command.until == null || command.until! <= day) topic.ref,
+        ];
+        final outstandingTopics = <ElementRef>[
+          for (final ElementRef ref in runtime.outstandingTopics)
+            if (ref != topic.ref) ref,
+          if (command.until == null || command.until! <= day) topic.ref,
+        ];
+        await _context.saveRuntimeState(
+          runtime.copyWith(
+            outstanding: outstanding,
+            outstandingTopics: outstandingTopics,
+            prngSeed: transition.prngState.seed,
+          ),
         );
+        final TopicState after = transition.state;
         await _journal.append(
           operationId: command.operationId.value,
           ref: command.ref,
-          eventType: command.kind == DeferralKind.automatic
+          eventType: command.isAutomatic
               ? RevlogEventType.autoPostpone
               : RevlogEventType.postpone,
           atUtc: command.timestampUtc,
           before: _journal.topicSnapshot(topic, calendar: calendar),
-          after: _journal.topicSnapshot(topic, calendar: calendar),
+          after: _journal.topicSnapshot(after, calendar: calendar),
           scheduledDays: topic.intervalDays,
           postponeCount: topic.postponeCount,
           metadata: <String, Object?>{
-            'until': until.toString(),
-            'adjustment_reason': reason.wireName,
-            if (applied.alreadyApplied) 'idempotent_replay': true,
-            if (decision != null) ...decision.toMetadata(),
+            'target': (command.until ?? day).toString(),
+            'queue_only': alreadyOutstanding,
           },
         );
         await _log(
@@ -451,19 +488,17 @@ final class ReaderHandlers {
           'topic.postponed',
           ref: command.ref,
           metadata: <String, Object?>{
-            'until': until.toString(),
-            'reason': reason.wireName,
+            'target': (command.until ?? day).toString(),
+            'queue_only': alreadyOutstanding,
           },
         );
-        return Ok<TopicState>(topic);
+        return Ok<TopicState>(after);
       });
 
   /// Sets a topic's interval by hand.
   ///
-  /// SuperMemo treats this as a priority signal — asking to see something in
-  /// eleven days rather than thirty says it matters more — but the priority
-  /// change stays a separate, visible command rather than a hidden side
-  /// effect, so the user is never surprised by their collection reordering.
+  /// The standard SM20 UI adapts A and priority against the entered remaining
+  /// interval after the low-level due rewrite.
   Future<Result<TopicState>> reschedule(RescheduleTopic command) =>
       _run<TopicState>(command, kTopicRescheduledKind, () async {
         if (command.intervalDays < 0) {
@@ -477,21 +512,30 @@ final class ReaderHandlers {
         final StudyDay day = await today();
         final StudyDayCalendar calendar = await _context.calendar();
         final StudyDay destination = day.addDays(command.intervalDays);
-        await _adjustments.setExactOverride(
-          element: topic.ref,
-          reason: ScheduleAdjustmentReason.manualReschedule,
-          operationId: command.operationId.value,
-          atUtc: command.timestampUtc,
-          studyDay: day,
-          scheduledForStudyDay: destination,
+        final TopicScheduler scheduler = await _context.topicScheduler();
+        final TopicTransition transition = scheduler.jumpInterval(
+          topic,
+          today: day,
+          remainingInterval: command.intervalDays,
+          modifyPriority: true,
+          priorityScale: await _context.priorityScale(),
         );
+        if (!await _learning.compareAndSwapTopic(
+          expected: topic,
+          replacement: transition.state,
+        )) {
+          return const Err<TopicState>(
+            ConflictFailure('the topic changed before reschedule committed'),
+          );
+        }
+        await _context.savePrngState(transition.prngState);
         await _journal.append(
           operationId: command.operationId.value,
           ref: command.ref,
           eventType: RevlogEventType.manualReschedule,
           atUtc: command.timestampUtc,
           before: _journal.topicSnapshot(topic, calendar: calendar),
-          after: _journal.topicSnapshot(topic, calendar: calendar),
+          after: _journal.topicSnapshot(transition.state, calendar: calendar),
           scheduledDays: topic.intervalDays,
           metadata: <String, Object?>{'scheduled_for': destination.toString()},
         );
@@ -501,58 +545,30 @@ final class ReaderHandlers {
           ref: command.ref,
           metadata: <String, Object?>{'scheduled_for': destination.toString()},
         );
-        return Ok<TopicState>(topic);
+        return Ok<TopicState>(transition.state);
       });
 
-  /// Declares a source finished.
-  Future<Result<TopicState>> finishSource(FinishSource command) => _lifecycle(
-    command,
-    ElementRef(id: command.sourceId, type: ElementType.source),
-    'topic.finished',
-    RevlogEventType.finish,
-    (TopicScheduler s, TopicState t, StudyDay _) => s.finish(t),
-  );
-
-  /// Explicit finish for sources and extracts.
-  Future<Result<TopicState>> finishTopic(FinishTopic command) => _lifecycle(
-    command,
-    command.ref,
-    'topic.finished',
-    RevlogEventType.finish,
-    (TopicScheduler scheduler, TopicState topic, StudyDay _) =>
-        scheduler.finish(topic),
-  );
-
   /// Keeps content, stops scheduling.
+  ///
+  /// SM20 has no Suspend and no Finish: an element is pending, memorized,
+  /// dismissed, or deleted. Both of those commands only ever meant "stop
+  /// scheduling this but keep it", which is exactly Dismiss.
   Future<Result<TopicState>> dismiss(DismissElement command) => _lifecycle(
     command,
     command.ref,
     'topic.dismissed',
     RevlogEventType.dismiss,
-    (TopicScheduler s, TopicState t, StudyDay _) => s.dismiss(t),
+    Sm20ElementStatus.dismissed,
   );
 
-  /// Temporary removal from the queue.
-  Future<Result<TopicState>> suspend(SuspendElement command) => _lifecycle(
+  /// Undismiss: the status byte only, exactly as the executable does it.
+  Future<Result<TopicState>> undismiss(UndismissSource command) => _lifecycle(
     command,
     command.ref,
-    'topic.suspended',
-    RevlogEventType.suspend,
-    (TopicScheduler s, TopicState t, StudyDay _) => s.suspend(t),
+    'topic.undismissed',
+    RevlogEventType.resume,
+    Sm20ElementStatus.pending,
   );
-
-  /// Reactivates without guessing whether overdue state should become today.
-  Future<Result<TopicState>> reactivate(ReactivateElement command) =>
-      _lifecycle(
-        command,
-        command.ref,
-        'topic.reactivated',
-        RevlogEventType.resume,
-        (TopicScheduler s, TopicState t, StudyDay day) =>
-            t.schedule.lifecycle == ElementLifecycle.suspended
-            ? s.resume(t, day)
-            : s.reactivate(t, day),
-      );
 
   /// Soft-deletes a source without touching content or descendant schedules.
   Future<Result<TopicState>> deleteSource(DeleteSource command) => _lifecycle(
@@ -560,7 +576,7 @@ final class ReaderHandlers {
     ElementRef(id: command.sourceId, type: ElementType.source),
     'source.deleted',
     RevlogEventType.dismiss,
-    (TopicScheduler s, TopicState t, StudyDay _) => s.delete(t),
+    Sm20ElementStatus.deleted,
   );
 
   /// Changes a source's pacing profile without touching position or interval.
@@ -689,14 +705,26 @@ final class ReaderHandlers {
     ElementRef ref,
     String kind,
     RevlogEventType eventType,
-    TopicTransition Function(TopicScheduler, TopicState, StudyDay) transition,
+    Sm20ElementStatus target,
   ) => _run<TopicState>(command, kind, () async {
     final TopicState? topic = await _learning.findTopic(ref);
     if (topic == null) return _missingSchedule<TopicState>(ref.id);
 
     final StudyDay day = await today();
     final TopicScheduler scheduler = await _context.topicScheduler();
-    final TopicTransition result = transition(scheduler, topic, day);
+    final TopicTransition result = switch (target) {
+      Sm20ElementStatus.dismissed => scheduler.dismiss(
+        topic,
+        day,
+        priorityScale: await _context.priorityScale(),
+      ),
+      Sm20ElementStatus.pending => scheduler.undismiss(topic),
+      Sm20ElementStatus.deleted => scheduler.delete(topic, day),
+      Sm20ElementStatus.memorized => TopicTransition.unchanged(
+        topic,
+        scheduler.prngState,
+      ),
+    };
     if (!result.isChange) return Ok<TopicState>(result.state);
 
     final StudyDayCalendar calendar = await _context.calendar();
@@ -708,6 +736,29 @@ final class ReaderHandlers {
         ConflictFailure('the topic changed before lifecycle commit'),
       );
     }
+    final runtime = await _context.runtimeState();
+    final List<ElementRef> pending = runtime.pending
+        .where((ElementRef value) => value != ref)
+        .toList();
+    if (result.state.status == Sm20ElementStatus.pending) pending.add(ref);
+    await _context.saveRuntimeState(
+      runtime.copyWith(
+        prngSeed: result.prngState.seed,
+        outstanding: runtime.outstanding
+            .where((ElementRef value) => value != ref)
+            .toList(),
+        outstandingItems: runtime.outstandingItems
+            .where((ElementRef value) => value != ref)
+            .toList(),
+        outstandingTopics: runtime.outstandingTopics
+            .where((ElementRef value) => value != ref)
+            .toList(),
+        finalDrill: runtime.finalDrill
+            .where((ElementRef value) => value != ref)
+            .toList(),
+        pending: pending,
+      ),
+    );
     await _journal.append(
       operationId: command.operationId.value,
       ref: ref,
@@ -721,18 +772,10 @@ final class ReaderHandlers {
         'to': result.state.schedule.lifecycle.name,
       },
     );
-    final ScheduleAdjustmentSet adjustments = ScheduleAdjustmentSet(
-      await _learning.listAdjustmentsFor(ref),
-    );
-    final ScheduleAdjustmentSnapshot snapshot = adjustments.snapshotFor(
-      <ElementRef>{ref},
-    );
     final SchedulerEventType schedulerEventType =
         switch (result.state.schedule.lifecycle) {
           ElementLifecycle.active => SchedulerEventType.resumed,
-          ElementLifecycle.suspended => SchedulerEventType.suspended,
           ElementLifecycle.dismissed => SchedulerEventType.dismissed,
-          ElementLifecycle.finished => SchedulerEventType.finished,
           ElementLifecycle.deleted => SchedulerEventType.dismissed,
         };
     await _journal.appendScheduler(
@@ -742,7 +785,7 @@ final class ReaderHandlers {
       atUtc: command.timestampUtc,
       studyDay: day,
       policyVersion: result.state.schedulerVersion,
-      schedulerName: result.state.schedulerKind.storageName,
+      schedulerName: result.state.schedulerName,
       schedulerVersion: result.state.schedulerVersion,
       stateBefore: _topicStateJson(topic),
       stateAfter: _topicStateJson(result.state),
@@ -752,8 +795,6 @@ final class ReaderHandlers {
       algorithmicDueAfter: SchedulerEvent.encodeStudyDayDue(
         result.state.schedule.algorithmicDueDay,
       ),
-      adjustmentsBefore: snapshot,
-      adjustmentsAfter: snapshot,
       metadata: <String, Object?>{
         'from': topic.schedule.lifecycle.name,
         'to': result.state.schedule.lifecycle.name,
@@ -803,11 +844,11 @@ final class ReaderHandlers {
             PostponeElement(:final ref) ||
             RescheduleTopic(:final ref) ||
             DismissElement(:final ref) ||
-            SuspendElement(:final ref) ||
-            ReactivateElement(:final ref) => ref,
-            FinishSource(:final sourceId) || DeleteSource(:final sourceId) =>
-              ElementRef(id: sourceId, type: ElementType.source),
-            FinishTopic(:final ref) => ref,
+            UndismissSource(:final ref) => ref,
+            DeleteSource(:final sourceId) => ElementRef(
+              id: sourceId,
+              type: ElementType.source,
+            ),
             _ => null,
           };
           if (topicRef != null) {
@@ -861,18 +902,18 @@ final class ReaderHandlers {
     'updated_at_utc': state.schedule.updatedAtUtc?.millisecondsSinceEpoch,
     'schedule_revision': state.schedule.revision,
     'legacy_due_provenance': state.schedule.legacyDueProvenance.index,
-    'profile_id': state.profileId,
-    'step_index': state.stepIndex,
-    'interval_days': state.intervalDays,
-    'a_factor': state.aFactor,
-    'yield_ewma': state.yieldEwma,
-    'encounters': state.encounters,
-    'postpone_count': state.postponeCount,
+    'status': state.status.index,
+    'repetition_count': state.repetitionCount,
+    'lapse_count': state.lapseCount,
+    'stored_interval': state.storedInterval,
+    'a_factor_raw': state.aFactorRaw.toString(),
+    'last_interval_ratio_raw': state.lastIntervalRatioRaw.toString(),
+    'history_block_id': state.historyBlockId,
+    'recent_postponement_count': state.recentPostponementCount,
+    'total_postponement_count': state.totalPostponementCount,
+    'learning_control': state.learningControl,
     'encounters_since_last_card': state.encountersSinceLastCard,
-    'last_encounter_day': state.lastEncounterDay?.epochDay,
-    'scheduler_kind': state.schedulerKind.storageName,
-    'scheduler_version': state.schedulerVersion,
-    'policy_input_snapshot': state.policyInputSnapshot,
+    'last_review_day': state.lastReviewDay?.epochDay,
     'topic_revision': state.revision,
   });
 
@@ -892,7 +933,7 @@ final class ReaderHandlers {
       );
     }
 
-    final int? lastEncounter = map['last_encounter_day'] as int?;
+    final int? lastReview = map['last_review_day'] as int?;
     final int? createdAt = map['created_at_utc'] as int?;
     final int? updatedAt = map['updated_at_utc'] as int?;
     final ElementRef ref = ElementRef(
@@ -919,20 +960,20 @@ final class ReaderHandlers {
         legacyDueProvenance:
             LegacyDueProvenance.values[map['legacy_due_provenance']! as int],
       ),
-      profileId: map['profile_id']! as String,
-      stepIndex: map['step_index']! as int,
-      intervalDays: (map['interval_days']! as num).toDouble(),
-      aFactor: (map['a_factor']! as num).toDouble(),
-      yieldEwma: (map['yield_ewma']! as num).toDouble(),
-      encounters: map['encounters']! as int,
-      postponeCount: map['postpone_count']! as int,
+      status: Sm20ElementStatus.values[map['status']! as int],
+      repetitionCount: map['repetition_count']! as int,
+      lapseCount: map['lapse_count']! as int,
+      storedInterval: map['stored_interval']! as int,
+      aFactorRaw: _real48FromHex(map['a_factor_raw']! as String),
+      lastIntervalRatioRaw: _real48FromHex(
+        map['last_interval_ratio_raw']! as String,
+      ),
+      historyBlockId: map['history_block_id']! as int,
+      recentPostponementCount: map['recent_postponement_count']! as int,
+      totalPostponementCount: map['total_postponement_count']! as int,
+      learningControl: map['learning_control']! as int,
       encountersSinceLastCard: map['encounters_since_last_card']! as int,
-      lastEncounterDay: lastEncounter == null ? null : day(lastEncounter),
-      schedulerKind: TopicSchedulerKind.parse(map['scheduler_kind']! as String),
-      schedulerVersion: map['scheduler_version']! as String,
-      policyInputSnapshot:
-          (map['policy_input_snapshot'] as Map<Object?, Object?>?)
-              ?.cast<String, Object?>(),
+      lastReviewDay: lastReview == null ? null : day(lastReview),
       revision: map['topic_revision']! as int,
     );
   }
@@ -991,20 +1032,6 @@ final class ReaderHandlers {
           );
         }
         final StudyDayCalendar calendar = await _context.calendar();
-        final ScheduleAdjustmentSnapshot priorAdjustments =
-            original.adjustmentsBefore == null
-            ? ScheduleAdjustmentSnapshot(
-                elements: <ElementRef>{command.ref},
-                activeAdjustments: const <ScheduleAdjustment>[],
-              )
-            : decodeAdjustmentSnapshot(original.adjustmentsBefore!);
-        final ScheduleAdjustmentMutation adjustmentMutation = await _adjustments
-            .restoreSnapshot(
-              snapshot: priorAdjustments,
-              atUtc: command.timestampUtc,
-              studyDay: calendar.dayOf(command.timestampUtc),
-              operationId: command.operationId.value,
-            );
         await _journal.append(
           operationId: command.operationId.value,
           ref: command.ref,
@@ -1021,7 +1048,7 @@ final class ReaderHandlers {
           atUtc: command.timestampUtc,
           studyDay: calendar.dayOf(command.timestampUtc),
           policyVersion: restored.schedulerVersion,
-          schedulerName: restored.schedulerKind.storageName,
+          schedulerName: restored.schedulerName,
           schedulerVersion: restored.schedulerVersion,
           stateBefore: _topicStateJson(current),
           stateAfter: _topicStateJson(restored),
@@ -1031,9 +1058,11 @@ final class ReaderHandlers {
           algorithmicDueAfter: SchedulerEvent.encodeStudyDayDue(
             restored.schedule.algorithmicDueDay,
           ),
-          adjustmentsBefore: adjustmentMutation.beforeSnapshot,
-          adjustmentsAfter: adjustmentMutation.afterSnapshot,
           undoesEventId: original.id,
+        );
+        await _restoreTopicQueue(
+          restored,
+          calendar.dayOf(command.timestampUtc),
         );
         await _log(
           command,
@@ -1053,6 +1082,33 @@ final class ReaderHandlers {
         ),
       );
     }
+  }
+
+  Future<void> _restoreTopicQueue(TopicState topic, StudyDay today) async {
+    final runtime = await _context.runtimeState();
+    final List<ElementRef> outstanding = runtime.outstanding
+        .where((ElementRef value) => value != topic.ref)
+        .toList();
+    final List<ElementRef> topics = runtime.outstandingTopics
+        .where((ElementRef value) => value != topic.ref)
+        .toList();
+    final List<ElementRef> pending = runtime.pending
+        .where((ElementRef value) => value != topic.ref)
+        .toList();
+    if (topic.status == Sm20ElementStatus.pending) {
+      pending.insert(0, topic.ref);
+    } else if (topic.status == Sm20ElementStatus.memorized &&
+        topic.schedule.algorithmicDueDay <= today) {
+      outstanding.insert(0, topic.ref);
+      topics.insert(0, topic.ref);
+    }
+    await _context.saveRuntimeState(
+      runtime.copyWith(
+        outstanding: outstanding,
+        outstandingTopics: topics,
+        pending: pending,
+      ),
+    );
   }
 
   Future<void> _log(
@@ -1087,30 +1143,44 @@ final class ReaderHandlers {
   }
 
   Map<String, Object?>? _metadataFor(TopicEvent event) => switch (event) {
-    TopicEncounterCompleted(
-      :final fromStep,
-      :final toStep,
-      :final intervalDays,
+    TopicRepetitionCommitted(
+      :final oldInterval,
+      :final selectedInterval,
+      :final storedInterval,
       :final nextDueDay,
-      :final aFactor,
+      :final oldAFactor,
+      :final newAFactor,
+      :final priorityBefore,
+      :final priorityAfter,
+      :final bulk,
+      :final randomDraws,
     ) =>
       <String, Object?>{
-        'from_step': fromStep,
-        'to_step': toStep,
-        'interval_days': intervalDays,
+        'old_interval': oldInterval,
+        'selected_interval': selectedInterval,
+        'stored_interval': storedInterval,
         'next_due': nextDueDay.toString(),
-        if (aFactor != null) 'a_factor': aFactor.value,
+        'a_before': oldAFactor,
+        'a_after': newAFactor,
+        'priority_before': priorityBefore,
+        'priority_after': priorityAfter,
+        'bulk': bulk,
+        'random_draws': randomDraws,
       },
-    TopicPostponed(:final until, :final deferralKind) => <String, Object?>{
-      'until': until.toString(),
-      'kind': deferralKind.name,
-    },
-    TopicLifecycleChanged(:final from, :final to, :final automatic) =>
+    TopicRescheduled(
+      :final oldInterval,
+      :final newInterval,
+      :final targetDay,
+    ) =>
       <String, Object?>{
-        'from': from.name,
-        'to': to.name,
-        if (automatic) 'automatic': true,
+        'old_interval': oldInterval,
+        'new_interval': newInterval,
+        'target_day': targetDay.toString(),
       },
+    TopicLifecycleChanged(:final from, :final to) => <String, Object?>{
+      'from': from.name,
+      'to': to.name,
+    },
   };
 
   Err<T> _missingSource<T>(String id) =>
@@ -1119,4 +1189,12 @@ final class ReaderHandlers {
   Err<T> _missingSchedule<T>(String id) => Err<T>(
     NotFoundFailure('no schedule for that element', entity: 'schedule', id: id),
   );
+}
+
+DelphiReal48 _real48FromHex(String value) {
+  if (value.length != 12) throw const FormatException('invalid Real48 hex');
+  return DelphiReal48.fromBytes(<int>[
+    for (var index = 0; index < 12; index += 2)
+      int.parse(value.substring(index, index + 2), radix: 16),
+  ]);
 }
