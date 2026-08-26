@@ -361,7 +361,7 @@ final class QueueHandlers {
         final List<ElementRef> queue = switch (command.stage) {
           Sm20StageRequest.outstanding => runtime.outstanding,
           Sm20StageRequest.finalDrill => runtime.finalDrill,
-          Sm20StageRequest.randomLearning => runtime.pending,
+          Sm20StageRequest.newMaterial => runtime.pending,
         };
         if (queue.isEmpty) {
           // The executable greys out a stage whose queue is empty. Refusing
@@ -373,7 +373,7 @@ final class QueueHandlers {
                 'nothing is outstanding right now',
               Sm20StageRequest.finalDrill =>
                 'nothing is scheduled for the final drill',
-              Sm20StageRequest.randomLearning =>
+              Sm20StageRequest.newMaterial =>
                 'there are no pending elements to learn',
             }),
           );

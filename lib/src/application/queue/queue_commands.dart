@@ -36,10 +36,13 @@ enum Sm20StageRequest {
   /// is "Go through the final revision of the material repeated recently".
   finalDrill(1),
 
-  /// `Learn -> Stages -> 2. New material`, also reachable as
-  /// `Learn -> Random -> Random learning`, whose hint is "Learn new elements
-  /// by randomly reviewing pending elements in the collection".
-  randomLearning(2);
+  /// `Learn -> Stages -> 2. New material`, whose hint is "Learn new material
+  /// (i.e. commit it to your memory)".
+  ///
+  /// This is not `Random learning`. That command is a separate menu entry
+  /// which reviews the same pending elements in randomized order, and is
+  /// therefore this stage preceded by a randomization of the pending queue.
+  newMaterial(2);
 
   const Sm20StageRequest(this.learningMode);
 

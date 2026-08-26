@@ -855,7 +855,6 @@ Future<double?> _promptForDouble(
   }
 }
 
-
 /// SM20's `Every which element?` prompt for batch Add to Outstanding.
 ///
 /// The spacing is not cosmetic: section 9.7 seeds the first insertion at

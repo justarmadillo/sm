@@ -214,11 +214,26 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
       Sm20StageRequest.finalDrill =>
         'Final drill: ${outcome.affected} element'
             '${outcome.affected == 1 ? '' : 's'}',
-      Sm20StageRequest.randomLearning =>
+      Sm20StageRequest.newMaterial =>
         'Random learning: ${outcome.affected} pending element'
             '${outcome.affected == 1 ? '' : 's'}',
     },
   );
+
+  /// `Random learning`: the pending stage, reviewed in randomized order.
+  ///
+  /// The executable keeps this separate from `2. New material`, and the
+  /// difference is only the order, so this is a randomization of the pending
+  /// queue followed by the same stage entry. The randomization runs first
+  /// because entering the stage is what presents the order.
+  Future<void> randomLearning() async {
+    await randomizeQueue(Sm20RandomizableQueue.pending);
+    final QueueUiState? current = state.valueOrNull;
+    // A refused randomization has already reported why; entering the stage
+    // anyway would replace that message with a less useful one.
+    if (current?.message?.isError ?? false) return;
+    await enterStage(Sm20StageRequest.newMaterial);
+  }
 
   /// Cut drills: empties the Final Drill queue.
   Future<void> cutDrills() => _queueCommand(

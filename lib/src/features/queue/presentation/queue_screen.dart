@@ -684,7 +684,7 @@ class _LearnMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) => PopupMenuButton<String>(
     enabled: enabled,
-    tooltip: 'Learning stages',
+    tooltip: 'Choose a learning stage to execute',
     icon: const Icon(Icons.playlist_play, size: 18),
     onSelected: (String value) async {
       switch (value) {
@@ -692,8 +692,10 @@ class _LearnMenu extends StatelessWidget {
           await model.enterStage(Sm20StageRequest.outstanding);
         case 'final_drill':
           await model.enterStage(Sm20StageRequest.finalDrill);
+        case 'new_material':
+          await model.enterStage(Sm20StageRequest.newMaterial);
         case 'random_learning':
-          await model.enterStage(Sm20StageRequest.randomLearning);
+          await model.randomLearning();
         case 'cut_drills':
           if (!context.mounted) return;
           // Cutting the drill throws away a selection the user built by
@@ -731,32 +733,71 @@ class _LearnMenu extends StatelessWidget {
       }
     },
     itemBuilder: (BuildContext context) => const <PopupMenuEntry<String>>[
+      // Captions and tooltips are the executable's own, so the menu can be
+      // matched against SuperMemo item by item.
       PopupMenuItem<String>(
         value: 'outstanding',
-        child: Text('1. Outstanding material'),
+        child: Tooltip(
+          message: "Repeat items that are scheduled for today's repetitions",
+          child: Text('1. Outstanding material'),
+        ),
       ),
       PopupMenuItem<String>(
-        value: 'random_learning',
-        child: Text('2. New material'),
+        value: 'new_material',
+        child: Tooltip(
+          message: 'Learn new material (i.e. commit it to your memory)',
+          child: Text('2. New material'),
+        ),
       ),
       PopupMenuItem<String>(
         value: 'final_drill',
-        child: Text('3. Final drill'),
+        child: Tooltip(
+          message:
+              'Go through the final revision of the material repeated '
+              'recently (final drill stage)',
+          child: Text('3. Final drill'),
+        ),
       ),
       PopupMenuDivider(),
-      PopupMenuItem<String>(value: 'cut_drills', child: Text('Cut drills')),
+      PopupMenuItem<String>(
+        value: 'random_learning',
+        child: Tooltip(
+          message:
+              'Learn new elements by randomly reviewing pending elements '
+              'in the collection',
+          child: Text('Random learning'),
+        ),
+      ),
+      PopupMenuItem<String>(
+        value: 'cut_drills',
+        child: Tooltip(
+          message: 'Eliminate items scheduled for final drill',
+          child: Text('Cut drills'),
+        ),
+      ),
       PopupMenuDivider(),
       PopupMenuItem<String>(
         value: 'randomize_outstanding',
-        child: Text('Randomize repetitions'),
+        child: Tooltip(
+          message: 'Randomize the sequence of outstanding items',
+          child: Text('Randomize repetitions'),
+        ),
       ),
       PopupMenuItem<String>(
         value: 'randomize_drill',
-        child: Text('Randomize final drill'),
+        child: Tooltip(
+          message:
+              'Mix randomly the queue of elements scheduled for final '
+              'drill',
+          child: Text('Randomize drill'),
+        ),
       ),
       PopupMenuItem<String>(
         value: 'randomize_pending',
-        child: Text('Randomize pending queue'),
+        child: Tooltip(
+          message: 'Mix randomly the queue of pending elements',
+          child: Text('Randomize pending'),
+        ),
       ),
     ],
   );

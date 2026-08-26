@@ -1077,18 +1077,21 @@ queues, so a clone that implements only the automatic chain has no way to reach
 a drill while Outstanding still holds work. The executable's embedded menu
 resources identify them:
 
-`Learn -> Stages` lists all three stages explicitly, numbered, and greys out
-the ones whose queue is empty:
+`Learn -> Stages` (`MILearnStages`, hint `Choose a learning stage to execute`)
+lists all three stages explicitly and numbered, and greys out the ones whose
+queue is empty:
 
-```text
-1. Outstanding material
-2. New material          (disabled when Pending is empty)
-3. Final drill           Ctrl+F4
-```
+| Menu item | Caption | Embedded hint | Shortcut |
+|---|---|---|---|
+| `MILearnOutstanding` | `1. &Outstanding material` | Repeat items that are scheduled for today's repetitions | — |
+| `MILearnNew` | `2. &New material` | Learn new material (i.e. commit it to your memory) | — |
+| `MILearnDrill` | `3. Final &drill` | Go through the final revision of the material repeated recently (final drill stage) | Ctrl+F4 |
 
 Stage 1 is the way back. Without it a user who entered a fallback stage would
 be held there until its queue emptied, so a clone that offers only the two
 fallback entries is not merely incomplete, it is a trap.
+
+The `Drill` and `Random` submenus carry the remaining commands:
 
 | Menu item | Caption | Embedded hint |
 |---|---|---|
@@ -1096,14 +1099,21 @@ fallback entries is not merely incomplete, it is a trap.
 | `MICutDrills` | `&Cut drills` | Eliminate items scheduled for final drill |
 | `MIRandomLearning` | `Ran&dom learning` | Learn new elements by randomly reviewing pending elements in the collection |
 | `MIRandomizeRepetitions` | `Randomi&ze repetitions` | Randomize the sequence of outstanding items |
-| `MIRandomizeDrill` | `Randomize drill` | prompts `Do you want to randomize final drill?`, reports `Final drill randomized` |
-| `MIRandomizePending` | `Randomize pending` | prompts `Do you want to randomize pending queue?`, reports `Pending queue randomized` |
+| `MIRandomizeDrill` | `&Drill` | Mix randomly the queue of elements scheduled for final drill |
+| `MIRandomizePending` | `&Pending` | Mix randomly the queue of pending elements |
 
-`Final drill` is bound to Ctrl+F4 and presents the Final Drill queue at once.
-`Random learning` presents Pending the same way. Both select which stored queue
-is shown and write only the learning mode; neither creates, schedules, or
-grades anything, and an empty target stage is refused rather than entered —
-the executable answers `Nothing more to learn`.
+`MIFinalDrill2` duplicates stage 3 under the Drill submenu; both carry Ctrl+F4.
+
+`Random learning` is **not** stage 2. `MILearnNew` presents the pending queue
+in its stored order, while `MIRandomLearning` reviews the same elements in
+randomized order, so the second is the first preceded by a randomization of the
+pending queue. Treating them as one command loses the stored order that stage 2
+is specifically for.
+
+Entering a stage writes only the learning mode: nothing is created, scheduled,
+or graded. An empty target stage is refused rather than entered — the
+executable greys the item out, and answers `Nothing more to learn` when no
+stage has work.
 
 `Cut drills` clears Final Drill membership only. Due date, interval, A,
 priority, and both repetition counters are untouched, because drill membership
