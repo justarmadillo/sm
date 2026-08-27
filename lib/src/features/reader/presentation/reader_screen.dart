@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme.dart';
 import '../../../app/toast.dart';
 import '../../../domain/content/block.dart';
+import '../../../domain/content/document.dart';
 import '../../../domain/content/extract.dart';
 import '../../../domain/content/reader_anchor.dart';
 import '../../extract/presentation/extract_context_overlay.dart';
@@ -152,10 +153,26 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   /// Tracks the block under the top of the viewport for the outline.
-  void _updateCurrentBlock(String blockId) {
-    if (_currentBlockId == blockId) return;
+  void _updateCurrentBlock(String? blockId) {
+    if (blockId == null || _currentBlockId == blockId) return;
     if (!mounted) return;
     setState(() => _currentBlockId = blockId);
+  }
+
+  /// Scrolls to the start of [blockId], which the outline names by id.
+  ///
+  /// The outline is built from the document in hand, so a block id is a valid
+  /// way to point at a row of it. The anchor it produces is a byte offset, and
+  /// only that offset is ever stored.
+  Future<void> _animateToBlock(Document document, String blockId) async {
+    final Block? block = document.blockById(blockId);
+    if (block == null) return;
+    await _readerKey.currentState?.animateToAnchor(
+      ReaderAnchor(
+        utf8Offset: block.sourceStartUtf8,
+        contentRevision: document.contentRevision,
+      ),
+    );
   }
 
   /// Scrolls to an extract and paints it, so choosing one in the panel lands
@@ -203,7 +220,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         model.clearMessage();
       }
       if (data.isDone && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop(StudyRouteResult.committed);
+        // Consume the signal before leaving. It is retained state on a keyed
+        // family provider, so an uncleared flag re-fires on the next open of
+        // the same source and pops it again instantly.
+        final bool repetition = data.wasRepetition;
+        model.clearDone();
+        Navigator.of(
+          context,
+        ).pop(repetition ? StudyRouteResult.committed : StudyRouteResult.moved);
       }
     });
 
@@ -290,7 +314,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ),
         },
         child: Focus(
-          autofocus: true,
+          // Not while a block is open in the editor: a rebuild that re-attaches
+          // this node would otherwise reclaim focus from the field mid-word.
+          autofocus: !state.isEditing,
           child: Column(
             children: <Widget>[
               _StatusBar(state: state),
@@ -334,8 +360,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                                 _openContext(context, state, model, block),
                             onVisiblePositionChanged: (ReaderAnchor anchor) {
                               unawaited(model.recordPosition(anchor));
-                              _updateCurrentBlock(anchor.blockId);
+                              _updateCurrentBlock(
+                                state.document.blockForAnchor(anchor)?.id,
+                              );
                             },
+                            editingBlockId: state.editingBlockId,
+                            isBusy: state.isBusy,
+                            onEditCommit: (Block block, String markdown) =>
+                                unawaited(model.commitEdit(block, markdown)),
+                            onEditCancel: (Block _) => model.cancelEditing(),
+                            onEditDelete: (Block block) =>
+                                unawaited(model.deleteBlock(block)),
                           ),
                           _SelectionToolbarLayer(
                             controller: controller,
@@ -363,6 +398,20 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                               );
                               showToast(context, 'Copied');
                             },
+                            onEditBlock: !state.canCommitProgress
+                                ? null
+                                : () {
+                                    final anchor = controller
+                                        .resolveSelection()
+                                        ?.range
+                                        .startAnchor;
+                                    if (anchor == null) return;
+                                    final block = state.document
+                                        .blockForAnchor(anchor);
+                                    if (block == null) return;
+                                    controller.clear();
+                                    model.beginEditing(block);
+                                  },
                           ),
                         ],
                       ),
@@ -377,10 +426,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         onTabChanged: (ReaderPanelTab next) =>
                             setState(() => _panelTab = next),
                         onGoToBlock: (String blockId) => unawaited(
-                          _readerKey.currentState?.animateToAnchor(
-                                ReaderAnchor(blockId: blockId, utf8Offset: 0),
-                              ) ??
-                              Future<void>.value(),
+                          _animateToBlock(state.document, blockId),
                         ),
                         onGoToExtract: _goToExtract,
                         onClose: () => setState(() => _panelOpen = false),
@@ -473,6 +519,7 @@ class _SelectionToolbarLayer extends StatelessWidget {
     required this.onExtract,
     required this.onSetMarker,
     required this.onCopy,
+    required this.onEditBlock,
   });
 
   final ReaderSelectionController controller;
@@ -482,6 +529,7 @@ class _SelectionToolbarLayer extends StatelessWidget {
   final VoidCallback onExtract;
   final VoidCallback onSetMarker;
   final VoidCallback onCopy;
+  final VoidCallback? onEditBlock;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -504,6 +552,7 @@ class _SelectionToolbarLayer extends StatelessWidget {
         onExtract: onExtract,
         onSetMarker: onSetMarker,
         onCopy: onCopy,
+        onEditBlock: onEditBlock,
       );
     },
   );
@@ -779,6 +828,19 @@ class _ActionBar extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             if (state.canCommitProgress) ...<Widget>[
+              // Undoing an edit is a text operation, not a scheduling one, so
+              // it sits with the content actions and never touches the due
+              // date. It appends the reverse splice rather than rewinding.
+              if (state.canUndoEdit) ...<Widget>[
+                TextButton.icon(
+                  onPressed: state.isBusy
+                      ? null
+                      : () => unawaited(model.undoEdit()),
+                  icon: const Icon(Icons.undo, size: 15),
+                  label: const Text('Undo edit'),
+                ),
+                const SizedBox(width: 6),
+              ],
               OutlinedButton(
                 onPressed: state.isBusy ? null : onFormulate,
                 child: const Text('Formulate'),
@@ -789,9 +851,23 @@ class _ActionBar extends StatelessWidget {
                 child: const Text('Dismiss source'),
               ),
               const SizedBox(width: 6),
+              // Two different commands, deliberately distinct. Later Today
+              // moves the element inside today's queue and leaves the due
+              // date alone, so it comes back in this same session; Postpone
+              // takes it off today entirely.
               OutlinedButton(
                 onPressed: state.isBusy ? null : model.later,
-                child: const Text('Later'),
+                child: const Text('Later today'),
+              ),
+              const SizedBox(width: 6),
+              OutlinedButton(
+                onPressed: state.isBusy
+                    ? null
+                    : () async {
+                        final int? days = await _promptForDays(context);
+                        if (days != null) await model.later(days: days);
+                      },
+                child: const Text('Postpone…'),
               ),
               const SizedBox(width: 6),
               FilledButton(
@@ -816,5 +892,65 @@ class _ActionBar extends StatelessWidget {
       return 'Selection ready — Extract (Ctrl+E) keeps your place.';
     }
     return 'Select text to extract. Click the left margin to place the marker.';
+  }
+}
+
+/// Asks how many days to push an element out by.
+Future<int?> _promptForDays(BuildContext context) async {
+  final TextEditingController controller = TextEditingController(text: '1');
+  try {
+    return await showDialog<int>(
+      context: context,
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setState) {
+          final int? value = int.tryParse(controller.text.trim());
+          final bool valid = value != null && value >= 1 && value <= 3650;
+          return AlertDialog(
+            title: const Text('Postpone by'),
+            content: SizedBox(
+              width: 320,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Text(
+                    'Moves the next repetition this many days out. It is a '
+                    'reschedule, not a repetition: the A-factor, priority '
+                    'and repetition count are left alone.',
+                    style: TextStyle(fontSize: 12, color: AppColors.muted),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      helperText: '1-3650 days',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: valid
+                    ? () => Navigator.of(context).pop(value)
+                    : null,
+                child: const Text('Postpone'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  } finally {
+    controller.dispose();
   }
 }

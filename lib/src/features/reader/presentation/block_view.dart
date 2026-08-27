@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme.dart';
 import '../../../domain/content/block.dart';
+import 'block_editor.dart';
 import 'block_span_builder.dart';
 
 /// Width of the margin strip that carries the marker and extract marks.
@@ -28,6 +29,11 @@ class BlockView extends StatefulWidget {
     this.extractMarks = 0,
     this.onGutterTap,
     this.onExtractMarksTap,
+    this.isEditing = false,
+    this.isBusy = false,
+    this.onEditCommit,
+    this.onEditCancel,
+    this.onEditDelete,
     super.key,
   });
 
@@ -56,6 +62,22 @@ class BlockView extends StatefulWidget {
   /// Tapping an extract mark opens the extracts taken from this block.
   final void Function(Block block)? onExtractMarksTap;
 
+  /// Whether this block is currently open in the editor.
+  ///
+  /// Exactly one block may be, and only its rendering changes: every other
+  /// block on the page keeps its normal appearance and stays selectable.
+  final bool isEditing;
+
+  /// Whether a commit is still in flight.
+  final bool isBusy;
+
+  /// Called with the block's new raw markdown.
+  final void Function(Block block, String markdown)? onEditCommit;
+
+  final void Function(Block block)? onEditCancel;
+
+  final void Function(Block block)? onEditDelete;
+
   @override
   State<BlockView> createState() => _BlockViewState();
 }
@@ -66,7 +88,9 @@ class _BlockViewState extends State<BlockView> {
   @override
   void initState() {
     super.initState();
-    widget.onParagraphMounted(widget.block.id, _paragraphKey);
+    if (!widget.isEditing) {
+      widget.onParagraphMounted(widget.block.id, _paragraphKey);
+    }
   }
 
   @override
@@ -74,6 +98,16 @@ class _BlockViewState extends State<BlockView> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.block.id != widget.block.id) {
       widget.onParagraphUnmounted(oldWidget.block.id);
+      if (!widget.isEditing) {
+        widget.onParagraphMounted(widget.block.id, _paragraphKey);
+      }
+      return;
+    }
+    if (oldWidget.isEditing == widget.isEditing) return;
+    // Entering the editor removes the paragraph; leaving it puts one back.
+    if (widget.isEditing) {
+      widget.onParagraphUnmounted(widget.block.id);
+    } else {
       widget.onParagraphMounted(widget.block.id, _paragraphKey);
     }
   }
@@ -124,6 +158,23 @@ class _BlockViewState extends State<BlockView> {
   }
 
   Widget _buildBody(Block block, ReaderTypography typography) {
+    if (widget.isEditing && widget.onEditCommit != null) {
+      // The paragraph is gone while editing, so its render object must not
+      // stay registered for hit-testing: a selection resolved against a
+      // paragraph that is no longer on screen would produce offsets from a
+      // layout nobody can see.
+      return BlockEditor(
+        block: block,
+        typography: typography,
+        isBusy: widget.isBusy,
+        onCommit: (String markdown) => widget.onEditCommit!(block, markdown),
+        onCancel: () => widget.onEditCancel?.call(block),
+        onDelete: widget.onEditDelete == null
+            ? null
+            : () => widget.onEditDelete!(block),
+      );
+    }
+
     final paragraph = RichText(
       key: _paragraphKey,
       text: buildBlockSpan(block, typography, highlights: widget.highlights),

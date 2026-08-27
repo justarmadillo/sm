@@ -14,12 +14,14 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../app/theme.dart';
 import '../../../domain/content/block.dart';
 import '../../../domain/content/document.dart';
 import '../../../domain/content/inline_markup.dart';
 import '../../../domain/content/reader_anchor.dart';
+import '../../../domain/content/reader_coordinates.dart';
 import 'block_span_builder.dart';
 
 /// A selection expressed in rendered character coordinates.
@@ -67,9 +69,14 @@ final class ReaderSelection {
 /// only drag across what is on screen. Anchors, by contrast, resolve for every
 /// block whether mounted or not.
 final class ReaderSelectionController extends ChangeNotifier {
-  ReaderSelectionController(this._document);
+  ReaderSelectionController(this._document)
+    : _coordinates = ReaderCoordinates(_document);
 
   Document _document;
+
+  /// The one conversion path from screen positions to stored offsets.
+  ReaderCoordinates _coordinates;
+
   final Map<String, GlobalKey> _paragraphs = <String, GlobalKey>{};
 
   ReaderSelection? _selection;
@@ -91,10 +98,37 @@ final class ReaderSelectionController extends ChangeNotifier {
   /// Points the controller at a different document and clears state.
   void setDocument(Document document) {
     _document = document;
-    _paragraphs.clear();
+    _coordinates = ReaderCoordinates(document);
+    // The selection goes: it was measured in a layout of text that has been
+    // replaced, so carrying it across would produce coordinates into a
+    // document nobody is looking at any more.
     _selection = null;
     _anchorBlockId = null;
-    notifyListeners();
+    // The paragraph map deliberately survives. Its entries are maintained by
+    // the blocks themselves as they mount and unmount, so clearing it here
+    // would drop the live render objects of every block that stayed on screen
+    // — and nothing would put them back, because an unchanged block does not
+    // re-register.
+    _notifyWhenSafe();
+  }
+
+  /// Notifies listeners, waiting for the end of the frame if one is running.
+  ///
+  /// Re-pointing at a new document happens in `didUpdateWidget`, which runs
+  /// inside build. Notifying there marks listening builders dirty mid-build,
+  /// which the framework rejects outright — so the news waits for the frame
+  /// to finish. The state itself is already updated, so nothing reads a stale
+  /// document in the meantime.
+  void _notifyWhenSafe() {
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    final bool building =
+        phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.midFrameMicrotasks;
+    if (!building) {
+      notifyListeners();
+      return;
+    }
+    SchedulerBinding.instance.addPostFrameCallback((_) => notifyListeners());
   }
 
   /// Registers a laid-out paragraph so it can be hit-tested.
@@ -106,6 +140,13 @@ final class ReaderSelectionController extends ChangeNotifier {
   void unregisterParagraph(String blockId) {
     _paragraphs.remove(blockId);
   }
+
+  /// Whether [blockId] currently has a paragraph that can be hit-tested.
+  ///
+  /// False for a block that is scrolled away *and* for one open in the editor:
+  /// a field is not a paragraph, and resolving a selection against the layout
+  /// it replaced would produce offsets from something nobody can see.
+  bool isParagraphMounted(String blockId) => _paragraphs.containsKey(blockId);
 
   /// Whether [globalPosition] falls within the horizontal span of the text.
   ///
@@ -249,10 +290,7 @@ final class ReaderSelectionController extends ChangeNotifier {
     if (selection == null) return null;
     final block = _document.blockById(selection.startBlockId);
     if (block == null) return null;
-    return ReaderAnchor(
-      blockId: block.id,
-      utf8Offset: block.renderedToUtf8(selection.startRendered),
-    );
+    return _coordinates.anchorForRendered(block, selection.startRendered);
   }
 
   /// Screen rectangle covering the current selection, or null.
@@ -301,16 +339,14 @@ final class ReaderSelectionController extends ChangeNotifier {
     final endBlock = _document.blockById(selection.endBlockId);
     if (startBlock == null || endBlock == null) return null;
 
-    final startAnchor = ReaderAnchor(
-      blockId: startBlock.id,
-      utf8Offset: startBlock.renderedToUtf8(selection.startRendered),
+    final startAnchor = _coordinates.anchorForRendered(
+      startBlock,
+      selection.startRendered,
     );
-    final endAnchor = ReaderAnchor(
-      blockId: endBlock.id,
-      utf8Offset: endBlock.renderedToUtf8(
-        selection.endRendered,
-        edge: RenderedEdge.trailing,
-      ),
+    final endAnchor = _coordinates.anchorForRendered(
+      endBlock,
+      selection.endRendered,
+      edge: RenderedEdge.trailing,
     );
     final markdown = _document.markdownBetween(startAnchor, endAnchor);
     if (markdown.isEmpty) return null;
@@ -335,16 +371,13 @@ final class ReaderSelectionController extends ChangeNotifier {
     if (hit == null) return null;
     final block = _document.blockById(hit.blockId);
     if (block == null) return null;
-    return ReaderAnchor(
-      blockId: block.id,
-      utf8Offset: block.renderedToUtf8(hit.renderedIndex),
-    );
+    return _coordinates.anchorForRendered(block, hit.renderedIndex);
   }
 
   /// Global caret position for [anchor], or null while its block is unmounted.
   Offset? globalOffsetForAnchor(ReaderAnchor anchor) {
-    final block = _document.blockById(anchor.blockId);
-    final key = _paragraphs[anchor.blockId];
+    final block = _document.blockForAnchor(anchor);
+    final key = block == null ? null : _paragraphs[block.id];
     final renderObject = key?.currentContext?.findRenderObject();
     if (block == null ||
         !_document.containsAnchor(anchor) ||
@@ -352,7 +385,10 @@ final class ReaderSelectionController extends ChangeNotifier {
         !renderObject.hasSize) {
       return null;
     }
-    final rendered = block.utf8ToRendered(anchor.utf8Offset);
+    final rendered = _coordinates.renderedIndexForDocument(
+      block,
+      anchor.utf8Offset,
+    );
     final local = renderObject.getOffsetForCaret(
       TextPosition(offset: rendered),
       Rect.zero,

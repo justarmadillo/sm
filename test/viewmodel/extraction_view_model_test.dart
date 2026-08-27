@@ -10,6 +10,7 @@ import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/features/library/presentation/library_view_model.dart';
 import 'package:incremental_reader/src/features/reader/presentation/reader_view_model.dart';
+import '../support/anchors.dart';
 
 const String _markdown = '''
 # Encoding
@@ -68,8 +69,8 @@ void main() {
       start,
       start + needle.length,
     );
-    final startAnchor = ReaderAnchor(blockId: block.id, utf8Offset: startUtf8);
-    final endAnchor = ReaderAnchor(blockId: block.id, utf8Offset: endUtf8);
+    final startAnchor = anchorIn(block, startUtf8);
+    final endAnchor = anchorIn(block, endUtf8);
     return SelectionRange.of(
       startAnchor: startAnchor,
       endAnchor: endAnchor,

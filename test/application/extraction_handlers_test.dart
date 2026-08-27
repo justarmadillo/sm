@@ -6,6 +6,7 @@ import 'package:incremental_reader/src/application/reader/reader_commands.dart';
 import 'package:incremental_reader/src/core/clock.dart';
 import 'package:incremental_reader/src/core/result.dart';
 import 'package:incremental_reader/src/core/tracing.dart';
+import 'package:incremental_reader/src/core/utf8_offsets.dart';
 import 'package:incremental_reader/src/data/database/connection.dart';
 import 'package:incremental_reader/src/domain/content/block.dart';
 import 'package:incremental_reader/src/domain/content/document.dart';
@@ -17,6 +18,7 @@ import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
 import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:test/test.dart';
 
+import '../support/anchors.dart';
 import '../support/app_harness.dart';
 
 /// Deliberately awkward: formatting, links, code, math, Unicode, and a list,
@@ -84,10 +86,7 @@ void main() {
       start,
       start + needle.length,
     );
-    final anchors = (
-      ReaderAnchor(blockId: block.id, utf8Offset: startUtf8),
-      ReaderAnchor(blockId: block.id, utf8Offset: endUtf8),
-    );
+    final anchors = (anchorIn(block, startUtf8), anchorIn(block, endUtf8));
     final markdown = document.markdownBetween(anchors.$1, anchors.$2);
     return SelectionRange.of(
       startAnchor: anchors.$1,
@@ -297,7 +296,7 @@ void main() {
         expect(created.provenance.sourceId, source.id);
         expect(created.provenance.startAnchor, range.startAnchor);
         expect(created.provenance.selectedTextHash, range.selectedTextHash);
-        expect(created.provenance.isSameBlock, isTrue);
+        expect(document.isSameBlock(created.provenance.range), isTrue);
         expect(created.isVerbatim, isTrue);
       },
     );
@@ -491,13 +490,9 @@ void main() {
           parentId: created.id,
           parentIsSource: false,
           range: SelectionRange.of(
-            startAnchor: ReaderAnchor(
-              blockId: '${created.id}:0',
-              utf8Offset: 0,
-            ),
+            startAnchor: const ReaderAnchor(utf8Offset: 0),
             endAnchor: ReaderAnchor(
-              blockId: '${created.id}:0',
-              utf8Offset: created.markdown.length,
+              utf8Offset: utf8Length(created.markdown),
             ),
             markdown: created.markdown,
           ),
@@ -532,7 +527,7 @@ void main() {
 
     test('an empty selection is refused', () async {
       final block = blockOf(BlockType.paragraph);
-      final anchor = ReaderAnchor(blockId: block.id, utf8Offset: 4);
+      final anchor = anchorIn(block, 4);
       final result = await extract(
         SelectionRange.of(startAnchor: anchor, endAnchor: anchor, markdown: ''),
       );
@@ -571,14 +566,8 @@ void main() {
         start,
         start + 'working memory'.length,
       );
-      final startAnchor = ReaderAnchor(
-        blockId: innerBlock.id,
-        utf8Offset: startUtf8,
-      );
-      final endAnchor = ReaderAnchor(
-        blockId: innerBlock.id,
-        utf8Offset: endUtf8,
-      );
+      final startAnchor = anchorIn(innerBlock, startUtf8);
+      final endAnchor = anchorIn(innerBlock, endUtf8);
 
       final second = await harness.extraction.createExtract(
         CreateExtract(

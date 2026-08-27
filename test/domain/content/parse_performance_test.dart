@@ -89,9 +89,8 @@ void main() {
 
       final stopwatch = Stopwatch()..start();
       for (final block in document.blocks) {
-        final anchor = document.anchorAtDocumentOffset(block.sourceStartUtf8);
-        expect(anchor, isNotNull);
-        expect(document.blockById(anchor!.blockId), isNotNull);
+        final anchor = document.anchorAt(block.sourceStartUtf8);
+        expect(document.blockForAnchor(anchor)?.id, block.id);
       }
       stopwatch.stop();
 
@@ -105,8 +104,8 @@ void main() {
 
     test('a cross-document range slices without rescanning', () {
       final document = Document.parse(sourceId: 'big', markdown: markdown);
-      final start = document.startAnchor!;
-      final end = document.endAnchor!;
+      final start = document.startAnchor;
+      final end = document.endAnchor;
 
       final stopwatch = Stopwatch()..start();
       final slice = document.markdownBetween(start, end);

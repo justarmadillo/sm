@@ -1,10 +1,16 @@
-/// The parsed, immutable form of one source's markdown.
+/// The parsed form of one source's markdown at one content revision.
 ///
 /// A [Document] owns the block list and every coordinate conversion the Reader
 /// and extraction need. All of it is pure: nothing here mounts a widget, so
 /// anchors resolve for blocks that are not currently rendered.
+///
+/// Blocks are a *derived cache*. Their ids are positional and carry no meaning
+/// outside this object — nothing persisted refers to them — so re-parsing after
+/// an edit is free to renumber them. Positions are byte offsets into
+/// the markdown, which survive re-parsing unchanged.
 library;
 
+import '../../core/utf8_offsets.dart';
 import 'block.dart';
 import 'markdown_block_parser.dart';
 import 'reader_anchor.dart';
@@ -16,18 +22,24 @@ final class Document {
     required this.sourceId,
     required this.markdown,
     required List<Block> blocks,
+    this.contentRevision = kInitialContentRevision,
   }) : blocks = List<Block>.unmodifiable(blocks),
        _indexById = <String, int>{
          for (var i = 0; i < blocks.length; i++) blocks[i].id: i,
        };
 
   /// Parses [markdown] for [sourceId], normalizing line endings first.
-  factory Document.parse({required String sourceId, required String markdown}) {
+  factory Document.parse({
+    required String sourceId,
+    required String markdown,
+    int contentRevision = kInitialContentRevision,
+  }) {
     final normalized = normalizeMarkdown(markdown);
     return Document(
       sourceId: sourceId,
       markdown: normalized,
       blocks: parseMarkdownBlocks(normalized, sourceId: sourceId),
+      contentRevision: contentRevision,
     );
   }
 
@@ -37,15 +49,29 @@ final class Document {
   /// Normalized source markdown. Offsets address this exact string.
   final String markdown;
 
+  /// Revision of [markdown]. Anchors resolved here are stamped with it.
+  final int contentRevision;
+
   /// Blocks in document order.
   final List<Block> blocks;
 
   final Map<String, int> _indexById;
 
+  Utf8OffsetIndex? _utf8Index;
+
+  /// UTF-8 index over the whole [markdown], built on first use.
+  Utf8OffsetIndex get utf8Index => _utf8Index ??= Utf8OffsetIndex(markdown);
+
+  /// Total UTF-8 length of the document.
+  int get lengthUtf8 => utf8Index.byteLength;
+
   /// Whether the document has no blocks.
   bool get isEmpty => blocks.isEmpty;
 
   /// The block with [id], or null when it does not belong to this document.
+  ///
+  /// Block ids are ephemeral. Use this for rendering and hit-testing only,
+  /// never to resolve anything that was persisted.
   Block? blockById(String id) {
     final index = _indexById[id];
     return index == null ? null : blocks[index];
@@ -55,119 +81,148 @@ final class Document {
   int? indexOfBlock(String id) => _indexById[id];
 
   /// An anchor at the very start of the document.
-  ReaderAnchor? get startAnchor => blocks.isEmpty
-      ? null
-      : ReaderAnchor(blockId: blocks.first.id, utf8Offset: 0);
+  ReaderAnchor get startAnchor =>
+      ReaderAnchor(utf8Offset: 0, contentRevision: contentRevision);
 
   /// An anchor at the very end of the document.
-  ReaderAnchor? get endAnchor => blocks.isEmpty
-      ? null
-      : ReaderAnchor(
-          blockId: blocks.last.id,
-          utf8Offset: blocks.last.lengthUtf8,
-        );
+  ReaderAnchor get endAnchor => ReaderAnchor(
+    utf8Offset: blocks.isEmpty ? 0 : blocks.last.sourceEndUtf8,
+    contentRevision: contentRevision,
+  );
+
+  /// An anchor at [documentUtf8Offset], snapped into the nearest block.
+  ///
+  /// An offset falling in the whitespace between two blocks resolves to the
+  /// start of the following block, so a gap is never addressable and two
+  /// anchors that mean the same place compare equal.
+  ReaderAnchor anchorAt(int documentUtf8Offset) => ReaderAnchor(
+    utf8Offset: canonicalOffset(documentUtf8Offset),
+    contentRevision: contentRevision,
+  );
+
+  /// [documentUtf8Offset] snapped into the nearest block.
+  int canonicalOffset(int documentUtf8Offset) {
+    if (blocks.isEmpty) return 0;
+    final offset = documentUtf8Offset.clamp(0, lengthUtf8);
+    if (offset <= blocks.first.sourceStartUtf8) {
+      return blocks.first.sourceStartUtf8;
+    }
+    final index = _blockIndexAtOrBefore(offset);
+    final block = blocks[index];
+    if (offset <= block.sourceEndUtf8) return offset;
+    // Landed in the gap after this block; move to the next block's start.
+    if (index + 1 < blocks.length) return blocks[index + 1].sourceStartUtf8;
+    return block.sourceEndUtf8;
+  }
+
+  /// The block containing [documentUtf8Offset], or null for an empty document.
+  ///
+  /// An offset in the gap between two blocks belongs to the following block,
+  /// matching [canonicalOffset].
+  Block? blockAtOffset(int documentUtf8Offset) {
+    if (blocks.isEmpty) return null;
+    final offset = canonicalOffset(documentUtf8Offset);
+    return blocks[_blockIndexAtOrBefore(offset)];
+  }
+
+  /// Index of the block containing [documentUtf8Offset], or null when empty.
+  int? blockIndexAtOffset(int documentUtf8Offset) {
+    if (blocks.isEmpty) return null;
+    return _blockIndexAtOrBefore(canonicalOffset(documentUtf8Offset));
+  }
+
+  /// The block [anchor] points into, or null when it cannot be resolved.
+  Block? blockForAnchor(ReaderAnchor anchor) =>
+      blockAtOffset(anchor.utf8Offset);
+
+  /// Whether [anchor] addresses a place inside this document.
+  ///
+  /// Revision is not checked here: a caller holding an older anchor must
+  /// migrate it forward first. See `SourceEditJournal`.
+  bool containsAnchor(ReaderAnchor anchor) =>
+      !isEmpty &&
+      anchor.utf8Offset >= 0 &&
+      anchor.utf8Offset <= lengthUtf8 &&
+      canonicalOffset(anchor.utf8Offset) == anchor.utf8Offset;
 
   /// Document-absolute UTF-8 offset of [anchor], or null when unresolvable.
-  int? documentOffsetOf(ReaderAnchor anchor) {
-    final block = blockById(anchor.blockId);
-    if (block == null) return null;
-    if (anchor.utf8Offset < 0 || anchor.utf8Offset > block.lengthUtf8) {
-      return null;
-    }
-    return block.sourceStartUtf8 + anchor.utf8Offset;
-  }
-
-  /// Whether [anchor] is a canonical coordinate in this document.
-  bool containsAnchor(ReaderAnchor anchor) => documentOffsetOf(anchor) != null;
-
-  /// Anchor for a document-absolute UTF-8 offset.
   ///
-  /// An offset falling between blocks resolves to the start of the following
-  /// block, so whitespace between blocks is never addressable.
-  ReaderAnchor? anchorAtDocumentOffset(int documentUtf8Offset) {
-    if (blocks.isEmpty) return null;
-    if (documentUtf8Offset <= blocks.first.sourceStartUtf8) return startAnchor;
-    var low = 0;
-    var high = blocks.length - 1;
-    while (low < high) {
-      final mid = (low + high + 1) >> 1;
-      if (blocks[mid].sourceStartUtf8 <= documentUtf8Offset) {
-        low = mid;
-      } else {
-        high = mid - 1;
-      }
-    }
-    final block = blocks[low];
-    if (documentUtf8Offset > block.sourceEndUtf8) {
-      // Landed in the gap after this block; move to the next block's start.
-      if (low + 1 < blocks.length) {
-        return ReaderAnchor(blockId: blocks[low + 1].id, utf8Offset: 0);
-      }
-      return ReaderAnchor(blockId: block.id, utf8Offset: block.lengthUtf8);
-    }
-    return ReaderAnchor(
-      blockId: block.id,
-      utf8Offset: documentUtf8Offset - block.sourceStartUtf8,
-    );
-  }
+  /// Retained so callers read as coordinate conversions rather than field
+  /// access; in document space the conversion is the identity.
+  int? documentOffsetOf(ReaderAnchor anchor) =>
+      containsAnchor(anchor) ? anchor.utf8Offset : null;
 
   /// Whether [a] comes before [b] in document order.
-  bool isBefore(ReaderAnchor a, ReaderAnchor b) {
-    final indexA = _indexById[a.blockId];
-    final indexB = _indexById[b.blockId];
-    if (indexA == null || indexB == null) return false;
-    if (indexA != indexB) return indexA < indexB;
-    return a.utf8Offset < b.utf8Offset;
+  bool isBefore(ReaderAnchor a, ReaderAnchor b) => a.utf8Offset < b.utf8Offset;
+
+  /// Whether both ends of [range] land in the same block.
+  bool isSameBlock(SelectionRange range) {
+    final start = blockIndexAtOffset(range.startUtf8);
+    if (start == null) return false;
+    // The exclusive end of a range that stops exactly at a block boundary
+    // belongs to the block it closes, not to the one that follows.
+    final end = blockIndexAtOffsetTrailing(range.endUtf8);
+    return start == end;
+  }
+
+  /// Block index for the *exclusive* end of a range.
+  ///
+  /// An end offset sitting exactly on a block's start belongs to the previous
+  /// block, which is the one the range actually covered.
+  int? blockIndexAtOffsetTrailing(int documentUtf8Offset) {
+    if (blocks.isEmpty) return null;
+    final offset = documentUtf8Offset.clamp(0, lengthUtf8);
+    final index = _blockIndexAtOrBefore(offset);
+    final block = blocks[index];
+    if (offset <= block.sourceStartUtf8 && index > 0) return index - 1;
+    return index;
   }
 
   /// The exact markdown between [start] and [end], inclusive of block breaks.
   ///
-  /// Returns an empty string when either anchor is unknown or the range is
-  /// inverted. Ranges spanning blocks include the original separators, so the
-  /// result round-trips to the same text on re-parse.
-  String markdownBetween(ReaderAnchor start, ReaderAnchor end) {
-    final from = documentOffsetOf(start);
-    final to = documentOffsetOf(end);
-    if (from == null || to == null || to <= from) return '';
-    final startBlock = blockById(start.blockId)!;
-    final endBlock = blockById(end.blockId)!;
-    if (identical(startBlock, endBlock)) {
-      return startBlock.rawSlice(start.utf8Offset, end.utf8Offset);
-    }
-    final startUtf16 = _documentUtf16For(startBlock, start.utf8Offset);
-    final endUtf16 = _documentUtf16For(endBlock, end.utf8Offset);
-    return markdown.substring(startUtf16, endUtf16);
+  /// Returns an empty string when the range is inverted or unresolvable.
+  /// Ranges spanning blocks include the original separators, so the result
+  /// round-trips to the same text on re-parse.
+  String markdownBetween(ReaderAnchor start, ReaderAnchor end) =>
+      markdownSlice(start.utf8Offset, end.utf8Offset);
+
+  /// The exact markdown of the byte range `[startUtf8, endUtf8)`.
+  String markdownSlice(int startUtf8, int endUtf8) {
+    if (endUtf8 <= startUtf8) return '';
+    final from = utf8Index.toUtf16(startUtf8.clamp(0, lengthUtf8));
+    final to = utf8Index.toUtf16(endUtf8.clamp(0, lengthUtf8));
+    if (to <= from) return '';
+    return markdown.substring(from, to);
   }
 
   /// The exact markdown covered by [range].
   String markdownForRange(SelectionRange range) =>
-      markdownBetween(range.startAnchor, range.endAnchor);
+      markdownSlice(range.startUtf8, range.endUtf8);
 
   /// Standalone Markdown that renders the same selected passage.
   ///
-  /// M2 deliberately accepts one block only. The exact raw source slice and
-  /// hash remain in [range] for provenance; this fragment repairs formatting
-  /// delimiters at its boundaries for independent display and processing.
+  /// One block only. The exact raw source slice and hash remain in [range] for
+  /// provenance; this fragment repairs formatting delimiters at its boundaries
+  /// so the passage renders on its own.
   String markdownFragmentForRange(SelectionRange range) {
-    if (!range.isSameBlock) return '';
-    final block = blockById(range.startAnchor.blockId);
-    if (block == null ||
-        !containsAnchor(range.startAnchor) ||
-        !containsAnchor(range.endAnchor)) {
-      return '';
-    }
-    final start = block.utf8ToRendered(range.startAnchor.utf8Offset);
-    final end = block.utf8ToRendered(range.endAnchor.utf8Offset);
+    if (!isSameBlock(range)) return '';
+    final block = blockAtOffset(range.startUtf8);
+    if (block == null) return '';
+    final start = block.utf8ToRendered(
+      _blockRelative(block, range.startUtf8),
+    );
+    final end = block.utf8ToRendered(_blockRelative(block, range.endUtf8));
     return block.markdownFragmentForRendered(start, end);
   }
 
   /// Blocks touched by the range from [start] to [end], in document order.
   List<Block> blocksBetween(ReaderAnchor start, ReaderAnchor end) {
-    final indexA = _indexById[start.blockId];
-    final indexB = _indexById[end.blockId];
-    if (indexA == null || indexB == null) return const <Block>[];
-    final from = indexA <= indexB ? indexA : indexB;
-    final to = indexA <= indexB ? indexB : indexA;
+    if (blocks.isEmpty) return const <Block>[];
+    final a = blockIndexAtOffset(start.utf8Offset);
+    final b = blockIndexAtOffset(end.utf8Offset);
+    if (a == null || b == null) return const <Block>[];
+    final from = a <= b ? a : b;
+    final to = a <= b ? b : a;
     return blocks.sublist(from, to + 1);
   }
 
@@ -175,18 +230,25 @@ final class Document {
   ///
   /// Counted over what the reader sees, not over the markdown, so syntax does
   /// not inflate the reminder line's sense of how far the session has gone.
-  int wordsBetween(ReaderAnchor start, ReaderAnchor end) {
-    final startIndex = _indexById[start.blockId];
-    final endIndex = _indexById[end.blockId];
+  int wordsBetween(ReaderAnchor start, ReaderAnchor end) =>
+      wordsInRange(start.utf8Offset, end.utf8Offset);
+
+  /// Words of rendered text in the byte range `[startUtf8, endUtf8)`.
+  int wordsInRange(int startUtf8, int endUtf8) {
+    if (blocks.isEmpty || endUtf8 <= startUtf8) return 0;
+    final startIndex = blockIndexAtOffset(startUtf8);
+    final endIndex = blockIndexAtOffset(endUtf8);
     if (startIndex == null || endIndex == null || endIndex < startIndex) {
       return 0;
     }
     var words = 0;
     for (var i = startIndex; i <= endIndex; i++) {
       final block = blocks[i];
-      final from = i == startIndex ? block.utf8ToRendered(start.utf8Offset) : 0;
+      final from = i == startIndex
+          ? block.utf8ToRendered(_blockRelative(block, startUtf8))
+          : 0;
       final to = i == endIndex
-          ? block.utf8ToRendered(end.utf8Offset)
+          ? block.utf8ToRendered(_blockRelative(block, endUtf8))
           : block.renderedText.length;
       if (to <= from) continue;
       words += countWords(block.renderedText.substring(from, to));
@@ -204,21 +266,20 @@ final class Document {
   int wordsOutside(List<(ReaderAnchor, ReaderAnchor)> ranges) {
     final covered = <int, List<(int, int)>>{};
     for (final (ReaderAnchor a, ReaderAnchor b) in ranges) {
-      final int? indexA = _indexById[a.blockId];
-      final int? indexB = _indexById[b.blockId];
-      if (indexA == null || indexB == null) continue;
-      final bool forward =
-          indexA < indexB || (indexA == indexB && a.utf8Offset <= b.utf8Offset);
+      final bool forward = a.utf8Offset <= b.utf8Offset;
       final ReaderAnchor start = forward ? a : b;
       final ReaderAnchor end = forward ? b : a;
-      final int from = forward ? indexA : indexB;
-      final int to = forward ? indexB : indexA;
+      final int? from = blockIndexAtOffset(start.utf8Offset);
+      final int? to = blockIndexAtOffset(end.utf8Offset);
+      if (from == null || to == null) continue;
 
       for (var i = from; i <= to; i++) {
         final Block block = blocks[i];
-        final int lo = i == from ? block.utf8ToRendered(start.utf8Offset) : 0;
+        final int lo = i == from
+            ? block.utf8ToRendered(_blockRelative(block, start.utf8Offset))
+            : 0;
         final int hi = i == to
-            ? block.utf8ToRendered(end.utf8Offset)
+            ? block.utf8ToRendered(_blockRelative(block, end.utf8Offset))
             : block.renderedText.length;
         if (hi <= lo) continue;
         (covered[i] ??= <(int, int)>[]).add((lo, hi));
@@ -249,23 +310,44 @@ final class Document {
   /// Resolves to a block boundary, which is close enough for a reminder line
   /// and avoids implying a precision the count does not have.
   ReaderAnchor? anchorAfterWords(ReaderAnchor from, int words) {
-    final startIndex = _indexById[from.blockId];
+    final startIndex = blockIndexAtOffset(from.utf8Offset);
     if (startIndex == null) return null;
     var remaining = words;
     for (var i = startIndex; i < blocks.length; i++) {
       final block = blocks[i];
-      final start = i == startIndex ? block.utf8ToRendered(from.utf8Offset) : 0;
+      final start = i == startIndex
+          ? block.utf8ToRendered(_blockRelative(block, from.utf8Offset))
+          : 0;
       final text = block.renderedText;
       if (start >= text.length) continue;
       final blockWords = countWords(text.substring(start));
       if (blockWords >= remaining) {
-        return ReaderAnchor(blockId: block.id, utf8Offset: 0);
+        return ReaderAnchor(
+          utf8Offset: block.sourceStartUtf8,
+          contentRevision: contentRevision,
+        );
       }
       remaining -= blockWords;
     }
     return null;
   }
 
-  int _documentUtf16For(Block block, int blockUtf8Offset) =>
-      block.sourceStartUtf16 + block.utf8Index.toUtf16(blockUtf8Offset);
+  /// [documentUtf8Offset] expressed relative to [block], clamped to it.
+  int _blockRelative(Block block, int documentUtf8Offset) =>
+      (documentUtf8Offset - block.sourceStartUtf8).clamp(0, block.lengthUtf8);
+
+  /// Index of the last block whose start is at or before [offset].
+  int _blockIndexAtOrBefore(int offset) {
+    var low = 0;
+    var high = blocks.length - 1;
+    while (low < high) {
+      final mid = (low + high + 1) >> 1;
+      if (blocks[mid].sourceStartUtf8 <= offset) {
+        low = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return low;
+  }
 }

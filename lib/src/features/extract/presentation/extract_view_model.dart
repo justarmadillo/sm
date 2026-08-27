@@ -82,7 +82,8 @@ final class ExtractUiState {
   Map<String, int> get extractMarksByBlock {
     final counts = <String, int>{};
     for (final child in children) {
-      final blockId = child.provenance.startAnchor.blockId;
+      final blockId = _startBlockId(child);
+      if (blockId == null) continue;
       counts[blockId] = (counts[blockId] ?? 0) + 1;
     }
     return counts;
@@ -90,8 +91,15 @@ final class ExtractUiState {
 
   List<Extract> extractsStartingIn(String blockId) => <Extract>[
     for (final child in children)
-      if (child.provenance.startAnchor.blockId == blockId) child,
+      if (_startBlockId(child) == blockId) child,
   ];
+
+  /// Block a child's recorded range starts in, or null when its link back to
+  /// this text has degraded and no longer names a place here.
+  String? _startBlockId(Extract child) {
+    if (!child.provenance.isIntact) return null;
+    return document.blockAtOffset(child.provenance.startUtf8)?.id;
+  }
 
   ExtractUiState copyWith({
     Extract? extract,
@@ -202,7 +210,7 @@ final class ExtractViewModel
     if (current == null ||
         !current.canMutate ||
         current.isBusy ||
-        !range.isSameBlock) {
+        !current.document.isSameBlock(range)) {
       return null;
     }
     state = AsyncValue<ExtractUiState>.data(current.copyWith(isBusy: true));

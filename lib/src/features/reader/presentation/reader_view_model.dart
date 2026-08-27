@@ -14,6 +14,7 @@ import '../../../app/providers.dart';
 import '../../../application/extraction/extraction_commands.dart';
 import '../../../application/formulation/formulation_commands.dart';
 import '../../../application/reader/reader_commands.dart';
+import '../../../application/reader/reader_handlers.dart';
 import '../../../core/result.dart';
 import '../../../core/tracing.dart';
 import '../../../domain/content/block.dart';
@@ -22,6 +23,7 @@ import '../../../domain/content/document.dart';
 import '../../../domain/content/extract.dart';
 import '../../../domain/content/reader_anchor.dart';
 import '../../../domain/content/source.dart';
+import '../../../domain/content/source_editing.dart';
 import '../../../domain/scheduling/element.dart';
 import '../../../domain/scheduling/study_day.dart';
 import '../../../domain/scheduling/topic_scheduler.dart';
@@ -83,6 +85,9 @@ final class ReaderUiState {
     this.message,
     this.isBusy = false,
     this.isDone = false,
+    this.wasRepetition = false,
+    this.editingBlockId,
+    this.canUndoEdit = false,
   });
 
   final Source source;
@@ -107,6 +112,19 @@ final class ReaderUiState {
   /// The most recent extract, so Undo has something to point at.
   final String? lastExtractId;
 
+  /// The block currently open in the editor.
+  ///
+  /// At most one. Editing is block-scoped so the splice it produces has known
+  /// bounds; letting two blocks be open at once would reintroduce the question
+  /// of what changed, which is the question this design exists to avoid.
+  final String? editingBlockId;
+
+  /// Whether this source has an edit that can be reversed.
+  final bool canUndoEdit;
+
+  /// Whether a block is open in the editor.
+  bool get isEditing => editingBlockId != null;
+
   /// Rendered words between [openedAt] and the current position.
   final int wordsThisSession;
 
@@ -126,6 +144,12 @@ final class ReaderUiState {
 
   /// Set once a terminal command has committed and the screen should close.
   final bool isDone;
+
+  /// Whether the terminal command that set [isDone] was a repetition.
+  ///
+  /// Later Today and Dismiss end the visit without advancing any schedule, so
+  /// they must not be counted as work completed.
+  final bool wasRepetition;
 
   /// Whether terminal actions are offered at all.
   bool get canCommitProgress => mode == ReaderMode.scheduled;
@@ -163,7 +187,8 @@ final class ReaderUiState {
   Map<String, int> get extractMarksByBlock {
     final counts = <String, int>{};
     for (final extract in extracts) {
-      final blockId = extract.provenance.startAnchor.blockId;
+      final blockId = _startBlockId(extract);
+      if (blockId == null) continue;
       counts[blockId] = (counts[blockId] ?? 0) + 1;
     }
     return counts;
@@ -172,14 +197,24 @@ final class ReaderUiState {
   /// Extracts whose selection begins in [blockId].
   List<Extract> extractsStartingIn(String blockId) => <Extract>[
     for (final extract in extracts)
-      if (extract.provenance.startAnchor.blockId == blockId) extract,
+      if (_startBlockId(extract) == blockId) extract,
   ];
+
+  /// Block this extract's recorded range starts in, or null when it has none
+  /// in this document: an extract of an extract, or one whose link back has
+  /// degraded and no longer describes a place here.
+  String? _startBlockId(Extract extract) {
+    final provenance = extract.provenance;
+    if (!provenance.parentIsSource || !provenance.isIntact) return null;
+    if (provenance.parentId != document.sourceId) return null;
+    return document.blockAtOffset(provenance.startUtf8)?.id;
+  }
 
   /// How far through the document the marker sits, as a percentage.
   double get progressPercent {
     final anchor = marker;
     if (anchor == null) return 0;
-    final index = document.indexOfBlock(anchor.blockId);
+    final index = document.blockIndexAtOffset(anchor.utf8Offset);
     if (index == null || document.blocks.isEmpty) return 0;
     return (index + 1) / document.blocks.length * 100;
   }
@@ -201,9 +236,14 @@ final class ReaderUiState {
     bool clearMessage = false,
     bool? isBusy,
     bool? isDone,
+    bool? wasRepetition,
+    String? editingBlockId,
+    bool clearEditing = false,
+    bool? canUndoEdit,
+    Document? document,
   }) => ReaderUiState(
     source: source ?? this.source,
-    document: document,
+    document: document ?? this.document,
     topic: topic ?? this.topic,
     mode: mode ?? this.mode,
     openedAt: openedAt ?? this.openedAt,
@@ -220,6 +260,9 @@ final class ReaderUiState {
     message: clearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
     isDone: isDone ?? this.isDone,
+    wasRepetition: wasRepetition ?? this.wasRepetition,
+    editingBlockId: clearEditing ? null : (editingBlockId ?? this.editingBlockId),
+    canUndoEdit: canUndoEdit ?? this.canUndoEdit,
   );
 }
 
@@ -267,6 +310,7 @@ final class ReaderViewModel
           : (source.resume.openAt ?? document.startAnchor),
       extracts: await content.listExtractsOfParent(source.id),
       cardsFromSource: (await content.listCardsOfSource(source.id)).length,
+      canUndoEdit: (await content.latestSourceEdit(source.id)) != null,
     );
   }
 
@@ -284,7 +328,10 @@ final class ReaderViewModel
             MoveResumeMarker(
               operation,
               sourceId: current.source.id,
-              anchor: ReaderAnchor(blockId: block.id, utf8Offset: 0),
+              anchor: ReaderAnchor(
+                utf8Offset: block.sourceStartUtf8,
+                contentRevision: current.document.contentRevision,
+              ),
             ),
           ),
       apply: (ReaderUiState s, Source source) => s.copyWith(source: source),
@@ -415,7 +462,7 @@ final class ReaderViewModel
             ),
           ),
       apply: (ReaderUiState s, TopicState topic) =>
-          s.copyWith(topic: topic, isDone: true),
+          s.copyWith(topic: topic, isDone: true, wasRepetition: true),
       successAsync: (TopicState topic) async =>
           'Next on ${await _refreshEffectiveDue(topic)}',
     );
@@ -439,7 +486,7 @@ final class ReaderViewModel
             PostponeElement(operation, ref: current.topic.ref, until: until),
           ),
       apply: (ReaderUiState s, TopicState topic) =>
-          s.copyWith(topic: topic, isDone: true),
+          s.copyWith(topic: topic, isDone: true, wasRepetition: false),
       successAsync: (TopicState topic) async {
         final StudyDay due = await _refreshEffectiveDue(topic);
         final StudyDay today = await ref.read(readerHandlersProvider).today();
@@ -487,7 +534,7 @@ final class ReaderViewModel
             ),
           ),
       apply: (ReaderUiState s, TopicState topic) =>
-          s.copyWith(topic: topic, isDone: true),
+          s.copyWith(topic: topic, isDone: true, wasRepetition: false),
       success: (_) => 'Dismissed. It stays in the Library.',
     );
   }
@@ -502,7 +549,7 @@ final class ReaderViewModel
     if (current == null ||
         current.isBusy ||
         !current.canCommitProgress ||
-        !range.isSameBlock) {
+        !current.document.isSameBlock(range)) {
       return null;
     }
     state = AsyncValue<ReaderUiState>.data(current.copyWith(isBusy: true));
@@ -634,6 +681,21 @@ final class ReaderViewModel
     );
   }
 
+  /// Consumes the one-shot completion signal.
+  ///
+  /// `isDone` means "a terminal command just committed", not "this source is
+  /// finished". The provider is a keyed family and is not autoDispose, so
+  /// reopening the same source hands back the same state: left set, the flag
+  /// would fire again the moment the reader rebuilt, popping the screen before
+  /// the user could read a word and counting a repetition that never happened.
+  void clearDone() {
+    final ReaderUiState? current = state.valueOrNull;
+    if (current == null || !current.isDone) return;
+    state = AsyncValue<ReaderUiState>.data(
+      current.copyWith(isDone: false, wasRepetition: false),
+    );
+  }
+
   /// Clears the one-shot message after the view has shown it.
   void clearMessage() {
     final current = state.valueOrNull;
@@ -641,6 +703,144 @@ final class ReaderViewModel
     state = AsyncValue<ReaderUiState>.data(
       current!.copyWith(clearMessage: true),
     );
+  }
+
+  /// Opens [block] in the editor.
+  ///
+  /// Any live selection is dropped rather than carried in: the paragraph it
+  /// was measured against is about to be replaced by a text field, and offsets
+  /// resolved against a layout that no longer exists are exactly the kind of
+  /// quietly-wrong coordinate this design removes.
+  void beginEditing(Block block) {
+    final current = state.valueOrNull;
+    if (current == null || !current.canCommitProgress) return;
+    state = AsyncValue<ReaderUiState>.data(
+      current.copyWith(editingBlockId: block.id, clearMessage: true),
+    );
+  }
+
+  /// Closes the editor without writing anything.
+  void cancelEditing() {
+    final current = state.valueOrNull;
+    if (current == null || !current.isEditing) return;
+    state = AsyncValue<ReaderUiState>.data(
+      current.copyWith(clearEditing: true),
+    );
+  }
+
+  /// Commits [markdown] as the new text of [block].
+  Future<void> commitEdit(Block block, String markdown) => _runEdit(
+    (OperationId operation, ReaderUiState current) => ref
+        .read(readerHandlersProvider)
+        .editSourceBlock(
+          EditSourceBlock(
+            operation,
+            sourceId: current.source.id,
+            blockId: block.id,
+            markdown: markdown,
+            baseContentRevision: current.document.contentRevision,
+          ),
+        ),
+  );
+
+  /// Removes [block] and the separator that went with it.
+  Future<void> deleteBlock(Block block) => _runEdit(
+    (OperationId operation, ReaderUiState current) => ref
+        .read(readerHandlersProvider)
+        .deleteSourceBlock(
+          DeleteSourceBlock(
+            operation,
+            sourceId: current.source.id,
+            blockId: block.id,
+            baseContentRevision: current.document.contentRevision,
+          ),
+        ),
+  );
+
+  /// Reverses the most recent edit to this source's text.
+  Future<void> undoEdit() => _runEdit(
+    (OperationId operation, ReaderUiState current) => ref
+        .read(readerHandlersProvider)
+        .undoSourceEdit(
+          UndoSourceEdit(operation, sourceId: current.source.id),
+        ),
+  );
+
+  /// Shared body for the editing commands.
+  ///
+  /// Rebuilds from the returned document rather than reloading the screen: the
+  /// block list has been re-derived and its ids differ from the previous
+  /// parse, so anything still holding an old block id has to be discarded in
+  /// the same frame the new document arrives.
+  Future<void> _runEdit(
+    Future<Result<SourceEdited>> Function(
+      OperationId operation,
+      ReaderUiState current,
+    )
+    run,
+  ) async {
+    final current = state.valueOrNull;
+    if (current == null || current.isBusy || !current.canCommitProgress) return;
+    state = AsyncValue<ReaderUiState>.data(current.copyWith(isBusy: true));
+
+    final result = await run(
+      OperationId(ref.read(idGeneratorProvider).newId()),
+      current,
+    );
+    final latest = state.valueOrNull ?? current;
+
+    if (result case Err<SourceEdited>(:final failure)) {
+      state = AsyncValue<ReaderUiState>.data(
+        latest.copyWith(
+          isBusy: false,
+          message: UiMessage(failure.message, isError: true),
+        ),
+      );
+      return;
+    }
+
+    final SourceEdited edited = result.unwrap();
+    final content = ref.read(contentRepositoryProvider);
+    state = AsyncValue<ReaderUiState>.data(
+      latest.copyWith(
+        source: edited.source,
+        document: edited.document,
+        extracts: await content.listExtractsOfParent(edited.source.id),
+        isBusy: false,
+        clearEditing: true,
+        canUndoEdit:
+            (await content.latestSourceEdit(edited.source.id)) != null,
+        openedAt: edited.source.resume.openAt,
+        message: edited.didChange
+            ? _editMessage(edited.outcome!)
+            : const UiMessage('Nothing changed'),
+      ),
+    );
+  }
+
+  /// What to say after an edit that displaced something.
+  ///
+  /// Silence would be wrong here: an extract whose source text is gone is
+  /// still a usable card, but the user is the only one who can decide what to
+  /// do about the broken link, and they can only decide if they are told.
+  static UiMessage _editMessage(SourceEditOutcome outcome) {
+    final int orphaned = outcome.provenanceUpdates
+        .where(
+          (ProvenanceUpdate u) =>
+              u.provenance.state == ProvenanceState.orphaned,
+        )
+        .length;
+    final int stale = outcome.provenanceUpdates
+        .where(
+          (ProvenanceUpdate u) => u.provenance.state == ProvenanceState.stale,
+        )
+        .length;
+    if (orphaned == 0 && stale == 0) return const UiMessage('Saved');
+    final parts = <String>[
+      if (orphaned > 0) '$orphaned extract${orphaned == 1 ? '' : 's'} orphaned',
+      if (stale > 0) '$stale extract${stale == 1 ? '' : 's'} now stale',
+    ];
+    return UiMessage('Saved — ${parts.join(', ')}');
   }
 
   int? _foregroundMs() {

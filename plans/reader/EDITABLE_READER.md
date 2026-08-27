@@ -2,6 +2,8 @@
 
 Status: **normative implementation contract**
 
+Implementation: phases 1–4 are built and green (502 tests). Phases 5–7 — images, tables, and the `SelectionArea` migration — are not started. Where this document and the code differ, the code is the newer answer and this document has been corrected to match; every such correction is marked **[Revised]**.
+
 Audience: an AI coding agent, or a developer, modifying the Reader in this repository.
 
 Purpose: define a reading surface that survives **selection**, **in-place editing of source text**, **images**, and **tables** without ever silently moving a stored position.
@@ -91,9 +93,10 @@ and the exact inverse in the other direction.
 final class ReaderAnchor {
   final int utf8Offset;      // document space
   final int contentRevision; // the source revision this offset was written against
-  final PositionGravity gravity;
 }
 ```
+
+**[Revised]** Gravity is *not* a stored field. It is a property of the migration call, supplied by the caller that knows the role — a marker migrates `left`, a provenance start migrates `right`. Storing it would add a column that never varies per row, and would raise a question with no good answer: whether two anchors at the same offset with different gravity are equal.
 
 `blockId` is removed. Which block a position lives in is **looked up when needed**, by binary search over the block byte ranges the `Blocks` table already stores, and never stored.
 
@@ -103,7 +106,7 @@ final class ReaderAnchor {
 
 An insertion at exactly the offset of an anchor is ambiguous: does the anchor end up before or after the new text? The answer differs by role, so it is a property of the anchor.
 
-| Anchor | Gravity | Behaviour on an insertion at its exact offset |
+| Anchor | Gravity supplied at migration | Behaviour on an insertion at its exact offset |
 |---|---|---|
 | Resume marker | `left` | Stays before the new text |
 | Soft position | `left` | Stays before the new text |
@@ -147,8 +150,11 @@ final class TextSplice {
 - `inserted` has been passed through `normalizeMarkdown` **before** its byte length is computed
 - `insertedLength <= kMaxSpliceBytes` (default 8 MiB)
 - the splice is not a no-op (`removedLength == 0 && insertedLength == 0`)
+- **[Revised]** the splice would actually change the text (`removedFrom(text) != inserted`)
 
-**[Invariant]** A no-op splice never bumps `contentRevision` and never writes an edit row.
+**[Revised]** That last rule is not redundant. Re-saving a block the user opened and did not change produces a splice with real bounds and identical content; without the check it would advance the revision and write a journal row for an edit that changed nothing, and the counter would stop meaning "number of edits that changed something" — which is exactly what replay depends on. The editing command tests for it first and reports success without writing, so a harmless re-save never surfaces as an error.
+
+**[Invariant]** A splice that leaves the text unchanged never bumps `contentRevision` and never writes an edit row.
 
 **[Rationale]** Normalizing after measuring is the classic desync: a pasted CRLF block measured as `\r\n` and stored as `\n` shifts every downstream position by the number of lines pasted.
 
@@ -173,7 +179,7 @@ The boundary cases:
 - **`a < p < b`** — the text this position pointed at was removed. Collapse to `a`. **Mark stale.**
 - **`p == a` and `p == b`** (pure insertion at `p`) — resolved by gravity: `left` yields `a`, `right` yields `a + n`. Not stale.
 - **`p == a`, `b > a`** — `p` stays at `a`. Not stale.
-- **`p == b`, `b > a`** — `p + shift`, which equals `a`. Not stale.
+- **`p == b`, `b > a`** — `p + shift`, which equals `a + n`: immediately after the newly inserted text, and exactly `a` when the splice inserted nothing. Not stale.
 
 **[Invariant]** Migration has no heuristics, no text search, and no fuzzy matching. Every input has exactly one defined output.
 
@@ -199,13 +205,14 @@ enum ProvenanceState { verbatim, stale, orphaned }
 
 **[Normative]** After migration, for each affected extract:
 
+0. **[Revised]** If the range sat entirely inside a region the splice *replaced* — bounds within `[a, b)`, and `n > 0` — it is re-pointed at the replacement span `[a, a + n)` and graded by rule 2, which finds the hash no longer matches and marks it `stale`. A range inside a region the splice merely *deleted* has no replacement and falls through to rule 1. This matters because block-scoped editing replaces a whole block at a time, so without it every edit to a paragraph would orphan every extract taken from it. Pointing at the paragraph that replaced the passage — flagged, never silently — is more useful than pointing nowhere, and it is still exact: it is the span the splice wrote, not a guess at where the words went.
 1. If the migrated range is empty (`start == end`) **and** it was non-empty before → `orphaned`.
 2. Else if the pre-migration range overlapped `[a, b)` → re-slice the new markdown and re-hash. Hash equals `selectedTextHash` → `verbatim`; otherwise → `stale`.
 3. Else → unchanged.
 
 **[Normative]** Only ranges overlapping `[a, b)` are re-hashed. A range entirely before `a` cannot have changed content; a range entirely after `b` shifted but its bytes are identical.
 
-**[Normative]** `stale` and `orphaned` are never cleared automatically. The reader shows the state on the "open source" affordance — a stale extract offers *"the source text has changed"* rather than jumping to a location that may be wrong. **[Deferred]** An explicit user-driven re-link action.
+**[Normative]** `stale` and `orphaned` are never cleared automatically, with exactly one exception: **[Revised]** undo restores the pre-edit provenance from the journal's recorded payload (§9.3), because undo means the edit did not happen. Migration itself never repairs a degraded link. The reader shows the state on the "open source" affordance — a stale extract offers *"the source text has changed"* rather than jumping to a location that may be wrong. **[Deferred]** An explicit user-driven re-link action.
 
 **[Rationale]** Automatic re-anchoring by text search is the tempting alternative and the wrong one: in a document where a phrase appears twice it re-links to the wrong occurrence and reports success. Flagging is honest, and honest degradation is what makes the reader trustworthy over years of use.
 
@@ -223,9 +230,9 @@ enum ProvenanceState { verbatim, stale, orphaned }
 
 ---
 
-## 9. Schema — version 8
+## 9. Schema — version 12
 
-`kSchemaVersion` moves from 7 to 8. The migration is appended as an `if (from < 8)` block, re-runs `_createIndexes`, and is re-runnable (`_addColumnIfMissing`, `_hasColumn`), per the existing conventions.
+`kSchemaVersion` moves from 11 to 12. The migration is appended as an `if (from < 12)` block, re-runs `_createIndexes`, and is re-runnable (`_addColumnIfMissing`, `_hasColumn`), per the existing conventions.
 
 ### 9.1 `Sources`
 
@@ -277,6 +284,9 @@ Append-only journal, one row per applied splice.
 | `inserted_text` | exact bytes inserted |
 | `applied_at_utc` | |
 | `operation_id` | idempotency key |
+| `restore_json` | **[Revised]** everything this edit displaced, so undo restores rather than approximates |
+
+**[Revised]** `restore_json` carries the pre-edit marker offset, soft offset, and one entry per child (`extractId`, `startUtf8`, `endUtf8`, `state`). It exists because migration is **not invertible**: a position that pointed inside removed text was collapsed onto the start of the edit, and the collapse threw away where it had been, so replaying the inverse splice moves it but not back. §15 item 28 requires undo to restore byte-identical positions, and the only way to satisfy that is to have recorded them.
 
 ```sql
 UNIQUE (source_id, content_revision)
@@ -311,7 +321,7 @@ CHECK (state != 0 OR (width_px > 0 AND height_px > 0))
 
 Added: `table_cells` TEXT nullable — a JSON array of rows, each row an array of `[start, end]` UTF-16 pairs relative to `raw`. Null for every non-table block.
 
-### 9.6 Data migration (v7 → v8)
+### 9.6 Data migration (v11 → v12)
 
 **[Normative]** In order:
 
@@ -377,6 +387,10 @@ An extract's provenance may name another extract as parent, and extract text is 
 **[Normative]** While a block is in edit mode, its rendered form is replaced by raw markdown, and *only* that block's. Every other block on screen keeps rendering images and tables normally.
 
 **[Normative]** Extraction is disabled inside a block being edited. A selection made before entering edit mode is discarded on entry, not carried across.
+
+**[Normative]** **[Revised]** While any block is open in the editor, the reading surface's own gestures and key handling are off: no drag-selection, no double-click-for-word, no autofocus on the reading pane. The first reason is not cosmetic — the reader's double-tap recognizer holds the gesture arena for its timeout, so every click inside the editor, Save included, waits on it. The second is that the surface's tap handler pulls keyboard focus out of the field the user is typing in.
+
+**[Normative]** **[Revised]** A block open in the editor is **unregistered** from the selection layer's paragraph map. A field is not a paragraph, and resolving a selection against the layout it replaced would produce offsets from something nobody can see.
 
 **[Normative]** After a commit, the reader restores scroll from the **migrated soft position**, not from the block index. Re-derivation may change the block count, so an index-based restore lands in the wrong place exactly when the edit was large.
 
@@ -525,7 +539,7 @@ Plus unit tests for each row of the §6 table, each gravity case in §4.1, and e
 
 ### 17.3 `test/data`
 
-The v7 → v8 migration, seeding the **v7 schema explicitly** — `Migrator.createAll` builds current tables, so stamping `user_version = 7` over them tests a schema that never existed. Cover the orphan path of §9.6 step 5.
+The v11 → v12 migration, seeding the **v11 schema explicitly** — `Migrator.createAll` builds current tables, so stamping `user_version = 11` over them tests a schema that never existed. Cover the orphan path of §9.6 step 5.
 
 ### 17.4 `test/widget`
 
@@ -543,10 +557,10 @@ Each phase ends with the app fully working. No phase leaves a half-migrated coor
 
 | # | Phase | Gate |
 |---|---|---|
-| 1 | `ReaderCoordinates` façade over the existing scheme; every call site routed through it | Round-trip property test green; no behaviour change |
-| 2 | Document-space anchors, schema v8, data migration; blocks become a cache | Migration tests green; §15 items 13–19 green with no editor yet |
-| 3 | `TextSplice`, `SourceEdits`, migration, staleness, undo | §15 splice, encoding, and failure items green |
-| 4 | Block-scoped editing UI | Widget and integration tests green |
+| 1 | ✅ `ReaderCoordinates` façade over the existing scheme; every call site routed through it | Round-trip property test green; no behaviour change |
+| 2 | ✅ Document-space anchors, schema v12, data migration; blocks become a cache | Migration tests green; §15 items 13–19 green with no editor yet |
+| 3 | ✅ `TextSplice`, `SourceEdits`, migration, staleness, undo | §15 splice, encoding, and failure items green |
+| 4 | ✅ Block-scoped editing UI | Widget tests green; the integration test of §17.5 is still outstanding |
 | 5 | Images: assets, import resolution, `WidgetSpan` rendering | §15 items 22, 23, 25 green |
 | 6 | Tables: cell map, grid rendering, cell-snapped selection | §15 items 24, 25 green |
 | 7 | `SelectionArea` migration; delete the hand-rolled selection code | Full §15 green |

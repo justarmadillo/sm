@@ -69,7 +69,7 @@ final class ResumePosition {
   String toString() => 'ResumePosition(marker: $marker, soft: $softPosition)';
 }
 
-/// An immutable imported document.
+/// An imported document at one revision of its text.
 @immutable
 final class Source {
   const Source({
@@ -80,6 +80,7 @@ final class Source {
     required this.wordCount,
     required this.importedAtUtc,
     this.resume = ResumePosition.none,
+    this.contentRevision = kInitialContentRevision,
   });
 
   /// Builds a source from raw markdown, normalizing and hashing it.
@@ -106,8 +107,11 @@ final class Source {
   final String id;
   final String title;
 
-  /// Normalized original markdown. Never edited after import.
+  /// Normalized markdown at [contentRevision]. Every anchor addresses it.
   final String markdown;
+
+  /// Version of [markdown], advanced by one per applied splice.
+  final int contentRevision;
 
   /// Lowercase hex SHA-256 of [markdown].
   final String contentHash;
@@ -120,14 +124,37 @@ final class Source {
   /// Explicit and soft reading positions.
   final ResumePosition resume;
 
-  Source copyWith({String? title, ResumePosition? resume}) => Source(
+  Source copyWith({
+    String? title,
+    ResumePosition? resume,
+    String? markdown,
+    String? contentHash,
+    int? wordCount,
+    int? contentRevision,
+  }) => Source(
     id: id,
     title: title ?? this.title,
-    markdown: markdown,
-    contentHash: contentHash,
-    wordCount: wordCount,
+    markdown: markdown ?? this.markdown,
+    contentHash: contentHash ?? this.contentHash,
+    wordCount: wordCount ?? this.wordCount,
     importedAtUtc: importedAtUtc,
     resume: resume ?? this.resume,
+    contentRevision: contentRevision ?? this.contentRevision,
+  );
+
+  /// The same source carrying [text] as its markdown at [contentRevision].
+  ///
+  /// Hash and word count are re-derived here so no caller can persist a
+  /// source whose summary fields disagree with its text.
+  Source withMarkdown(String text, {required int contentRevision}) => Source(
+    id: id,
+    title: title,
+    markdown: text,
+    contentHash: sha256.convert(utf8.encode(text)).toString(),
+    wordCount: countWords(text),
+    importedAtUtc: importedAtUtc,
+    resume: resume,
+    contentRevision: contentRevision,
   );
 
   @override

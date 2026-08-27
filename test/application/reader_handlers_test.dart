@@ -16,6 +16,7 @@ import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:test/test.dart';
 
+import '../support/anchors.dart';
 import '../support/app_harness.dart';
 
 const String _markdown = '''
@@ -180,10 +181,7 @@ void main() {
       final document = await harness.content.findDocument(source.id);
 
       // Mid-paragraph, not at a block boundary.
-      final anchor = ReaderAnchor(
-        blockId: document!.blocks[1].id,
-        utf8Offset: 21,
-      );
+      final anchor = anchorIn(document!.blocks[1], 21);
       final result = await harness.reader.moveResumeMarker(
         MoveResumeMarker(
           harness.nextOperation(),
@@ -207,10 +205,7 @@ void main() {
           SaveSoftPosition(
             harness.nextOperation(),
             sourceId: source.id,
-            anchor: ReaderAnchor(
-              blockId: document!.blocks[2].id,
-              utf8Offset: 0,
-            ),
+            anchor: anchorIn(document!.blocks[2], 0),
           ),
         );
 
@@ -231,10 +226,7 @@ void main() {
           SaveSoftPosition(
             harness.nextOperation(),
             sourceId: source.id,
-            anchor: ReaderAnchor(
-              blockId: document!.blocks[i].id,
-              utf8Offset: 0,
-            ),
+            anchor: anchorIn(document!.blocks[i], 0),
           ),
         );
       }
@@ -244,10 +236,7 @@ void main() {
     test('confirming the soft position promotes it to the marker', () async {
       final source = await harness.importFixture();
       final document = await harness.content.findDocument(source.id);
-      final anchor = ReaderAnchor(
-        blockId: document!.blocks[2].id,
-        utf8Offset: 4,
-      );
+      final anchor = anchorIn(document!.blocks[2], 4);
 
       await harness.reader.saveSoftPosition(
         SaveSoftPosition(
@@ -270,7 +259,7 @@ void main() {
         MoveResumeMarker(
           harness.nextOperation(),
           sourceId: source.id,
-          anchor: const ReaderAnchor(blockId: 'other:0', utf8Offset: 0),
+          anchor: const ReaderAnchor(utf8Offset: 1 << 30),
         ),
       );
       expect(result.failureOrNull, isA<ValidationFailure>());
@@ -533,10 +522,7 @@ void main() {
       final first = await openHarness();
       final source = await first.importFixture();
       final document = await first.content.findDocument(source.id);
-      final anchor = ReaderAnchor(
-        blockId: document!.blocks[1].id,
-        utf8Offset: 21,
-      );
+      final anchor = anchorIn(document!.blocks[1], 21);
       await first.reader.moveResumeMarker(
         MoveResumeMarker(
           first.nextOperation(),
@@ -557,7 +543,7 @@ void main() {
       // The marker still lands on the same character it was placed on,
       // mid-word rather than at a block boundary.
       expect(
-        reopenedDocument!.blockById(anchor.blockId)!.rawSlice(21, 27),
+        reopenedDocument!.blockForAnchor(anchor)!.rawSlice(21, 27),
         't the ',
       );
     });
@@ -568,10 +554,7 @@ void main() {
         final first = await openHarness();
         final source = await first.importFixture();
         final document = await first.content.findDocument(source.id);
-        final soft = ReaderAnchor(
-          blockId: document!.blocks[2].id,
-          utf8Offset: 0,
-        );
+        final soft = anchorIn(document!.blocks[2], 0);
         await first.reader.saveSoftPosition(
           SaveSoftPosition(
             first.nextOperation(),

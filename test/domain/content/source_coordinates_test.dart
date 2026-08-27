@@ -3,6 +3,7 @@ import 'package:incremental_reader/src/domain/content/document.dart';
 import 'package:incremental_reader/src/domain/content/inline_markup.dart';
 import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
 import 'package:test/test.dart';
+import '../../support/anchors.dart';
 
 /// Exercises every construct the Reader has to map exactly: formatting,
 /// links, code, math, Unicode, escapes, lists, quotes, and tables.
@@ -277,7 +278,7 @@ void main() {
       // answers coordinate questions for every block immediately.
       final fresh = Document.parse(sourceId: 'src', markdown: fixture);
       final last = fresh.blocks.last;
-      final anchor = ReaderAnchor(blockId: last.id, utf8Offset: 0);
+      final anchor = anchorIn(last, 0);
       expect(fresh.documentOffsetOf(anchor), last.sourceStartUtf8);
       expect(fresh.blockById(last.id), same(last));
     });
@@ -286,24 +287,24 @@ void main() {
   group('document coordinates', () {
     test('document offsets and anchors round trip', () {
       for (final block in document.blocks) {
-        final anchor = ReaderAnchor(blockId: block.id, utf8Offset: 0);
+        final anchor = anchorIn(block, 0);
         final offset = document.documentOffsetOf(anchor)!;
-        expect(document.anchorAtDocumentOffset(offset), anchor);
+        expect(document.anchorAt(offset), anchor);
       }
     });
 
     test('an offset between blocks resolves to the next block', () {
       final first = document.blocks.first;
-      final anchor = document.anchorAtDocumentOffset(first.sourceEndUtf8 + 1);
-      expect(anchor!.blockId, document.blocks[1].id);
-      expect(anchor.utf8Offset, 0);
+      final anchor = document.anchorAt(first.sourceEndUtf8 + 1);
+      expect(document.blockForAnchor(anchor)?.id, document.blocks[1].id);
+      expect(anchor.utf8Offset, document.blocks[1].sourceStartUtf8);
     });
 
     test('a cross-block range returns the exact original markdown', () {
-      final start = ReaderAnchor(blockId: document.blocks[3].id, utf8Offset: 0);
-      final end = ReaderAnchor(
-        blockId: document.blocks[5].id,
-        utf8Offset: document.blocks[5].lengthUtf8,
+      final start = anchorIn(document.blocks[3], 0);
+      final end = anchorIn(
+        document.blocks[5],
+        document.blocks[5].lengthUtf8,
       );
       final slice = document.markdownBetween(start, end);
       expect(
@@ -318,8 +319,8 @@ void main() {
     });
 
     test('a selection range verifies its own text', () {
-      final start = ReaderAnchor(blockId: document.blocks[0].id, utf8Offset: 2);
-      final end = ReaderAnchor(blockId: document.blocks[0].id, utf8Offset: 13);
+      final start = anchorIn(document.blocks[0], 2);
+      final end = anchorIn(document.blocks[0], 13);
       final markdown = document.markdownBetween(start, end);
       final range = SelectionRange.of(
         startAnchor: start,
@@ -329,20 +330,18 @@ void main() {
       expect(markdown, 'Heading One');
       expect(range.matches(markdown), isTrue);
       expect(range.matches('Heading Two'), isFalse);
-      expect(range.isSameBlock, isTrue);
+      expect(document.isSameBlock(range), isTrue);
       expect(range.isCollapsed, isFalse);
     });
 
     test('an inverted or unknown range yields nothing', () {
-      final a = ReaderAnchor(blockId: document.blocks[2].id, utf8Offset: 5);
-      final b = ReaderAnchor(blockId: document.blocks[1].id, utf8Offset: 5);
+      final a = anchorIn(document.blocks[2], 5);
+      final b = anchorIn(document.blocks[1], 5);
       expect(document.markdownBetween(a, b), '');
       expect(
-        document.markdownBetween(
-          const ReaderAnchor(blockId: 'missing', utf8Offset: 0),
-          a,
-        ),
-        '',
+        document.markdownBetween(const ReaderAnchor(utf8Offset: 0), a).isEmpty,
+        isFalse,
+        reason: 'offset 0 is a real place; only inverted ranges are empty',
       );
     });
   });

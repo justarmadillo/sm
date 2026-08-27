@@ -16,6 +16,9 @@ import '../../domain/content/document.dart';
 import '../../domain/content/extract.dart';
 import '../../domain/content/reader_anchor.dart';
 import '../../domain/content/source.dart';
+import '../../domain/content/source_edit.dart';
+import '../../domain/content/source_editing.dart';
+import '../../domain/content/text_splice.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
@@ -86,6 +89,32 @@ abstract interface class ContentRepository {
 
   /// Atomically promotes the stored soft position to the marker.
   Future<Source?> confirmSoftPosition(String sourceId);
+
+  /// Applies one splice to a source's text, in a single transaction.
+  ///
+  /// Everything that points into the text moves with it: both reading
+  /// positions, and every direct child's recorded range. Nothing
+  /// scheduling-related is read or written — editing text is not a repetition
+  /// and must never disturb a due date.
+  ///
+  /// [baseContentRevision] is the revision the caller believed it was editing.
+  /// A mismatch yields [SourceEditConflict] and writes nothing, so two windows
+  /// editing the same source cannot silently overwrite one another.
+  Future<SourceEditResult> applySourceEdit({
+    required String sourceId,
+    required TextSplice splice,
+    required int baseContentRevision,
+    required String operationId,
+    required DateTime nowUtc,
+    bool isUndo = false,
+    SourceEditRestore? restore,
+  });
+
+  /// The edit journal for [sourceId], oldest first.
+  Future<List<SourceEdit>> listSourceEdits(String sourceId);
+
+  /// The most recent edit applied to [sourceId], or null.
+  Future<SourceEdit?> latestSourceEdit(String sourceId);
 
   /// Stores a new extract.
   Future<void> insertExtract(Extract extract);

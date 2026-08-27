@@ -9,6 +9,7 @@ import 'package:incremental_reader/src/features/reader/presentation/block_view.d
 import 'package:incremental_reader/src/features/reader/presentation/reader_selection.dart';
 import 'package:incremental_reader/src/features/reader/presentation/reader_view.dart';
 import 'package:incremental_reader/src/features/reader/presentation/sample_corpus.dart';
+import '../support/anchors.dart';
 
 const String _shortMarkdown = '''
 # Chapter One
@@ -83,7 +84,7 @@ void main() {
         tester,
         document,
         controller,
-        marker: ReaderAnchor(blockId: document.blocks[1].id, utf8Offset: 0),
+        marker: anchorIn(document.blocks[1], 0),
       );
 
       final marked = tester
@@ -150,7 +151,7 @@ void main() {
       );
 
       // The coordinate system is data, not layout: it answers anyway.
-      final anchor = ReaderAnchor(blockId: last.id, utf8Offset: 0);
+      final anchor = anchorIn(last, 0);
       expect(document.documentOffsetOf(anchor), last.sourceStartUtf8);
       expect(document.indexOfBlock(last.id), document.blocks.length - 1);
       // Rendered coordinates answer too, without the block ever being laid out.
@@ -170,9 +171,7 @@ void main() {
       final key = await pumpReader(tester, document, controller);
 
       final target = document.blocks[document.blocks.length - 3];
-      key.currentState!.jumpToAnchor(
-        ReaderAnchor(blockId: target.id, utf8Offset: 0),
-      );
+      key.currentState!.jumpToAnchor(anchorIn(target, 0));
       await tester.pumpAndSettle();
 
       final mountedIds = tester
@@ -196,7 +195,7 @@ void main() {
         tester,
         document,
         controller,
-        initialAnchor: ReaderAnchor(blockId: target.id, utf8Offset: 0),
+        initialAnchor: anchorIn(target, 0),
       );
 
       final mountedIds = tester
@@ -293,7 +292,7 @@ void main() {
         resolved!.markdown,
         'The second paragraph is plain and easy to select from end to end.',
       );
-      expect(resolved.range.isSameBlock, isTrue);
+      expect(document.isSameBlock(resolved.range), isTrue);
       expect(resolved.range.matches(resolved.markdown), isTrue);
     });
 
@@ -328,7 +327,7 @@ void main() {
 
       final resolved = controller.resolveSelection();
       expect(resolved, isNotNull);
-      expect(resolved!.range.isSameBlock, isFalse);
+      expect(document.isSameBlock(resolved!.range), isFalse);
       expect(controller.canExtract, isFalse);
       expect(resolved.markdown, startsWith('The second paragraph'));
       expect(resolved.markdown, endsWith('- A list item'));
@@ -370,9 +369,9 @@ void main() {
       );
       await tester.pump();
 
-      expect(tapped?.blockId, target.id);
-      expect(tapped!.utf8Offset, greaterThan(0));
-      expect(tapped!.utf8Offset, lessThanOrEqualTo(target.lengthUtf8));
+      expect(document.blockForAnchor(tapped!)?.id, target.id);
+      expect(tapped!.utf8Offset, greaterThan(target.sourceStartUtf8));
+      expect(tapped!.utf8Offset, lessThanOrEqualTo(target.sourceEndUtf8));
     });
 
     testWidgets('clicking clears the selection', (WidgetTester tester) async {

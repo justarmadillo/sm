@@ -22,6 +22,7 @@ class SelectionToolbar extends StatelessWidget {
     required this.onExtract,
     required this.onSetMarker,
     required this.onCopy,
+    required this.onEditBlock,
     required this.canSetMarker,
     required this.canExtract,
     this.extractHint,
@@ -38,6 +39,12 @@ class SelectionToolbar extends StatelessWidget {
   final VoidCallback onExtract;
   final VoidCallback onSetMarker;
   final VoidCallback onCopy;
+
+  /// Opens the block the selection started in for editing.
+  ///
+  /// Null while editing would be meaningless — browsing a source it does not
+  /// own, for instance — so the action disappears rather than failing.
+  final VoidCallback? onEditBlock;
 
   /// Whether placing a marker is meaningful in the current mode.
   final bool canSetMarker;
@@ -57,7 +64,7 @@ class SelectionToolbar extends StatelessWidget {
         ? anchorRect.top - _kToolbarHeight - 8
         : anchorRect.bottom + 8;
 
-    const width = 300.0;
+    const width = 380.0;
     final maxLeft = (viewportSize.width - width - 12).clamp(
       12.0,
       viewportSize.width,
@@ -111,6 +118,13 @@ class SelectionToolbar extends StatelessWidget {
                 icon: Icons.copy_all_outlined,
                 label: 'Copy',
                 onPressed: onCopy,
+              ),
+              const _ToolbarDivider(),
+              _ToolbarButton(
+                icon: Icons.edit_outlined,
+                label: 'Edit',
+                onPressed: onEditBlock,
+                disabledHint: 'Browsing cannot edit this source',
               ),
             ],
           ),

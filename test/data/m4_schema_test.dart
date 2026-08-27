@@ -49,22 +49,9 @@ void main() {
     );
     await db.customStatement(
       'INSERT INTO extracts (id, markdown, source_id, parent_id, '
-      'parent_is_source, start_block_id, start_offset, end_block_id, '
-      'end_offset, selected_text_hash, created_at_utc) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      <Object?>[
-        'x1',
-        'passage',
-        's1',
-        's1',
-        1,
-        'b1',
-        0,
-        'b1',
-        7,
-        'b' * 64,
-        1000,
-      ],
+      'parent_is_source, start_utf8, end_utf8, selected_text_hash, '
+      'created_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      <Object?>['x1', 'passage', 's1', 's1', 1, 0, 7, 'b' * 64, 1000],
     );
     await db.customStatement(
       'INSERT INTO cards (id, extract_id, kind, front, back, created_at_utc) '

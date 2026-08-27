@@ -79,45 +79,57 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, SourceRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _markerBlockIdMeta = const VerificationMeta(
-    'markerBlockId',
+  static const VerificationMeta _contentRevisionMeta = const VerificationMeta(
+    'contentRevision',
   );
   @override
-  late final GeneratedColumn<String> markerBlockId = GeneratedColumn<String>(
-    'marker_block_id',
+  late final GeneratedColumn<int> contentRevision = GeneratedColumn<int>(
+    'content_revision',
     aliasedName,
-    true,
-    type: DriftSqlType.string,
+    false,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
+    defaultValue: const Constant(1),
   );
-  static const VerificationMeta _markerOffsetMeta = const VerificationMeta(
-    'markerOffset',
+  static const VerificationMeta _markerUtf8Meta = const VerificationMeta(
+    'markerUtf8',
   );
   @override
-  late final GeneratedColumn<int> markerOffset = GeneratedColumn<int>(
-    'marker_offset',
+  late final GeneratedColumn<int> markerUtf8 = GeneratedColumn<int>(
+    'marker_utf8',
     aliasedName,
     true,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _softBlockIdMeta = const VerificationMeta(
-    'softBlockId',
+  static const VerificationMeta _markerRevisionMeta = const VerificationMeta(
+    'markerRevision',
   );
   @override
-  late final GeneratedColumn<String> softBlockId = GeneratedColumn<String>(
-    'soft_block_id',
+  late final GeneratedColumn<int> markerRevision = GeneratedColumn<int>(
+    'marker_revision',
     aliasedName,
     true,
-    type: DriftSqlType.string,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _softOffsetMeta = const VerificationMeta(
-    'softOffset',
+  static const VerificationMeta _softUtf8Meta = const VerificationMeta(
+    'softUtf8',
   );
   @override
-  late final GeneratedColumn<int> softOffset = GeneratedColumn<int>(
-    'soft_offset',
+  late final GeneratedColumn<int> softUtf8 = GeneratedColumn<int>(
+    'soft_utf8',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _softRevisionMeta = const VerificationMeta(
+    'softRevision',
+  );
+  @override
+  late final GeneratedColumn<int> softRevision = GeneratedColumn<int>(
+    'soft_revision',
     aliasedName,
     true,
     type: DriftSqlType.int,
@@ -143,10 +155,11 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, SourceRow> {
     contentHash,
     wordCount,
     importedAtUtc,
-    markerBlockId,
-    markerOffset,
-    softBlockId,
-    softOffset,
+    contentRevision,
+    markerUtf8,
+    markerRevision,
+    softUtf8,
+    softRevision,
     revision,
   ];
   @override
@@ -212,37 +225,43 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, SourceRow> {
     } else if (isInserting) {
       context.missing(_importedAtUtcMeta);
     }
-    if (data.containsKey('marker_block_id')) {
+    if (data.containsKey('content_revision')) {
       context.handle(
-        _markerBlockIdMeta,
-        markerBlockId.isAcceptableOrUnknown(
-          data['marker_block_id']!,
-          _markerBlockIdMeta,
+        _contentRevisionMeta,
+        contentRevision.isAcceptableOrUnknown(
+          data['content_revision']!,
+          _contentRevisionMeta,
         ),
       );
     }
-    if (data.containsKey('marker_offset')) {
+    if (data.containsKey('marker_utf8')) {
       context.handle(
-        _markerOffsetMeta,
-        markerOffset.isAcceptableOrUnknown(
-          data['marker_offset']!,
-          _markerOffsetMeta,
+        _markerUtf8Meta,
+        markerUtf8.isAcceptableOrUnknown(data['marker_utf8']!, _markerUtf8Meta),
+      );
+    }
+    if (data.containsKey('marker_revision')) {
+      context.handle(
+        _markerRevisionMeta,
+        markerRevision.isAcceptableOrUnknown(
+          data['marker_revision']!,
+          _markerRevisionMeta,
         ),
       );
     }
-    if (data.containsKey('soft_block_id')) {
+    if (data.containsKey('soft_utf8')) {
       context.handle(
-        _softBlockIdMeta,
-        softBlockId.isAcceptableOrUnknown(
-          data['soft_block_id']!,
-          _softBlockIdMeta,
-        ),
+        _softUtf8Meta,
+        softUtf8.isAcceptableOrUnknown(data['soft_utf8']!, _softUtf8Meta),
       );
     }
-    if (data.containsKey('soft_offset')) {
+    if (data.containsKey('soft_revision')) {
       context.handle(
-        _softOffsetMeta,
-        softOffset.isAcceptableOrUnknown(data['soft_offset']!, _softOffsetMeta),
+        _softRevisionMeta,
+        softRevision.isAcceptableOrUnknown(
+          data['soft_revision']!,
+          _softRevisionMeta,
+        ),
       );
     }
     if (data.containsKey('revision')) {
@@ -284,21 +303,25 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, SourceRow> {
         DriftSqlType.int,
         data['${effectivePrefix}imported_at_utc'],
       )!,
-      markerBlockId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}marker_block_id'],
-      ),
-      markerOffset: attachedDatabase.typeMapping.read(
+      contentRevision: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}marker_offset'],
-      ),
-      softBlockId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}soft_block_id'],
-      ),
-      softOffset: attachedDatabase.typeMapping.read(
+        data['${effectivePrefix}content_revision'],
+      )!,
+      markerUtf8: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}soft_offset'],
+        data['${effectivePrefix}marker_utf8'],
+      ),
+      markerRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}marker_revision'],
+      ),
+      softUtf8: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}soft_utf8'],
+      ),
+      softRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}soft_revision'],
       ),
       revision: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -317,19 +340,27 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
   final String id;
   final String title;
 
-  /// Normalized original markdown. Every anchor addresses this exact text.
+  /// Normalized markdown at [contentRevision]. Every anchor addresses it.
   final String markdown;
   final String contentHash;
   final int wordCount;
   final int importedAtUtc;
 
-  /// Explicit resume marker. Both columns are set or both are null.
-  final String? markerBlockId;
-  final int? markerOffset;
+  /// Version of [markdown] itself, bumped only by a content splice.
+  ///
+  /// Deliberately not [revision]: that counts row writes of any kind, and
+  /// replaying the edit journal needs a counter that advances once per splice
+  /// and never otherwise.
+  final int contentRevision;
+
+  /// Explicit resume marker, as a document byte offset. Both columns are set
+  /// or both are null.
+  final int? markerUtf8;
+  final int? markerRevision;
 
   /// Soft position. Never drives scheduling.
-  final String? softBlockId;
-  final int? softOffset;
+  final int? softUtf8;
+  final int? softRevision;
 
   /// Bumped on every write, for change detection and diagnostics.
   final int revision;
@@ -340,10 +371,11 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
     required this.contentHash,
     required this.wordCount,
     required this.importedAtUtc,
-    this.markerBlockId,
-    this.markerOffset,
-    this.softBlockId,
-    this.softOffset,
+    required this.contentRevision,
+    this.markerUtf8,
+    this.markerRevision,
+    this.softUtf8,
+    this.softRevision,
     required this.revision,
   });
   @override
@@ -355,17 +387,18 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
     map['content_hash'] = Variable<String>(contentHash);
     map['word_count'] = Variable<int>(wordCount);
     map['imported_at_utc'] = Variable<int>(importedAtUtc);
-    if (!nullToAbsent || markerBlockId != null) {
-      map['marker_block_id'] = Variable<String>(markerBlockId);
+    map['content_revision'] = Variable<int>(contentRevision);
+    if (!nullToAbsent || markerUtf8 != null) {
+      map['marker_utf8'] = Variable<int>(markerUtf8);
     }
-    if (!nullToAbsent || markerOffset != null) {
-      map['marker_offset'] = Variable<int>(markerOffset);
+    if (!nullToAbsent || markerRevision != null) {
+      map['marker_revision'] = Variable<int>(markerRevision);
     }
-    if (!nullToAbsent || softBlockId != null) {
-      map['soft_block_id'] = Variable<String>(softBlockId);
+    if (!nullToAbsent || softUtf8 != null) {
+      map['soft_utf8'] = Variable<int>(softUtf8);
     }
-    if (!nullToAbsent || softOffset != null) {
-      map['soft_offset'] = Variable<int>(softOffset);
+    if (!nullToAbsent || softRevision != null) {
+      map['soft_revision'] = Variable<int>(softRevision);
     }
     map['revision'] = Variable<int>(revision);
     return map;
@@ -379,18 +412,19 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
       contentHash: Value(contentHash),
       wordCount: Value(wordCount),
       importedAtUtc: Value(importedAtUtc),
-      markerBlockId: markerBlockId == null && nullToAbsent
+      contentRevision: Value(contentRevision),
+      markerUtf8: markerUtf8 == null && nullToAbsent
           ? const Value.absent()
-          : Value(markerBlockId),
-      markerOffset: markerOffset == null && nullToAbsent
+          : Value(markerUtf8),
+      markerRevision: markerRevision == null && nullToAbsent
           ? const Value.absent()
-          : Value(markerOffset),
-      softBlockId: softBlockId == null && nullToAbsent
+          : Value(markerRevision),
+      softUtf8: softUtf8 == null && nullToAbsent
           ? const Value.absent()
-          : Value(softBlockId),
-      softOffset: softOffset == null && nullToAbsent
+          : Value(softUtf8),
+      softRevision: softRevision == null && nullToAbsent
           ? const Value.absent()
-          : Value(softOffset),
+          : Value(softRevision),
       revision: Value(revision),
     );
   }
@@ -407,10 +441,11 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
       contentHash: serializer.fromJson<String>(json['contentHash']),
       wordCount: serializer.fromJson<int>(json['wordCount']),
       importedAtUtc: serializer.fromJson<int>(json['importedAtUtc']),
-      markerBlockId: serializer.fromJson<String?>(json['markerBlockId']),
-      markerOffset: serializer.fromJson<int?>(json['markerOffset']),
-      softBlockId: serializer.fromJson<String?>(json['softBlockId']),
-      softOffset: serializer.fromJson<int?>(json['softOffset']),
+      contentRevision: serializer.fromJson<int>(json['contentRevision']),
+      markerUtf8: serializer.fromJson<int?>(json['markerUtf8']),
+      markerRevision: serializer.fromJson<int?>(json['markerRevision']),
+      softUtf8: serializer.fromJson<int?>(json['softUtf8']),
+      softRevision: serializer.fromJson<int?>(json['softRevision']),
       revision: serializer.fromJson<int>(json['revision']),
     );
   }
@@ -424,10 +459,11 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
       'contentHash': serializer.toJson<String>(contentHash),
       'wordCount': serializer.toJson<int>(wordCount),
       'importedAtUtc': serializer.toJson<int>(importedAtUtc),
-      'markerBlockId': serializer.toJson<String?>(markerBlockId),
-      'markerOffset': serializer.toJson<int?>(markerOffset),
-      'softBlockId': serializer.toJson<String?>(softBlockId),
-      'softOffset': serializer.toJson<int?>(softOffset),
+      'contentRevision': serializer.toJson<int>(contentRevision),
+      'markerUtf8': serializer.toJson<int?>(markerUtf8),
+      'markerRevision': serializer.toJson<int?>(markerRevision),
+      'softUtf8': serializer.toJson<int?>(softUtf8),
+      'softRevision': serializer.toJson<int?>(softRevision),
       'revision': serializer.toJson<int>(revision),
     };
   }
@@ -439,10 +475,11 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
     String? contentHash,
     int? wordCount,
     int? importedAtUtc,
-    Value<String?> markerBlockId = const Value.absent(),
-    Value<int?> markerOffset = const Value.absent(),
-    Value<String?> softBlockId = const Value.absent(),
-    Value<int?> softOffset = const Value.absent(),
+    int? contentRevision,
+    Value<int?> markerUtf8 = const Value.absent(),
+    Value<int?> markerRevision = const Value.absent(),
+    Value<int?> softUtf8 = const Value.absent(),
+    Value<int?> softRevision = const Value.absent(),
     int? revision,
   }) => SourceRow(
     id: id ?? this.id,
@@ -451,12 +488,13 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
     contentHash: contentHash ?? this.contentHash,
     wordCount: wordCount ?? this.wordCount,
     importedAtUtc: importedAtUtc ?? this.importedAtUtc,
-    markerBlockId: markerBlockId.present
-        ? markerBlockId.value
-        : this.markerBlockId,
-    markerOffset: markerOffset.present ? markerOffset.value : this.markerOffset,
-    softBlockId: softBlockId.present ? softBlockId.value : this.softBlockId,
-    softOffset: softOffset.present ? softOffset.value : this.softOffset,
+    contentRevision: contentRevision ?? this.contentRevision,
+    markerUtf8: markerUtf8.present ? markerUtf8.value : this.markerUtf8,
+    markerRevision: markerRevision.present
+        ? markerRevision.value
+        : this.markerRevision,
+    softUtf8: softUtf8.present ? softUtf8.value : this.softUtf8,
+    softRevision: softRevision.present ? softRevision.value : this.softRevision,
     revision: revision ?? this.revision,
   );
   SourceRow copyWithCompanion(SourcesCompanion data) {
@@ -471,18 +509,19 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
       importedAtUtc: data.importedAtUtc.present
           ? data.importedAtUtc.value
           : this.importedAtUtc,
-      markerBlockId: data.markerBlockId.present
-          ? data.markerBlockId.value
-          : this.markerBlockId,
-      markerOffset: data.markerOffset.present
-          ? data.markerOffset.value
-          : this.markerOffset,
-      softBlockId: data.softBlockId.present
-          ? data.softBlockId.value
-          : this.softBlockId,
-      softOffset: data.softOffset.present
-          ? data.softOffset.value
-          : this.softOffset,
+      contentRevision: data.contentRevision.present
+          ? data.contentRevision.value
+          : this.contentRevision,
+      markerUtf8: data.markerUtf8.present
+          ? data.markerUtf8.value
+          : this.markerUtf8,
+      markerRevision: data.markerRevision.present
+          ? data.markerRevision.value
+          : this.markerRevision,
+      softUtf8: data.softUtf8.present ? data.softUtf8.value : this.softUtf8,
+      softRevision: data.softRevision.present
+          ? data.softRevision.value
+          : this.softRevision,
       revision: data.revision.present ? data.revision.value : this.revision,
     );
   }
@@ -496,10 +535,11 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
           ..write('contentHash: $contentHash, ')
           ..write('wordCount: $wordCount, ')
           ..write('importedAtUtc: $importedAtUtc, ')
-          ..write('markerBlockId: $markerBlockId, ')
-          ..write('markerOffset: $markerOffset, ')
-          ..write('softBlockId: $softBlockId, ')
-          ..write('softOffset: $softOffset, ')
+          ..write('contentRevision: $contentRevision, ')
+          ..write('markerUtf8: $markerUtf8, ')
+          ..write('markerRevision: $markerRevision, ')
+          ..write('softUtf8: $softUtf8, ')
+          ..write('softRevision: $softRevision, ')
           ..write('revision: $revision')
           ..write(')'))
         .toString();
@@ -513,10 +553,11 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
     contentHash,
     wordCount,
     importedAtUtc,
-    markerBlockId,
-    markerOffset,
-    softBlockId,
-    softOffset,
+    contentRevision,
+    markerUtf8,
+    markerRevision,
+    softUtf8,
+    softRevision,
     revision,
   );
   @override
@@ -529,10 +570,11 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
           other.contentHash == this.contentHash &&
           other.wordCount == this.wordCount &&
           other.importedAtUtc == this.importedAtUtc &&
-          other.markerBlockId == this.markerBlockId &&
-          other.markerOffset == this.markerOffset &&
-          other.softBlockId == this.softBlockId &&
-          other.softOffset == this.softOffset &&
+          other.contentRevision == this.contentRevision &&
+          other.markerUtf8 == this.markerUtf8 &&
+          other.markerRevision == this.markerRevision &&
+          other.softUtf8 == this.softUtf8 &&
+          other.softRevision == this.softRevision &&
           other.revision == this.revision);
 }
 
@@ -543,10 +585,11 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
   final Value<String> contentHash;
   final Value<int> wordCount;
   final Value<int> importedAtUtc;
-  final Value<String?> markerBlockId;
-  final Value<int?> markerOffset;
-  final Value<String?> softBlockId;
-  final Value<int?> softOffset;
+  final Value<int> contentRevision;
+  final Value<int?> markerUtf8;
+  final Value<int?> markerRevision;
+  final Value<int?> softUtf8;
+  final Value<int?> softRevision;
   final Value<int> revision;
   final Value<int> rowid;
   const SourcesCompanion({
@@ -556,10 +599,11 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
     this.contentHash = const Value.absent(),
     this.wordCount = const Value.absent(),
     this.importedAtUtc = const Value.absent(),
-    this.markerBlockId = const Value.absent(),
-    this.markerOffset = const Value.absent(),
-    this.softBlockId = const Value.absent(),
-    this.softOffset = const Value.absent(),
+    this.contentRevision = const Value.absent(),
+    this.markerUtf8 = const Value.absent(),
+    this.markerRevision = const Value.absent(),
+    this.softUtf8 = const Value.absent(),
+    this.softRevision = const Value.absent(),
     this.revision = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -570,10 +614,11 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
     required String contentHash,
     required int wordCount,
     required int importedAtUtc,
-    this.markerBlockId = const Value.absent(),
-    this.markerOffset = const Value.absent(),
-    this.softBlockId = const Value.absent(),
-    this.softOffset = const Value.absent(),
+    this.contentRevision = const Value.absent(),
+    this.markerUtf8 = const Value.absent(),
+    this.markerRevision = const Value.absent(),
+    this.softUtf8 = const Value.absent(),
+    this.softRevision = const Value.absent(),
     this.revision = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -589,10 +634,11 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
     Expression<String>? contentHash,
     Expression<int>? wordCount,
     Expression<int>? importedAtUtc,
-    Expression<String>? markerBlockId,
-    Expression<int>? markerOffset,
-    Expression<String>? softBlockId,
-    Expression<int>? softOffset,
+    Expression<int>? contentRevision,
+    Expression<int>? markerUtf8,
+    Expression<int>? markerRevision,
+    Expression<int>? softUtf8,
+    Expression<int>? softRevision,
     Expression<int>? revision,
     Expression<int>? rowid,
   }) {
@@ -603,10 +649,11 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
       if (contentHash != null) 'content_hash': contentHash,
       if (wordCount != null) 'word_count': wordCount,
       if (importedAtUtc != null) 'imported_at_utc': importedAtUtc,
-      if (markerBlockId != null) 'marker_block_id': markerBlockId,
-      if (markerOffset != null) 'marker_offset': markerOffset,
-      if (softBlockId != null) 'soft_block_id': softBlockId,
-      if (softOffset != null) 'soft_offset': softOffset,
+      if (contentRevision != null) 'content_revision': contentRevision,
+      if (markerUtf8 != null) 'marker_utf8': markerUtf8,
+      if (markerRevision != null) 'marker_revision': markerRevision,
+      if (softUtf8 != null) 'soft_utf8': softUtf8,
+      if (softRevision != null) 'soft_revision': softRevision,
       if (revision != null) 'revision': revision,
       if (rowid != null) 'rowid': rowid,
     });
@@ -619,10 +666,11 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
     Value<String>? contentHash,
     Value<int>? wordCount,
     Value<int>? importedAtUtc,
-    Value<String?>? markerBlockId,
-    Value<int?>? markerOffset,
-    Value<String?>? softBlockId,
-    Value<int?>? softOffset,
+    Value<int>? contentRevision,
+    Value<int?>? markerUtf8,
+    Value<int?>? markerRevision,
+    Value<int?>? softUtf8,
+    Value<int?>? softRevision,
     Value<int>? revision,
     Value<int>? rowid,
   }) {
@@ -633,10 +681,11 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
       contentHash: contentHash ?? this.contentHash,
       wordCount: wordCount ?? this.wordCount,
       importedAtUtc: importedAtUtc ?? this.importedAtUtc,
-      markerBlockId: markerBlockId ?? this.markerBlockId,
-      markerOffset: markerOffset ?? this.markerOffset,
-      softBlockId: softBlockId ?? this.softBlockId,
-      softOffset: softOffset ?? this.softOffset,
+      contentRevision: contentRevision ?? this.contentRevision,
+      markerUtf8: markerUtf8 ?? this.markerUtf8,
+      markerRevision: markerRevision ?? this.markerRevision,
+      softUtf8: softUtf8 ?? this.softUtf8,
+      softRevision: softRevision ?? this.softRevision,
       revision: revision ?? this.revision,
       rowid: rowid ?? this.rowid,
     );
@@ -663,17 +712,20 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
     if (importedAtUtc.present) {
       map['imported_at_utc'] = Variable<int>(importedAtUtc.value);
     }
-    if (markerBlockId.present) {
-      map['marker_block_id'] = Variable<String>(markerBlockId.value);
+    if (contentRevision.present) {
+      map['content_revision'] = Variable<int>(contentRevision.value);
     }
-    if (markerOffset.present) {
-      map['marker_offset'] = Variable<int>(markerOffset.value);
+    if (markerUtf8.present) {
+      map['marker_utf8'] = Variable<int>(markerUtf8.value);
     }
-    if (softBlockId.present) {
-      map['soft_block_id'] = Variable<String>(softBlockId.value);
+    if (markerRevision.present) {
+      map['marker_revision'] = Variable<int>(markerRevision.value);
     }
-    if (softOffset.present) {
-      map['soft_offset'] = Variable<int>(softOffset.value);
+    if (softUtf8.present) {
+      map['soft_utf8'] = Variable<int>(softUtf8.value);
+    }
+    if (softRevision.present) {
+      map['soft_revision'] = Variable<int>(softRevision.value);
     }
     if (revision.present) {
       map['revision'] = Variable<int>(revision.value);
@@ -693,11 +745,715 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
           ..write('contentHash: $contentHash, ')
           ..write('wordCount: $wordCount, ')
           ..write('importedAtUtc: $importedAtUtc, ')
-          ..write('markerBlockId: $markerBlockId, ')
-          ..write('markerOffset: $markerOffset, ')
-          ..write('softBlockId: $softBlockId, ')
-          ..write('softOffset: $softOffset, ')
+          ..write('contentRevision: $contentRevision, ')
+          ..write('markerUtf8: $markerUtf8, ')
+          ..write('markerRevision: $markerRevision, ')
+          ..write('softUtf8: $softUtf8, ')
+          ..write('softRevision: $softRevision, ')
           ..write('revision: $revision, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SourceEditsTable extends SourceEdits
+    with TableInfo<$SourceEditsTable, SourceEditRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SourceEditsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES sources (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _contentRevisionMeta = const VerificationMeta(
+    'contentRevision',
+  );
+  @override
+  late final GeneratedColumn<int> contentRevision = GeneratedColumn<int>(
+    'content_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startUtf8Meta = const VerificationMeta(
+    'startUtf8',
+  );
+  @override
+  late final GeneratedColumn<int> startUtf8 = GeneratedColumn<int>(
+    'start_utf8',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endUtf8Meta = const VerificationMeta(
+    'endUtf8',
+  );
+  @override
+  late final GeneratedColumn<int> endUtf8 = GeneratedColumn<int>(
+    'end_utf8',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _removedTextMeta = const VerificationMeta(
+    'removedText',
+  );
+  @override
+  late final GeneratedColumn<String> removedText = GeneratedColumn<String>(
+    'removed_text',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _insertedTextMeta = const VerificationMeta(
+    'insertedText',
+  );
+  @override
+  late final GeneratedColumn<String> insertedText = GeneratedColumn<String>(
+    'inserted_text',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isUndoMeta = const VerificationMeta('isUndo');
+  @override
+  late final GeneratedColumn<bool> isUndo = GeneratedColumn<bool>(
+    'is_undo',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_undo" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _restoreJsonMeta = const VerificationMeta(
+    'restoreJson',
+  );
+  @override
+  late final GeneratedColumn<String> restoreJson = GeneratedColumn<String>(
+    'restore_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _appliedAtUtcMeta = const VerificationMeta(
+    'appliedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> appliedAtUtc = GeneratedColumn<int>(
+    'applied_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operationIdMeta = const VerificationMeta(
+    'operationId',
+  );
+  @override
+  late final GeneratedColumn<String> operationId = GeneratedColumn<String>(
+    'operation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sourceId,
+    contentRevision,
+    startUtf8,
+    endUtf8,
+    removedText,
+    insertedText,
+    isUndo,
+    restoreJson,
+    appliedAtUtc,
+    operationId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'source_edits';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SourceEditRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('content_revision')) {
+      context.handle(
+        _contentRevisionMeta,
+        contentRevision.isAcceptableOrUnknown(
+          data['content_revision']!,
+          _contentRevisionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_contentRevisionMeta);
+    }
+    if (data.containsKey('start_utf8')) {
+      context.handle(
+        _startUtf8Meta,
+        startUtf8.isAcceptableOrUnknown(data['start_utf8']!, _startUtf8Meta),
+      );
+    } else if (isInserting) {
+      context.missing(_startUtf8Meta);
+    }
+    if (data.containsKey('end_utf8')) {
+      context.handle(
+        _endUtf8Meta,
+        endUtf8.isAcceptableOrUnknown(data['end_utf8']!, _endUtf8Meta),
+      );
+    } else if (isInserting) {
+      context.missing(_endUtf8Meta);
+    }
+    if (data.containsKey('removed_text')) {
+      context.handle(
+        _removedTextMeta,
+        removedText.isAcceptableOrUnknown(
+          data['removed_text']!,
+          _removedTextMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_removedTextMeta);
+    }
+    if (data.containsKey('inserted_text')) {
+      context.handle(
+        _insertedTextMeta,
+        insertedText.isAcceptableOrUnknown(
+          data['inserted_text']!,
+          _insertedTextMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_insertedTextMeta);
+    }
+    if (data.containsKey('is_undo')) {
+      context.handle(
+        _isUndoMeta,
+        isUndo.isAcceptableOrUnknown(data['is_undo']!, _isUndoMeta),
+      );
+    }
+    if (data.containsKey('restore_json')) {
+      context.handle(
+        _restoreJsonMeta,
+        restoreJson.isAcceptableOrUnknown(
+          data['restore_json']!,
+          _restoreJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('applied_at_utc')) {
+      context.handle(
+        _appliedAtUtcMeta,
+        appliedAtUtc.isAcceptableOrUnknown(
+          data['applied_at_utc']!,
+          _appliedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_appliedAtUtcMeta);
+    }
+    if (data.containsKey('operation_id')) {
+      context.handle(
+        _operationIdMeta,
+        operationId.isAcceptableOrUnknown(
+          data['operation_id']!,
+          _operationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_operationIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SourceEditRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SourceEditRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      )!,
+      contentRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}content_revision'],
+      )!,
+      startUtf8: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}start_utf8'],
+      )!,
+      endUtf8: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}end_utf8'],
+      )!,
+      removedText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}removed_text'],
+      )!,
+      insertedText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}inserted_text'],
+      )!,
+      isUndo: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_undo'],
+      )!,
+      restoreJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}restore_json'],
+      )!,
+      appliedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}applied_at_utc'],
+      )!,
+      operationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation_id'],
+      )!,
+    );
+  }
+
+  @override
+  $SourceEditsTable createAlias(String alias) {
+    return $SourceEditsTable(attachedDatabase, alias);
+  }
+}
+
+class SourceEditRow extends DataClass implements Insertable<SourceEditRow> {
+  final String id;
+  final String sourceId;
+
+  /// The revision this splice produced.
+  final int contentRevision;
+
+  /// First byte replaced.
+  final int startUtf8;
+
+  /// One past the last byte replaced; equal to [startUtf8] for an insertion.
+  final int endUtf8;
+
+  /// Exactly what was removed, so the inverse splice is exact.
+  final String removedText;
+
+  /// Exactly what was inserted, already normalized.
+  final String insertedText;
+
+  /// Whether this edit was itself the undo of an earlier one.
+  final bool isUndo;
+
+  /// JSON of everything this edit displaced, so undo restores it exactly.
+  ///
+  /// Collapsing a position onto the start of an edit destroys where it was;
+  /// no rule can invert that, so the pre-edit values are carried here.
+  final String restoreJson;
+  final int appliedAtUtc;
+  final String operationId;
+  const SourceEditRow({
+    required this.id,
+    required this.sourceId,
+    required this.contentRevision,
+    required this.startUtf8,
+    required this.endUtf8,
+    required this.removedText,
+    required this.insertedText,
+    required this.isUndo,
+    required this.restoreJson,
+    required this.appliedAtUtc,
+    required this.operationId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['source_id'] = Variable<String>(sourceId);
+    map['content_revision'] = Variable<int>(contentRevision);
+    map['start_utf8'] = Variable<int>(startUtf8);
+    map['end_utf8'] = Variable<int>(endUtf8);
+    map['removed_text'] = Variable<String>(removedText);
+    map['inserted_text'] = Variable<String>(insertedText);
+    map['is_undo'] = Variable<bool>(isUndo);
+    map['restore_json'] = Variable<String>(restoreJson);
+    map['applied_at_utc'] = Variable<int>(appliedAtUtc);
+    map['operation_id'] = Variable<String>(operationId);
+    return map;
+  }
+
+  SourceEditsCompanion toCompanion(bool nullToAbsent) {
+    return SourceEditsCompanion(
+      id: Value(id),
+      sourceId: Value(sourceId),
+      contentRevision: Value(contentRevision),
+      startUtf8: Value(startUtf8),
+      endUtf8: Value(endUtf8),
+      removedText: Value(removedText),
+      insertedText: Value(insertedText),
+      isUndo: Value(isUndo),
+      restoreJson: Value(restoreJson),
+      appliedAtUtc: Value(appliedAtUtc),
+      operationId: Value(operationId),
+    );
+  }
+
+  factory SourceEditRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SourceEditRow(
+      id: serializer.fromJson<String>(json['id']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      contentRevision: serializer.fromJson<int>(json['contentRevision']),
+      startUtf8: serializer.fromJson<int>(json['startUtf8']),
+      endUtf8: serializer.fromJson<int>(json['endUtf8']),
+      removedText: serializer.fromJson<String>(json['removedText']),
+      insertedText: serializer.fromJson<String>(json['insertedText']),
+      isUndo: serializer.fromJson<bool>(json['isUndo']),
+      restoreJson: serializer.fromJson<String>(json['restoreJson']),
+      appliedAtUtc: serializer.fromJson<int>(json['appliedAtUtc']),
+      operationId: serializer.fromJson<String>(json['operationId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'contentRevision': serializer.toJson<int>(contentRevision),
+      'startUtf8': serializer.toJson<int>(startUtf8),
+      'endUtf8': serializer.toJson<int>(endUtf8),
+      'removedText': serializer.toJson<String>(removedText),
+      'insertedText': serializer.toJson<String>(insertedText),
+      'isUndo': serializer.toJson<bool>(isUndo),
+      'restoreJson': serializer.toJson<String>(restoreJson),
+      'appliedAtUtc': serializer.toJson<int>(appliedAtUtc),
+      'operationId': serializer.toJson<String>(operationId),
+    };
+  }
+
+  SourceEditRow copyWith({
+    String? id,
+    String? sourceId,
+    int? contentRevision,
+    int? startUtf8,
+    int? endUtf8,
+    String? removedText,
+    String? insertedText,
+    bool? isUndo,
+    String? restoreJson,
+    int? appliedAtUtc,
+    String? operationId,
+  }) => SourceEditRow(
+    id: id ?? this.id,
+    sourceId: sourceId ?? this.sourceId,
+    contentRevision: contentRevision ?? this.contentRevision,
+    startUtf8: startUtf8 ?? this.startUtf8,
+    endUtf8: endUtf8 ?? this.endUtf8,
+    removedText: removedText ?? this.removedText,
+    insertedText: insertedText ?? this.insertedText,
+    isUndo: isUndo ?? this.isUndo,
+    restoreJson: restoreJson ?? this.restoreJson,
+    appliedAtUtc: appliedAtUtc ?? this.appliedAtUtc,
+    operationId: operationId ?? this.operationId,
+  );
+  SourceEditRow copyWithCompanion(SourceEditsCompanion data) {
+    return SourceEditRow(
+      id: data.id.present ? data.id.value : this.id,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      contentRevision: data.contentRevision.present
+          ? data.contentRevision.value
+          : this.contentRevision,
+      startUtf8: data.startUtf8.present ? data.startUtf8.value : this.startUtf8,
+      endUtf8: data.endUtf8.present ? data.endUtf8.value : this.endUtf8,
+      removedText: data.removedText.present
+          ? data.removedText.value
+          : this.removedText,
+      insertedText: data.insertedText.present
+          ? data.insertedText.value
+          : this.insertedText,
+      isUndo: data.isUndo.present ? data.isUndo.value : this.isUndo,
+      restoreJson: data.restoreJson.present
+          ? data.restoreJson.value
+          : this.restoreJson,
+      appliedAtUtc: data.appliedAtUtc.present
+          ? data.appliedAtUtc.value
+          : this.appliedAtUtc,
+      operationId: data.operationId.present
+          ? data.operationId.value
+          : this.operationId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SourceEditRow(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('contentRevision: $contentRevision, ')
+          ..write('startUtf8: $startUtf8, ')
+          ..write('endUtf8: $endUtf8, ')
+          ..write('removedText: $removedText, ')
+          ..write('insertedText: $insertedText, ')
+          ..write('isUndo: $isUndo, ')
+          ..write('restoreJson: $restoreJson, ')
+          ..write('appliedAtUtc: $appliedAtUtc, ')
+          ..write('operationId: $operationId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    sourceId,
+    contentRevision,
+    startUtf8,
+    endUtf8,
+    removedText,
+    insertedText,
+    isUndo,
+    restoreJson,
+    appliedAtUtc,
+    operationId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SourceEditRow &&
+          other.id == this.id &&
+          other.sourceId == this.sourceId &&
+          other.contentRevision == this.contentRevision &&
+          other.startUtf8 == this.startUtf8 &&
+          other.endUtf8 == this.endUtf8 &&
+          other.removedText == this.removedText &&
+          other.insertedText == this.insertedText &&
+          other.isUndo == this.isUndo &&
+          other.restoreJson == this.restoreJson &&
+          other.appliedAtUtc == this.appliedAtUtc &&
+          other.operationId == this.operationId);
+}
+
+class SourceEditsCompanion extends UpdateCompanion<SourceEditRow> {
+  final Value<String> id;
+  final Value<String> sourceId;
+  final Value<int> contentRevision;
+  final Value<int> startUtf8;
+  final Value<int> endUtf8;
+  final Value<String> removedText;
+  final Value<String> insertedText;
+  final Value<bool> isUndo;
+  final Value<String> restoreJson;
+  final Value<int> appliedAtUtc;
+  final Value<String> operationId;
+  final Value<int> rowid;
+  const SourceEditsCompanion({
+    this.id = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.contentRevision = const Value.absent(),
+    this.startUtf8 = const Value.absent(),
+    this.endUtf8 = const Value.absent(),
+    this.removedText = const Value.absent(),
+    this.insertedText = const Value.absent(),
+    this.isUndo = const Value.absent(),
+    this.restoreJson = const Value.absent(),
+    this.appliedAtUtc = const Value.absent(),
+    this.operationId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SourceEditsCompanion.insert({
+    required String id,
+    required String sourceId,
+    required int contentRevision,
+    required int startUtf8,
+    required int endUtf8,
+    required String removedText,
+    required String insertedText,
+    this.isUndo = const Value.absent(),
+    this.restoreJson = const Value.absent(),
+    required int appliedAtUtc,
+    required String operationId,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       sourceId = Value(sourceId),
+       contentRevision = Value(contentRevision),
+       startUtf8 = Value(startUtf8),
+       endUtf8 = Value(endUtf8),
+       removedText = Value(removedText),
+       insertedText = Value(insertedText),
+       appliedAtUtc = Value(appliedAtUtc),
+       operationId = Value(operationId);
+  static Insertable<SourceEditRow> custom({
+    Expression<String>? id,
+    Expression<String>? sourceId,
+    Expression<int>? contentRevision,
+    Expression<int>? startUtf8,
+    Expression<int>? endUtf8,
+    Expression<String>? removedText,
+    Expression<String>? insertedText,
+    Expression<bool>? isUndo,
+    Expression<String>? restoreJson,
+    Expression<int>? appliedAtUtc,
+    Expression<String>? operationId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sourceId != null) 'source_id': sourceId,
+      if (contentRevision != null) 'content_revision': contentRevision,
+      if (startUtf8 != null) 'start_utf8': startUtf8,
+      if (endUtf8 != null) 'end_utf8': endUtf8,
+      if (removedText != null) 'removed_text': removedText,
+      if (insertedText != null) 'inserted_text': insertedText,
+      if (isUndo != null) 'is_undo': isUndo,
+      if (restoreJson != null) 'restore_json': restoreJson,
+      if (appliedAtUtc != null) 'applied_at_utc': appliedAtUtc,
+      if (operationId != null) 'operation_id': operationId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SourceEditsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? sourceId,
+    Value<int>? contentRevision,
+    Value<int>? startUtf8,
+    Value<int>? endUtf8,
+    Value<String>? removedText,
+    Value<String>? insertedText,
+    Value<bool>? isUndo,
+    Value<String>? restoreJson,
+    Value<int>? appliedAtUtc,
+    Value<String>? operationId,
+    Value<int>? rowid,
+  }) {
+    return SourceEditsCompanion(
+      id: id ?? this.id,
+      sourceId: sourceId ?? this.sourceId,
+      contentRevision: contentRevision ?? this.contentRevision,
+      startUtf8: startUtf8 ?? this.startUtf8,
+      endUtf8: endUtf8 ?? this.endUtf8,
+      removedText: removedText ?? this.removedText,
+      insertedText: insertedText ?? this.insertedText,
+      isUndo: isUndo ?? this.isUndo,
+      restoreJson: restoreJson ?? this.restoreJson,
+      appliedAtUtc: appliedAtUtc ?? this.appliedAtUtc,
+      operationId: operationId ?? this.operationId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (contentRevision.present) {
+      map['content_revision'] = Variable<int>(contentRevision.value);
+    }
+    if (startUtf8.present) {
+      map['start_utf8'] = Variable<int>(startUtf8.value);
+    }
+    if (endUtf8.present) {
+      map['end_utf8'] = Variable<int>(endUtf8.value);
+    }
+    if (removedText.present) {
+      map['removed_text'] = Variable<String>(removedText.value);
+    }
+    if (insertedText.present) {
+      map['inserted_text'] = Variable<String>(insertedText.value);
+    }
+    if (isUndo.present) {
+      map['is_undo'] = Variable<bool>(isUndo.value);
+    }
+    if (restoreJson.present) {
+      map['restore_json'] = Variable<String>(restoreJson.value);
+    }
+    if (appliedAtUtc.present) {
+      map['applied_at_utc'] = Variable<int>(appliedAtUtc.value);
+    }
+    if (operationId.present) {
+      map['operation_id'] = Variable<String>(operationId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SourceEditsCompanion(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('contentRevision: $contentRevision, ')
+          ..write('startUtf8: $startUtf8, ')
+          ..write('endUtf8: $endUtf8, ')
+          ..write('removedText: $removedText, ')
+          ..write('insertedText: $insertedText, ')
+          ..write('isUndo: $isUndo, ')
+          ..write('restoreJson: $restoreJson, ')
+          ..write('appliedAtUtc: $appliedAtUtc, ')
+          ..write('operationId: $operationId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1640,49 +2396,52 @@ class $ExtractsTable extends Extracts
       'CHECK ("parent_is_source" IN (0, 1))',
     ),
   );
-  static const VerificationMeta _startBlockIdMeta = const VerificationMeta(
-    'startBlockId',
+  static const VerificationMeta _startUtf8Meta = const VerificationMeta(
+    'startUtf8',
   );
   @override
-  late final GeneratedColumn<String> startBlockId = GeneratedColumn<String>(
-    'start_block_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _startOffsetMeta = const VerificationMeta(
-    'startOffset',
-  );
-  @override
-  late final GeneratedColumn<int> startOffset = GeneratedColumn<int>(
-    'start_offset',
+  late final GeneratedColumn<int> startUtf8 = GeneratedColumn<int>(
+    'start_utf8',
     aliasedName,
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _endBlockIdMeta = const VerificationMeta(
-    'endBlockId',
+  static const VerificationMeta _endUtf8Meta = const VerificationMeta(
+    'endUtf8',
   );
   @override
-  late final GeneratedColumn<String> endBlockId = GeneratedColumn<String>(
-    'end_block_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _endOffsetMeta = const VerificationMeta(
-    'endOffset',
-  );
-  @override
-  late final GeneratedColumn<int> endOffset = GeneratedColumn<int>(
-    'end_offset',
+  late final GeneratedColumn<int> endUtf8 = GeneratedColumn<int>(
+    'end_utf8',
     aliasedName,
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _anchorRevisionMeta = const VerificationMeta(
+    'anchorRevision',
+  );
+  @override
+  late final GeneratedColumn<int> anchorRevision = GeneratedColumn<int>(
+    'anchor_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _provenanceStateMeta = const VerificationMeta(
+    'provenanceState',
+  );
+  @override
+  late final GeneratedColumn<int> provenanceState = GeneratedColumn<int>(
+    'provenance_state',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(provenanceState).isBetweenValues(0, 2),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
   );
   static const VerificationMeta _selectedTextHashMeta = const VerificationMeta(
     'selectedTextHash',
@@ -1721,6 +2480,18 @@ class $ExtractsTable extends Extracts
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _contentRevisionMeta = const VerificationMeta(
+    'contentRevision',
+  );
+  @override
+  late final GeneratedColumn<int> contentRevision = GeneratedColumn<int>(
+    'content_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1728,13 +2499,14 @@ class $ExtractsTable extends Extracts
     sourceId,
     parentId,
     parentIsSource,
-    startBlockId,
-    startOffset,
-    endBlockId,
-    endOffset,
+    startUtf8,
+    endUtf8,
+    anchorRevision,
+    provenanceState,
     selectedTextHash,
     createdAtUtc,
     editedAtUtc,
+    contentRevision,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1788,46 +2560,39 @@ class $ExtractsTable extends Extracts
     } else if (isInserting) {
       context.missing(_parentIsSourceMeta);
     }
-    if (data.containsKey('start_block_id')) {
+    if (data.containsKey('start_utf8')) {
       context.handle(
-        _startBlockIdMeta,
-        startBlockId.isAcceptableOrUnknown(
-          data['start_block_id']!,
-          _startBlockIdMeta,
+        _startUtf8Meta,
+        startUtf8.isAcceptableOrUnknown(data['start_utf8']!, _startUtf8Meta),
+      );
+    } else if (isInserting) {
+      context.missing(_startUtf8Meta);
+    }
+    if (data.containsKey('end_utf8')) {
+      context.handle(
+        _endUtf8Meta,
+        endUtf8.isAcceptableOrUnknown(data['end_utf8']!, _endUtf8Meta),
+      );
+    } else if (isInserting) {
+      context.missing(_endUtf8Meta);
+    }
+    if (data.containsKey('anchor_revision')) {
+      context.handle(
+        _anchorRevisionMeta,
+        anchorRevision.isAcceptableOrUnknown(
+          data['anchor_revision']!,
+          _anchorRevisionMeta,
         ),
       );
-    } else if (isInserting) {
-      context.missing(_startBlockIdMeta);
     }
-    if (data.containsKey('start_offset')) {
+    if (data.containsKey('provenance_state')) {
       context.handle(
-        _startOffsetMeta,
-        startOffset.isAcceptableOrUnknown(
-          data['start_offset']!,
-          _startOffsetMeta,
+        _provenanceStateMeta,
+        provenanceState.isAcceptableOrUnknown(
+          data['provenance_state']!,
+          _provenanceStateMeta,
         ),
       );
-    } else if (isInserting) {
-      context.missing(_startOffsetMeta);
-    }
-    if (data.containsKey('end_block_id')) {
-      context.handle(
-        _endBlockIdMeta,
-        endBlockId.isAcceptableOrUnknown(
-          data['end_block_id']!,
-          _endBlockIdMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_endBlockIdMeta);
-    }
-    if (data.containsKey('end_offset')) {
-      context.handle(
-        _endOffsetMeta,
-        endOffset.isAcceptableOrUnknown(data['end_offset']!, _endOffsetMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_endOffsetMeta);
     }
     if (data.containsKey('selected_text_hash')) {
       context.handle(
@@ -1860,6 +2625,15 @@ class $ExtractsTable extends Extracts
         ),
       );
     }
+    if (data.containsKey('content_revision')) {
+      context.handle(
+        _contentRevisionMeta,
+        contentRevision.isAcceptableOrUnknown(
+          data['content_revision']!,
+          _contentRevisionMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1889,21 +2663,21 @@ class $ExtractsTable extends Extracts
         DriftSqlType.bool,
         data['${effectivePrefix}parent_is_source'],
       )!,
-      startBlockId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}start_block_id'],
-      )!,
-      startOffset: attachedDatabase.typeMapping.read(
+      startUtf8: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}start_offset'],
+        data['${effectivePrefix}start_utf8'],
       )!,
-      endBlockId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}end_block_id'],
-      )!,
-      endOffset: attachedDatabase.typeMapping.read(
+      endUtf8: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}end_offset'],
+        data['${effectivePrefix}end_utf8'],
+      )!,
+      anchorRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}anchor_revision'],
+      )!,
+      provenanceState: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}provenance_state'],
       )!,
       selectedTextHash: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -1917,6 +2691,10 @@ class $ExtractsTable extends Extracts
         DriftSqlType.int,
         data['${effectivePrefix}edited_at_utc'],
       ),
+      contentRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}content_revision'],
+      )!,
     );
   }
 
@@ -1936,26 +2714,40 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
   /// Immediate parent: a source or another extract.
   final String parentId;
   final bool parentIsSource;
-  final String startBlockId;
-  final int startOffset;
-  final String endBlockId;
-  final int endOffset;
+
+  /// Byte range of the parent's markdown this passage was taken from.
+  final int startUtf8;
+  final int endUtf8;
+
+  /// Parent revision the range was recorded against.
+  final int anchorRevision;
+
+  /// How much of the link back still holds: 0 verbatim, 1 stale, 2 orphaned.
+  ///
+  /// Never cleared by a migration. A range whose text was edited away is
+  /// reported, not re-found: searching for the passage again picks the wrong
+  /// occurrence whenever a phrase repeats, and does it silently.
+  final int provenanceState;
   final String selectedTextHash;
   final int createdAtUtc;
   final int? editedAtUtc;
+
+  /// Version of this extract's own [markdown], for extracts with children.
+  final int contentRevision;
   const ExtractRow({
     required this.id,
     required this.markdown,
     required this.sourceId,
     required this.parentId,
     required this.parentIsSource,
-    required this.startBlockId,
-    required this.startOffset,
-    required this.endBlockId,
-    required this.endOffset,
+    required this.startUtf8,
+    required this.endUtf8,
+    required this.anchorRevision,
+    required this.provenanceState,
     required this.selectedTextHash,
     required this.createdAtUtc,
     this.editedAtUtc,
+    required this.contentRevision,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1965,15 +2757,16 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
     map['source_id'] = Variable<String>(sourceId);
     map['parent_id'] = Variable<String>(parentId);
     map['parent_is_source'] = Variable<bool>(parentIsSource);
-    map['start_block_id'] = Variable<String>(startBlockId);
-    map['start_offset'] = Variable<int>(startOffset);
-    map['end_block_id'] = Variable<String>(endBlockId);
-    map['end_offset'] = Variable<int>(endOffset);
+    map['start_utf8'] = Variable<int>(startUtf8);
+    map['end_utf8'] = Variable<int>(endUtf8);
+    map['anchor_revision'] = Variable<int>(anchorRevision);
+    map['provenance_state'] = Variable<int>(provenanceState);
     map['selected_text_hash'] = Variable<String>(selectedTextHash);
     map['created_at_utc'] = Variable<int>(createdAtUtc);
     if (!nullToAbsent || editedAtUtc != null) {
       map['edited_at_utc'] = Variable<int>(editedAtUtc);
     }
+    map['content_revision'] = Variable<int>(contentRevision);
     return map;
   }
 
@@ -1984,15 +2777,16 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
       sourceId: Value(sourceId),
       parentId: Value(parentId),
       parentIsSource: Value(parentIsSource),
-      startBlockId: Value(startBlockId),
-      startOffset: Value(startOffset),
-      endBlockId: Value(endBlockId),
-      endOffset: Value(endOffset),
+      startUtf8: Value(startUtf8),
+      endUtf8: Value(endUtf8),
+      anchorRevision: Value(anchorRevision),
+      provenanceState: Value(provenanceState),
       selectedTextHash: Value(selectedTextHash),
       createdAtUtc: Value(createdAtUtc),
       editedAtUtc: editedAtUtc == null && nullToAbsent
           ? const Value.absent()
           : Value(editedAtUtc),
+      contentRevision: Value(contentRevision),
     );
   }
 
@@ -2007,13 +2801,14 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
       sourceId: serializer.fromJson<String>(json['sourceId']),
       parentId: serializer.fromJson<String>(json['parentId']),
       parentIsSource: serializer.fromJson<bool>(json['parentIsSource']),
-      startBlockId: serializer.fromJson<String>(json['startBlockId']),
-      startOffset: serializer.fromJson<int>(json['startOffset']),
-      endBlockId: serializer.fromJson<String>(json['endBlockId']),
-      endOffset: serializer.fromJson<int>(json['endOffset']),
+      startUtf8: serializer.fromJson<int>(json['startUtf8']),
+      endUtf8: serializer.fromJson<int>(json['endUtf8']),
+      anchorRevision: serializer.fromJson<int>(json['anchorRevision']),
+      provenanceState: serializer.fromJson<int>(json['provenanceState']),
       selectedTextHash: serializer.fromJson<String>(json['selectedTextHash']),
       createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
       editedAtUtc: serializer.fromJson<int?>(json['editedAtUtc']),
+      contentRevision: serializer.fromJson<int>(json['contentRevision']),
     );
   }
   @override
@@ -2025,13 +2820,14 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
       'sourceId': serializer.toJson<String>(sourceId),
       'parentId': serializer.toJson<String>(parentId),
       'parentIsSource': serializer.toJson<bool>(parentIsSource),
-      'startBlockId': serializer.toJson<String>(startBlockId),
-      'startOffset': serializer.toJson<int>(startOffset),
-      'endBlockId': serializer.toJson<String>(endBlockId),
-      'endOffset': serializer.toJson<int>(endOffset),
+      'startUtf8': serializer.toJson<int>(startUtf8),
+      'endUtf8': serializer.toJson<int>(endUtf8),
+      'anchorRevision': serializer.toJson<int>(anchorRevision),
+      'provenanceState': serializer.toJson<int>(provenanceState),
       'selectedTextHash': serializer.toJson<String>(selectedTextHash),
       'createdAtUtc': serializer.toJson<int>(createdAtUtc),
       'editedAtUtc': serializer.toJson<int?>(editedAtUtc),
+      'contentRevision': serializer.toJson<int>(contentRevision),
     };
   }
 
@@ -2041,26 +2837,28 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
     String? sourceId,
     String? parentId,
     bool? parentIsSource,
-    String? startBlockId,
-    int? startOffset,
-    String? endBlockId,
-    int? endOffset,
+    int? startUtf8,
+    int? endUtf8,
+    int? anchorRevision,
+    int? provenanceState,
     String? selectedTextHash,
     int? createdAtUtc,
     Value<int?> editedAtUtc = const Value.absent(),
+    int? contentRevision,
   }) => ExtractRow(
     id: id ?? this.id,
     markdown: markdown ?? this.markdown,
     sourceId: sourceId ?? this.sourceId,
     parentId: parentId ?? this.parentId,
     parentIsSource: parentIsSource ?? this.parentIsSource,
-    startBlockId: startBlockId ?? this.startBlockId,
-    startOffset: startOffset ?? this.startOffset,
-    endBlockId: endBlockId ?? this.endBlockId,
-    endOffset: endOffset ?? this.endOffset,
+    startUtf8: startUtf8 ?? this.startUtf8,
+    endUtf8: endUtf8 ?? this.endUtf8,
+    anchorRevision: anchorRevision ?? this.anchorRevision,
+    provenanceState: provenanceState ?? this.provenanceState,
     selectedTextHash: selectedTextHash ?? this.selectedTextHash,
     createdAtUtc: createdAtUtc ?? this.createdAtUtc,
     editedAtUtc: editedAtUtc.present ? editedAtUtc.value : this.editedAtUtc,
+    contentRevision: contentRevision ?? this.contentRevision,
   );
   ExtractRow copyWithCompanion(ExtractsCompanion data) {
     return ExtractRow(
@@ -2071,16 +2869,14 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
       parentIsSource: data.parentIsSource.present
           ? data.parentIsSource.value
           : this.parentIsSource,
-      startBlockId: data.startBlockId.present
-          ? data.startBlockId.value
-          : this.startBlockId,
-      startOffset: data.startOffset.present
-          ? data.startOffset.value
-          : this.startOffset,
-      endBlockId: data.endBlockId.present
-          ? data.endBlockId.value
-          : this.endBlockId,
-      endOffset: data.endOffset.present ? data.endOffset.value : this.endOffset,
+      startUtf8: data.startUtf8.present ? data.startUtf8.value : this.startUtf8,
+      endUtf8: data.endUtf8.present ? data.endUtf8.value : this.endUtf8,
+      anchorRevision: data.anchorRevision.present
+          ? data.anchorRevision.value
+          : this.anchorRevision,
+      provenanceState: data.provenanceState.present
+          ? data.provenanceState.value
+          : this.provenanceState,
       selectedTextHash: data.selectedTextHash.present
           ? data.selectedTextHash.value
           : this.selectedTextHash,
@@ -2090,6 +2886,9 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
       editedAtUtc: data.editedAtUtc.present
           ? data.editedAtUtc.value
           : this.editedAtUtc,
+      contentRevision: data.contentRevision.present
+          ? data.contentRevision.value
+          : this.contentRevision,
     );
   }
 
@@ -2101,13 +2900,14 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
           ..write('sourceId: $sourceId, ')
           ..write('parentId: $parentId, ')
           ..write('parentIsSource: $parentIsSource, ')
-          ..write('startBlockId: $startBlockId, ')
-          ..write('startOffset: $startOffset, ')
-          ..write('endBlockId: $endBlockId, ')
-          ..write('endOffset: $endOffset, ')
+          ..write('startUtf8: $startUtf8, ')
+          ..write('endUtf8: $endUtf8, ')
+          ..write('anchorRevision: $anchorRevision, ')
+          ..write('provenanceState: $provenanceState, ')
           ..write('selectedTextHash: $selectedTextHash, ')
           ..write('createdAtUtc: $createdAtUtc, ')
-          ..write('editedAtUtc: $editedAtUtc')
+          ..write('editedAtUtc: $editedAtUtc, ')
+          ..write('contentRevision: $contentRevision')
           ..write(')'))
         .toString();
   }
@@ -2119,13 +2919,14 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
     sourceId,
     parentId,
     parentIsSource,
-    startBlockId,
-    startOffset,
-    endBlockId,
-    endOffset,
+    startUtf8,
+    endUtf8,
+    anchorRevision,
+    provenanceState,
     selectedTextHash,
     createdAtUtc,
     editedAtUtc,
+    contentRevision,
   );
   @override
   bool operator ==(Object other) =>
@@ -2136,13 +2937,14 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
           other.sourceId == this.sourceId &&
           other.parentId == this.parentId &&
           other.parentIsSource == this.parentIsSource &&
-          other.startBlockId == this.startBlockId &&
-          other.startOffset == this.startOffset &&
-          other.endBlockId == this.endBlockId &&
-          other.endOffset == this.endOffset &&
+          other.startUtf8 == this.startUtf8 &&
+          other.endUtf8 == this.endUtf8 &&
+          other.anchorRevision == this.anchorRevision &&
+          other.provenanceState == this.provenanceState &&
           other.selectedTextHash == this.selectedTextHash &&
           other.createdAtUtc == this.createdAtUtc &&
-          other.editedAtUtc == this.editedAtUtc);
+          other.editedAtUtc == this.editedAtUtc &&
+          other.contentRevision == this.contentRevision);
 }
 
 class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
@@ -2151,13 +2953,14 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
   final Value<String> sourceId;
   final Value<String> parentId;
   final Value<bool> parentIsSource;
-  final Value<String> startBlockId;
-  final Value<int> startOffset;
-  final Value<String> endBlockId;
-  final Value<int> endOffset;
+  final Value<int> startUtf8;
+  final Value<int> endUtf8;
+  final Value<int> anchorRevision;
+  final Value<int> provenanceState;
   final Value<String> selectedTextHash;
   final Value<int> createdAtUtc;
   final Value<int?> editedAtUtc;
+  final Value<int> contentRevision;
   final Value<int> rowid;
   const ExtractsCompanion({
     this.id = const Value.absent(),
@@ -2165,13 +2968,14 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
     this.sourceId = const Value.absent(),
     this.parentId = const Value.absent(),
     this.parentIsSource = const Value.absent(),
-    this.startBlockId = const Value.absent(),
-    this.startOffset = const Value.absent(),
-    this.endBlockId = const Value.absent(),
-    this.endOffset = const Value.absent(),
+    this.startUtf8 = const Value.absent(),
+    this.endUtf8 = const Value.absent(),
+    this.anchorRevision = const Value.absent(),
+    this.provenanceState = const Value.absent(),
     this.selectedTextHash = const Value.absent(),
     this.createdAtUtc = const Value.absent(),
     this.editedAtUtc = const Value.absent(),
+    this.contentRevision = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ExtractsCompanion.insert({
@@ -2180,23 +2984,22 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
     required String sourceId,
     required String parentId,
     required bool parentIsSource,
-    required String startBlockId,
-    required int startOffset,
-    required String endBlockId,
-    required int endOffset,
+    required int startUtf8,
+    required int endUtf8,
+    this.anchorRevision = const Value.absent(),
+    this.provenanceState = const Value.absent(),
     required String selectedTextHash,
     required int createdAtUtc,
     this.editedAtUtc = const Value.absent(),
+    this.contentRevision = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        markdown = Value(markdown),
        sourceId = Value(sourceId),
        parentId = Value(parentId),
        parentIsSource = Value(parentIsSource),
-       startBlockId = Value(startBlockId),
-       startOffset = Value(startOffset),
-       endBlockId = Value(endBlockId),
-       endOffset = Value(endOffset),
+       startUtf8 = Value(startUtf8),
+       endUtf8 = Value(endUtf8),
        selectedTextHash = Value(selectedTextHash),
        createdAtUtc = Value(createdAtUtc);
   static Insertable<ExtractRow> custom({
@@ -2205,13 +3008,14 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
     Expression<String>? sourceId,
     Expression<String>? parentId,
     Expression<bool>? parentIsSource,
-    Expression<String>? startBlockId,
-    Expression<int>? startOffset,
-    Expression<String>? endBlockId,
-    Expression<int>? endOffset,
+    Expression<int>? startUtf8,
+    Expression<int>? endUtf8,
+    Expression<int>? anchorRevision,
+    Expression<int>? provenanceState,
     Expression<String>? selectedTextHash,
     Expression<int>? createdAtUtc,
     Expression<int>? editedAtUtc,
+    Expression<int>? contentRevision,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2220,13 +3024,14 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
       if (sourceId != null) 'source_id': sourceId,
       if (parentId != null) 'parent_id': parentId,
       if (parentIsSource != null) 'parent_is_source': parentIsSource,
-      if (startBlockId != null) 'start_block_id': startBlockId,
-      if (startOffset != null) 'start_offset': startOffset,
-      if (endBlockId != null) 'end_block_id': endBlockId,
-      if (endOffset != null) 'end_offset': endOffset,
+      if (startUtf8 != null) 'start_utf8': startUtf8,
+      if (endUtf8 != null) 'end_utf8': endUtf8,
+      if (anchorRevision != null) 'anchor_revision': anchorRevision,
+      if (provenanceState != null) 'provenance_state': provenanceState,
       if (selectedTextHash != null) 'selected_text_hash': selectedTextHash,
       if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
       if (editedAtUtc != null) 'edited_at_utc': editedAtUtc,
+      if (contentRevision != null) 'content_revision': contentRevision,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2237,13 +3042,14 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
     Value<String>? sourceId,
     Value<String>? parentId,
     Value<bool>? parentIsSource,
-    Value<String>? startBlockId,
-    Value<int>? startOffset,
-    Value<String>? endBlockId,
-    Value<int>? endOffset,
+    Value<int>? startUtf8,
+    Value<int>? endUtf8,
+    Value<int>? anchorRevision,
+    Value<int>? provenanceState,
     Value<String>? selectedTextHash,
     Value<int>? createdAtUtc,
     Value<int?>? editedAtUtc,
+    Value<int>? contentRevision,
     Value<int>? rowid,
   }) {
     return ExtractsCompanion(
@@ -2252,13 +3058,14 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
       sourceId: sourceId ?? this.sourceId,
       parentId: parentId ?? this.parentId,
       parentIsSource: parentIsSource ?? this.parentIsSource,
-      startBlockId: startBlockId ?? this.startBlockId,
-      startOffset: startOffset ?? this.startOffset,
-      endBlockId: endBlockId ?? this.endBlockId,
-      endOffset: endOffset ?? this.endOffset,
+      startUtf8: startUtf8 ?? this.startUtf8,
+      endUtf8: endUtf8 ?? this.endUtf8,
+      anchorRevision: anchorRevision ?? this.anchorRevision,
+      provenanceState: provenanceState ?? this.provenanceState,
       selectedTextHash: selectedTextHash ?? this.selectedTextHash,
       createdAtUtc: createdAtUtc ?? this.createdAtUtc,
       editedAtUtc: editedAtUtc ?? this.editedAtUtc,
+      contentRevision: contentRevision ?? this.contentRevision,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2281,17 +3088,17 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
     if (parentIsSource.present) {
       map['parent_is_source'] = Variable<bool>(parentIsSource.value);
     }
-    if (startBlockId.present) {
-      map['start_block_id'] = Variable<String>(startBlockId.value);
+    if (startUtf8.present) {
+      map['start_utf8'] = Variable<int>(startUtf8.value);
     }
-    if (startOffset.present) {
-      map['start_offset'] = Variable<int>(startOffset.value);
+    if (endUtf8.present) {
+      map['end_utf8'] = Variable<int>(endUtf8.value);
     }
-    if (endBlockId.present) {
-      map['end_block_id'] = Variable<String>(endBlockId.value);
+    if (anchorRevision.present) {
+      map['anchor_revision'] = Variable<int>(anchorRevision.value);
     }
-    if (endOffset.present) {
-      map['end_offset'] = Variable<int>(endOffset.value);
+    if (provenanceState.present) {
+      map['provenance_state'] = Variable<int>(provenanceState.value);
     }
     if (selectedTextHash.present) {
       map['selected_text_hash'] = Variable<String>(selectedTextHash.value);
@@ -2301,6 +3108,9 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
     }
     if (editedAtUtc.present) {
       map['edited_at_utc'] = Variable<int>(editedAtUtc.value);
+    }
+    if (contentRevision.present) {
+      map['content_revision'] = Variable<int>(contentRevision.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -2316,13 +3126,14 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
           ..write('sourceId: $sourceId, ')
           ..write('parentId: $parentId, ')
           ..write('parentIsSource: $parentIsSource, ')
-          ..write('startBlockId: $startBlockId, ')
-          ..write('startOffset: $startOffset, ')
-          ..write('endBlockId: $endBlockId, ')
-          ..write('endOffset: $endOffset, ')
+          ..write('startUtf8: $startUtf8, ')
+          ..write('endUtf8: $endUtf8, ')
+          ..write('anchorRevision: $anchorRevision, ')
+          ..write('provenanceState: $provenanceState, ')
           ..write('selectedTextHash: $selectedTextHash, ')
           ..write('createdAtUtc: $createdAtUtc, ')
           ..write('editedAtUtc: $editedAtUtc, ')
+          ..write('contentRevision: $contentRevision, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -11841,6 +12652,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $SourcesTable sources = $SourcesTable(this);
+  late final $SourceEditsTable sourceEdits = $SourceEditsTable(this);
   late final $BlocksTable blocks = $BlocksTable(this);
   late final $ExtractsTable extracts = $ExtractsTable(this);
   late final $CardsTable cards = $CardsTable(this);
@@ -11867,6 +12679,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     sources,
+    sourceEdits,
     blocks,
     extracts,
     cards,
@@ -11889,6 +12702,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         'sources',
         limitUpdateKind: UpdateKind.delete,
       ),
+      result: [TableUpdate('source_edits', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'sources',
+        limitUpdateKind: UpdateKind.delete,
+      ),
       result: [TableUpdate('blocks', kind: UpdateKind.delete)],
     ),
   ]);
@@ -11902,10 +12722,11 @@ typedef $$SourcesTableCreateCompanionBuilder =
       required String contentHash,
       required int wordCount,
       required int importedAtUtc,
-      Value<String?> markerBlockId,
-      Value<int?> markerOffset,
-      Value<String?> softBlockId,
-      Value<int?> softOffset,
+      Value<int> contentRevision,
+      Value<int?> markerUtf8,
+      Value<int?> markerRevision,
+      Value<int?> softUtf8,
+      Value<int?> softRevision,
       Value<int> revision,
       Value<int> rowid,
     });
@@ -11917,10 +12738,11 @@ typedef $$SourcesTableUpdateCompanionBuilder =
       Value<String> contentHash,
       Value<int> wordCount,
       Value<int> importedAtUtc,
-      Value<String?> markerBlockId,
-      Value<int?> markerOffset,
-      Value<String?> softBlockId,
-      Value<int?> softOffset,
+      Value<int> contentRevision,
+      Value<int?> markerUtf8,
+      Value<int?> markerRevision,
+      Value<int?> softUtf8,
+      Value<int?> softRevision,
       Value<int> revision,
       Value<int> rowid,
     });
@@ -11928,6 +12750,24 @@ typedef $$SourcesTableUpdateCompanionBuilder =
 final class $$SourcesTableReferences
     extends BaseReferences<_$AppDatabase, $SourcesTable, SourceRow> {
   $$SourcesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$SourceEditsTable, List<SourceEditRow>>
+  _sourceEditsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.sourceEdits,
+    aliasName: 'sources__id__source_edits__source_id',
+  );
+
+  $$SourceEditsTableProcessedTableManager get sourceEditsRefs {
+    final manager = $$SourceEditsTableTableManager(
+      $_db,
+      $_db.sourceEdits,
+    ).filter((f) => f.sourceId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_sourceEditsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 
   static MultiTypedResultKey<$BlocksTable, List<BlockRow>> _blocksRefsTable(
     _$AppDatabase db,
@@ -12006,23 +12846,28 @@ class $$SourcesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get markerBlockId => $composableBuilder(
-    column: $table.markerBlockId,
+  ColumnFilters<int> get contentRevision => $composableBuilder(
+    column: $table.contentRevision,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get markerOffset => $composableBuilder(
-    column: $table.markerOffset,
+  ColumnFilters<int> get markerUtf8 => $composableBuilder(
+    column: $table.markerUtf8,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get softBlockId => $composableBuilder(
-    column: $table.softBlockId,
+  ColumnFilters<int> get markerRevision => $composableBuilder(
+    column: $table.markerRevision,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get softOffset => $composableBuilder(
-    column: $table.softOffset,
+  ColumnFilters<int> get softUtf8 => $composableBuilder(
+    column: $table.softUtf8,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get softRevision => $composableBuilder(
+    column: $table.softRevision,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12030,6 +12875,31 @@ class $$SourcesTableFilterComposer
     column: $table.revision,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> sourceEditsRefs(
+    Expression<bool> Function($$SourceEditsTableFilterComposer f) f,
+  ) {
+    final $$SourceEditsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.sourceEdits,
+      getReferencedColumn: (t) => t.sourceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SourceEditsTableFilterComposer(
+            $db: $db,
+            $table: $db.sourceEdits,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 
   Expression<bool> blocksRefs(
     Expression<bool> Function($$BlocksTableFilterComposer f) f,
@@ -12121,23 +12991,28 @@ class $$SourcesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get markerBlockId => $composableBuilder(
-    column: $table.markerBlockId,
+  ColumnOrderings<int> get contentRevision => $composableBuilder(
+    column: $table.contentRevision,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get markerOffset => $composableBuilder(
-    column: $table.markerOffset,
+  ColumnOrderings<int> get markerUtf8 => $composableBuilder(
+    column: $table.markerUtf8,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get softBlockId => $composableBuilder(
-    column: $table.softBlockId,
+  ColumnOrderings<int> get markerRevision => $composableBuilder(
+    column: $table.markerRevision,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get softOffset => $composableBuilder(
-    column: $table.softOffset,
+  ColumnOrderings<int> get softUtf8 => $composableBuilder(
+    column: $table.softUtf8,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get softRevision => $composableBuilder(
+    column: $table.softRevision,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -12178,28 +13053,56 @@ class $$SourcesTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get markerBlockId => $composableBuilder(
-    column: $table.markerBlockId,
+  GeneratedColumn<int> get contentRevision => $composableBuilder(
+    column: $table.contentRevision,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get markerOffset => $composableBuilder(
-    column: $table.markerOffset,
+  GeneratedColumn<int> get markerUtf8 => $composableBuilder(
+    column: $table.markerUtf8,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get softBlockId => $composableBuilder(
-    column: $table.softBlockId,
+  GeneratedColumn<int> get markerRevision => $composableBuilder(
+    column: $table.markerRevision,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get softOffset => $composableBuilder(
-    column: $table.softOffset,
+  GeneratedColumn<int> get softUtf8 =>
+      $composableBuilder(column: $table.softUtf8, builder: (column) => column);
+
+  GeneratedColumn<int> get softRevision => $composableBuilder(
+    column: $table.softRevision,
     builder: (column) => column,
   );
 
   GeneratedColumn<int> get revision =>
       $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  Expression<T> sourceEditsRefs<T extends Object>(
+    Expression<T> Function($$SourceEditsTableAnnotationComposer a) f,
+  ) {
+    final $$SourceEditsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.sourceEdits,
+      getReferencedColumn: (t) => t.sourceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SourceEditsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.sourceEdits,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 
   Expression<T> blocksRefs<T extends Object>(
     Expression<T> Function($$BlocksTableAnnotationComposer a) f,
@@ -12265,7 +13168,11 @@ class $$SourcesTableTableManager
           $$SourcesTableUpdateCompanionBuilder,
           (SourceRow, $$SourcesTableReferences),
           SourceRow,
-          PrefetchHooks Function({bool blocksRefs, bool extractsRefs})
+          PrefetchHooks Function({
+            bool sourceEditsRefs,
+            bool blocksRefs,
+            bool extractsRefs,
+          })
         > {
   $$SourcesTableTableManager(_$AppDatabase db, $SourcesTable table)
     : super(
@@ -12286,10 +13193,11 @@ class $$SourcesTableTableManager
                 Value<String> contentHash = const Value.absent(),
                 Value<int> wordCount = const Value.absent(),
                 Value<int> importedAtUtc = const Value.absent(),
-                Value<String?> markerBlockId = const Value.absent(),
-                Value<int?> markerOffset = const Value.absent(),
-                Value<String?> softBlockId = const Value.absent(),
-                Value<int?> softOffset = const Value.absent(),
+                Value<int> contentRevision = const Value.absent(),
+                Value<int?> markerUtf8 = const Value.absent(),
+                Value<int?> markerRevision = const Value.absent(),
+                Value<int?> softUtf8 = const Value.absent(),
+                Value<int?> softRevision = const Value.absent(),
                 Value<int> revision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SourcesCompanion(
@@ -12299,10 +13207,11 @@ class $$SourcesTableTableManager
                 contentHash: contentHash,
                 wordCount: wordCount,
                 importedAtUtc: importedAtUtc,
-                markerBlockId: markerBlockId,
-                markerOffset: markerOffset,
-                softBlockId: softBlockId,
-                softOffset: softOffset,
+                contentRevision: contentRevision,
+                markerUtf8: markerUtf8,
+                markerRevision: markerRevision,
+                softUtf8: softUtf8,
+                softRevision: softRevision,
                 revision: revision,
                 rowid: rowid,
               ),
@@ -12314,10 +13223,11 @@ class $$SourcesTableTableManager
                 required String contentHash,
                 required int wordCount,
                 required int importedAtUtc,
-                Value<String?> markerBlockId = const Value.absent(),
-                Value<int?> markerOffset = const Value.absent(),
-                Value<String?> softBlockId = const Value.absent(),
-                Value<int?> softOffset = const Value.absent(),
+                Value<int> contentRevision = const Value.absent(),
+                Value<int?> markerUtf8 = const Value.absent(),
+                Value<int?> markerRevision = const Value.absent(),
+                Value<int?> softUtf8 = const Value.absent(),
+                Value<int?> softRevision = const Value.absent(),
                 Value<int> revision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SourcesCompanion.insert(
@@ -12327,10 +13237,11 @@ class $$SourcesTableTableManager
                 contentHash: contentHash,
                 wordCount: wordCount,
                 importedAtUtc: importedAtUtc,
-                markerBlockId: markerBlockId,
-                markerOffset: markerOffset,
-                softBlockId: softBlockId,
-                softOffset: softOffset,
+                contentRevision: contentRevision,
+                markerUtf8: markerUtf8,
+                markerRevision: markerRevision,
+                softUtf8: softUtf8,
+                softRevision: softRevision,
                 revision: revision,
                 rowid: rowid,
               ),
@@ -12342,50 +13253,89 @@ class $$SourcesTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({blocksRefs = false, extractsRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [
-                if (blocksRefs) db.blocks,
-                if (extractsRefs) db.extracts,
-              ],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (blocksRefs)
-                    await $_getPrefetchedData<
-                      SourceRow,
-                      $SourcesTable,
-                      BlockRow
-                    >(
-                      currentTable: table,
-                      referencedTable: $$SourcesTableReferences
-                          ._blocksRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$SourcesTableReferences(db, table, p0).blocksRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.sourceId == item.id),
-                      typedResults: items,
-                    ),
-                  if (extractsRefs)
-                    await $_getPrefetchedData<
-                      SourceRow,
-                      $SourcesTable,
-                      ExtractRow
-                    >(
-                      currentTable: table,
-                      referencedTable: $$SourcesTableReferences
-                          ._extractsRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$SourcesTableReferences(db, table, p0).extractsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.sourceId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({
+                sourceEditsRefs = false,
+                blocksRefs = false,
+                extractsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (sourceEditsRefs) db.sourceEdits,
+                    if (blocksRefs) db.blocks,
+                    if (extractsRefs) db.extracts,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (sourceEditsRefs)
+                        await $_getPrefetchedData<
+                          SourceRow,
+                          $SourcesTable,
+                          SourceEditRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$SourcesTableReferences
+                              ._sourceEditsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$SourcesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).sourceEditsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.sourceId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (blocksRefs)
+                        await $_getPrefetchedData<
+                          SourceRow,
+                          $SourcesTable,
+                          BlockRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$SourcesTableReferences
+                              ._blocksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$SourcesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).blocksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.sourceId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (extractsRefs)
+                        await $_getPrefetchedData<
+                          SourceRow,
+                          $SourcesTable,
+                          ExtractRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$SourcesTableReferences
+                              ._extractsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$SourcesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).extractsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.sourceId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -12402,7 +13352,454 @@ typedef $$SourcesTableProcessedTableManager =
       $$SourcesTableUpdateCompanionBuilder,
       (SourceRow, $$SourcesTableReferences),
       SourceRow,
-      PrefetchHooks Function({bool blocksRefs, bool extractsRefs})
+      PrefetchHooks Function({
+        bool sourceEditsRefs,
+        bool blocksRefs,
+        bool extractsRefs,
+      })
+    >;
+typedef $$SourceEditsTableCreateCompanionBuilder =
+    SourceEditsCompanion Function({
+      required String id,
+      required String sourceId,
+      required int contentRevision,
+      required int startUtf8,
+      required int endUtf8,
+      required String removedText,
+      required String insertedText,
+      Value<bool> isUndo,
+      Value<String> restoreJson,
+      required int appliedAtUtc,
+      required String operationId,
+      Value<int> rowid,
+    });
+typedef $$SourceEditsTableUpdateCompanionBuilder =
+    SourceEditsCompanion Function({
+      Value<String> id,
+      Value<String> sourceId,
+      Value<int> contentRevision,
+      Value<int> startUtf8,
+      Value<int> endUtf8,
+      Value<String> removedText,
+      Value<String> insertedText,
+      Value<bool> isUndo,
+      Value<String> restoreJson,
+      Value<int> appliedAtUtc,
+      Value<String> operationId,
+      Value<int> rowid,
+    });
+
+final class $$SourceEditsTableReferences
+    extends BaseReferences<_$AppDatabase, $SourceEditsTable, SourceEditRow> {
+  $$SourceEditsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $SourcesTable _sourceIdTable(_$AppDatabase db) =>
+      db.sources.createAlias('source_edits__source_id__sources__id');
+
+  $$SourcesTableProcessedTableManager get sourceId {
+    final $_column = $_itemColumn<String>('source_id')!;
+
+    final manager = $$SourcesTableTableManager(
+      $_db,
+      $_db.sources,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sourceIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$SourceEditsTableFilterComposer
+    extends Composer<_$AppDatabase, $SourceEditsTable> {
+  $$SourceEditsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get contentRevision => $composableBuilder(
+    column: $table.contentRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get startUtf8 => $composableBuilder(
+    column: $table.startUtf8,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get endUtf8 => $composableBuilder(
+    column: $table.endUtf8,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get removedText => $composableBuilder(
+    column: $table.removedText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get insertedText => $composableBuilder(
+    column: $table.insertedText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isUndo => $composableBuilder(
+    column: $table.isUndo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get restoreJson => $composableBuilder(
+    column: $table.restoreJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get appliedAtUtc => $composableBuilder(
+    column: $table.appliedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$SourcesTableFilterComposer get sourceId {
+    final $$SourcesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceId,
+      referencedTable: $db.sources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SourcesTableFilterComposer(
+            $db: $db,
+            $table: $db.sources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SourceEditsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SourceEditsTable> {
+  $$SourceEditsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get contentRevision => $composableBuilder(
+    column: $table.contentRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get startUtf8 => $composableBuilder(
+    column: $table.startUtf8,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get endUtf8 => $composableBuilder(
+    column: $table.endUtf8,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get removedText => $composableBuilder(
+    column: $table.removedText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get insertedText => $composableBuilder(
+    column: $table.insertedText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isUndo => $composableBuilder(
+    column: $table.isUndo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get restoreJson => $composableBuilder(
+    column: $table.restoreJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get appliedAtUtc => $composableBuilder(
+    column: $table.appliedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$SourcesTableOrderingComposer get sourceId {
+    final $$SourcesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceId,
+      referencedTable: $db.sources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SourcesTableOrderingComposer(
+            $db: $db,
+            $table: $db.sources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SourceEditsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SourceEditsTable> {
+  $$SourceEditsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get contentRevision => $composableBuilder(
+    column: $table.contentRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get startUtf8 =>
+      $composableBuilder(column: $table.startUtf8, builder: (column) => column);
+
+  GeneratedColumn<int> get endUtf8 =>
+      $composableBuilder(column: $table.endUtf8, builder: (column) => column);
+
+  GeneratedColumn<String> get removedText => $composableBuilder(
+    column: $table.removedText,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get insertedText => $composableBuilder(
+    column: $table.insertedText,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isUndo =>
+      $composableBuilder(column: $table.isUndo, builder: (column) => column);
+
+  GeneratedColumn<String> get restoreJson => $composableBuilder(
+    column: $table.restoreJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get appliedAtUtc => $composableBuilder(
+    column: $table.appliedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => column,
+  );
+
+  $$SourcesTableAnnotationComposer get sourceId {
+    final $$SourcesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceId,
+      referencedTable: $db.sources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SourcesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.sources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SourceEditsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SourceEditsTable,
+          SourceEditRow,
+          $$SourceEditsTableFilterComposer,
+          $$SourceEditsTableOrderingComposer,
+          $$SourceEditsTableAnnotationComposer,
+          $$SourceEditsTableCreateCompanionBuilder,
+          $$SourceEditsTableUpdateCompanionBuilder,
+          (SourceEditRow, $$SourceEditsTableReferences),
+          SourceEditRow,
+          PrefetchHooks Function({bool sourceId})
+        > {
+  $$SourceEditsTableTableManager(_$AppDatabase db, $SourceEditsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SourceEditsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SourceEditsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SourceEditsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<int> contentRevision = const Value.absent(),
+                Value<int> startUtf8 = const Value.absent(),
+                Value<int> endUtf8 = const Value.absent(),
+                Value<String> removedText = const Value.absent(),
+                Value<String> insertedText = const Value.absent(),
+                Value<bool> isUndo = const Value.absent(),
+                Value<String> restoreJson = const Value.absent(),
+                Value<int> appliedAtUtc = const Value.absent(),
+                Value<String> operationId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SourceEditsCompanion(
+                id: id,
+                sourceId: sourceId,
+                contentRevision: contentRevision,
+                startUtf8: startUtf8,
+                endUtf8: endUtf8,
+                removedText: removedText,
+                insertedText: insertedText,
+                isUndo: isUndo,
+                restoreJson: restoreJson,
+                appliedAtUtc: appliedAtUtc,
+                operationId: operationId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String sourceId,
+                required int contentRevision,
+                required int startUtf8,
+                required int endUtf8,
+                required String removedText,
+                required String insertedText,
+                Value<bool> isUndo = const Value.absent(),
+                Value<String> restoreJson = const Value.absent(),
+                required int appliedAtUtc,
+                required String operationId,
+                Value<int> rowid = const Value.absent(),
+              }) => SourceEditsCompanion.insert(
+                id: id,
+                sourceId: sourceId,
+                contentRevision: contentRevision,
+                startUtf8: startUtf8,
+                endUtf8: endUtf8,
+                removedText: removedText,
+                insertedText: insertedText,
+                isUndo: isUndo,
+                restoreJson: restoreJson,
+                appliedAtUtc: appliedAtUtc,
+                operationId: operationId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$SourceEditsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({sourceId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (sourceId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.sourceId,
+                                referencedTable: $$SourceEditsTableReferences
+                                    ._sourceIdTable(db),
+                                referencedColumn: $$SourceEditsTableReferences
+                                    ._sourceIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$SourceEditsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SourceEditsTable,
+      SourceEditRow,
+      $$SourceEditsTableFilterComposer,
+      $$SourceEditsTableOrderingComposer,
+      $$SourceEditsTableAnnotationComposer,
+      $$SourceEditsTableCreateCompanionBuilder,
+      $$SourceEditsTableUpdateCompanionBuilder,
+      (SourceEditRow, $$SourceEditsTableReferences),
+      SourceEditRow,
+      PrefetchHooks Function({bool sourceId})
     >;
 typedef $$BlocksTableCreateCompanionBuilder =
     BlocksCompanion Function({
@@ -12928,13 +14325,14 @@ typedef $$ExtractsTableCreateCompanionBuilder =
       required String sourceId,
       required String parentId,
       required bool parentIsSource,
-      required String startBlockId,
-      required int startOffset,
-      required String endBlockId,
-      required int endOffset,
+      required int startUtf8,
+      required int endUtf8,
+      Value<int> anchorRevision,
+      Value<int> provenanceState,
       required String selectedTextHash,
       required int createdAtUtc,
       Value<int?> editedAtUtc,
+      Value<int> contentRevision,
       Value<int> rowid,
     });
 typedef $$ExtractsTableUpdateCompanionBuilder =
@@ -12944,13 +14342,14 @@ typedef $$ExtractsTableUpdateCompanionBuilder =
       Value<String> sourceId,
       Value<String> parentId,
       Value<bool> parentIsSource,
-      Value<String> startBlockId,
-      Value<int> startOffset,
-      Value<String> endBlockId,
-      Value<int> endOffset,
+      Value<int> startUtf8,
+      Value<int> endUtf8,
+      Value<int> anchorRevision,
+      Value<int> provenanceState,
       Value<String> selectedTextHash,
       Value<int> createdAtUtc,
       Value<int?> editedAtUtc,
+      Value<int> contentRevision,
       Value<int> rowid,
     });
 
@@ -13005,23 +14404,23 @@ class $$ExtractsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get startBlockId => $composableBuilder(
-    column: $table.startBlockId,
+  ColumnFilters<int> get startUtf8 => $composableBuilder(
+    column: $table.startUtf8,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get startOffset => $composableBuilder(
-    column: $table.startOffset,
+  ColumnFilters<int> get endUtf8 => $composableBuilder(
+    column: $table.endUtf8,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get endBlockId => $composableBuilder(
-    column: $table.endBlockId,
+  ColumnFilters<int> get anchorRevision => $composableBuilder(
+    column: $table.anchorRevision,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get endOffset => $composableBuilder(
-    column: $table.endOffset,
+  ColumnFilters<int> get provenanceState => $composableBuilder(
+    column: $table.provenanceState,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13037,6 +14436,11 @@ class $$ExtractsTableFilterComposer
 
   ColumnFilters<int> get editedAtUtc => $composableBuilder(
     column: $table.editedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get contentRevision => $composableBuilder(
+    column: $table.contentRevision,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13093,23 +14497,23 @@ class $$ExtractsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get startBlockId => $composableBuilder(
-    column: $table.startBlockId,
+  ColumnOrderings<int> get startUtf8 => $composableBuilder(
+    column: $table.startUtf8,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get startOffset => $composableBuilder(
-    column: $table.startOffset,
+  ColumnOrderings<int> get endUtf8 => $composableBuilder(
+    column: $table.endUtf8,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get endBlockId => $composableBuilder(
-    column: $table.endBlockId,
+  ColumnOrderings<int> get anchorRevision => $composableBuilder(
+    column: $table.anchorRevision,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get endOffset => $composableBuilder(
-    column: $table.endOffset,
+  ColumnOrderings<int> get provenanceState => $composableBuilder(
+    column: $table.provenanceState,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -13125,6 +14529,11 @@ class $$ExtractsTableOrderingComposer
 
   ColumnOrderings<int> get editedAtUtc => $composableBuilder(
     column: $table.editedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get contentRevision => $composableBuilder(
+    column: $table.contentRevision,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -13175,23 +14584,21 @@ class $$ExtractsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get startBlockId => $composableBuilder(
-    column: $table.startBlockId,
+  GeneratedColumn<int> get startUtf8 =>
+      $composableBuilder(column: $table.startUtf8, builder: (column) => column);
+
+  GeneratedColumn<int> get endUtf8 =>
+      $composableBuilder(column: $table.endUtf8, builder: (column) => column);
+
+  GeneratedColumn<int> get anchorRevision => $composableBuilder(
+    column: $table.anchorRevision,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get startOffset => $composableBuilder(
-    column: $table.startOffset,
+  GeneratedColumn<int> get provenanceState => $composableBuilder(
+    column: $table.provenanceState,
     builder: (column) => column,
   );
-
-  GeneratedColumn<String> get endBlockId => $composableBuilder(
-    column: $table.endBlockId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get endOffset =>
-      $composableBuilder(column: $table.endOffset, builder: (column) => column);
 
   GeneratedColumn<String> get selectedTextHash => $composableBuilder(
     column: $table.selectedTextHash,
@@ -13205,6 +14612,11 @@ class $$ExtractsTableAnnotationComposer
 
   GeneratedColumn<int> get editedAtUtc => $composableBuilder(
     column: $table.editedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get contentRevision => $composableBuilder(
+    column: $table.contentRevision,
     builder: (column) => column,
   );
 
@@ -13265,13 +14677,14 @@ class $$ExtractsTableTableManager
                 Value<String> sourceId = const Value.absent(),
                 Value<String> parentId = const Value.absent(),
                 Value<bool> parentIsSource = const Value.absent(),
-                Value<String> startBlockId = const Value.absent(),
-                Value<int> startOffset = const Value.absent(),
-                Value<String> endBlockId = const Value.absent(),
-                Value<int> endOffset = const Value.absent(),
+                Value<int> startUtf8 = const Value.absent(),
+                Value<int> endUtf8 = const Value.absent(),
+                Value<int> anchorRevision = const Value.absent(),
+                Value<int> provenanceState = const Value.absent(),
                 Value<String> selectedTextHash = const Value.absent(),
                 Value<int> createdAtUtc = const Value.absent(),
                 Value<int?> editedAtUtc = const Value.absent(),
+                Value<int> contentRevision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ExtractsCompanion(
                 id: id,
@@ -13279,13 +14692,14 @@ class $$ExtractsTableTableManager
                 sourceId: sourceId,
                 parentId: parentId,
                 parentIsSource: parentIsSource,
-                startBlockId: startBlockId,
-                startOffset: startOffset,
-                endBlockId: endBlockId,
-                endOffset: endOffset,
+                startUtf8: startUtf8,
+                endUtf8: endUtf8,
+                anchorRevision: anchorRevision,
+                provenanceState: provenanceState,
                 selectedTextHash: selectedTextHash,
                 createdAtUtc: createdAtUtc,
                 editedAtUtc: editedAtUtc,
+                contentRevision: contentRevision,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -13295,13 +14709,14 @@ class $$ExtractsTableTableManager
                 required String sourceId,
                 required String parentId,
                 required bool parentIsSource,
-                required String startBlockId,
-                required int startOffset,
-                required String endBlockId,
-                required int endOffset,
+                required int startUtf8,
+                required int endUtf8,
+                Value<int> anchorRevision = const Value.absent(),
+                Value<int> provenanceState = const Value.absent(),
                 required String selectedTextHash,
                 required int createdAtUtc,
                 Value<int?> editedAtUtc = const Value.absent(),
+                Value<int> contentRevision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ExtractsCompanion.insert(
                 id: id,
@@ -13309,13 +14724,14 @@ class $$ExtractsTableTableManager
                 sourceId: sourceId,
                 parentId: parentId,
                 parentIsSource: parentIsSource,
-                startBlockId: startBlockId,
-                startOffset: startOffset,
-                endBlockId: endBlockId,
-                endOffset: endOffset,
+                startUtf8: startUtf8,
+                endUtf8: endUtf8,
+                anchorRevision: anchorRevision,
+                provenanceState: provenanceState,
                 selectedTextHash: selectedTextHash,
                 createdAtUtc: createdAtUtc,
                 editedAtUtc: editedAtUtc,
+                contentRevision: contentRevision,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -18158,6 +19574,8 @@ class $AppDatabaseManager {
   $AppDatabaseManager(this._db);
   $$SourcesTableTableManager get sources =>
       $$SourcesTableTableManager(_db, _db.sources);
+  $$SourceEditsTableTableManager get sourceEdits =>
+      $$SourceEditsTableTableManager(_db, _db.sourceEdits);
   $$BlocksTableTableManager get blocks =>
       $$BlocksTableTableManager(_db, _db.blocks);
   $$ExtractsTableTableManager get extracts =>

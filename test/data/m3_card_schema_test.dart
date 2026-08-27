@@ -384,10 +384,9 @@ Future<void> _seedCardParents(
   );
   await database.customStatement(
     'INSERT INTO extracts (id, markdown, source_id, parent_id, '
-    'parent_is_source, start_block_id, start_offset, end_block_id, '
-    'end_offset, selected_text_hash, created_at_utc) '
-    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    <Object?>['e1', 'text', 's1', 's1', 1, 's1:0', 0, 's1:0', 4, 'b' * 64, 0],
+    'parent_is_source, start_utf8, end_utf8, selected_text_hash, '
+    'created_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    <Object?>['e1', 'text', 's1', 's1', 1, 0, 4, 'b' * 64, 0],
   );
   for (var index = 1; index <= count; index++) {
     final id = 'c$index';

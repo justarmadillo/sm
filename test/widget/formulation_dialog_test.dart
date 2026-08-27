@@ -14,8 +14,8 @@ void main() {
       sourceId: 'source-1',
       parentId: 'source-1',
       parentIsSource: true,
-      startAnchor: ReaderAnchor(blockId: 'source-1:0', utf8Offset: 0),
-      endAnchor: ReaderAnchor(blockId: 'source-1:0', utf8Offset: 5),
+      startAnchor: ReaderAnchor(utf8Offset: 0),
+      endAnchor: ReaderAnchor(utf8Offset: 5),
       selectedTextHash:
           'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     ),

@@ -20,14 +20,21 @@ library;
 
 import 'dart:convert';
 
+import 'package:meta/meta.dart';
+
 import '../../core/clock.dart';
 import '../../core/ids.dart';
 import '../../core/result.dart';
 import '../../core/tracing.dart';
+import '../../domain/content/block.dart';
+import '../../domain/content/block_edit.dart';
 import '../../domain/content/document.dart';
 import '../../domain/content/extract.dart';
 import '../../domain/content/reader_anchor.dart';
 import '../../domain/content/source.dart';
+import '../../domain/content/source_edit.dart';
+import '../../domain/content/source_editing.dart';
+import '../../domain/content/text_splice.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/revlog.dart';
@@ -47,6 +54,12 @@ const String kSourceImportedKind = 'source.imported';
 /// Activity kind recorded when the resume marker moves.
 const String kMarkerMovedKind = 'reader.marker_moved';
 
+/// Activity kind recorded when a source's text is edited.
+const String kSourceEditedKind = 'source.edited';
+
+/// Activity kind recorded when an edit is reversed.
+const String kSourceEditUndoneKind = 'source.edit_undone';
+
 /// Activity kind recorded when a topic's interval is set by hand.
 const String kTopicRescheduledKind = 'topic.rescheduled';
 
@@ -57,6 +70,30 @@ const String kTopicRescheduledKind = 'topic.rescheduled';
 /// own name here instead would leave the guard permanently unsatisfied and
 /// let a retried Done commit a second repetition.
 const String kTopicEncounterCompletedKind = 'topic.encounter_completed';
+
+/// What one text edit produced, for the caller that has to redraw.
+///
+/// [outcome] is null when nothing was written — a no-op edit, or a command
+/// replayed after it had already been applied.
+@immutable
+final class SourceEdited {
+  const SourceEdited({
+    required this.source,
+    required this.document,
+    required this.outcome,
+  });
+
+  final Source source;
+
+  /// The re-derived document. Block ids differ from the previous parse and
+  /// carry no meaning across it.
+  final Document document;
+
+  final SourceEditOutcome? outcome;
+
+  /// Whether the text actually changed.
+  bool get didChange => outcome != null;
+}
 
 /// Handlers for reading, marking, and pacing sources.
 final class ReaderHandlers {
@@ -223,7 +260,7 @@ final class ReaderHandlers {
           command,
           kMarkerMovedKind,
           ref: ElementRef(id: source.id, type: ElementType.source),
-          metadata: <String, Object?>{'block': command.anchor.blockId},
+          metadata: <String, Object?>{'offset': command.anchor.utf8Offset},
         );
         return Ok<Source>(updated);
       });
@@ -455,10 +492,23 @@ final class ReaderHandlers {
             if (ref != topic.ref) ref,
           if (command.until == null || command.until! <= day) topic.ref,
         ];
+        // An element belongs to exactly one stage store. Later Today on a
+        // pending topic memorizes it through the section 8.1 nonmemorized
+        // branch, so it has to leave Pending as it joins Outstanding —
+        // otherwise it sits in both, and the stale entry resurfaces the next
+        // time the Pending stage is built.
+        final bool stillPending =
+            transition.state.status == Sm20ElementStatus.pending;
+        final pending = <ElementRef>[
+          for (final ElementRef ref in runtime.pending)
+            if (ref != topic.ref) ref,
+          if (stillPending) topic.ref,
+        ];
         await _context.saveRuntimeState(
           runtime.copyWith(
             outstanding: outstanding,
             outstandingTopics: outstandingTopics,
+            pending: pending,
             prngSeed: transition.prngState.seed,
           ),
         );
@@ -637,11 +687,11 @@ final class ReaderHandlers {
     }
 
     final ReaderAnchor? marker = source.resume.marker;
-    final ReaderAnchor? start = document.startAnchor;
-    final ReaderAnchor? end = document.endAnchor;
+    final ReaderAnchor start = document.startAnchor;
+    final ReaderAnchor end = document.endAnchor;
     double? readFraction;
     var reachedEnd = false;
-    if (marker != null && start != null && end != null) {
+    if (marker != null) {
       final int total = document.wordsBetween(start, end);
       final int read = document.wordsBetween(start, marker);
       readFraction = total <= 0 ? 1 : (read / total).clamp(0, 1);
@@ -802,6 +852,210 @@ final class ReaderHandlers {
   }
 
   /// Wraps a command body in a transaction, idempotency check, and tracing.
+  /// Replaces one block's markdown.
+  ///
+  /// Editing text is not a repetition. Nothing here reads or writes a
+  /// schedule, a priority, a revlog entry, or a scheduler event, and the
+  /// source's due date is exactly where it was before.
+  Future<Result<SourceEdited>> editSourceBlock(EditSourceBlock command) =>
+      _runEdit(command, kSourceEditedKind, (Document document) {
+        final Block? block = document.blockById(command.blockId);
+        if (block == null) return null;
+        return spliceForBlockEdit(document, block, command.markdown);
+      }, sourceId: command.sourceId, base: command.baseContentRevision);
+
+  /// Removes one block, separator included.
+  Future<Result<SourceEdited>> deleteSourceBlock(DeleteSourceBlock command) =>
+      _runEdit(command, kSourceEditedKind, (Document document) {
+        final Block? block = document.blockById(command.blockId);
+        if (block == null) return null;
+        return spliceForBlockRemoval(document, block);
+      }, sourceId: command.sourceId, base: command.baseContentRevision);
+
+  /// Adds a new block after an existing one.
+  Future<Result<SourceEdited>> insertSourceBlock(InsertSourceBlock command) =>
+      _runEdit(command, kSourceEditedKind, (Document document) {
+        final Block? block = document.blockById(command.afterBlockId);
+        if (block == null) return null;
+        return spliceForBlockInsertion(document, block, command.markdown);
+      }, sourceId: command.sourceId, base: command.baseContentRevision);
+
+  /// Reverses the most recent edit, as a new forward edit.
+  Future<Result<SourceEdited>> undoSourceEdit(UndoSourceEdit command) async {
+    final SourceEdit? last = await _content.latestSourceEdit(command.sourceId);
+    if (last == null) {
+      return const Err<SourceEdited>(
+        ConflictFailure('there is nothing to undo on this source'),
+      );
+    }
+    return _runEdit(
+      command,
+      kSourceEditUndoneKind,
+      (Document _) => last.inverseSplice,
+      sourceId: command.sourceId,
+      base: last.contentRevision,
+      isUndo: true,
+      restore: last.restore,
+    );
+  }
+
+  /// Shared body for every text edit.
+  ///
+  /// [buildSplice] receives the document as currently stored and returns the
+  /// splice to apply, or null when the block it names is gone. Everything
+  /// after that — validation, migration of positions and provenance, the
+  /// journal row, the block rebuild — happens inside the repository's single
+  /// transaction, so a crash leaves the previous revision wholly intact.
+  Future<Result<SourceEdited>> _runEdit(
+    AppCommand command,
+    String kind,
+    TextSplice? Function(Document document) buildSplice, {
+    required String sourceId,
+    required int base,
+    bool isUndo = false,
+    SourceEditRestore? restore,
+  }) async {
+    try {
+      return await _transactions.run<Result<SourceEdited>>(() async {
+        final Document? document = await _content.findDocument(sourceId);
+        if (document == null) return _missingSource<SourceEdited>(sourceId);
+
+        final TextSplice? splice = buildSplice(document);
+        if (splice == null) {
+          return const Err<SourceEdited>(
+            ValidationFailure('that block is not part of this source'),
+          );
+        }
+        if (splice.isNoop || splice.changesNothingIn(document.markdown)) {
+          // Nothing changed. Reporting success without writing keeps the
+          // revision counter meaningful: it counts real edits, and replaying
+          // the journal has to land exactly where eager migration did.
+          final Source? unchanged = await _content.findSource(sourceId);
+          if (unchanged == null) return _missingSource<SourceEdited>(sourceId);
+          return Ok<SourceEdited>(
+            SourceEdited(
+              source: unchanged,
+              document: document,
+              outcome: null,
+            ),
+          );
+        }
+
+        final SourceEditResult applied = await _content.applySourceEdit(
+          sourceId: sourceId,
+          splice: splice,
+          baseContentRevision: base,
+          operationId: command.operationId.value,
+          nowUtc: _clock.nowUtc(),
+          isUndo: isUndo,
+          restore: restore,
+        );
+
+        switch (applied) {
+          case SourceEditTargetMissing():
+            return _missingSource<SourceEdited>(sourceId);
+
+          case SourceEditConflict(:final actualRevision):
+            return Err<SourceEdited>(
+              ConflictFailure(
+                'this source changed while you were editing '
+                '(now at revision $actualRevision)',
+              ),
+            );
+
+          case SourceEditRejected(:final reason):
+            return Err<SourceEdited>(
+              ValidationFailure(_rejectionMessage(reason)),
+            );
+
+          case SourceEditReplayed(:final source):
+            final Document? current = await _content.findDocument(sourceId);
+            return Ok<SourceEdited>(
+              SourceEdited(
+                source: source,
+                document: current ?? document,
+                outcome: null,
+              ),
+            );
+
+          case SourceEditApplied(:final source, :final outcome):
+            final Document? next = await _content.findDocument(sourceId);
+            await _search.upsertDocument(
+              SearchDocument(
+                ref: ElementRef(id: sourceId, type: ElementType.source),
+                title: source.title,
+                body: source.markdown,
+                sourceId: sourceId,
+                updatedAtUtc: _clock.nowUtc(),
+              ),
+            );
+            await _transfer.advanceGeneration();
+            await _log(
+              command,
+              kind,
+              ref: ElementRef(id: sourceId, type: ElementType.source),
+              metadata: <String, Object?>{
+                'revision': outcome.contentRevision,
+                'removed': splice.removedLength,
+                'inserted': splice.insertedLength,
+                'marker_displaced': outcome.markerWasInsideEdit,
+                'provenance_changed': outcome.changedProvenance.length,
+                'stale': outcome.provenanceUpdates
+                    .where(
+                      (ProvenanceUpdate u) =>
+                          u.provenance.state == ProvenanceState.stale,
+                    )
+                    .length,
+                'orphaned': outcome.provenanceUpdates
+                    .where(
+                      (ProvenanceUpdate u) =>
+                          u.provenance.state == ProvenanceState.orphaned,
+                    )
+                    .length,
+              },
+            );
+            return Ok<SourceEdited>(
+              SourceEdited(
+                source: source,
+                document:
+                    next ??
+                    Document.parse(
+                      sourceId: sourceId,
+                      markdown: source.markdown,
+                      contentRevision: source.contentRevision,
+                    ),
+                outcome: outcome,
+              ),
+            );
+        }
+      });
+    } on Object catch (error, stackTrace) {
+      final UnexpectedFailure failure = UnexpectedFailure(
+        'command $kind failed',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+      _diagnostics.record(
+        DiagnosticEvent(
+          level: DiagnosticLevel.error,
+          name: kind,
+          timestampUtc: _clock.nowUtc(),
+          operationId: command.operationId,
+          failure: failure,
+        ),
+      );
+      return Err<SourceEdited>(failure);
+    }
+  }
+
+  static String _rejectionMessage(SpliceRejection reason) => switch (reason) {
+    SpliceRejection.outOfRange => 'that edit is outside the source text',
+    SpliceRejection.notOnCharacterBoundary =>
+      'that edit would split a character',
+    SpliceRejection.tooLarge => 'that edit is too large to apply at once',
+    SpliceRejection.empty => 'that edit changes nothing',
+  };
+
   Future<Result<T>> _run<T>(
     AppCommand command,
     String kind,

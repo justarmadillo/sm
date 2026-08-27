@@ -13,14 +13,18 @@ library;
 
 import 'package:drift/drift.dart';
 
-/// Imported documents. The markdown is an immutable snapshot.
+/// Imported documents.
+///
+/// The markdown is editable, and every edit is a splice recorded in
+/// [SourceEdits]. Positions are byte offsets into this exact text, stamped
+/// with the [contentRevision] they were written against.
 @DataClassName('SourceRow')
 class Sources extends Table {
   TextColumn get id => text()();
 
   TextColumn get title => text().withLength(min: 1, max: 500)();
 
-  /// Normalized original markdown. Every anchor addresses this exact text.
+  /// Normalized markdown at [contentRevision]. Every anchor addresses it.
   TextColumn get markdown => text()();
 
   TextColumn get contentHash => text().withLength(min: 64, max: 64)();
@@ -30,15 +34,23 @@ class Sources extends Table {
 
   IntColumn get importedAtUtc => integer()();
 
-  /// Explicit resume marker. Both columns are set or both are null.
-  TextColumn get markerBlockId => text().nullable()();
+  /// Version of [markdown] itself, bumped only by a content splice.
+  ///
+  /// Deliberately not [revision]: that counts row writes of any kind, and
+  /// replaying the edit journal needs a counter that advances once per splice
+  /// and never otherwise.
+  IntColumn get contentRevision => integer().withDefault(const Constant(1))();
 
-  IntColumn get markerOffset => integer().nullable()();
+  /// Explicit resume marker, as a document byte offset. Both columns are set
+  /// or both are null.
+  IntColumn get markerUtf8 => integer().nullable()();
+
+  IntColumn get markerRevision => integer().nullable()();
 
   /// Soft position. Never drives scheduling.
-  TextColumn get softBlockId => text().nullable()();
+  IntColumn get softUtf8 => integer().nullable()();
 
-  IntColumn get softOffset => integer().nullable()();
+  IntColumn get softRevision => integer().nullable()();
 
   /// Bumped on every write, for change detection and diagnostics.
   IntColumn get revision => integer().withDefault(const Constant(1))();
@@ -48,8 +60,64 @@ class Sources extends Table {
 
   @override
   List<String> get customConstraints => <String>[
-    'CHECK ((marker_block_id IS NULL) = (marker_offset IS NULL))',
-    'CHECK ((soft_block_id IS NULL) = (soft_offset IS NULL))',
+    'CHECK ((marker_utf8 IS NULL) = (marker_revision IS NULL))',
+    'CHECK ((soft_utf8 IS NULL) = (soft_revision IS NULL))',
+    'CHECK (marker_utf8 IS NULL OR marker_utf8 >= 0)',
+    'CHECK (soft_utf8 IS NULL OR soft_utf8 >= 0)',
+    'CHECK (content_revision >= 1)',
+  ];
+}
+
+/// Every edit ever applied to a source's text, one row per splice.
+///
+/// Append-only. Undo appends the inverse splice at a new revision rather than
+/// deleting a row, so the journal is always a complete forward history and a
+/// position written against any past revision can be replayed to the present.
+@DataClassName('SourceEditRow')
+class SourceEdits extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get sourceId =>
+      text().references(Sources, #id, onDelete: KeyAction.cascade)();
+
+  /// The revision this splice produced.
+  IntColumn get contentRevision => integer()();
+
+  /// First byte replaced.
+  IntColumn get startUtf8 => integer()();
+
+  /// One past the last byte replaced; equal to [startUtf8] for an insertion.
+  IntColumn get endUtf8 => integer()();
+
+  /// Exactly what was removed, so the inverse splice is exact.
+  TextColumn get removedText => text()();
+
+  /// Exactly what was inserted, already normalized.
+  TextColumn get insertedText => text()();
+
+  /// Whether this edit was itself the undo of an earlier one.
+  BoolColumn get isUndo => boolean().withDefault(const Constant(false))();
+
+  /// JSON of everything this edit displaced, so undo restores it exactly.
+  ///
+  /// Collapsing a position onto the start of an edit destroys where it was;
+  /// no rule can invert that, so the pre-edit values are carried here.
+  TextColumn get restoreJson => text().withDefault(const Constant(''))();
+
+  IntColumn get appliedAtUtc => integer()();
+
+  TextColumn get operationId => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+
+  @override
+  List<String> get customConstraints => <String>[
+    'UNIQUE (source_id, content_revision)',
+    'UNIQUE (operation_id)',
+    'CHECK (end_utf8 >= start_utf8)',
+    'CHECK (start_utf8 >= 0)',
+    'CHECK (content_revision >= 2)',
   ];
 }
 
@@ -115,13 +183,23 @@ class Extracts extends Table {
 
   BoolColumn get parentIsSource => boolean()();
 
-  TextColumn get startBlockId => text()();
+  /// Byte range of the parent's markdown this passage was taken from.
+  IntColumn get startUtf8 => integer()();
 
-  IntColumn get startOffset => integer()();
+  IntColumn get endUtf8 => integer()();
 
-  TextColumn get endBlockId => text()();
+  /// Parent revision the range was recorded against.
+  IntColumn get anchorRevision =>
+      integer().withDefault(const Constant(1))();
 
-  IntColumn get endOffset => integer()();
+  /// How much of the link back still holds: 0 verbatim, 1 stale, 2 orphaned.
+  ///
+  /// Never cleared by a migration. A range whose text was edited away is
+  /// reported, not re-found: searching for the passage again picks the wrong
+  /// occurrence whenever a phrase repeats, and does it silently.
+  IntColumn get provenanceState => integer()
+      .check(provenanceState.isBetweenValues(0, 2))
+      .withDefault(const Constant(0))();
 
   TextColumn get selectedTextHash => text().withLength(min: 64, max: 64)();
 
@@ -129,14 +207,18 @@ class Extracts extends Table {
 
   IntColumn get editedAtUtc => integer().nullable()();
 
+  /// Version of this extract's own [markdown], for extracts with children.
+  IntColumn get contentRevision => integer().withDefault(const Constant(1))();
+
   @override
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
 
   @override
   List<String> get customConstraints => <String>[
-    'CHECK (start_offset >= 0)',
-    'CHECK (end_offset >= 0)',
-    'CHECK ((start_block_id != end_block_id) OR (end_offset > start_offset))',
+    'CHECK (start_utf8 >= 0)',
+    'CHECK (end_utf8 >= start_utf8)',
+    'CHECK (anchor_revision >= 1)',
+    'CHECK (content_revision >= 1)',
   ];
 }
 

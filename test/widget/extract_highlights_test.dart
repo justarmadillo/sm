@@ -18,6 +18,7 @@ import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
 import 'package:incremental_reader/src/features/reader/presentation/extract_highlights.dart';
 import 'package:incremental_reader/src/features/reader/presentation/reader_selection.dart';
 import 'package:incremental_reader/src/features/reader/presentation/reader_view.dart';
+import '../support/anchors.dart';
 
 const String _markdown = '''
 # Chapter One
@@ -31,16 +32,11 @@ The second paragraph is plain and easy to select from end to end.
 Extract _extractOf(Block block, String text, {String id = 'x1'}) {
   final renderedStart = block.renderedText.indexOf(text);
   expect(renderedStart, isNonNegative, reason: '"$text" is not in the block');
-  final startAnchor = ReaderAnchor(
-    blockId: block.id,
-    utf8Offset: block.renderedToUtf8(renderedStart),
-  );
-  final endAnchor = ReaderAnchor(
-    blockId: block.id,
-    utf8Offset: block.renderedToUtf8(
-      renderedStart + text.length,
-      edge: RenderedEdge.trailing,
-    ),
+  final startAnchor = anchorAtRendered(block, renderedStart);
+  final endAnchor = anchorAtRendered(
+    block,
+    renderedStart + text.length,
+    edge: RenderedEdge.trailing,
   );
   return Extract(
     id: id,
@@ -104,8 +100,8 @@ void main() {
           sourceId: 's',
           parentId: 'other-extract',
           parentIsSource: false,
-          startAnchor: ReaderAnchor(blockId: 'not-here', utf8Offset: 0),
-          endAnchor: ReaderAnchor(blockId: 'not-here', utf8Offset: 3),
+          startAnchor: ReaderAnchor(utf8Offset: 0),
+          endAnchor: ReaderAnchor(utf8Offset: 3),
           selectedTextHash: 'deadbeef',
         ),
         createdAtUtc: DateTime.utc(2026, 8, 20),
@@ -123,14 +119,8 @@ void main() {
           sourceId: 's',
           parentId: 's',
           parentIsSource: true,
-          startAnchor: ReaderAnchor(
-            blockId: document.blocks[1].id,
-            utf8Offset: 0,
-          ),
-          endAnchor: ReaderAnchor(
-            blockId: document.blocks[2].id,
-            utf8Offset: 5,
-          ),
+          startAnchor: anchorIn(document.blocks[1], 0),
+          endAnchor: anchorIn(document.blocks[2], 5),
           selectedTextHash: 'irrelevant',
         ),
         createdAtUtc: DateTime.utc(2026, 8, 20),

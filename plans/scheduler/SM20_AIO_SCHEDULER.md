@@ -261,7 +261,11 @@ membership is separate from the due schedule.
 Retain all of the following for behavioral identity:
 
 - the priority order of **every intact element**, including cards/items,
-  topics, extracts, pending elements, and dismissed elements;
+  topics, extracts, pending elements, and dismissed elements. Confirmed
+  against a collection written by the executable: `info/priority.sub` lists
+  every element id, and the collection root — status `2`, dismissed — is one
+  of them. Dropping dismissed elements would change `N` and therefore every
+  rank-derived percentage in the collection;
 - the current global 32-bit PRNG seed;
 - collection learning-start day and today's collection-relative day;
 - the combined Outstanding order plus its item and topic membership lists;
@@ -866,11 +870,18 @@ with the user-entered **remaining** interval.
 
 Routine: `0xF0E4C0`.
 
-- If the element is already Outstanding, SM20 only shifts its position in the
-  Outstanding queue. No due date, interval, A, priority, or repetition field
-  changes.
+- If the element is already Outstanding, no due date, interval, A, priority, or
+  repetition field changes. The user is asked for a target position in the
+  Outstanding queue and the entry is moved there; inside a browser review the
+  element is additionally dropped from the review subset. See “The shift” and
+  “The mode gate” below.
 - If it is not Outstanding and `last_review == Today`, the command warns and
-  does nothing.
+  does nothing. The exact message names the alternative:
+
+  ```text
+  Element has been reviewed already
+  Use Ctrl+Shift+D instead (Add to Drill)
+  ```
 - Otherwise it calls `JumpIntervalExt(0, modify_priority=false)` and then
   shifts the queue entry. The target due day becomes Today; the stored interval
   becomes `Today-last_review` through the low-level rescheduler. For a normal
@@ -879,6 +890,119 @@ Routine: `0xF0E4C0`.
 
 There is no separate “Later adjustment” field in these paths. The operation is
 either a queue-only shift or an actual due-date/interval rewrite.
+
+The executable's embedded menu resources name the command twice, once on the
+element menu and once on the repetition popup:
+
+| Menu item | Caption | Embedded hint |
+|---|---|---|
+| `MILaterToday` | `Later today` | Schedule the element for review later today |
+| `MILaterToday` | `Later today` | Move the repetition to later today (as if it never happened) |
+
+“As if it never happened” is the operative phrase, and it is independent
+confirmation of the first branch above: a Later Today is not a repetition and
+must not be counted as one, neither in statistics nor in a session counter.
+
+The surrounding items on those menus are the commands that *do* carry a
+duration, which is what makes Later Today's absence of one deliberate rather
+than an omission:
+
+| Menu item | Caption | Embedded hint |
+|---|---|---|
+| `MIJumpInterval` | `&Reschedule` | Schedule the next repetition on a given day |
+| `MIReschedule` | `Reschedule` | Skip that repetition and schedule it on another day |
+| `MIExecuteRepetition` | `Execute repetition` | Execute repetition and manually set the interval |
+
+#### The shift: the user chooses the position
+
+The already-queued branch is not an automatic reordering. `0xF0E870` prompts:
+
+```text
+if element not in collection.outstanding:
+    "Element not in the outstanding queue"
+    "Cannot shift its outstanding position"        # 0xFA5470, refuses
+    return
+
+default = UInt32 at outstanding_queue + 9
+if InputNumber("Shift to which position in the outstanding queue?", default):
+    0xD64480(collection, element_id, position)
+```
+
+So Later Today has **no duration and no fixed distance**. It asks for a target
+position in today's Outstanding queue, pre-filled from the queue structure, and
+`0xD64480` moves the entry there. This is the same numeric-input pattern as
+`Every which element?` on batch Add to Outstanding, and it means the distance
+is user input rather than a constant to recover.
+
+The pre-filled default is the `UInt32` at offset `9` of the outstanding-queue
+record. That field is not otherwise identified here; the reading consistent
+with the dialog is the queue's element count, which offers the end of the queue
+as the default answer.
+
+#### The mode gate: leaving a browser review
+
+`0xF0E4C0` runs the prompt above first, then guards a second step on a mode
+byte at `+0x23F0` of the calling form:
+
+```text
+0xF0E870(form, element_id)                     # the prompt and the shift
+
+v3 = form[+0x23F0]
+gate = v3 <= 7 and ((1 << v3) & 0xE0) != 0     # true only for v3 in 5, 6, 7
+
+if gate:
+    type = 0xD59F10(collection, element_id)
+           0xD57A80(collection, element_id, type)
+           0xF4E400(form, form[+0x23F1])
+```
+
+`(1 << v3) & 0xE0` selects bits 5, 6 and 7, so this runs only while the
+learning mode is one of the browser review modes of section 9.7, never in the
+ordinary Outstanding stage.
+
+`0xD59F10` reads the element's type byte, defaulting to `3` when the id is
+zero:
+
+```text
+type = 3
+if element_id != 0:
+    0xD73490(collection, &saved)              # save current position
+    0xD71680(collection, &type, element_id)   # read the type byte
+    0xD626C0(collection, saved)               # restore
+return type
+```
+
+`0xD57A80` then drops the element from the two queues held on the global at
+`off_1164810` and decrements the matching counter:
+
+```text
+if 0xD58A10(collection):
+    if global[+68] != 0:
+        remove element from global[+68]
+    if global[+60] != 0 and element in global[+60]:
+        remove element from global[+60]
+        if type == 1:  global[+11] -= 1        # item counter
+        else:          global[+12] -= 1        # topic-family counter
+```
+
+Those are not the collection's Outstanding queue — that one lives at
+`collection + 237` and is what `0xF0E870` shifts. They are the current review
+session's queues, so the second step means: inside a browser review, Later
+Today shifts the element's Outstanding position **and** removes it from the
+review subset, advancing the review past it. The `type == 1` split is the item
+versus topic-family distinction of section 10.3.
+
+**Deliberate divergence in this port.** SM20 prompts; this app does not. It
+moves the element to the end of the combined Outstanding queue without asking,
+which is the dialog's own default answer, so the common case is identical and
+only the ability to choose a nearer position is missing. That was a considered
+product decision rather than an unimplemented detail: a dialog on every Later
+buys one rarely-wanted choice at the cost of a keypress on every use.
+
+Anything that needs exact SM20 parity — a migration comparison, or a
+conformance run against the executable — has to account for this, because a
+user who answers the prompt with anything other than the default produces a
+different queue order from this port.
 
 ### 8.5 Advance Topics, Items, and All elements
 
@@ -1803,7 +1927,7 @@ postpone counters through the low-level rescheduler.
 | Manual Reschedule UI | topic A update | topic priority update | unchanged | replace | as command requires | 0 |
 | Advance Topic | bulk update against selected short interval | bulk interval drift | increment / Today | replace | learning flow | 1 per draw-eligible candidate |
 | Advance Item | unchanged/not applicable | unchanged | unchanged | replace | unchanged | 1 per draw-eligible candidate |
-| Later Today, already Outstanding | unchanged | unchanged | unchanged | unchanged | shift only | 0 |
+| Later Today, already Outstanding | unchanged | unchanged | unchanged | unchanged | shift to a prompted position; in review modes 5-7 also drop from the review subset | 0 |
 | Later Today, not Outstanding | topic A update against new `0` | unchanged | unchanged | due Today | insert/shift | 0 |
 | Remember topic, explicit interval 1 | unchanged | unchanged | initialize | due Tomorrow | admit | 0 |
 | Forget memorized topic | unchanged | unchanged | clear / Today | remove | restore intact/pending | 0 |

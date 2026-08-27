@@ -230,5 +230,42 @@ final class AppHarness {
     AppSettings Function(AppSettings current) change,
   ) async => applySettings(change(await settingsStore.load()));
 
+  /// Every scheduling row, serialized, ordered, and comparable.
+  ///
+  /// Exists for one assertion: that a command which must not touch the
+  /// schedule did not touch it. Comparing whole rows is deliberate — a check
+  /// that only looked at due dates would miss an interval, a repetition
+  /// count, or a lifecycle quietly changing underneath.
+  Future<String> schedulingSnapshot() async {
+    final buffer = StringBuffer();
+    for (final table in <String>[
+      'element_schedules',
+      'topic_states',
+      'card_memories',
+      'revlog_entries',
+      'scheduler_events',
+      'review_events',
+      'mercy_batches',
+    ]) {
+      final rows = await database
+          .customSelect('SELECT * FROM $table')
+          .get();
+      final serialized = <String>[
+        for (final row in rows)
+          (row.data.entries.toList()
+                ..sort(
+                  (MapEntry<String, Object?> a, MapEntry<String, Object?> b) =>
+                      a.key.compareTo(b.key),
+                ))
+              .map(
+                (MapEntry<String, Object?> e) => '\${e.key}=\${e.value}',
+              )
+              .join(','),
+      ]..sort();
+      buffer.writeln('$table: ${serialized.join(' | ')}');
+    }
+    return buffer.toString();
+  }
+
   Future<void> close() => database.close();
 }

@@ -17,6 +17,18 @@ import 'package:incremental_reader/src/data/database/app_database.dart';
 import 'package:incremental_reader/src/data/database/connection.dart';
 import 'package:integration_test/integration_test.dart';
 
+/// Opens the Contents tab when it is showing.
+///
+/// The home screen leads with the study queue, so the import affordance lives
+/// one tab across. Tolerating its absence keeps this usable from a screen that
+/// is already past the tab bar.
+Future<void> _openContents(WidgetTester tester) async {
+  final Finder tab = find.text('Contents');
+  if (tab.evaluate().isEmpty) return;
+  await tester.tap(tab.first);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -47,6 +59,7 @@ void main() {
     String title,
     String body,
   ) async {
+    await _openContents(tester);
     await tester.tap(find.text('Import markdown').first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, title);
@@ -198,6 +211,7 @@ void main() {
     // Importing leaves the Reader open in scheduled mode, which is where
     // SuperMemo's Alt+Z lives: a card straight from the article, no extract
     // in between.
+    await _openContents(tester);
     await tester.tap(find.text('Import markdown').first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, 'Recall');

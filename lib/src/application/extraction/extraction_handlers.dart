@@ -93,7 +93,7 @@ final class ExtractionHandlers {
         );
       }
 
-      if (!command.range.isSameBlock) {
+      if (!parent.document.isSameBlock(command.range)) {
         return const Err<Extract>(
           ValidationFailure(
             'Multi-block extraction arrives in M5; select within one block',
@@ -256,7 +256,7 @@ final class ExtractionHandlers {
         ref: ref,
         metadata: <String, Object?>{
           'parent': command.parentId,
-          'same_block': command.range.isSameBlock,
+          'same_block': parent.document.isSameBlock(command.range),
           'length': markdown.length,
         },
       );

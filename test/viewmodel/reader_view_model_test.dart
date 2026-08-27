@@ -6,13 +6,13 @@ import 'package:incremental_reader/src/core/clock.dart';
 import 'package:incremental_reader/src/core/ids.dart';
 import 'package:incremental_reader/src/data/database/app_database.dart';
 import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
 import 'package:incremental_reader/src/domain/content/source.dart';
 import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:incremental_reader/src/features/library/presentation/import_sheet.dart';
 import 'package:incremental_reader/src/features/library/presentation/library_view_model.dart';
 import 'package:incremental_reader/src/features/reader/presentation/reader_view_model.dart';
+import '../support/anchors.dart';
 
 const String _markdown = '''
 # A Chapter
@@ -132,7 +132,7 @@ void main() {
       final model = modelFor(sourceId, ReaderMode.browse);
 
       await model.recordPosition(
-        ReaderAnchor(blockId: state.document.blocks[3].id, utf8Offset: 0),
+        anchorIn(state.document.blocks[3], 0),
       );
 
       final stored = await container
@@ -206,7 +206,10 @@ void main() {
       );
       final reopened = await readerFor(sourceId, ReaderMode.scheduled);
 
-      expect(reopened.openedAt!.blockId, target.id);
+      expect(
+        reopened.document.blockForAnchor(reopened.openedAt!)?.id,
+        target.id,
+      );
       expect(reopened.progressPercent, greaterThan(0));
     });
 
@@ -276,7 +279,7 @@ void main() {
       expect(state.showReminder, isFalse);
 
       await model.recordPosition(
-        ReaderAnchor(blockId: state.document.blocks.last.id, utf8Offset: 0),
+        anchorIn(state.document.blocks.last, 0),
       );
       var current = container
           .read(
@@ -310,7 +313,7 @@ void main() {
       final model = modelFor(sourceId, ReaderMode.scheduled);
 
       await model.recordPosition(
-        ReaderAnchor(blockId: state.document.blocks[3].id, utf8Offset: 0),
+        anchorIn(state.document.blocks[3], 0),
       );
       final afterScroll = container
           .read(
@@ -332,7 +335,10 @@ void main() {
             ),
           )
           .requireValue;
-      expect(confirmed.marker!.blockId, state.document.blocks[3].id);
+      expect(
+        state.document.blockForAnchor(confirmed.marker!)?.id,
+        state.document.blocks[3].id,
+      );
       expect(confirmed.softPosition, isNull);
     });
   });

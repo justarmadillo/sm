@@ -30,6 +30,7 @@ import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:test/test.dart';
 
+import '../support/anchors.dart';
 import '../support/app_harness.dart';
 
 const String _markdown = '''
@@ -515,8 +516,5 @@ void main() {
     0,
     block.renderedText.length,
   );
-  return (
-    ReaderAnchor(blockId: block.id, utf8Offset: start),
-    ReaderAnchor(blockId: block.id, utf8Offset: end),
-  );
+  return (anchorIn(block, start), anchorIn(block, end));
 }

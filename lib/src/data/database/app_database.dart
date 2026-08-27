@@ -8,13 +8,16 @@ library;
 
 import 'package:drift/drift.dart';
 
+import '../../core/utf8_offsets.dart';
+import '../../domain/content/document.dart';
+import '../../domain/content/reader_anchor.dart';
 import '../../domain/scheduling/sm20_numeric.dart';
 import 'tables.dart';
 
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 11;
+const int kSchemaVersion = 12;
 
 /// Name of the external-content FTS5 index over [SearchDocuments].
 const String kSearchIndexTable = 'search_index';
@@ -22,6 +25,7 @@ const String kSearchIndexTable = 'search_index';
 @DriftDatabase(
   tables: <Type>[
     Sources,
+    SourceEdits,
     Blocks,
     Extracts,
     Cards,
@@ -538,6 +542,20 @@ class AppDatabase extends _$AppDatabase {
         await m.alterTable(TableMigration(sources));
         await _createIndexes(m);
       }
+      if (from < 12) {
+        // Reader positions stop naming a block and start naming a place.
+        //
+        // Block ids are positional (`sourceId:index`), so they were only ever
+        // stable while the text was. The moment a source becomes editable,
+        // inserting one paragraph re-points every anchor below it at its
+        // neighbour's text — with no error and no way for the user to tell.
+        // Document byte offsets survive re-parsing, and an edit moves them by
+        // an amount the edit itself reports.
+        //
+        // See plans/reader/EDITABLE_READER.md sections 2, 4, and 9.6.
+        await _migrateAnchorsToDocumentSpace(m);
+        await _createIndexes(m);
+      }
     },
     beforeOpen: (OpeningDetails details) async {
       // SQLite disables foreign keys per connection by default, so this
@@ -768,6 +786,220 @@ class AppDatabase extends _$AppDatabase {
       variables: <Variable<Object>>[Variable<String>(name)],
     ).get();
     return rows.isNotEmpty;
+  }
+
+  /// Converts every stored `(blockId, offsetInBlock)` pair into a document
+  /// byte offset, and records how much of each extract's provenance survived.
+  ///
+  /// Nothing is guessed. An anchor whose block no longer exists — a row left
+  /// by an interrupted import, or one written before a parser change — becomes
+  /// an explicit orphan rather than a plausible-looking position. That follows
+  /// the precedent set when v6 refused to invent a due date for a legacy row
+  /// it could not interpret: an invented value is worse than an absent one,
+  /// because the user cannot tell it is wrong.
+  Future<void> _migrateAnchorsToDocumentSpace(Migrator m) async {
+    if (!await _hasTable('sources')) return;
+
+    await _addRawColumnIfMissing(
+      'sources',
+      'content_revision',
+      'INTEGER NOT NULL DEFAULT 1',
+    );
+    await _addRawColumnIfMissing('sources', 'marker_utf8', 'INTEGER NULL');
+    await _addRawColumnIfMissing('sources', 'marker_revision', 'INTEGER NULL');
+    await _addRawColumnIfMissing('sources', 'soft_utf8', 'INTEGER NULL');
+    await _addRawColumnIfMissing('sources', 'soft_revision', 'INTEGER NULL');
+    await _addRawColumnIfMissing('extracts', 'start_utf8', 'INTEGER NULL');
+    await _addRawColumnIfMissing('extracts', 'end_utf8', 'INTEGER NULL');
+    await _addRawColumnIfMissing(
+      'extracts',
+      'anchor_revision',
+      'INTEGER NOT NULL DEFAULT 1',
+    );
+    await _addRawColumnIfMissing(
+      'extracts',
+      'provenance_state',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addRawColumnIfMissing(
+      'extracts',
+      'content_revision',
+      'INTEGER NOT NULL DEFAULT 1',
+    );
+
+    // The old columns are the signal that this file still needs converting.
+    // Their absence means an earlier run of this step already finished.
+    if (await _hasColumn('sources', 'marker_block_id')) {
+      await _convertSourceMarkers();
+    }
+    if (await _hasColumn('extracts', 'start_block_id')) {
+      await _convertExtractProvenance();
+    }
+
+    // A row whose anchors could not be resolved still has to satisfy the new
+    // NOT NULL definition before the table is rebuilt around it.
+    await customStatement(
+      'UPDATE extracts SET start_utf8 = COALESCE(start_utf8, 0), '
+      'end_utf8 = COALESCE(end_utf8, 0)',
+    );
+
+    if (!await _hasTable('source_edits')) await m.createTable(sourceEdits);
+
+    // Rebuilds install the current definitions: the retired block columns
+    // disappear and the new CHECK constraints take effect. Both tables need a
+    // rebuild rather than DROP COLUMN because the retired constraints named
+    // the retired columns.
+    await m.alterTable(TableMigration(sources));
+    await m.alterTable(TableMigration(extracts));
+  }
+
+  /// Rewrites both reading positions of every source as document offsets.
+  Future<void> _convertSourceMarkers() async {
+    final Map<String, int> blockStarts = await _blockStartOffsets();
+    final List<QueryRow> rows = await customSelect(
+      'SELECT id, marker_block_id, marker_offset, soft_block_id, soft_offset '
+      'FROM sources',
+    ).get();
+
+    for (final QueryRow row in rows) {
+      final int? marker = _documentOffset(
+        blockStarts,
+        row.read<String?>('marker_block_id'),
+        row.read<int?>('marker_offset'),
+      );
+      final int? soft = _documentOffset(
+        blockStarts,
+        row.read<String?>('soft_block_id'),
+        row.read<int?>('soft_offset'),
+      );
+      await customStatement(
+        'UPDATE sources SET marker_utf8 = ?, marker_revision = ?, '
+        'soft_utf8 = ?, soft_revision = ? WHERE id = ?',
+        <Object?>[
+          marker,
+          marker == null ? null : kInitialContentRevision,
+          soft,
+          soft == null ? null : kInitialContentRevision,
+          row.read<String>('id'),
+        ],
+      );
+    }
+  }
+
+  /// Rewrites every extract's recorded range, and grades what survived.
+  Future<void> _convertExtractProvenance() async {
+    final Map<String, int> sourceBlockStarts = await _blockStartOffsets();
+    final Map<String, String> parentText = <String, String>{};
+    final Map<String, Map<String, int>> extractBlockStarts =
+        <String, Map<String, int>>{};
+
+    for (final QueryRow row in await customSelect(
+      'SELECT id, markdown FROM sources',
+    ).get()) {
+      parentText[row.read<String>('id')] = row.read<String>('markdown');
+    }
+    final List<QueryRow> extracts = await customSelect(
+      'SELECT id, markdown, parent_id, parent_is_source, start_block_id, '
+      'start_offset, end_block_id, end_offset, selected_text_hash '
+      'FROM extracts',
+    ).get();
+    for (final QueryRow row in extracts) {
+      parentText[row.read<String>('id')] = row.read<String>('markdown');
+    }
+
+    for (final QueryRow row in extracts) {
+      final String parentId = row.read<String>('parent_id');
+      final bool parentIsSource = row.read<int>('parent_is_source') != 0;
+
+      final Map<String, int> starts;
+      if (parentIsSource) {
+        starts = sourceBlockStarts;
+      } else {
+        // Extracts never had persisted blocks: their anchors addressed a
+        // document parsed on demand from the extract's own markdown, so the
+        // same parse has to be repeated here to read the old coordinates.
+        starts = extractBlockStarts.putIfAbsent(parentId, () {
+          final String text = parentText[parentId] ?? '';
+          final Document parsed = Document.parse(
+            sourceId: parentId,
+            markdown: text,
+          );
+          return <String, int>{
+            for (final block in parsed.blocks) block.id: block.sourceStartUtf8,
+          };
+        });
+      }
+
+      final int? start = _documentOffset(
+        starts,
+        row.read<String?>('start_block_id'),
+        row.read<int?>('start_offset'),
+      );
+      final int? end = _documentOffset(
+        starts,
+        row.read<String?>('end_block_id'),
+        row.read<int?>('end_offset'),
+      );
+
+      // 0 verbatim, 1 stale, 2 orphaned.
+      var state = 2;
+      var startUtf8 = 0;
+      var endUtf8 = 0;
+      if (start != null && end != null && end >= start) {
+        startUtf8 = start;
+        endUtf8 = end;
+        final String text = parentText[parentId] ?? '';
+        final String slice = _sliceByUtf8(text, start, end);
+        state = hashSelection(slice) == row.read<String>('selected_text_hash')
+            ? 0
+            : 1;
+      }
+
+      await customStatement(
+        'UPDATE extracts SET start_utf8 = ?, end_utf8 = ?, '
+        'anchor_revision = ?, provenance_state = ?, content_revision = ? '
+        'WHERE id = ?',
+        <Object?>[
+          startUtf8,
+          endUtf8,
+          kInitialContentRevision,
+          state,
+          kInitialContentRevision,
+          row.read<String>('id'),
+        ],
+      );
+    }
+  }
+
+  Future<Map<String, int>> _blockStartOffsets() async {
+    if (!await _hasTable('blocks')) return <String, int>{};
+    final List<QueryRow> rows = await customSelect(
+      'SELECT id, start_utf8 FROM blocks',
+    ).get();
+    return <String, int>{
+      for (final QueryRow row in rows)
+        row.read<String>('id'): row.read<int>('start_utf8'),
+    };
+  }
+
+  static int? _documentOffset(
+    Map<String, int> blockStarts,
+    String? blockId,
+    int? offset,
+  ) {
+    if (blockId == null || offset == null) return null;
+    final int? start = blockStarts[blockId];
+    if (start == null) return null;
+    return start + offset;
+  }
+
+  static String _sliceByUtf8(String text, int startUtf8, int endUtf8) {
+    if (endUtf8 <= startUtf8) return '';
+    final Utf8OffsetIndex index = Utf8OffsetIndex(text);
+    final int from = index.toUtf16(startUtf8.clamp(0, index.byteLength));
+    final int to = index.toUtf16(endUtf8.clamp(0, index.byteLength));
+    if (to <= from) return '';
+    return text.substring(from, to);
   }
 
   Future<bool> _hasColumn(String table, String column) async {

@@ -174,8 +174,14 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
         if (entry.ref == previous) break;
         previous = entry.ref;
         final result = await _openEntry(entry);
-        if (!mounted || result != StudyRouteResult.committed) break;
-        await ref.read(queueViewModelProvider.notifier).refreshAfterCommit();
+        if (!mounted || !result.advancesSession) break;
+        // Later Today and Dismiss end the visit without advancing a schedule,
+        // so the session moves on but nothing is counted as completed.
+        if (result.isRepetition) {
+          await ref.read(queueViewModelProvider.notifier).refreshAfterCommit();
+        } else {
+          await ref.read(queueViewModelProvider.notifier).refresh();
+        }
         if (!mounted) break;
         final refreshed = ref.read(queueViewModelProvider);
         if (refreshed.hasError || refreshed.valueOrNull?.next == null) break;

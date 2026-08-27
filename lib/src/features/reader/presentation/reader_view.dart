@@ -46,11 +46,26 @@ class ReaderView extends StatefulWidget {
     this.extractHighlights = const <String, List<BlockHighlight>>{},
     this.onVisiblePositionChanged,
     this.initialAnchor,
+    this.editingBlockId,
+    this.isBusy = false,
+    this.onEditCommit,
+    this.onEditCancel,
+    this.onEditDelete,
     super.key,
   });
 
   final Document document;
   final ReaderSelectionController controller;
+
+  /// The block currently open in the editor, if any.
+  final String? editingBlockId;
+
+  /// Whether a commit is in flight, so the editor can refuse a second one.
+  final bool isBusy;
+
+  final void Function(Block block, String markdown)? onEditCommit;
+  final void Function(Block block)? onEditCancel;
+  final void Function(Block block)? onEditDelete;
   final ReaderTypography typography;
 
   /// The authoritative resume marker, drawn as a filled dot.
@@ -110,7 +125,12 @@ class ReaderViewState extends State<ReaderView> {
   @override
   void didUpdateWidget(ReaderView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.document.sourceId != widget.document.sourceId) {
+    // Any new document, not merely a new source. Editing re-derives the
+    // document of the *same* source, and a controller left on the previous one
+    // resolves selections against text that is no longer stored: the range it
+    // produces hashes a passage the source can no longer yield, and extraction
+    // then refuses it as "no longer matching".
+    if (!identical(oldWidget.document, widget.document)) {
       widget.controller.setDocument(widget.document);
       _lastReportedAnchor = null;
     }
@@ -127,7 +147,7 @@ class ReaderViewState extends State<ReaderView> {
   ///
   /// Works for unmounted blocks: the list resolves an index, not an offset.
   void jumpToAnchor(ReaderAnchor anchor, {double alignment = 0.08}) {
-    final index = widget.document.indexOfBlock(anchor.blockId);
+    final index = widget.document.blockIndexAtOffset(anchor.utf8Offset);
     if (index == null || !_scrollController.isAttached) return;
     _scrollController.jumpTo(index: index, alignment: alignment);
     WidgetsBinding.instance.addPostFrameCallback(
@@ -145,7 +165,7 @@ class ReaderViewState extends State<ReaderView> {
     double alignment = 0.08,
     Duration duration = const Duration(milliseconds: 250),
   }) async {
-    final index = widget.document.indexOfBlock(anchor.blockId);
+    final index = widget.document.blockIndexAtOffset(anchor.utf8Offset);
     if (index == null || !_scrollController.isAttached) return;
     await _scrollController.scrollTo(
       index: index,
@@ -257,6 +277,12 @@ class ReaderViewState extends State<ReaderView> {
   /// instead of scrolling the text.
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is KeyUpEvent) return KeyEventResult.ignored;
+    // Reading shortcuts belong to the reading surface, and only while it is
+    // the thing the keyboard is pointed at. A key event travels up from
+    // whatever holds focus, so without this the page-down binding on Space
+    // would fire for a space typed into a field nested inside this view —
+    // the caret would stay put and the article would jump.
+    if (!node.hasPrimaryFocus) return KeyEventResult.ignored;
     const double line = 64;
 
     switch (event.logicalKey) {
@@ -283,31 +309,52 @@ class ReaderViewState extends State<ReaderView> {
 
   @override
   Widget build(BuildContext context) {
-    final markerBlockId = widget.marker?.blockId;
-    final softBlockId = widget.softPosition?.blockId;
+    // Which block carries the dot is a rendering question, answered from the
+    // stored offset every build. Nothing persists a block id.
+    final marker = widget.marker;
+    final soft = widget.softPosition;
+    final markerBlockId = marker == null
+        ? null
+        : widget.document.blockForAnchor(marker)?.id;
+    final softBlockId = soft == null
+        ? null
+        : widget.document.blockForAnchor(soft)?.id;
 
     // Raw pointer events rather than a drag recognizer: a selection drag must
     // not enter the gesture arena against the scrollable, and on desktop a
     // mouse drag does not scroll anyway, so there is nothing to arbitrate.
+    final bool editing = widget.editingBlockId != null;
+
     return Focus(
       focusNode: _keyboardFocus,
-      autofocus: true,
-      onKeyEvent: _handleKeyEvent,
+      // Autofocus would take the caret away from the editor the moment a
+      // rebuild put this widget back in the tree.
+      autofocus: !editing,
+      onKeyEvent: editing ? null : _handleKeyEvent,
+      // While a block is open in the editor the reading surface's own gestures
+      // are off. They are not merely unnecessary — the double-tap recognizer
+      // holds the gesture arena for its timeout, so every click inside the
+      // editor waits on it, and the tap handler would pull keyboard focus back
+      // out of the field the user is typing in.
       child: Listener(
-        onPointerDown: _handlePointerDown,
-        onPointerMove: _handlePointerMove,
-        onPointerUp: _handlePointerUp,
-        onPointerCancel: _handlePointerCancel,
+        onPointerDown: editing ? null : _handlePointerDown,
+        onPointerMove: editing ? null : _handlePointerMove,
+        onPointerUp: editing ? null : _handlePointerUp,
+        onPointerCancel: editing ? null : _handlePointerCancel,
         child: GestureDetector(
           behavior: HitTestBehavior.translucent,
-          onTap: () {
-            // Clicking the text is also how the reader takes keyboard focus
-            // back from a toolbar button.
-            _keyboardFocus.requestFocus();
-            widget.controller.clear();
-          },
-          onDoubleTapDown: (TapDownDetails details) =>
-              widget.controller.selectWordAt(details.globalPosition),
+          onTap: editing
+              ? null
+              : () {
+                  // Clicking the text is also how the reader takes keyboard
+                  // focus back from a toolbar button.
+                  _keyboardFocus.requestFocus();
+                  widget.controller.clear();
+                },
+          onDoubleTapDown: editing
+              ? null
+              : (TapDownDetails details) =>
+                    widget.controller.selectWordAt(details.globalPosition),
           child: Center(
             child: ConstrainedBox(
               constraints: BoxConstraints(
@@ -359,12 +406,18 @@ class ReaderViewState extends State<ReaderView> {
                                         blockId: block.id,
                                       ) ??
                                       ReaderAnchor(
-                                        blockId: block.id,
-                                        utf8Offset: 0,
+                                        utf8Offset: block.sourceStartUtf8,
+                                        contentRevision:
+                                            widget.document.contentRevision,
                                       );
                                   widget.onGutterTap!(anchor);
                                 },
                           onExtractMarksTap: widget.onExtractMarksTap,
+                          isEditing: widget.editingBlockId == block.id,
+                          isBusy: widget.isBusy,
+                          onEditCommit: widget.onEditCommit,
+                          onEditCancel: widget.onEditCancel,
+                          onEditDelete: widget.onEditDelete,
                           onParagraphMounted:
                               widget.controller.registerParagraph,
                           onParagraphUnmounted:

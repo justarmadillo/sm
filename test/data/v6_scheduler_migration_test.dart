@@ -469,11 +469,10 @@ void _seedV5Rows(sqlite.Database database) {
   ''');
   database.execute('''
     INSERT INTO extracts
-      (id, markdown, source_id, parent_id, parent_is_source, start_block_id,
-       start_offset, end_block_id, end_offset, selected_text_hash,
-       created_at_utc, edited_at_utc)
+      (id, markdown, source_id, parent_id, parent_is_source, start_utf8,
+       end_utf8, selected_text_hash, created_at_utc, edited_at_utc)
     VALUES
-      ('x1', 'passage', 's1', 's1', 1, 'block', 0, 'block', 7,
+      ('x1', 'passage', 's1', 's1', 1, 0, 7,
        '${'c' * 64}', 1100, 1200)
   ''');
   database.execute('''

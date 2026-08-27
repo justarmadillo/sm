@@ -193,3 +193,77 @@ final class DeleteSource extends AppCommand {
 
   final String sourceId;
 }
+
+/// Replace the raw markdown of one block.
+///
+/// The common editing path. The block's byte range is known before the user
+/// types, so committing produces an exact splice with nothing to infer.
+///
+/// [baseContentRevision] is the revision the editor was opened against. A
+/// mismatch is refused rather than merged: two windows editing one source is
+/// an ordinary situation, and silently overwriting the other one is not an
+/// acceptable answer to it.
+final class EditSourceBlock extends AppCommand {
+  EditSourceBlock(
+    super.operationId, {
+    required this.sourceId,
+    required this.blockId,
+    required this.markdown,
+    required this.baseContentRevision,
+    super.timestampUtc,
+  });
+
+  final String sourceId;
+  final String blockId;
+
+  /// The block's new markdown. Blank removes the block.
+  final String markdown;
+
+  final int baseContentRevision;
+}
+
+/// Remove one block and the separator that went with it.
+final class DeleteSourceBlock extends AppCommand {
+  DeleteSourceBlock(
+    super.operationId, {
+    required this.sourceId,
+    required this.blockId,
+    required this.baseContentRevision,
+    super.timestampUtc,
+  });
+
+  final String sourceId;
+  final String blockId;
+  final int baseContentRevision;
+}
+
+/// Add a new block after an existing one.
+final class InsertSourceBlock extends AppCommand {
+  InsertSourceBlock(
+    super.operationId, {
+    required this.sourceId,
+    required this.afterBlockId,
+    required this.markdown,
+    required this.baseContentRevision,
+    super.timestampUtc,
+  });
+
+  final String sourceId;
+  final String afterBlockId;
+  final String markdown;
+  final int baseContentRevision;
+}
+
+/// Reverse the most recent edit to a source's text.
+///
+/// Applied as an ordinary forward splice at a new revision, so the journal
+/// stays append-only and replaying it remains total.
+final class UndoSourceEdit extends AppCommand {
+  UndoSourceEdit(
+    super.operationId, {
+    required this.sourceId,
+    super.timestampUtc,
+  });
+
+  final String sourceId;
+}

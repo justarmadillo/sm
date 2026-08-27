@@ -3,14 +3,19 @@
 /// SuperMemo leaves extracted passages visibly marked inside the article, and
 /// that mark is load-bearing: it is the only way to tell, mid-chapter, which
 /// sentences have already been processed. Extraction never edits the text, so
-/// the mark has to be recomputed from each extract's anchors every time the
-/// document is rendered.
+/// the mark has to be recomputed from each extract's recorded byte range every
+/// time the document is rendered.
+///
+/// An extract whose provenance has degraded is not painted. A stale range no
+/// longer describes the passage the extract holds, and a wash drawn over the
+/// wrong sentence is a worse answer than no wash at all.
 library;
 
 import '../../../app/theme.dart';
 import '../../../domain/content/block.dart';
 import '../../../domain/content/document.dart';
 import '../../../domain/content/extract.dart';
+import '../../../domain/content/reader_coordinates.dart';
 import 'block_span_builder.dart';
 
 /// Persistent extract washes for every block of [document], keyed by block id.
@@ -24,29 +29,21 @@ Map<String, List<BlockHighlight>> buildExtractHighlights(
   String? focusedExtractId,
 }) {
   final result = <String, List<BlockHighlight>>{};
+  final coordinates = ReaderCoordinates(document);
 
   for (final extract in extracts) {
-    final start = extract.provenance.startAnchor;
-    final end = extract.provenance.endAnchor;
-    final startIndex = document.indexOfBlock(start.blockId);
-    final endIndex = document.indexOfBlock(end.blockId);
-    if (startIndex == null || endIndex == null || endIndex < startIndex) {
-      // An extract taken from another extract, or from a stale document
-      // version. Provenance is still intact; it simply has nothing to paint
-      // here.
-      continue;
-    }
+    final range = _paintableRange(document, extract);
+    if (range == null) continue;
+    final (int startIndex, int endIndex) = range;
 
     final focused = extract.id == focusedExtractId;
     for (var index = startIndex; index <= endIndex; index++) {
       final block = document.blocks[index];
-      final text = block.renderedText;
-      final from = index == startIndex
-          ? block.utf8ToRendered(start.utf8Offset)
-          : 0;
-      final to = index == endIndex
-          ? block.utf8ToRendered(end.utf8Offset)
-          : text.length;
+      final (int from, int to) = coordinates.renderedRangeForDocument(
+        block,
+        extract.provenance.startUtf8,
+        extract.provenance.endUtf8,
+      );
       if (to <= from) continue;
 
       (result[block.id] ??= <BlockHighlight>[]).add(
@@ -96,12 +93,9 @@ List<Extract> extractsCoveringBlock(
 }
 
 bool _covers(Document document, Extract extract, int blockIndex) {
-  final startIndex = document.indexOfBlock(
-    extract.provenance.startAnchor.blockId,
-  );
-  final endIndex = document.indexOfBlock(extract.provenance.endAnchor.blockId);
-  if (startIndex == null || endIndex == null) return false;
-  return blockIndex >= startIndex && blockIndex <= endIndex;
+  final range = _paintableRange(document, extract);
+  if (range == null) return false;
+  return blockIndex >= range.$1 && blockIndex <= range.$2;
 }
 
 /// Where a block's extract marks belong in the gutter, keyed by block id.
@@ -115,19 +109,32 @@ Map<String, int> extractMarksByCoveredBlock(
 ) {
   final counts = <String, int>{};
   for (final extract in extracts) {
-    final startIndex = document.indexOfBlock(
-      extract.provenance.startAnchor.blockId,
-    );
-    final endIndex = document.indexOfBlock(
-      extract.provenance.endAnchor.blockId,
-    );
-    if (startIndex == null || endIndex == null || endIndex < startIndex) {
-      continue;
-    }
-    for (var index = startIndex; index <= endIndex; index++) {
+    final range = _paintableRange(document, extract);
+    if (range == null) continue;
+    for (var index = range.$1; index <= range.$2; index++) {
       final Block block = document.blocks[index];
       counts[block.id] = (counts[block.id] ?? 0) + 1;
     }
   }
   return counts;
+}
+
+/// Block index range this extract may be drawn over, or null when it may not.
+///
+/// Returns null for an extract taken from another extract — its range
+/// addresses that parent's text, not this document — and for one whose link
+/// back has degraded.
+(int, int)? _paintableRange(Document document, Extract extract) {
+  final provenance = extract.provenance;
+  if (!provenance.parentIsSource) return null;
+  if (provenance.parentId != document.sourceId) return null;
+  if (!provenance.isIntact) return null;
+  if (provenance.endUtf8 <= provenance.startUtf8) return null;
+
+  final startIndex = document.blockIndexAtOffset(provenance.startUtf8);
+  final endIndex = document.blockIndexAtOffsetTrailing(provenance.endUtf8);
+  if (startIndex == null || endIndex == null || endIndex < startIndex) {
+    return null;
+  }
+  return (startIndex, endIndex);
 }

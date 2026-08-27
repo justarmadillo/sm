@@ -16,6 +16,8 @@ import '../../domain/content/document.dart';
 import '../../domain/content/extract.dart';
 import '../../domain/content/reader_anchor.dart';
 import '../../domain/content/source.dart';
+import '../../domain/content/source_edit.dart';
+import '../../domain/content/text_splice.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
@@ -129,9 +131,10 @@ Source sourceFromRow(SourceRow row) => Source(
   wordCount: row.wordCount,
   importedAtUtc: fromEpochMs(row.importedAtUtc),
   resume: ResumePosition(
-    marker: _anchorOrNull(row.markerBlockId, row.markerOffset),
-    softPosition: _anchorOrNull(row.softBlockId, row.softOffset),
+    marker: _anchorOrNull(row.markerUtf8, row.markerRevision),
+    softPosition: _anchorOrNull(row.softUtf8, row.softRevision),
   ),
+  contentRevision: row.contentRevision,
 );
 
 /// Row companion for inserting or replacing a [Source].
@@ -143,10 +146,13 @@ SourcesCompanion sourceToCompanion(Source source, {int revision = 1}) =>
       contentHash: source.contentHash,
       wordCount: source.wordCount,
       importedAtUtc: toEpochMs(source.importedAtUtc),
-      markerBlockId: Value<String?>(source.resume.marker?.blockId),
-      markerOffset: Value<int?>(source.resume.marker?.utf8Offset),
-      softBlockId: Value<String?>(source.resume.softPosition?.blockId),
-      softOffset: Value<int?>(source.resume.softPosition?.utf8Offset),
+      markerUtf8: Value<int?>(source.resume.marker?.utf8Offset),
+      markerRevision: Value<int?>(source.resume.marker?.contentRevision),
+      softUtf8: Value<int?>(source.resume.softPosition?.utf8Offset),
+      softRevision: Value<int?>(
+        source.resume.softPosition?.contentRevision,
+      ),
+      contentRevision: Value<int>(source.contentRevision),
       revision: Value<int>(revision),
     );
 
@@ -197,6 +203,7 @@ Document documentFromRows(SourceRow source, List<BlockRow> blocks) => Document(
   sourceId: source.id,
   markdown: source.markdown,
   blocks: <Block>[for (final row in blocks) blockFromRow(row)],
+  contentRevision: source.contentRevision,
 );
 
 /// Domain [Extract] from its row.
@@ -208,14 +215,19 @@ Extract extractFromRow(ExtractRow row) => Extract(
     parentId: row.parentId,
     parentIsSource: row.parentIsSource,
     startAnchor: ReaderAnchor(
-      blockId: row.startBlockId,
-      utf8Offset: row.startOffset,
+      utf8Offset: row.startUtf8,
+      contentRevision: row.anchorRevision,
     ),
-    endAnchor: ReaderAnchor(blockId: row.endBlockId, utf8Offset: row.endOffset),
+    endAnchor: ReaderAnchor(
+      utf8Offset: row.endUtf8,
+      contentRevision: row.anchorRevision,
+    ),
     selectedTextHash: row.selectedTextHash,
+    state: ProvenanceState.values[row.provenanceState],
   ),
   createdAtUtc: fromEpochMs(row.createdAtUtc),
   editedAtUtc: row.editedAtUtc == null ? null : fromEpochMs(row.editedAtUtc!),
+  contentRevision: row.contentRevision,
 );
 
 /// Row companion for an [Extract].
@@ -227,15 +239,16 @@ ExtractsCompanion extractToCompanion(Extract extract) {
     sourceId: provenance.sourceId,
     parentId: provenance.parentId,
     parentIsSource: provenance.parentIsSource,
-    startBlockId: provenance.startAnchor.blockId,
-    startOffset: provenance.startAnchor.utf8Offset,
-    endBlockId: provenance.endAnchor.blockId,
-    endOffset: provenance.endAnchor.utf8Offset,
+    startUtf8: provenance.startUtf8,
+    endUtf8: provenance.endUtf8,
+    anchorRevision: Value<int>(provenance.contentRevision),
+    provenanceState: Value<int>(provenance.state.index),
     selectedTextHash: provenance.selectedTextHash,
     createdAtUtc: toEpochMs(extract.createdAtUtc),
     editedAtUtc: Value<int?>(
       extract.editedAtUtc == null ? null : toEpochMs(extract.editedAtUtc!),
     ),
+    contentRevision: Value<int>(extract.contentRevision),
   );
 }
 
@@ -536,7 +549,40 @@ ReviewEventsCompanion reviewRecordToCompanion(ReviewRecord record) =>
       operationId: record.operationId,
     );
 
-ReaderAnchor? _anchorOrNull(String? blockId, int? offset) =>
-    blockId == null || offset == null
+/// Domain [SourceEdit] from its row.
+SourceEdit sourceEditFromRow(SourceEditRow row) => SourceEdit(
+  id: row.id,
+  sourceId: row.sourceId,
+  contentRevision: row.contentRevision,
+  splice: TextSplice.normalized(
+    startUtf8: row.startUtf8,
+    endUtf8: row.endUtf8,
+    inserted: row.insertedText,
+  ),
+  removedText: row.removedText,
+  appliedAtUtc: fromEpochMs(row.appliedAtUtc),
+  operationId: row.operationId,
+  isUndo: row.isUndo,
+  restore: SourceEditRestore.decode(row.restoreJson),
+);
+
+/// Row companion for a [SourceEdit].
+SourceEditsCompanion sourceEditToCompanion(SourceEdit edit) =>
+    SourceEditsCompanion.insert(
+      id: edit.id,
+      sourceId: edit.sourceId,
+      contentRevision: edit.contentRevision,
+      startUtf8: edit.splice.startUtf8,
+      endUtf8: edit.splice.endUtf8,
+      removedText: edit.removedText,
+      insertedText: edit.splice.inserted,
+      isUndo: Value<bool>(edit.isUndo),
+      restoreJson: Value<String>(edit.restore.encode()),
+      appliedAtUtc: toEpochMs(edit.appliedAtUtc),
+      operationId: edit.operationId,
+    );
+
+ReaderAnchor? _anchorOrNull(int? offset, int? contentRevision) =>
+    offset == null || contentRevision == null
     ? null
-    : ReaderAnchor(blockId: blockId, utf8Offset: offset);
+    : ReaderAnchor(utf8Offset: offset, contentRevision: contentRevision);

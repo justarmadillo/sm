@@ -524,21 +524,28 @@ class _Row extends ConsumerWidget {
                     padding: EdgeInsets.zero,
                     icon: const Icon(Icons.schedule_send_outlined, size: 17),
                   ),
-                  PopupMenuButton<_LearningCommand>(
-                    tooltip: 'Learning commands',
-                    onSelected: onLearningCommand,
-                    itemBuilder: (BuildContext context) =>
-                        <PopupMenuEntry<_LearningCommand>>[
-                          for (final _LearningCommand command
-                              in _LearningCommand.values)
-                            PopupMenuItem<_LearningCommand>(
-                              value: command,
-                              child: Text(command.label),
-                            ),
-                        ],
-                    constraints: _kActionConstraints,
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.more_vert, size: 17),
+                  SizedBox(
+                    width: _kActionConstraints.maxWidth,
+                    height: _kActionConstraints.maxHeight,
+                    child: PopupMenuButton<_LearningCommand>(
+                      tooltip: 'Learning commands',
+                      onSelected: onLearningCommand,
+                      itemBuilder: (BuildContext context) =>
+                          <PopupMenuEntry<_LearningCommand>>[
+                            for (final _LearningCommand command
+                                in _LearningCommand.values)
+                              PopupMenuItem<_LearningCommand>(
+                                value: command,
+                                child: Text(command.label),
+                              ),
+                          ],
+                      // No `constraints` here. On PopupMenuButton that property
+                      // sizes the *menu*, not the button, so the 33x33 box used
+                      // for the icon buttons would shrink the menu itself. The
+                      // button is sized by the SizedBox around it instead.
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(Icons.more_vert, size: 17),
+                    ),
                   ),
                 ],
               ),

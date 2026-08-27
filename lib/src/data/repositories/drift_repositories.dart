@@ -19,6 +19,9 @@ import '../../domain/content/document.dart';
 import '../../domain/content/extract.dart';
 import '../../domain/content/reader_anchor.dart';
 import '../../domain/content/source.dart';
+import '../../domain/content/source_edit.dart';
+import '../../domain/content/source_editing.dart';
+import '../../domain/content/text_splice.dart';
 import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
@@ -94,17 +97,19 @@ final class DriftContentRepository implements ContentRepository {
   @override
   Future<void> updateSource(Source source) async {
     // Bump the revision in the same statement so concurrent readers can tell
-    // a stale projection from a fresh one.
+    // a stale projection from a fresh one. The text itself is deliberately not
+    // writable here: it changes only through applySourceEdit, which records
+    // the splice and migrates everything pointing into it.
     await _database.customStatement(
-      'UPDATE sources SET title = ?, marker_block_id = ?, '
-      'marker_offset = ?, soft_block_id = ?, soft_offset = ?, '
+      'UPDATE sources SET title = ?, marker_utf8 = ?, '
+      'marker_revision = ?, soft_utf8 = ?, soft_revision = ?, '
       'revision = revision + 1 WHERE id = ?',
       <Object?>[
         source.title,
-        source.resume.marker?.blockId,
         source.resume.marker?.utf8Offset,
-        source.resume.softPosition?.blockId,
+        source.resume.marker?.contentRevision,
         source.resume.softPosition?.utf8Offset,
+        source.resume.softPosition?.contentRevision,
         source.id,
       ],
     );
@@ -113,9 +118,9 @@ final class DriftContentRepository implements ContentRepository {
   @override
   Future<Source?> setResumeMarker(String sourceId, ReaderAnchor anchor) async {
     await _database.customStatement(
-      'UPDATE sources SET marker_block_id = ?, marker_offset = ?, '
+      'UPDATE sources SET marker_utf8 = ?, marker_revision = ?, '
       'revision = revision + 1 WHERE id = ?',
-      <Object?>[anchor.blockId, anchor.utf8Offset, sourceId],
+      <Object?>[anchor.utf8Offset, anchor.contentRevision, sourceId],
     );
     return findSource(sourceId);
   }
@@ -123,9 +128,9 @@ final class DriftContentRepository implements ContentRepository {
   @override
   Future<Source?> setSoftPosition(String sourceId, ReaderAnchor anchor) async {
     await _database.customStatement(
-      'UPDATE sources SET soft_block_id = ?, soft_offset = ?, '
+      'UPDATE sources SET soft_utf8 = ?, soft_revision = ?, '
       'revision = revision + 1 WHERE id = ?',
-      <Object?>[anchor.blockId, anchor.utf8Offset, sourceId],
+      <Object?>[anchor.utf8Offset, anchor.contentRevision, sourceId],
     );
     return findSource(sourceId);
   }
@@ -133,13 +138,233 @@ final class DriftContentRepository implements ContentRepository {
   @override
   Future<Source?> confirmSoftPosition(String sourceId) async {
     await _database.customStatement(
-      'UPDATE sources SET marker_block_id = soft_block_id, '
-      'marker_offset = soft_offset, revision = revision + 1 '
-      'WHERE id = ? AND soft_block_id IS NOT NULL',
+      'UPDATE sources SET marker_utf8 = soft_utf8, '
+      'marker_revision = soft_revision, revision = revision + 1 '
+      'WHERE id = ? AND soft_utf8 IS NOT NULL',
       <Object?>[sourceId],
     );
     return findSource(sourceId);
   }
+
+  @override
+  Future<SourceEditResult> applySourceEdit({
+    required String sourceId,
+    required TextSplice splice,
+    required int baseContentRevision,
+    required String operationId,
+    required DateTime nowUtc,
+    bool isUndo = false,
+    SourceEditRestore? restore,
+  }) => _database.transaction(() async {
+    // A resent command replays its recorded outcome rather than applying the
+    // splice twice. The journal row is the record, so this needs no separate
+    // bookkeeping table.
+    final SourceEditRow? already = await _sourceEditByOperation(operationId);
+    if (already != null) {
+      final Source? current = await findSource(already.sourceId);
+      if (current != null) {
+        return SourceEditReplayed(
+          source: current,
+          edit: sourceEditFromRow(already),
+        );
+      }
+    }
+
+    final SourceRow? row = await (_database.select(
+      _database.sources,
+    )..where(($SourcesTable t) => t.id.equals(sourceId))).getSingleOrNull();
+    if (row == null) return SourceEditTargetMissing(sourceId);
+
+    if (row.contentRevision != baseContentRevision) {
+      return SourceEditConflict(
+        expectedRevision: baseContentRevision,
+        actualRevision: row.contentRevision,
+      );
+    }
+
+    final SpliceRejection? rejection = splice.validateAgainst(row.markdown);
+    if (rejection != null) return SourceEditRejected(rejection);
+
+    final Source before = sourceFromRow(row);
+    final List<Extract> children = await listExtractsOfParent(sourceId);
+
+    final SourceEditOutcome outcome = applySourceEditToText(
+      markdown: before.markdown,
+      contentRevision: before.contentRevision,
+      splice: splice,
+      marker: before.resume.marker,
+      softPosition: before.resume.softPosition,
+      children: <ChildProvenance>[
+        for (final Extract extract in children)
+          ChildProvenance(
+            extractId: extract.id,
+            provenance: extract.provenance,
+          ),
+      ],
+    );
+
+    // What this edit displaces, captured before it happens. Migration cannot
+    // be inverted — a position collapsed onto the start of an edit no longer
+    // remembers where it was — so undo restores from this rather than trying
+    // to compute its way back.
+    final SourceEditRestore displaced = SourceEditRestore(
+      markerUtf8: before.resume.marker?.utf8Offset,
+      softUtf8: before.resume.softPosition?.utf8Offset,
+      provenance: <ProvenanceSnapshot>[
+        for (final Extract extract in children)
+          ProvenanceSnapshot(
+            extractId: extract.id,
+            startUtf8: extract.provenance.startUtf8,
+            endUtf8: extract.provenance.endUtf8,
+            state: extract.provenance.state,
+          ),
+      ],
+    );
+
+    final SourceEdit edit = SourceEdit(
+      // Unique by construction: the schema already requires one edit per
+      // source per revision, so no identifier generator is needed here.
+      id: '$sourceId#${outcome.contentRevision}',
+      sourceId: sourceId,
+      contentRevision: outcome.contentRevision,
+      splice: splice,
+      removedText: outcome.removedText,
+      appliedAtUtc: nowUtc.toUtc(),
+      operationId: operationId,
+      isUndo: isUndo,
+      restore: displaced,
+    );
+    await _database
+        .into(_database.sourceEdits)
+        .insert(sourceEditToCompanion(edit));
+
+    // Undo is the one caller allowed to overwrite migration's answer, because
+    // it is restoring a recorded state rather than deriving a new one.
+    final ReaderAnchor? marker = _restoredAnchor(
+      restore?.markerUtf8,
+      outcome.marker,
+      outcome.contentRevision,
+    );
+    final ReaderAnchor? soft = _restoredAnchor(
+      restore?.softUtf8,
+      outcome.softPosition,
+      outcome.contentRevision,
+    );
+
+    final Source after = before
+        .withMarkdown(
+          outcome.markdown,
+          contentRevision: outcome.contentRevision,
+        )
+        .copyWith(resume: ResumePosition(marker: marker, softPosition: soft));
+
+    await _database.customStatement(
+      'UPDATE sources SET markdown = ?, content_hash = ?, word_count = ?, '
+      'content_revision = ?, marker_utf8 = ?, marker_revision = ?, '
+      'soft_utf8 = ?, soft_revision = ?, revision = revision + 1 '
+      'WHERE id = ?',
+      <Object?>[
+        after.markdown,
+        after.contentHash,
+        after.wordCount,
+        after.contentRevision,
+        after.resume.marker?.utf8Offset,
+        after.resume.marker?.contentRevision,
+        after.resume.softPosition?.utf8Offset,
+        after.resume.softPosition?.contentRevision,
+        sourceId,
+      ],
+    );
+
+    final Map<String, ProvenanceSnapshot> restored = <String, ProvenanceSnapshot>{
+      if (restore != null)
+        for (final ProvenanceSnapshot snapshot in restore.provenance)
+          snapshot.extractId: snapshot,
+    };
+
+    for (final ProvenanceUpdate update in outcome.provenanceUpdates) {
+      final ProvenanceSnapshot? recorded = restored[update.extractId];
+      if (recorded == null && !update.changed) continue;
+      await _database.customStatement(
+        'UPDATE extracts SET start_utf8 = ?, end_utf8 = ?, '
+        'anchor_revision = ?, provenance_state = ? WHERE id = ?',
+        <Object?>[
+          recorded?.startUtf8 ?? update.provenance.startUtf8,
+          recorded?.endUtf8 ?? update.provenance.endUtf8,
+          update.provenance.contentRevision,
+          (recorded?.state ?? update.provenance.state).index,
+          update.extractId,
+        ],
+      );
+    }
+
+    // Blocks are a derived cache and nothing persisted refers to their ids, so
+    // the whole set is rebuilt rather than patched. A windowed re-parse would
+    // have to reason about blank lines merging and splitting neighbours, and
+    // about setext headings reaching further than any fixed window — for a
+    // per-save cost measured in milliseconds.
+    await (_database.delete(
+      _database.blocks,
+    )..where(($BlocksTable t) => t.sourceId.equals(sourceId))).go();
+    final Document document = Document.parse(
+      sourceId: sourceId,
+      markdown: after.markdown,
+      contentRevision: after.contentRevision,
+    );
+    await _database.batch((Batch batch) {
+      batch.insertAll(_database.blocks, <BlocksCompanion>[
+        for (final block in document.blocks) blockToCompanion(block, sourceId),
+      ]);
+    });
+
+    return SourceEditApplied(source: after, edit: edit, outcome: outcome);
+  });
+
+  @override
+  Future<List<SourceEdit>> listSourceEdits(String sourceId) async {
+    final List<SourceEditRow> rows =
+        await (_database.select(_database.sourceEdits)
+              ..where(($SourceEditsTable t) => t.sourceId.equals(sourceId))
+              ..orderBy(<OrderClauseGenerator<$SourceEditsTable>>[
+                ($SourceEditsTable t) => OrderingTerm.asc(t.contentRevision),
+              ]))
+            .get();
+    return <SourceEdit>[for (final row in rows) sourceEditFromRow(row)];
+  }
+
+  @override
+  Future<SourceEdit?> latestSourceEdit(String sourceId) async {
+    final SourceEditRow? row =
+        await (_database.select(_database.sourceEdits)
+              ..where(($SourceEditsTable t) => t.sourceId.equals(sourceId))
+              ..orderBy(<OrderClauseGenerator<$SourceEditsTable>>[
+                ($SourceEditsTable t) => OrderingTerm.desc(t.contentRevision),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    return row == null ? null : sourceEditFromRow(row);
+  }
+
+  /// The recorded offset when undoing, otherwise what migration produced.
+  static ReaderAnchor? _restoredAnchor(
+    int? recorded,
+    ReaderAnchor? migrated,
+    int contentRevision,
+  ) {
+    if (recorded != null) {
+      return ReaderAnchor(
+        utf8Offset: recorded,
+        contentRevision: contentRevision,
+      );
+    }
+    return migrated;
+  }
+
+  Future<SourceEditRow?> _sourceEditByOperation(String operationId) =>
+      (_database.select(_database.sourceEdits)
+            ..where(($SourceEditsTable t) => t.operationId.equals(operationId)))
+          .getSingleOrNull();
+
 
   @override
   Future<void> insertExtract(Extract extract) =>
