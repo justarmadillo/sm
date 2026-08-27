@@ -30,11 +30,6 @@ class Sources extends Table {
 
   IntColumn get importedAtUtc => integer()();
 
-  /// Index into the reading-pace enum.
-  IntColumn get pace => integer()
-      .check(pace.isBetweenValues(0, 2))
-      .withDefault(const Constant(1))();
-
   /// Explicit resume marker. Both columns are set or both are null.
   TextColumn get markerBlockId => text().nullable()();
 
@@ -44,9 +39,6 @@ class Sources extends Table {
   TextColumn get softBlockId => text().nullable()();
 
   IntColumn get softOffset => integer().nullable()();
-
-  TextColumn get folderId =>
-      text().nullable().references(Folders, #id, onDelete: KeyAction.setNull)();
 
   /// Bumped on every write, for change detection and diagnostics.
   IntColumn get revision => integer().withDefault(const Constant(1))();
@@ -637,21 +629,6 @@ class ActivityEvents extends Table {
   IntColumn get durationMs => integer().nullable()();
 
   TextColumn get metadataJson => text().nullable()();
-
-  @override
-  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
-}
-
-/// User-organized upper levels of the knowledge tree.
-@DataClassName('FolderRow')
-class Folders extends Table {
-  TextColumn get id => text()();
-
-  TextColumn get parentId => text().nullable()();
-
-  TextColumn get name => text().withLength(min: 1, max: 200)();
-
-  IntColumn get position => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};

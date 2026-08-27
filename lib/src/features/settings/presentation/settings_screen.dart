@@ -662,8 +662,12 @@ class _Body extends StatelessWidget {
         ),
       ),
       SettingsRow(
-        label: 'Item forgetting-index floor',
-        hint: 'Reject an item when FI is strictly below this value.',
+        label: 'Skip cards you still recall',
+        hint:
+            'Cards easier than this are left alone. The number is a '
+            'forgetting index — the chance of failing a card, read off FSRS '
+            'retrievability as 100 × (1 − R). At 6, a card you would recall '
+            'better than 94% of the time is not postponed.',
         control: IntField(
           value: smart.itemForgettingIndexCutoff,
           min: 3,

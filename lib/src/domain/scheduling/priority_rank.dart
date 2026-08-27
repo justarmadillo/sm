@@ -143,7 +143,7 @@ final class PriorityPosition {
 ///
 /// Percentiles are derived, never stored: an absolute 0–100 score inflates
 /// (every new import feels like an 80) until the field carries no information
-/// and the overload valve has nothing left to discriminate on. A relative
+/// and the queue has nothing left to discriminate on. A relative
 /// order enforces scarcity structurally — promoting one element necessarily
 /// demotes another — which is exactly the property the priority queue needs.
 @immutable
@@ -270,6 +270,22 @@ final class PriorityScale {
 
   /// Exact Set Priority insertion after removing [current] first.
   PriorityRank rankForSetPriority(PriorityRank current, double percent) {
+    final (PriorityRank? above, PriorityRank? below) = neighboursForSetPriority(
+      current,
+      percent,
+    );
+    return PriorityRank.between(above, below);
+  }
+
+  /// The two ranks a Set Priority to [percent] would land between.
+  ///
+  /// Shared with [rankForSetPriority] rather than reimplemented, because a
+  /// preview that disagrees with the write it is previewing is worse than no
+  /// preview at all: the whole point is to show where the element will go.
+  (PriorityRank?, PriorityRank?) neighboursForSetPriority(
+    PriorityRank current,
+    double percent,
+  ) {
     final double target = percent.isFinite ? percent.clamp(0, 100) : 100;
     final List<PriorityRank> remaining = <PriorityRank>[..._keys];
     final int currentIndex = remaining.indexOf(current);
@@ -279,7 +295,7 @@ final class PriorityScale {
         ? count + 1
         : sm20RoundEven((target / 100) * count) + 1;
     final int index = (insertionPosition - 1).clamp(0, count);
-    return PriorityRank.between(
+    return (
       index == 0 ? null : remaining[index - 1],
       index == count ? null : remaining[index],
     );
@@ -329,19 +345,6 @@ final class PriorityScale {
       if (_keys[i] > rank) return _keys[i];
     }
     return null;
-  }
-
-  /// Whether [rank] sits inside the top [fraction] the overload valve must
-  /// never touch.
-  ///
-  /// Without this floor, auto-postpone eventually pushes everything out and
-  /// the collection schedules nothing — the postpone death spiral. Protected
-  /// elements stay due and force a decision: do it, or demote it by hand.
-  bool isProtected(PriorityRank rank, double fraction) {
-    if (_keys.isEmpty || fraction <= 0) return false;
-    final PriorityPosition? position = positionOf(rank);
-    if (position == null) return false;
-    return position.index < (_keys.length * fraction).ceil();
   }
 
   int _lowerBound(PriorityRank rank) {

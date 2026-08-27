@@ -16,18 +16,6 @@ import 'package:meta/meta.dart';
 import 'markdown_block_parser.dart';
 import 'reader_anchor.dart';
 
-/// Which topic interval sequence paces a source.
-enum ReadingPace {
-  /// `1,2,3,5,7,10,14,21,30` — material being worked through now.
-  focused,
-
-  /// `1,3,7,14,30,60,120,240,365` — the default.
-  normal,
-
-  /// `7,14,30,60,120,240,365,730` — background material.
-  slow,
-}
-
 /// The place a reader continues from.
 ///
 /// Two markers, deliberately: the explicit one is authoritative and drives
@@ -91,9 +79,7 @@ final class Source {
     required this.contentHash,
     required this.wordCount,
     required this.importedAtUtc,
-    this.pace = ReadingPace.normal,
     this.resume = ResumePosition.none,
-    this.folderId,
   });
 
   /// Builds a source from raw markdown, normalizing and hashing it.
@@ -105,8 +91,6 @@ final class Source {
     required String title,
     required String markdown,
     required DateTime importedAtUtc,
-    ReadingPace pace = ReadingPace.normal,
-    String? folderId,
   }) {
     final normalized = normalizeMarkdown(markdown);
     return Source(
@@ -116,8 +100,6 @@ final class Source {
       contentHash: sha256.convert(utf8.encode(normalized)).toString(),
       wordCount: countWords(normalized),
       importedAtUtc: importedAtUtc.toUtc(),
-      pace: pace,
-      folderId: folderId,
     );
   }
 
@@ -135,31 +117,17 @@ final class Source {
 
   final DateTime importedAtUtc;
 
-  /// Interval sequence this source is paced by.
-  final ReadingPace pace;
-
   /// Explicit and soft reading positions.
   final ResumePosition resume;
 
-  /// Folder in the user-organized upper tree, or null when unfiled.
-  final String? folderId;
-
-  Source copyWith({
-    String? title,
-    ReadingPace? pace,
-    ResumePosition? resume,
-    String? folderId,
-    bool clearFolder = false,
-  }) => Source(
+  Source copyWith({String? title, ResumePosition? resume}) => Source(
     id: id,
     title: title ?? this.title,
     markdown: markdown,
     contentHash: contentHash,
     wordCount: wordCount,
     importedAtUtc: importedAtUtc,
-    pace: pace ?? this.pace,
     resume: resume ?? this.resume,
-    folderId: clearFolder ? null : (folderId ?? this.folderId),
   );
 
   @override

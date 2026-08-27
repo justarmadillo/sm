@@ -128,12 +128,10 @@ Source sourceFromRow(SourceRow row) => Source(
   contentHash: row.contentHash,
   wordCount: row.wordCount,
   importedAtUtc: fromEpochMs(row.importedAtUtc),
-  pace: ReadingPace.values[row.pace],
   resume: ResumePosition(
     marker: _anchorOrNull(row.markerBlockId, row.markerOffset),
     softPosition: _anchorOrNull(row.softBlockId, row.softOffset),
   ),
-  folderId: row.folderId,
 );
 
 /// Row companion for inserting or replacing a [Source].
@@ -145,12 +143,10 @@ SourcesCompanion sourceToCompanion(Source source, {int revision = 1}) =>
       contentHash: source.contentHash,
       wordCount: source.wordCount,
       importedAtUtc: toEpochMs(source.importedAtUtc),
-      pace: Value<int>(source.pace.index),
       markerBlockId: Value<String?>(source.resume.marker?.blockId),
       markerOffset: Value<int?>(source.resume.marker?.utf8Offset),
       softBlockId: Value<String?>(source.resume.softPosition?.blockId),
       softOffset: Value<int?>(source.resume.softPosition?.utf8Offset),
-      folderId: Value<String?>(source.folderId),
       revision: Value<int>(revision),
     );
 

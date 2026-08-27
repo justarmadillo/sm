@@ -61,24 +61,6 @@ final class ActivityRecord {
   final Map<String, Object?>? metadata;
 }
 
-/// A source with the scheduling facts the Library needs to show it.
-@immutable
-final class LibraryEntry {
-  const LibraryEntry({
-    required this.source,
-    required this.topic,
-    required this.extractCount,
-  });
-
-  final Source source;
-  final TopicState topic;
-
-  /// Extracts taken directly from this source.
-  final int extractCount;
-
-  ElementSchedule get schedule => topic.schedule;
-}
-
 /// Sources, their parsed documents, extracts, and cards.
 abstract interface class ContentRepository {
   /// Stores a newly imported source together with its derived blocks.
@@ -146,9 +128,6 @@ abstract interface class ContentRepository {
   /// Sibling burying needs exactly this: three clozes cut from one sentence
   /// give each other away, so answering one pushes the rest off today.
   Future<List<Card>> listSiblingCards(String cardId);
-
-  /// How many cards each of [parentIds] has produced, keyed by parent id.
-  Future<Map<String, int>> countCardsByParent(List<String> parentIds);
 }
 
 /// Schedules, priority, topic pacing, and the activity log.
@@ -222,10 +201,6 @@ abstract interface class LearningRepository {
   /// Every schedule, ordered by priority, for the priority browser.
   Future<List<ElementSchedule>> listByPriority({int? limit, int? offset});
 
-  /// Rewrites priority for many elements in one transaction, for branch
-  /// reprioritization and drag-to-rebalance.
-  Future<void> setPriorities(Map<ElementRef, PriorityRank> ranks);
-
   /// Appends one activity record.
   Future<void> appendActivity(ActivityRecord record);
 
@@ -267,14 +242,6 @@ abstract interface class LearningRepository {
     SchedulerEventType? eventType,
   });
 
-  Future<SchedulerEvent?> findSchedulerEvent(String eventId);
-
-  Future<SchedulerEvent?> findLastSchedulerEvent(
-    ElementRef ref,
-    SchedulerEventType eventType, {
-    bool excludeUndone = true,
-  });
-
   Future<List<SchedulerEvent>> listSchedulerEventsFor(
     ElementRef ref, {
     int? limit,
@@ -298,10 +265,6 @@ abstract interface class LearningRepository {
 
   /// The most recent applied, not-yet-undone batch.
   Future<StoredMercyBatch?> findLastAppliedMercyBatch();
-
-  /// How many batches were applied on or after [day]. Drives the warning that
-  /// repeated Mercy is hiding a structural overload rather than curing one.
-  Future<int> countAppliedMercyBatchesSince(StudyDay day);
 
   /// How many entries of each event type were written on [day].
   Future<Map<RevlogEventType, int>> countRevlogOn(StudyDay day);
@@ -327,18 +290,6 @@ abstract interface class LearningRepository {
 
   /// Replaces many schedules in one statement batch.
   Future<void> saveSchedules(List<ElementSchedule> schedules);
-
-  /// Replaces many card memories and their schedules together.
-  Future<void> saveCardStates(List<CardState> cards);
-
-  /// Replaces many topics and their schedules together.
-  Future<void> saveTopics(List<TopicState> topics);
-
-  /// Active elements whose original due day is before [day], oldest first.
-  ///
-  /// The backlog Mercy spreads. Ordered by priority so the top of it lands
-  /// within days and the tail lands months out.
-  Future<List<ElementSchedule>> listBacklog({required StudyDay day});
 
   /// Every schedule of the given [types], whatever its lifecycle.
   Future<List<ElementSchedule>> listSchedules({
@@ -403,9 +354,6 @@ final class SearchHit {
 abstract interface class SearchRepository {
   /// Inserts or replaces one document, inside the caller's transaction.
   Future<void> upsertDocument(SearchDocument document);
-
-  /// Inserts or replaces many documents at once.
-  Future<void> upsertDocuments(List<SearchDocument> documents);
 
   /// Removes one document and its index entry.
   Future<void> deleteDocument(ElementRef ref);

@@ -440,8 +440,17 @@ final class ReaderViewModel
           ),
       apply: (ReaderUiState s, TopicState topic) =>
           s.copyWith(topic: topic, isDone: true),
-      successAsync: (TopicState topic) async =>
-          'Back on ${await _refreshEffectiveDue(topic)}',
+      successAsync: (TopicState topic) async {
+        final StudyDay due = await _refreshEffectiveDue(topic);
+        final StudyDay today = await ref.read(readerHandlersProvider).today();
+        // Later Today on an element that is already Outstanding is a
+        // queue-only shift: section 8.4 leaves the due date alone. Reporting
+        // the canonical due here would name a day that has already passed for
+        // anything overdue, and promise a return that is not scheduled.
+        return due <= today
+            ? "Moved to the back of today's queue"
+            : 'Back on $due';
+      },
     );
   }
 

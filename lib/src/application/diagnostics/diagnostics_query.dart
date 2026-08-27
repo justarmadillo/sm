@@ -170,10 +170,6 @@ final class DiagnosticsQuery {
   Future<List<ActivityRecord>> recentCommands({int limit = 50}) =>
       _learning.recentActivity(limit: limit);
 
-  /// The most recent log entries, newest first.
-  Future<List<RevlogEntry>> recentEvents({int limit = 100}) =>
-      _learning.recentRevlog(limit: limit);
-
   Future<String?> _titleOf(ElementRef ref) async => switch (ref.type) {
     ElementType.source => (await _content.findSource(ref.id))?.title,
     ElementType.extract => (await _content.findExtract(ref.id))?.markdown,

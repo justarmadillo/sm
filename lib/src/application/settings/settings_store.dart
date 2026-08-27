@@ -65,9 +65,6 @@ final class SettingsStore {
     }
   }
 
-  /// Restores every shipped default.
-  Future<Result<AppSettings>> resetToDefaults() => save(const AppSettings());
-
   /// Drops the cache so the next [load] re-reads from storage.
   void invalidate() => _cached = null;
 

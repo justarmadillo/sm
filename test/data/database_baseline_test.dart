@@ -30,8 +30,8 @@ void main() {
   Future<void> seed(AppDatabase db) async {
     await db.customStatement(
       'INSERT INTO sources (id, title, markdown, content_hash, word_count, '
-      'imported_at_utc, pace, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      <Object?>['s1', 'Fixture', '# Title', 'a' * 64, 2, 0, 1, 1],
+      'imported_at_utc, revision) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      <Object?>['s1', 'Fixture', '# Title', 'a' * 64, 2, 0, 1],
     );
     await db.customStatement(
       'INSERT INTO element_schedules (element_id, element_type, priority_key, '
@@ -64,7 +64,6 @@ void main() {
         'dataset_meta',
         'element_schedules',
         'extracts',
-        'folders',
         'mercy_batches',
         'review_events',
         'revlog_entries',

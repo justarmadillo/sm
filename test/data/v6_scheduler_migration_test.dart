@@ -461,11 +461,11 @@ Future<void> _createV5Fixture(File file) async {
 void _seedV5Rows(sqlite.Database database) {
   database.execute('''
     INSERT INTO sources
-      (id, title, markdown, content_hash, word_count, imported_at_utc, pace,
+      (id, title, markdown, content_hash, word_count, imported_at_utc,
        revision)
     VALUES
-      ('s1', 'Source', 'body', '${'a' * 64}', 20, 1000, 1, 1),
-      ('s-damaged', 'Damaged', 'body', '${'b' * 64}', 20, 900, 1, 1)
+      ('s1', 'Source', 'body', '${'a' * 64}', 20, 1000, 1),
+      ('s-damaged', 'Damaged', 'body', '${'b' * 64}', 20, 900, 1)
   ''');
   database.execute('''
     INSERT INTO extracts

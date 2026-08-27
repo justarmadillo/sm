@@ -369,10 +369,6 @@ final class ExtractionHandlers {
     return Ok<Extract>(updated);
   });
 
-  /// Extracts taken from [parentId], for the Reader's gutter marks.
-  Future<List<Extract>> listExtractsOf(String parentId) =>
-      _content.listExtractsOfParent(parentId);
-
   /// The document an extract's anchors address, source or extract.
   ///
   /// An extract's own text is parsed on demand rather than stored as blocks:

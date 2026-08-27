@@ -8,8 +8,8 @@
 library;
 
 import 'package:incremental_reader/src/application/queue/queue_commands.dart';
-import 'package:incremental_reader/src/application/reader/reader_commands.dart';
 import 'package:incremental_reader/src/application/queue/queue_query.dart';
+import 'package:incremental_reader/src/application/reader/reader_commands.dart';
 import 'package:incremental_reader/src/core/clock.dart';
 import 'package:incremental_reader/src/core/result.dart';
 import 'package:incremental_reader/src/domain/content/source.dart';

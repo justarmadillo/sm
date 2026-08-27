@@ -11,8 +11,11 @@ import 'package:meta/meta.dart';
 import '../../domain/content/card.dart';
 import '../../domain/content/extract.dart';
 import '../../domain/content/source.dart';
+import '../../domain/scheduling/card_scheduler.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
+import '../../domain/scheduling/study_day.dart';
+import '../../domain/scheduling/topic_scheduler.dart';
 import '../ports/repositories.dart';
 import '../scheduling/scheduling_context.dart';
 
@@ -24,6 +27,10 @@ final class PriorityEntry {
     required this.position,
     required this.title,
     required this.preview,
+    this.intervalDays = 0,
+    this.repetitions = 0,
+    this.lapses = 0,
+    this.lastRepetition,
   });
 
   final ElementSchedule schedule;
@@ -36,10 +43,22 @@ final class PriorityEntry {
   /// Short excerpt, so the user can recognize the element without opening it.
   final String preview;
 
+  /// Stored interval in days. Cards report their rounded scheduled days.
+  final int intervalDays;
+
+  final int repetitions;
+  final int lapses;
+
+  /// Day of the last repetition, or null when there has never been one.
+  final StudyDay? lastRepetition;
+
   ElementRef get ref => schedule.ref;
 
   /// SuperMemo-style percent: `0` is the most important.
   double get percent => position.percent;
+
+  /// Canonical next repetition.
+  StudyDay get nextRepetition => schedule.algorithmicDueDay;
 }
 
 /// What the Alt+P dialog shows about one element.
@@ -104,6 +123,7 @@ final class PriorityQuery {
     for (var index = 0; index < schedules.length; index++) {
       final ElementSchedule schedule = schedules[index];
       final (String title, String preview) = await _describe(schedule.ref);
+      final _Repetitions counters = await _countersFor(schedule.ref);
       entries.add(
         PriorityEntry(
           schedule: schedule,
@@ -115,10 +135,43 @@ final class PriorityQuery {
               ),
           title: title,
           preview: preview,
+          intervalDays: counters.intervalDays,
+          repetitions: counters.repetitions,
+          lapses: counters.lapses,
+          lastRepetition: counters.lastRepetition,
         ),
       );
     }
     return List<PriorityEntry>.unmodifiable(entries);
+  }
+
+  /// Repetition counters, read from whichever engine owns this element.
+  ///
+  /// Topics keep their own SM20 counters; cards keep FSRS ones. The browser
+  /// shows a single table, so the two are read into one shape here rather than
+  /// leaving the view to branch on element type.
+  Future<_Repetitions> _countersFor(ElementRef ref) async {
+    if (ref.type == ElementType.card) {
+      final CardState? card = await _learning.findCardState(ref.id);
+      if (card == null) return const _Repetitions();
+      final StudyDayCalendar calendar = await _context.calendar();
+      return _Repetitions(
+        intervalDays: (card.memory.scheduledDays ?? 0).round(),
+        repetitions: card.memory.reps,
+        lapses: card.memory.lapses,
+        lastRepetition: card.memory.lastReviewAtUtc == null
+            ? null
+            : calendar.dayOf(card.memory.lastReviewAtUtc!),
+      );
+    }
+    final TopicState? topic = await _learning.findTopic(ref);
+    if (topic == null) return const _Repetitions();
+    return _Repetitions(
+      intervalDays: topic.storedInterval,
+      repetitions: topic.repetitionCount,
+      lapses: topic.lapseCount,
+      lastRepetition: topic.lastReviewDay,
+    );
   }
 
   /// What the slider should show for [ref], or null when it has no schedule.
@@ -166,6 +219,27 @@ final class PriorityQuery {
       );
     }
     return List<PriorityEntry>.unmodifiable(entries);
+  }
+
+  /// The neighbours a Set Priority to [percent] would place [ref] between.
+  ///
+  /// The dialog calls this as the slider moves, so what it names is where the
+  /// element would actually land rather than where it currently sits.
+  Future<({PriorityEntry? above, PriorityEntry? below})> neighboursAt({
+    required ElementRef ref,
+    required double percent,
+  }) async {
+    final ElementSchedule? schedule = await _learning.findSchedule(ref);
+    if (schedule == null) {
+      return (above: null, below: null);
+    }
+    final PriorityScale scale = await _context.priorityScale();
+    final (PriorityRank? above, PriorityRank? below) = scale
+        .neighboursForSetPriority(schedule.priority, percent);
+    return (
+      above: await _neighbour(above, scale),
+      below: await _neighbour(below, scale),
+    );
   }
 
   Future<PriorityEntry?> _neighbour(
@@ -221,4 +295,20 @@ String excerptOf(String markdown, {int maximum = 140}) {
   final String collapsed = markdown.replaceAll(RegExp(r'\s+'), ' ').trim();
   if (collapsed.length <= maximum) return collapsed;
   return '${collapsed.substring(0, maximum - 1).trimRight()}…';
+}
+
+/// The counters a browser row shows, whichever engine produced them.
+@immutable
+final class _Repetitions {
+  const _Repetitions({
+    this.intervalDays = 0,
+    this.repetitions = 0,
+    this.lapses = 0,
+    this.lastRepetition,
+  });
+
+  final int intervalDays;
+  final int repetitions;
+  final int lapses;
+  final StudyDay? lastRepetition;
 }

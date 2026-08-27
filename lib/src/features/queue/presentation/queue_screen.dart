@@ -13,13 +13,17 @@ import '../../../application/scheduling/mercy_workflow.dart';
 import '../../../domain/scheduling/element.dart';
 import '../../../domain/scheduling/mercy.dart';
 import '../../../domain/scheduling/queue_policy.dart';
+import '../../contents/presentation/contents_screen.dart';
 import '../../diagnostics/presentation/diagnostics_screen.dart';
 import '../../extract/presentation/extract_screen.dart';
 import '../../extract/presentation/extract_view_model.dart';
+import '../../priority/presentation/priority_browser_screen.dart';
 import '../../priority/presentation/priority_dialog.dart';
 import '../../reader/presentation/reader_screen.dart';
 import '../../reader/presentation/reader_view_model.dart';
 import '../../review/presentation/review_screen.dart';
+import '../../settings/presentation/settings_screen.dart';
+import '../../shared/element_type_badge.dart';
 import 'queue_view_model.dart';
 import 'smart_postpone_dialog.dart';
 import 'study_route_result.dart';
@@ -77,8 +81,21 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
   ) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Study queue'),
+        title: const Text('Study'),
         actions: <Widget>[
+          // This screen is now the home, so the collection-wide destinations
+          // live here rather than on the screen that used to hold them.
+          TextButton.icon(
+            onPressed: _openingRoutes
+                ? null
+                : () async {
+                    await openContents(context, ref);
+                    await model.refresh();
+                  },
+            icon: const Icon(Icons.account_tree_outlined, size: 18),
+            label: const Text('Contents'),
+          ),
+          const SizedBox(width: 4),
           IconButton(
             // Undo lives here rather than on the review screen: that screen
             // closes the moment a grade commits, and the session is what the
@@ -95,9 +112,29 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
           IconButton(
             onPressed: _openingRoutes
                 ? null
+                : () async {
+                    await openPriorityBrowser(context, ref);
+                    await model.refresh();
+                  },
+            icon: const Icon(Icons.low_priority),
+            tooltip: 'Priority queue',
+          ),
+          IconButton(
+            onPressed: _openingRoutes
+                ? null
                 : () => openDiagnostics(context, ref),
             icon: const Icon(Icons.insights_outlined),
             tooltip: 'Diagnostics',
+          ),
+          IconButton(
+            onPressed: _openingRoutes
+                ? null
+                : () async {
+                    await openSettings(context, ref);
+                    await model.refresh();
+                  },
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
           ),
           const SizedBox(width: 8),
         ],
@@ -122,10 +159,20 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
     if (_openingRoutes) return;
     setState(() => _openingRoutes = true);
     try {
+      // The session advances only while each pass consumes an element. A
+      // command can legitimately report "committed" while leaving the queue
+      // exactly as it was — Later Today on an element that is already
+      // Outstanding is a queue-only shift, and a topic already repeated today
+      // makes no further progress. Without this guard the same element is
+      // reopened forever, spinning the session counter and hammering the
+      // database.
+      ElementRef? previous;
       while (mounted) {
         final state = ref.read(queueViewModelProvider).valueOrNull;
         final entry = state?.next;
         if (entry == null) break;
+        if (entry.ref == previous) break;
+        previous = entry.ref;
         final result = await _openEntry(entry);
         if (!mounted || result != StudyRouteResult.committed) break;
         await ref.read(queueViewModelProvider.notifier).refreshAfterCommit();
@@ -476,11 +523,11 @@ class _QueueTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final (IconData icon, Color color) = switch (entry.ref.type) {
-      ElementType.source => (Icons.menu_book_outlined, AppColors.accent),
-      ElementType.extract => (Icons.content_cut, AppColors.softMarker),
-      ElementType.card => (Icons.quiz_outlined, Colors.teal),
-    };
+    final ({IconData icon, Color color, String label}) style = elementTypeStyle(
+      entry.ref.type,
+    );
+    final IconData icon = style.icon;
+    final Color color = style.color;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
@@ -507,6 +554,12 @@ class _QueueTile extends ConsumerWidget {
                   children: <Widget>[
                     Row(
                       children: <Widget>[
+                        // The action says what to do; the badge says what the
+                        // element is. A mixed queue needs both, because Read
+                        // means something different for a topic than Review
+                        // does for a card.
+                        ElementTypeBadge(type: entry.ref.type),
+                        const SizedBox(width: 6),
                         Text(
                           entry.actionLabel.toUpperCase(),
                           style: TextStyle(

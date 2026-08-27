@@ -39,23 +39,4 @@ final class EffectiveDueQuery {
     }
     return (await _learning.findTopic(ref))?.schedule.algorithmicDueDay;
   }
-
-  Future<Map<ElementRef, StudyDay>> forSchedules(
-    Iterable<ElementSchedule> schedules,
-  ) async {
-    final List<ElementSchedule> all = schedules.toList(growable: false);
-    final StudyDayCalendar calendar = await _context.calendar();
-    final Map<ElementRef, StudyDay> result = <ElementRef, StudyDay>{};
-    for (final ElementSchedule schedule in all) {
-      if (schedule.ref.type == ElementType.card) {
-        final CardState? card = await _learning.findCardState(schedule.ref.id);
-        if (card != null) {
-          result[schedule.ref] = calendar.dayOf(card.memory.dueAtUtc);
-        }
-      } else {
-        result[schedule.ref] = schedule.algorithmicDueDay;
-      }
-    }
-    return result;
-  }
 }

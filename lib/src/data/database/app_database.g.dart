@@ -3,316 +3,6 @@
 part of 'app_database.dart';
 
 // ignore_for_file: type=lint
-class $FoldersTable extends Folders with TableInfo<$FoldersTable, FolderRow> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $FoldersTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _parentIdMeta = const VerificationMeta(
-    'parentId',
-  );
-  @override
-  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
-    'parent_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _nameMeta = const VerificationMeta('name');
-  @override
-  late final GeneratedColumn<String> name = GeneratedColumn<String>(
-    'name',
-    aliasedName,
-    false,
-    additionalChecks: GeneratedColumn.checkTextLength(
-      minTextLength: 1,
-      maxTextLength: 200,
-    ),
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _positionMeta = const VerificationMeta(
-    'position',
-  );
-  @override
-  late final GeneratedColumn<int> position = GeneratedColumn<int>(
-    'position',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  @override
-  List<GeneratedColumn> get $columns => [id, parentId, name, position];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'folders';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<FolderRow> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('parent_id')) {
-      context.handle(
-        _parentIdMeta,
-        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
-      );
-    }
-    if (data.containsKey('name')) {
-      context.handle(
-        _nameMeta,
-        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_nameMeta);
-    }
-    if (data.containsKey('position')) {
-      context.handle(
-        _positionMeta,
-        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  FolderRow map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return FolderRow(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      parentId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}parent_id'],
-      ),
-      name: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}name'],
-      )!,
-      position: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}position'],
-      )!,
-    );
-  }
-
-  @override
-  $FoldersTable createAlias(String alias) {
-    return $FoldersTable(attachedDatabase, alias);
-  }
-}
-
-class FolderRow extends DataClass implements Insertable<FolderRow> {
-  final String id;
-  final String? parentId;
-  final String name;
-  final int position;
-  const FolderRow({
-    required this.id,
-    this.parentId,
-    required this.name,
-    required this.position,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    if (!nullToAbsent || parentId != null) {
-      map['parent_id'] = Variable<String>(parentId);
-    }
-    map['name'] = Variable<String>(name);
-    map['position'] = Variable<int>(position);
-    return map;
-  }
-
-  FoldersCompanion toCompanion(bool nullToAbsent) {
-    return FoldersCompanion(
-      id: Value(id),
-      parentId: parentId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(parentId),
-      name: Value(name),
-      position: Value(position),
-    );
-  }
-
-  factory FolderRow.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return FolderRow(
-      id: serializer.fromJson<String>(json['id']),
-      parentId: serializer.fromJson<String?>(json['parentId']),
-      name: serializer.fromJson<String>(json['name']),
-      position: serializer.fromJson<int>(json['position']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'parentId': serializer.toJson<String?>(parentId),
-      'name': serializer.toJson<String>(name),
-      'position': serializer.toJson<int>(position),
-    };
-  }
-
-  FolderRow copyWith({
-    String? id,
-    Value<String?> parentId = const Value.absent(),
-    String? name,
-    int? position,
-  }) => FolderRow(
-    id: id ?? this.id,
-    parentId: parentId.present ? parentId.value : this.parentId,
-    name: name ?? this.name,
-    position: position ?? this.position,
-  );
-  FolderRow copyWithCompanion(FoldersCompanion data) {
-    return FolderRow(
-      id: data.id.present ? data.id.value : this.id,
-      parentId: data.parentId.present ? data.parentId.value : this.parentId,
-      name: data.name.present ? data.name.value : this.name,
-      position: data.position.present ? data.position.value : this.position,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('FolderRow(')
-          ..write('id: $id, ')
-          ..write('parentId: $parentId, ')
-          ..write('name: $name, ')
-          ..write('position: $position')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(id, parentId, name, position);
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is FolderRow &&
-          other.id == this.id &&
-          other.parentId == this.parentId &&
-          other.name == this.name &&
-          other.position == this.position);
-}
-
-class FoldersCompanion extends UpdateCompanion<FolderRow> {
-  final Value<String> id;
-  final Value<String?> parentId;
-  final Value<String> name;
-  final Value<int> position;
-  final Value<int> rowid;
-  const FoldersCompanion({
-    this.id = const Value.absent(),
-    this.parentId = const Value.absent(),
-    this.name = const Value.absent(),
-    this.position = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  FoldersCompanion.insert({
-    required String id,
-    this.parentId = const Value.absent(),
-    required String name,
-    this.position = const Value.absent(),
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       name = Value(name);
-  static Insertable<FolderRow> custom({
-    Expression<String>? id,
-    Expression<String>? parentId,
-    Expression<String>? name,
-    Expression<int>? position,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (parentId != null) 'parent_id': parentId,
-      if (name != null) 'name': name,
-      if (position != null) 'position': position,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  FoldersCompanion copyWith({
-    Value<String>? id,
-    Value<String?>? parentId,
-    Value<String>? name,
-    Value<int>? position,
-    Value<int>? rowid,
-  }) {
-    return FoldersCompanion(
-      id: id ?? this.id,
-      parentId: parentId ?? this.parentId,
-      name: name ?? this.name,
-      position: position ?? this.position,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (parentId.present) {
-      map['parent_id'] = Variable<String>(parentId.value);
-    }
-    if (name.present) {
-      map['name'] = Variable<String>(name.value);
-    }
-    if (position.present) {
-      map['position'] = Variable<int>(position.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('FoldersCompanion(')
-          ..write('id: $id, ')
-          ..write('parentId: $parentId, ')
-          ..write('name: $name, ')
-          ..write('position: $position, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
 class $SourcesTable extends Sources with TableInfo<$SourcesTable, SourceRow> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -389,17 +79,6 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, SourceRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _paceMeta = const VerificationMeta('pace');
-  @override
-  late final GeneratedColumn<int> pace = GeneratedColumn<int>(
-    'pace',
-    aliasedName,
-    false,
-    check: () => ComparableExpr(pace).isBetweenValues(0, 2),
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(1),
-  );
   static const VerificationMeta _markerBlockIdMeta = const VerificationMeta(
     'markerBlockId',
   );
@@ -444,20 +123,6 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, SourceRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _folderIdMeta = const VerificationMeta(
-    'folderId',
-  );
-  @override
-  late final GeneratedColumn<String> folderId = GeneratedColumn<String>(
-    'folder_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES folders (id) ON DELETE SET NULL',
-    ),
-  );
   static const VerificationMeta _revisionMeta = const VerificationMeta(
     'revision',
   );
@@ -478,12 +143,10 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, SourceRow> {
     contentHash,
     wordCount,
     importedAtUtc,
-    pace,
     markerBlockId,
     markerOffset,
     softBlockId,
     softOffset,
-    folderId,
     revision,
   ];
   @override
@@ -549,12 +212,6 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, SourceRow> {
     } else if (isInserting) {
       context.missing(_importedAtUtcMeta);
     }
-    if (data.containsKey('pace')) {
-      context.handle(
-        _paceMeta,
-        pace.isAcceptableOrUnknown(data['pace']!, _paceMeta),
-      );
-    }
     if (data.containsKey('marker_block_id')) {
       context.handle(
         _markerBlockIdMeta,
@@ -586,12 +243,6 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, SourceRow> {
       context.handle(
         _softOffsetMeta,
         softOffset.isAcceptableOrUnknown(data['soft_offset']!, _softOffsetMeta),
-      );
-    }
-    if (data.containsKey('folder_id')) {
-      context.handle(
-        _folderIdMeta,
-        folderId.isAcceptableOrUnknown(data['folder_id']!, _folderIdMeta),
       );
     }
     if (data.containsKey('revision')) {
@@ -633,10 +284,6 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, SourceRow> {
         DriftSqlType.int,
         data['${effectivePrefix}imported_at_utc'],
       )!,
-      pace: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}pace'],
-      )!,
       markerBlockId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}marker_block_id'],
@@ -652,10 +299,6 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, SourceRow> {
       softOffset: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}soft_offset'],
-      ),
-      folderId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}folder_id'],
       ),
       revision: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -680,9 +323,6 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
   final int wordCount;
   final int importedAtUtc;
 
-  /// Index into the reading-pace enum.
-  final int pace;
-
   /// Explicit resume marker. Both columns are set or both are null.
   final String? markerBlockId;
   final int? markerOffset;
@@ -690,7 +330,6 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
   /// Soft position. Never drives scheduling.
   final String? softBlockId;
   final int? softOffset;
-  final String? folderId;
 
   /// Bumped on every write, for change detection and diagnostics.
   final int revision;
@@ -701,12 +340,10 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
     required this.contentHash,
     required this.wordCount,
     required this.importedAtUtc,
-    required this.pace,
     this.markerBlockId,
     this.markerOffset,
     this.softBlockId,
     this.softOffset,
-    this.folderId,
     required this.revision,
   });
   @override
@@ -718,7 +355,6 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
     map['content_hash'] = Variable<String>(contentHash);
     map['word_count'] = Variable<int>(wordCount);
     map['imported_at_utc'] = Variable<int>(importedAtUtc);
-    map['pace'] = Variable<int>(pace);
     if (!nullToAbsent || markerBlockId != null) {
       map['marker_block_id'] = Variable<String>(markerBlockId);
     }
@@ -730,9 +366,6 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
     }
     if (!nullToAbsent || softOffset != null) {
       map['soft_offset'] = Variable<int>(softOffset);
-    }
-    if (!nullToAbsent || folderId != null) {
-      map['folder_id'] = Variable<String>(folderId);
     }
     map['revision'] = Variable<int>(revision);
     return map;
@@ -746,7 +379,6 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
       contentHash: Value(contentHash),
       wordCount: Value(wordCount),
       importedAtUtc: Value(importedAtUtc),
-      pace: Value(pace),
       markerBlockId: markerBlockId == null && nullToAbsent
           ? const Value.absent()
           : Value(markerBlockId),
@@ -759,9 +391,6 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
       softOffset: softOffset == null && nullToAbsent
           ? const Value.absent()
           : Value(softOffset),
-      folderId: folderId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(folderId),
       revision: Value(revision),
     );
   }
@@ -778,12 +407,10 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
       contentHash: serializer.fromJson<String>(json['contentHash']),
       wordCount: serializer.fromJson<int>(json['wordCount']),
       importedAtUtc: serializer.fromJson<int>(json['importedAtUtc']),
-      pace: serializer.fromJson<int>(json['pace']),
       markerBlockId: serializer.fromJson<String?>(json['markerBlockId']),
       markerOffset: serializer.fromJson<int?>(json['markerOffset']),
       softBlockId: serializer.fromJson<String?>(json['softBlockId']),
       softOffset: serializer.fromJson<int?>(json['softOffset']),
-      folderId: serializer.fromJson<String?>(json['folderId']),
       revision: serializer.fromJson<int>(json['revision']),
     );
   }
@@ -797,12 +424,10 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
       'contentHash': serializer.toJson<String>(contentHash),
       'wordCount': serializer.toJson<int>(wordCount),
       'importedAtUtc': serializer.toJson<int>(importedAtUtc),
-      'pace': serializer.toJson<int>(pace),
       'markerBlockId': serializer.toJson<String?>(markerBlockId),
       'markerOffset': serializer.toJson<int?>(markerOffset),
       'softBlockId': serializer.toJson<String?>(softBlockId),
       'softOffset': serializer.toJson<int?>(softOffset),
-      'folderId': serializer.toJson<String?>(folderId),
       'revision': serializer.toJson<int>(revision),
     };
   }
@@ -814,12 +439,10 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
     String? contentHash,
     int? wordCount,
     int? importedAtUtc,
-    int? pace,
     Value<String?> markerBlockId = const Value.absent(),
     Value<int?> markerOffset = const Value.absent(),
     Value<String?> softBlockId = const Value.absent(),
     Value<int?> softOffset = const Value.absent(),
-    Value<String?> folderId = const Value.absent(),
     int? revision,
   }) => SourceRow(
     id: id ?? this.id,
@@ -828,14 +451,12 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
     contentHash: contentHash ?? this.contentHash,
     wordCount: wordCount ?? this.wordCount,
     importedAtUtc: importedAtUtc ?? this.importedAtUtc,
-    pace: pace ?? this.pace,
     markerBlockId: markerBlockId.present
         ? markerBlockId.value
         : this.markerBlockId,
     markerOffset: markerOffset.present ? markerOffset.value : this.markerOffset,
     softBlockId: softBlockId.present ? softBlockId.value : this.softBlockId,
     softOffset: softOffset.present ? softOffset.value : this.softOffset,
-    folderId: folderId.present ? folderId.value : this.folderId,
     revision: revision ?? this.revision,
   );
   SourceRow copyWithCompanion(SourcesCompanion data) {
@@ -850,7 +471,6 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
       importedAtUtc: data.importedAtUtc.present
           ? data.importedAtUtc.value
           : this.importedAtUtc,
-      pace: data.pace.present ? data.pace.value : this.pace,
       markerBlockId: data.markerBlockId.present
           ? data.markerBlockId.value
           : this.markerBlockId,
@@ -863,7 +483,6 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
       softOffset: data.softOffset.present
           ? data.softOffset.value
           : this.softOffset,
-      folderId: data.folderId.present ? data.folderId.value : this.folderId,
       revision: data.revision.present ? data.revision.value : this.revision,
     );
   }
@@ -877,12 +496,10 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
           ..write('contentHash: $contentHash, ')
           ..write('wordCount: $wordCount, ')
           ..write('importedAtUtc: $importedAtUtc, ')
-          ..write('pace: $pace, ')
           ..write('markerBlockId: $markerBlockId, ')
           ..write('markerOffset: $markerOffset, ')
           ..write('softBlockId: $softBlockId, ')
           ..write('softOffset: $softOffset, ')
-          ..write('folderId: $folderId, ')
           ..write('revision: $revision')
           ..write(')'))
         .toString();
@@ -896,12 +513,10 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
     contentHash,
     wordCount,
     importedAtUtc,
-    pace,
     markerBlockId,
     markerOffset,
     softBlockId,
     softOffset,
-    folderId,
     revision,
   );
   @override
@@ -914,12 +529,10 @@ class SourceRow extends DataClass implements Insertable<SourceRow> {
           other.contentHash == this.contentHash &&
           other.wordCount == this.wordCount &&
           other.importedAtUtc == this.importedAtUtc &&
-          other.pace == this.pace &&
           other.markerBlockId == this.markerBlockId &&
           other.markerOffset == this.markerOffset &&
           other.softBlockId == this.softBlockId &&
           other.softOffset == this.softOffset &&
-          other.folderId == this.folderId &&
           other.revision == this.revision);
 }
 
@@ -930,12 +543,10 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
   final Value<String> contentHash;
   final Value<int> wordCount;
   final Value<int> importedAtUtc;
-  final Value<int> pace;
   final Value<String?> markerBlockId;
   final Value<int?> markerOffset;
   final Value<String?> softBlockId;
   final Value<int?> softOffset;
-  final Value<String?> folderId;
   final Value<int> revision;
   final Value<int> rowid;
   const SourcesCompanion({
@@ -945,12 +556,10 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
     this.contentHash = const Value.absent(),
     this.wordCount = const Value.absent(),
     this.importedAtUtc = const Value.absent(),
-    this.pace = const Value.absent(),
     this.markerBlockId = const Value.absent(),
     this.markerOffset = const Value.absent(),
     this.softBlockId = const Value.absent(),
     this.softOffset = const Value.absent(),
-    this.folderId = const Value.absent(),
     this.revision = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -961,12 +570,10 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
     required String contentHash,
     required int wordCount,
     required int importedAtUtc,
-    this.pace = const Value.absent(),
     this.markerBlockId = const Value.absent(),
     this.markerOffset = const Value.absent(),
     this.softBlockId = const Value.absent(),
     this.softOffset = const Value.absent(),
-    this.folderId = const Value.absent(),
     this.revision = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -982,12 +589,10 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
     Expression<String>? contentHash,
     Expression<int>? wordCount,
     Expression<int>? importedAtUtc,
-    Expression<int>? pace,
     Expression<String>? markerBlockId,
     Expression<int>? markerOffset,
     Expression<String>? softBlockId,
     Expression<int>? softOffset,
-    Expression<String>? folderId,
     Expression<int>? revision,
     Expression<int>? rowid,
   }) {
@@ -998,12 +603,10 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
       if (contentHash != null) 'content_hash': contentHash,
       if (wordCount != null) 'word_count': wordCount,
       if (importedAtUtc != null) 'imported_at_utc': importedAtUtc,
-      if (pace != null) 'pace': pace,
       if (markerBlockId != null) 'marker_block_id': markerBlockId,
       if (markerOffset != null) 'marker_offset': markerOffset,
       if (softBlockId != null) 'soft_block_id': softBlockId,
       if (softOffset != null) 'soft_offset': softOffset,
-      if (folderId != null) 'folder_id': folderId,
       if (revision != null) 'revision': revision,
       if (rowid != null) 'rowid': rowid,
     });
@@ -1016,12 +619,10 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
     Value<String>? contentHash,
     Value<int>? wordCount,
     Value<int>? importedAtUtc,
-    Value<int>? pace,
     Value<String?>? markerBlockId,
     Value<int?>? markerOffset,
     Value<String?>? softBlockId,
     Value<int?>? softOffset,
-    Value<String?>? folderId,
     Value<int>? revision,
     Value<int>? rowid,
   }) {
@@ -1032,12 +633,10 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
       contentHash: contentHash ?? this.contentHash,
       wordCount: wordCount ?? this.wordCount,
       importedAtUtc: importedAtUtc ?? this.importedAtUtc,
-      pace: pace ?? this.pace,
       markerBlockId: markerBlockId ?? this.markerBlockId,
       markerOffset: markerOffset ?? this.markerOffset,
       softBlockId: softBlockId ?? this.softBlockId,
       softOffset: softOffset ?? this.softOffset,
-      folderId: folderId ?? this.folderId,
       revision: revision ?? this.revision,
       rowid: rowid ?? this.rowid,
     );
@@ -1064,9 +663,6 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
     if (importedAtUtc.present) {
       map['imported_at_utc'] = Variable<int>(importedAtUtc.value);
     }
-    if (pace.present) {
-      map['pace'] = Variable<int>(pace.value);
-    }
     if (markerBlockId.present) {
       map['marker_block_id'] = Variable<String>(markerBlockId.value);
     }
@@ -1078,9 +674,6 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
     }
     if (softOffset.present) {
       map['soft_offset'] = Variable<int>(softOffset.value);
-    }
-    if (folderId.present) {
-      map['folder_id'] = Variable<String>(folderId.value);
     }
     if (revision.present) {
       map['revision'] = Variable<int>(revision.value);
@@ -1100,12 +693,10 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
           ..write('contentHash: $contentHash, ')
           ..write('wordCount: $wordCount, ')
           ..write('importedAtUtc: $importedAtUtc, ')
-          ..write('pace: $pace, ')
           ..write('markerBlockId: $markerBlockId, ')
           ..write('markerOffset: $markerOffset, ')
           ..write('softBlockId: $softBlockId, ')
           ..write('softOffset: $softOffset, ')
-          ..write('folderId: $folderId, ')
           ..write('revision: $revision, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -12249,7 +11840,6 @@ class DatasetMetaCompanion extends UpdateCompanion<DatasetMetaRow> {
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
-  late final $FoldersTable folders = $FoldersTable(this);
   late final $SourcesTable sources = $SourcesTable(this);
   late final $BlocksTable blocks = $BlocksTable(this);
   late final $ExtractsTable extracts = $ExtractsTable(this);
@@ -12276,7 +11866,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
-    folders,
     sources,
     blocks,
     extracts,
@@ -12297,13 +11886,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
     WritePropagation(
       on: TableUpdateQuery.onTableName(
-        'folders',
-        limitUpdateKind: UpdateKind.delete,
-      ),
-      result: [TableUpdate('sources', kind: UpdateKind.update)],
-    ),
-    WritePropagation(
-      on: TableUpdateQuery.onTableName(
         'sources',
         limitUpdateKind: UpdateKind.delete,
       ),
@@ -12312,285 +11894,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   ]);
 }
 
-typedef $$FoldersTableCreateCompanionBuilder =
-    FoldersCompanion Function({
-      required String id,
-      Value<String?> parentId,
-      required String name,
-      Value<int> position,
-      Value<int> rowid,
-    });
-typedef $$FoldersTableUpdateCompanionBuilder =
-    FoldersCompanion Function({
-      Value<String> id,
-      Value<String?> parentId,
-      Value<String> name,
-      Value<int> position,
-      Value<int> rowid,
-    });
-
-final class $$FoldersTableReferences
-    extends BaseReferences<_$AppDatabase, $FoldersTable, FolderRow> {
-  $$FoldersTableReferences(super.$_db, super.$_table, super.$_typedResult);
-
-  static MultiTypedResultKey<$SourcesTable, List<SourceRow>> _sourcesRefsTable(
-    _$AppDatabase db,
-  ) => MultiTypedResultKey.fromTable(
-    db.sources,
-    aliasName: 'folders__id__sources__folder_id',
-  );
-
-  $$SourcesTableProcessedTableManager get sourcesRefs {
-    final manager = $$SourcesTableTableManager(
-      $_db,
-      $_db.sources,
-    ).filter((f) => f.folderId.id.sqlEquals($_itemColumn<String>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_sourcesRefsTable($_db));
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
-}
-
-class $$FoldersTableFilterComposer
-    extends Composer<_$AppDatabase, $FoldersTable> {
-  $$FoldersTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get parentId => $composableBuilder(
-    column: $table.parentId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get name => $composableBuilder(
-    column: $table.name,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get position => $composableBuilder(
-    column: $table.position,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  Expression<bool> sourcesRefs(
-    Expression<bool> Function($$SourcesTableFilterComposer f) f,
-  ) {
-    final $$SourcesTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.sources,
-      getReferencedColumn: (t) => t.folderId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$SourcesTableFilterComposer(
-            $db: $db,
-            $table: $db.sources,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-}
-
-class $$FoldersTableOrderingComposer
-    extends Composer<_$AppDatabase, $FoldersTable> {
-  $$FoldersTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get parentId => $composableBuilder(
-    column: $table.parentId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get name => $composableBuilder(
-    column: $table.name,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get position => $composableBuilder(
-    column: $table.position,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$FoldersTableAnnotationComposer
-    extends Composer<_$AppDatabase, $FoldersTable> {
-  $$FoldersTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get parentId =>
-      $composableBuilder(column: $table.parentId, builder: (column) => column);
-
-  GeneratedColumn<String> get name =>
-      $composableBuilder(column: $table.name, builder: (column) => column);
-
-  GeneratedColumn<int> get position =>
-      $composableBuilder(column: $table.position, builder: (column) => column);
-
-  Expression<T> sourcesRefs<T extends Object>(
-    Expression<T> Function($$SourcesTableAnnotationComposer a) f,
-  ) {
-    final $$SourcesTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.sources,
-      getReferencedColumn: (t) => t.folderId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$SourcesTableAnnotationComposer(
-            $db: $db,
-            $table: $db.sources,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-}
-
-class $$FoldersTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $FoldersTable,
-          FolderRow,
-          $$FoldersTableFilterComposer,
-          $$FoldersTableOrderingComposer,
-          $$FoldersTableAnnotationComposer,
-          $$FoldersTableCreateCompanionBuilder,
-          $$FoldersTableUpdateCompanionBuilder,
-          (FolderRow, $$FoldersTableReferences),
-          FolderRow,
-          PrefetchHooks Function({bool sourcesRefs})
-        > {
-  $$FoldersTableTableManager(_$AppDatabase db, $FoldersTable table)
-    : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$FoldersTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$FoldersTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$FoldersTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String?> parentId = const Value.absent(),
-                Value<String> name = const Value.absent(),
-                Value<int> position = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => FoldersCompanion(
-                id: id,
-                parentId: parentId,
-                name: name,
-                position: position,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                Value<String?> parentId = const Value.absent(),
-                required String name,
-                Value<int> position = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => FoldersCompanion.insert(
-                id: id,
-                parentId: parentId,
-                name: name,
-                position: position,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map(
-                (e) => (
-                  e.readTable(table),
-                  $$FoldersTableReferences(db, table, e),
-                ),
-              )
-              .toList(),
-          prefetchHooksCallback: ({sourcesRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (sourcesRefs) db.sources],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (sourcesRefs)
-                    await $_getPrefetchedData<
-                      FolderRow,
-                      $FoldersTable,
-                      SourceRow
-                    >(
-                      currentTable: table,
-                      referencedTable: $$FoldersTableReferences
-                          ._sourcesRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$FoldersTableReferences(db, table, p0).sourcesRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.folderId == item.id),
-                      typedResults: items,
-                    ),
-                ];
-              },
-            );
-          },
-        ),
-      );
-}
-
-typedef $$FoldersTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $FoldersTable,
-      FolderRow,
-      $$FoldersTableFilterComposer,
-      $$FoldersTableOrderingComposer,
-      $$FoldersTableAnnotationComposer,
-      $$FoldersTableCreateCompanionBuilder,
-      $$FoldersTableUpdateCompanionBuilder,
-      (FolderRow, $$FoldersTableReferences),
-      FolderRow,
-      PrefetchHooks Function({bool sourcesRefs})
-    >;
 typedef $$SourcesTableCreateCompanionBuilder =
     SourcesCompanion Function({
       required String id,
@@ -12599,12 +11902,10 @@ typedef $$SourcesTableCreateCompanionBuilder =
       required String contentHash,
       required int wordCount,
       required int importedAtUtc,
-      Value<int> pace,
       Value<String?> markerBlockId,
       Value<int?> markerOffset,
       Value<String?> softBlockId,
       Value<int?> softOffset,
-      Value<String?> folderId,
       Value<int> revision,
       Value<int> rowid,
     });
@@ -12616,12 +11917,10 @@ typedef $$SourcesTableUpdateCompanionBuilder =
       Value<String> contentHash,
       Value<int> wordCount,
       Value<int> importedAtUtc,
-      Value<int> pace,
       Value<String?> markerBlockId,
       Value<int?> markerOffset,
       Value<String?> softBlockId,
       Value<int?> softOffset,
-      Value<String?> folderId,
       Value<int> revision,
       Value<int> rowid,
     });
@@ -12629,23 +11928,6 @@ typedef $$SourcesTableUpdateCompanionBuilder =
 final class $$SourcesTableReferences
     extends BaseReferences<_$AppDatabase, $SourcesTable, SourceRow> {
   $$SourcesTableReferences(super.$_db, super.$_table, super.$_typedResult);
-
-  static $FoldersTable _folderIdTable(_$AppDatabase db) =>
-      db.folders.createAlias('sources__folder_id__folders__id');
-
-  $$FoldersTableProcessedTableManager? get folderId {
-    final $_column = $_itemColumn<String>('folder_id');
-    if ($_column == null) return null;
-    final manager = $$FoldersTableTableManager(
-      $_db,
-      $_db.folders,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_folderIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
-    );
-  }
 
   static MultiTypedResultKey<$BlocksTable, List<BlockRow>> _blocksRefsTable(
     _$AppDatabase db,
@@ -12724,11 +12006,6 @@ class $$SourcesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get pace => $composableBuilder(
-    column: $table.pace,
-    builder: (column) => ColumnFilters(column),
-  );
-
   ColumnFilters<String> get markerBlockId => $composableBuilder(
     column: $table.markerBlockId,
     builder: (column) => ColumnFilters(column),
@@ -12753,29 +12030,6 @@ class $$SourcesTableFilterComposer
     column: $table.revision,
     builder: (column) => ColumnFilters(column),
   );
-
-  $$FoldersTableFilterComposer get folderId {
-    final $$FoldersTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.folderId,
-      referencedTable: $db.folders,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FoldersTableFilterComposer(
-            $db: $db,
-            $table: $db.folders,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 
   Expression<bool> blocksRefs(
     Expression<bool> Function($$BlocksTableFilterComposer f) f,
@@ -12867,11 +12121,6 @@ class $$SourcesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get pace => $composableBuilder(
-    column: $table.pace,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<String> get markerBlockId => $composableBuilder(
     column: $table.markerBlockId,
     builder: (column) => ColumnOrderings(column),
@@ -12896,29 +12145,6 @@ class $$SourcesTableOrderingComposer
     column: $table.revision,
     builder: (column) => ColumnOrderings(column),
   );
-
-  $$FoldersTableOrderingComposer get folderId {
-    final $$FoldersTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.folderId,
-      referencedTable: $db.folders,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FoldersTableOrderingComposer(
-            $db: $db,
-            $table: $db.folders,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 }
 
 class $$SourcesTableAnnotationComposer
@@ -12952,9 +12178,6 @@ class $$SourcesTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get pace =>
-      $composableBuilder(column: $table.pace, builder: (column) => column);
-
   GeneratedColumn<String> get markerBlockId => $composableBuilder(
     column: $table.markerBlockId,
     builder: (column) => column,
@@ -12977,29 +12200,6 @@ class $$SourcesTableAnnotationComposer
 
   GeneratedColumn<int> get revision =>
       $composableBuilder(column: $table.revision, builder: (column) => column);
-
-  $$FoldersTableAnnotationComposer get folderId {
-    final $$FoldersTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.folderId,
-      referencedTable: $db.folders,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FoldersTableAnnotationComposer(
-            $db: $db,
-            $table: $db.folders,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 
   Expression<T> blocksRefs<T extends Object>(
     Expression<T> Function($$BlocksTableAnnotationComposer a) f,
@@ -13065,11 +12265,7 @@ class $$SourcesTableTableManager
           $$SourcesTableUpdateCompanionBuilder,
           (SourceRow, $$SourcesTableReferences),
           SourceRow,
-          PrefetchHooks Function({
-            bool folderId,
-            bool blocksRefs,
-            bool extractsRefs,
-          })
+          PrefetchHooks Function({bool blocksRefs, bool extractsRefs})
         > {
   $$SourcesTableTableManager(_$AppDatabase db, $SourcesTable table)
     : super(
@@ -13090,12 +12286,10 @@ class $$SourcesTableTableManager
                 Value<String> contentHash = const Value.absent(),
                 Value<int> wordCount = const Value.absent(),
                 Value<int> importedAtUtc = const Value.absent(),
-                Value<int> pace = const Value.absent(),
                 Value<String?> markerBlockId = const Value.absent(),
                 Value<int?> markerOffset = const Value.absent(),
                 Value<String?> softBlockId = const Value.absent(),
                 Value<int?> softOffset = const Value.absent(),
-                Value<String?> folderId = const Value.absent(),
                 Value<int> revision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SourcesCompanion(
@@ -13105,12 +12299,10 @@ class $$SourcesTableTableManager
                 contentHash: contentHash,
                 wordCount: wordCount,
                 importedAtUtc: importedAtUtc,
-                pace: pace,
                 markerBlockId: markerBlockId,
                 markerOffset: markerOffset,
                 softBlockId: softBlockId,
                 softOffset: softOffset,
-                folderId: folderId,
                 revision: revision,
                 rowid: rowid,
               ),
@@ -13122,12 +12314,10 @@ class $$SourcesTableTableManager
                 required String contentHash,
                 required int wordCount,
                 required int importedAtUtc,
-                Value<int> pace = const Value.absent(),
                 Value<String?> markerBlockId = const Value.absent(),
                 Value<int?> markerOffset = const Value.absent(),
                 Value<String?> softBlockId = const Value.absent(),
                 Value<int?> softOffset = const Value.absent(),
-                Value<String?> folderId = const Value.absent(),
                 Value<int> revision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SourcesCompanion.insert(
@@ -13137,12 +12327,10 @@ class $$SourcesTableTableManager
                 contentHash: contentHash,
                 wordCount: wordCount,
                 importedAtUtc: importedAtUtc,
-                pace: pace,
                 markerBlockId: markerBlockId,
                 markerOffset: markerOffset,
                 softBlockId: softBlockId,
                 softOffset: softOffset,
-                folderId: folderId,
                 revision: revision,
                 rowid: rowid,
               ),
@@ -13154,94 +12342,50 @@ class $$SourcesTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback:
-              ({folderId = false, blocksRefs = false, extractsRefs = false}) {
-                return PrefetchHooks(
-                  db: db,
-                  explicitlyWatchedTables: [
-                    if (blocksRefs) db.blocks,
-                    if (extractsRefs) db.extracts,
-                  ],
-                  addJoins:
-                      <
-                        T extends TableManagerState<
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic
-                        >
-                      >(state) {
-                        if (folderId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.folderId,
-                                    referencedTable: $$SourcesTableReferences
-                                        ._folderIdTable(db),
-                                    referencedColumn: $$SourcesTableReferences
-                                        ._folderIdTable(db)
-                                        .id,
-                                  )
-                                  as T;
-                        }
-
-                        return state;
-                      },
-                  getPrefetchedDataCallback: (items) async {
-                    return [
-                      if (blocksRefs)
-                        await $_getPrefetchedData<
-                          SourceRow,
-                          $SourcesTable,
-                          BlockRow
-                        >(
-                          currentTable: table,
-                          referencedTable: $$SourcesTableReferences
-                              ._blocksRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$SourcesTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).blocksRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.sourceId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
-                      if (extractsRefs)
-                        await $_getPrefetchedData<
-                          SourceRow,
-                          $SourcesTable,
-                          ExtractRow
-                        >(
-                          currentTable: table,
-                          referencedTable: $$SourcesTableReferences
-                              ._extractsRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$SourcesTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).extractsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.sourceId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
-                    ];
-                  },
-                );
+          prefetchHooksCallback: ({blocksRefs = false, extractsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (blocksRefs) db.blocks,
+                if (extractsRefs) db.extracts,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (blocksRefs)
+                    await $_getPrefetchedData<
+                      SourceRow,
+                      $SourcesTable,
+                      BlockRow
+                    >(
+                      currentTable: table,
+                      referencedTable: $$SourcesTableReferences
+                          ._blocksRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$SourcesTableReferences(db, table, p0).blocksRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.sourceId == item.id),
+                      typedResults: items,
+                    ),
+                  if (extractsRefs)
+                    await $_getPrefetchedData<
+                      SourceRow,
+                      $SourcesTable,
+                      ExtractRow
+                    >(
+                      currentTable: table,
+                      referencedTable: $$SourcesTableReferences
+                          ._extractsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$SourcesTableReferences(db, table, p0).extractsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.sourceId == item.id),
+                      typedResults: items,
+                    ),
+                ];
               },
+            );
+          },
         ),
       );
 }
@@ -13258,11 +12402,7 @@ typedef $$SourcesTableProcessedTableManager =
       $$SourcesTableUpdateCompanionBuilder,
       (SourceRow, $$SourcesTableReferences),
       SourceRow,
-      PrefetchHooks Function({
-        bool folderId,
-        bool blocksRefs,
-        bool extractsRefs,
-      })
+      PrefetchHooks Function({bool blocksRefs, bool extractsRefs})
     >;
 typedef $$BlocksTableCreateCompanionBuilder =
     BlocksCompanion Function({
@@ -19016,8 +18156,6 @@ typedef $$DatasetMetaTableProcessedTableManager =
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
-  $$FoldersTableTableManager get folders =>
-      $$FoldersTableTableManager(_db, _db.folders);
   $$SourcesTableTableManager get sources =>
       $$SourcesTableTableManager(_db, _db.sources);
   $$BlocksTableTableManager get blocks =>

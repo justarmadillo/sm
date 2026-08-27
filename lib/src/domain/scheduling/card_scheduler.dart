@@ -126,8 +126,8 @@ final class CardSchedulerSettings {
 /// The complete memory state required to schedule one card again.
 ///
 /// New cards intentionally have null stability and difficulty: FSRS derives
-/// both from the first rating. [dueAtUtc] is the algorithmic due instant;
-/// deferral is kept separately so overload handling never falsifies it.
+/// both from the first rating. [dueAtUtc] is the canonical due instant, which
+/// a postponement rewrites directly: SM20 keeps no deferral overlay beside it.
 @immutable
 final class CardMemory {
   factory CardMemory({

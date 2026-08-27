@@ -1,12 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:incremental_reader/src/app/providers.dart';
+import 'package:incremental_reader/src/application/content/content_tree_query.dart';
 import 'package:incremental_reader/src/core/clock.dart';
 import 'package:incremental_reader/src/core/ids.dart';
 import 'package:incremental_reader/src/data/database/app_database.dart';
 import 'package:incremental_reader/src/data/database/connection.dart';
 import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
 import 'package:incremental_reader/src/domain/content/source.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:incremental_reader/src/features/library/presentation/import_sheet.dart';
 import 'package:incremental_reader/src/features/library/presentation/library_view_model.dart';
 import 'package:incremental_reader/src/features/reader/presentation/reader_view_model.dart';
@@ -69,16 +72,17 @@ void main() {
     ).notifier,
   );
 
-  group('library view model', () {
-    test('an imported source appears in today, with its schedule', () async {
+  group('element commands', () {
+    test('an imported source enters the knowledge tree', () async {
       await importFixture();
-      final state = container.read(libraryViewModelProvider).requireValue;
+      final List<ContentNode> tree = await container
+          .read(contentTreeQueryProvider)
+          .load();
 
-      expect(state.entries, hasLength(1));
-      expect(state.dueToday, hasLength(1));
-      expect(state.later, isEmpty);
-      expect(state.entries.single.source.title, 'A Chapter');
-      expect(state.entries.single.extractCount, 0);
+      expect(tree, hasLength(1));
+      expect(tree.single.title, 'A Chapter');
+      expect(tree.single.ref.type, ElementType.source);
+      expect(tree.single.children, isEmpty);
     });
 
     test('a failed import surfaces the failure and imports nothing', () async {
@@ -89,29 +93,23 @@ void main() {
 
       expect(id, isNull);
       final state = container.read(libraryViewModelProvider).requireValue;
-      expect(state.entries, isEmpty);
       expect(state.message!.isError, isTrue);
+      expect(await container.read(contentTreeQueryProvider).load(), isEmpty);
     });
 
-    test(
-      'dismissing moves a source out of today but keeps it listed',
-      () async {
-        final sourceId = await importFixture();
-        final library = container.read(libraryViewModelProvider.notifier);
-        final entry = container
-            .read(libraryViewModelProvider)
-            .requireValue
-            .entries
-            .single;
+    test('dismissing keeps the element in the tree', () async {
+      final sourceId = await importFixture();
+      final library = container.read(libraryViewModelProvider.notifier);
+      await library.dismiss(ElementRef(id: sourceId, type: ElementType.source));
 
-        await library.dismiss(entry.schedule.ref);
-
-        final state = container.read(libraryViewModelProvider).requireValue;
-        expect(state.dueToday, isEmpty);
-        expect(state.later, hasLength(1));
-        expect(state.entries.single.source.id, sourceId);
-      },
-    );
+      // Dismissing stops scheduling; it never removes content, so the tree
+      // still shows the element and says it is dismissed.
+      final List<ContentNode> tree = await container
+          .read(contentTreeQueryProvider)
+          .load();
+      expect(tree.single.ref.id, sourceId);
+      expect(tree.single.status, Sm20ElementStatus.dismissed);
+    });
   });
 
   group('browse mode cannot mutate progress', () {
@@ -166,15 +164,7 @@ void main() {
 
       final topic = await container
           .read(learningRepositoryProvider)
-          .findTopic(
-            container
-                .read(libraryViewModelProvider)
-                .requireValue
-                .entries
-                .single
-                .schedule
-                .ref,
-          );
+          .findTopic(ElementRef(id: sourceId, type: ElementType.source));
       expect(topic!.storedInterval, 0);
       expect(topic.schedule.dueDay.toString(), '2026-03-05');
     });

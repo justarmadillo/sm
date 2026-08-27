@@ -379,8 +379,8 @@ Future<void> _seedCardParents(
   await _addLegacyCardParentColumns(database);
   await database.customStatement(
     'INSERT INTO sources (id, title, markdown, content_hash, word_count, '
-    'imported_at_utc, pace, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    <Object?>['s1', 'Fixture', 'text', 'a' * 64, 1, 0, 1, 1],
+    'imported_at_utc, revision) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    <Object?>['s1', 'Fixture', 'text', 'a' * 64, 1, 0, 1],
   );
   await database.customStatement(
     'INSERT INTO extracts (id, markdown, source_id, parent_id, '

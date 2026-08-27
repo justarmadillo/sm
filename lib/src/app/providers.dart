@@ -12,6 +12,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/browser/browser_handlers.dart';
+import '../application/content/content_tree_query.dart';
 import '../application/diagnostics/diagnostics_query.dart';
 import '../application/diagnostics/scheduler_metrics_query.dart';
 import '../application/extraction/extraction_handlers.dart';
@@ -190,12 +191,13 @@ final Provider<TransferRepository> transferRepositoryProvider =
     );
 
 /// Library read projection.
-final Provider<DriftLibraryQuery> libraryQueryProvider =
-    Provider<DriftLibraryQuery>(
-      (Ref ref) => DriftLibraryQuery(
-        ref.watch(contentRepositoryProvider),
-        ref.watch(learningRepositoryProvider),
-        ref.watch(clockProvider),
+/// The knowledge tree: every element nested under the one it came from.
+final Provider<ContentTreeQuery> contentTreeQueryProvider =
+    Provider<ContentTreeQuery>(
+      (Ref ref) => ContentTreeQuery(
+        content: ref.watch(contentRepositoryProvider),
+        learning: ref.watch(learningRepositoryProvider),
+        context: ref.watch(schedulingContextProvider),
       ),
     );
 
@@ -300,7 +302,7 @@ final Provider<BrowserHandlers> browserHandlersProvider =
       ),
     );
 
-/// The overload valve, Study More, and Mercy.
+/// The daily queue transaction, the manual stage commands, and Mercy.
 final Provider<QueueHandlers> queueHandlersProvider = Provider<QueueHandlers>(
   (Ref ref) => QueueHandlers(
     content: ref.watch(contentRepositoryProvider),

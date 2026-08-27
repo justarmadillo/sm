@@ -32,7 +32,6 @@ import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/priority_rank.dart';
 import '../../domain/scheduling/revlog.dart';
 import '../../domain/scheduling/scheduler_event.dart';
-import '../../domain/scheduling/sm20_numeric.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../../domain/scheduling/topic_scheduler.dart';
 import '../app_command.dart';
@@ -118,8 +117,6 @@ final class ReaderHandlers {
       title: title,
       markdown: markdown,
       importedAtUtc: _clock.nowUtc(),
-      pace: command.pace,
-      folderId: command.folderId,
     );
     final Document document = Document.parse(
       sourceId: source.id,
@@ -196,7 +193,6 @@ final class ReaderHandlers {
       metadata: <String, Object?>{
         'words': source.wordCount,
         'blocks': document.blocks.length,
-        'pace': command.pace.name,
         'first_interval_days': topic.intervalDays,
       },
     );
@@ -580,31 +576,6 @@ final class ReaderHandlers {
   );
 
   /// Changes a source's pacing profile without touching position or interval.
-  Future<Result<Source>> setReadingPace(SetReadingPace command) =>
-      _run<Source>(command, 'source.pace_set', () async {
-        final Source? source = await _content.findSource(command.sourceId);
-        if (source == null) return _missingSource<Source>(command.sourceId);
-        final ElementRef ref = ElementRef(
-          id: source.id,
-          type: ElementType.source,
-        );
-        final TopicState? topic = await _learning.findTopic(ref);
-        if (topic == null) return _missingSchedule<Source>(command.sourceId);
-
-        final Source updated = source.copyWith(pace: command.pace);
-        await _content.updateSource(updated);
-        // Reading pace is content/UI metadata only. Per-row scheduler kind and
-        // version own future interval behavior; this legacy control must not
-        // silently migrate or reinterpret an existing schedule.
-        await _log(
-          command,
-          'source.pace_set',
-          ref: ref,
-          metadata: <String, Object?>{'pace': command.pace.name},
-        );
-        return Ok<Source>(updated);
-      });
-
   /// Renames a source.
   Future<Result<Source>> renameSource(RenameSource command) =>
       _run<Source>(command, 'source.renamed', () async {
@@ -917,200 +888,6 @@ final class ReaderHandlers {
     'topic_revision': state.revision,
   });
 
-  TopicState _topicStateFromJson(String source) {
-    final Map<String, Object?> map = jsonDecode(source) as Map<String, Object?>;
-    final String zoneId = map['zone_id']! as String;
-    StudyDay day(int value) {
-      final DateTime date = DateTime.fromMillisecondsSinceEpoch(
-        value * Duration.millisecondsPerDay,
-        isUtc: true,
-      );
-      return StudyDay(
-        year: date.year,
-        month: date.month,
-        day: date.day,
-        zoneId: zoneId,
-      );
-    }
-
-    final int? lastReview = map['last_review_day'] as int?;
-    final int? createdAt = map['created_at_utc'] as int?;
-    final int? updatedAt = map['updated_at_utc'] as int?;
-    final ElementRef ref = ElementRef(
-      id: map['element_id']! as String,
-      type: ElementType.values[map['element_type']! as int],
-    );
-    return TopicState(
-      schedule: ElementSchedule(
-        ref: ref,
-        priority: PriorityRank(map['priority_key']! as String),
-        lifecycle: ElementLifecycle.values[map['lifecycle']! as int],
-        dueDay: day(map['due_day']! as int),
-        originalDueDay: day(map['original_due_day']! as int),
-        rootId: map['root_id'] as String?,
-        parentElementId: map['parent_element_id'] as String?,
-        ordinal: map['ordinal'] as int?,
-        createdAtUtc: createdAt == null
-            ? null
-            : DateTime.fromMillisecondsSinceEpoch(createdAt, isUtc: true),
-        updatedAtUtc: updatedAt == null
-            ? null
-            : DateTime.fromMillisecondsSinceEpoch(updatedAt, isUtc: true),
-        revision: map['schedule_revision']! as int,
-        legacyDueProvenance:
-            LegacyDueProvenance.values[map['legacy_due_provenance']! as int],
-      ),
-      status: Sm20ElementStatus.values[map['status']! as int],
-      repetitionCount: map['repetition_count']! as int,
-      lapseCount: map['lapse_count']! as int,
-      storedInterval: map['stored_interval']! as int,
-      aFactorRaw: _real48FromHex(map['a_factor_raw']! as String),
-      lastIntervalRatioRaw: _real48FromHex(
-        map['last_interval_ratio_raw']! as String,
-      ),
-      historyBlockId: map['history_block_id']! as int,
-      recentPostponementCount: map['recent_postponement_count']! as int,
-      totalPostponementCount: map['total_postponement_count']! as int,
-      learningControl: map['learning_control']! as int,
-      encountersSinceLastCard: map['encounters_since_last_card']! as int,
-      lastReviewDay: lastReview == null ? null : day(lastReview),
-      revision: map['topic_revision']! as int,
-    );
-  }
-
-  /// Exact, append-only inverse of the latest non-undone topic encounter.
-  Future<Result<TopicState>> undoLastEncounter(
-    UndoLastTopicEncounter command,
-  ) async {
-    try {
-      return await _transactions.run<Result<TopicState>>(() async {
-        final SchedulerEvent? replay = await _learning
-            .findSchedulerEventByOperationId(
-              command.operationId.value,
-              eventType: SchedulerEventType.topicEncounterUndone,
-            );
-        if (replay != null) {
-          final TopicState? state = await _learning.findTopic(command.ref);
-          return state == null
-              ? _missingSchedule<TopicState>(command.ref.id)
-              : Ok<TopicState>(state);
-        }
-        final SchedulerEvent? original = await _learning.findLastSchedulerEvent(
-          command.ref,
-          SchedulerEventType.topicEncountered,
-        );
-        if (original == null ||
-            original.stateBefore == null ||
-            original.stateAfter == null) {
-          return const Err<TopicState>(
-            ConflictFailure('there is no complete topic encounter to undo'),
-          );
-        }
-        final TopicState? current = await _learning.findTopic(command.ref);
-        if (current == null) {
-          return _missingSchedule<TopicState>(command.ref.id);
-        }
-        if (_topicStateJson(current) != original.stateAfter) {
-          return const Err<TopicState>(
-            ConflictFailure('the topic changed after that encounter'),
-          );
-        }
-        final TopicState prior = _topicStateFromJson(original.stateBefore!);
-        final TopicState restored = prior.copyWith(
-          revision: current.revision + 1,
-          schedule: prior.schedule.copyWith(
-            revision: current.schedule.revision + 1,
-            updatedAtUtc: command.timestampUtc,
-          ),
-        );
-        if (!await _learning.compareAndSwapTopic(
-          expected: current,
-          replacement: restored,
-        )) {
-          return const Err<TopicState>(
-            ConflictFailure('the topic changed before undo committed'),
-          );
-        }
-        final StudyDayCalendar calendar = await _context.calendar();
-        await _journal.append(
-          operationId: command.operationId.value,
-          ref: command.ref,
-          eventType: RevlogEventType.undo,
-          atUtc: command.timestampUtc,
-          before: _journal.topicSnapshot(current, calendar: calendar),
-          after: _journal.topicSnapshot(restored, calendar: calendar),
-          metadata: <String, Object?>{'undone_event_id': original.id},
-        );
-        await _journal.appendScheduler(
-          operationId: command.operationId.value,
-          ref: command.ref,
-          eventType: SchedulerEventType.topicEncounterUndone,
-          atUtc: command.timestampUtc,
-          studyDay: calendar.dayOf(command.timestampUtc),
-          policyVersion: restored.schedulerVersion,
-          schedulerName: restored.schedulerName,
-          schedulerVersion: restored.schedulerVersion,
-          stateBefore: _topicStateJson(current),
-          stateAfter: _topicStateJson(restored),
-          algorithmicDueBefore: SchedulerEvent.encodeStudyDayDue(
-            current.schedule.algorithmicDueDay,
-          ),
-          algorithmicDueAfter: SchedulerEvent.encodeStudyDayDue(
-            restored.schedule.algorithmicDueDay,
-          ),
-          undoesEventId: original.id,
-        );
-        await _restoreTopicQueue(
-          restored,
-          calendar.dayOf(command.timestampUtc),
-        );
-        await _log(
-          command,
-          'topic.encounter_undone',
-          ref: command.ref,
-          metadata: <String, Object?>{'undone_event_id': original.id},
-        );
-        await _transfer.advanceGeneration();
-        return Ok<TopicState>(restored);
-      });
-    } on Object catch (error, stackTrace) {
-      return Err<TopicState>(
-        UnexpectedFailure(
-          'command topic.encounter_undone failed',
-          cause: error,
-          stackTrace: stackTrace,
-        ),
-      );
-    }
-  }
-
-  Future<void> _restoreTopicQueue(TopicState topic, StudyDay today) async {
-    final runtime = await _context.runtimeState();
-    final List<ElementRef> outstanding = runtime.outstanding
-        .where((ElementRef value) => value != topic.ref)
-        .toList();
-    final List<ElementRef> topics = runtime.outstandingTopics
-        .where((ElementRef value) => value != topic.ref)
-        .toList();
-    final List<ElementRef> pending = runtime.pending
-        .where((ElementRef value) => value != topic.ref)
-        .toList();
-    if (topic.status == Sm20ElementStatus.pending) {
-      pending.insert(0, topic.ref);
-    } else if (topic.status == Sm20ElementStatus.memorized &&
-        topic.schedule.algorithmicDueDay <= today) {
-      outstanding.insert(0, topic.ref);
-      topics.insert(0, topic.ref);
-    }
-    await _context.saveRuntimeState(
-      runtime.copyWith(
-        outstanding: outstanding,
-        outstandingTopics: topics,
-        pending: pending,
-      ),
-    );
-  }
-
   Future<void> _log(
     AppCommand command,
     String kind, {
@@ -1189,12 +966,4 @@ final class ReaderHandlers {
   Err<T> _missingSchedule<T>(String id) => Err<T>(
     NotFoundFailure('no schedule for that element', entity: 'schedule', id: id),
   );
-}
-
-DelphiReal48 _real48FromHex(String value) {
-  if (value.length != 12) throw const FormatException('invalid Real48 hex');
-  return DelphiReal48.fromBytes(<int>[
-    for (var index = 0; index < 12; index += 2)
-      int.parse(value.substring(index, index + 2), radix: 16),
-  ]);
 }

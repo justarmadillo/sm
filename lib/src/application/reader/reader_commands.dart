@@ -8,7 +8,6 @@
 library;
 
 import '../../domain/content/reader_anchor.dart';
-import '../../domain/content/source.dart';
 import '../../domain/scheduling/element.dart';
 import '../../domain/scheduling/study_day.dart';
 import '../app_command.dart';
@@ -19,16 +18,12 @@ final class ImportSource extends AppCommand {
     super.operationId, {
     required this.title,
     required this.markdown,
-    this.pace = ReadingPace.normal,
-    this.folderId,
     this.priorityPercent,
     super.timestampUtc,
   });
 
   final String title;
   final String markdown;
-  final ReadingPace pace;
-  final String? folderId;
 
   /// Where to place the article in the collection, `0` being most important.
   ///
@@ -123,7 +118,7 @@ final class PostponeElement extends AppCommand {
   /// interval — a fixed one day just returns it tomorrow into the same queue.
   final StudyDay? until;
 
-  /// Whether overload handling issued this, rather than the user.
+  /// Whether the automatic postpone pass issued this, rather than the user.
   ///
   /// It selects the log's event type and nothing else: SM20 records both as
   /// the same low-level reschedule.
@@ -179,18 +174,6 @@ final class RescheduleTopic extends AppCommand {
 }
 
 /// Change how a source is paced, without touching its position or step.
-final class SetReadingPace extends AppCommand {
-  SetReadingPace(
-    super.operationId, {
-    required this.sourceId,
-    required this.pace,
-    super.timestampUtc,
-  });
-
-  final String sourceId;
-  final ReadingPace pace;
-}
-
 /// Rename a source.
 final class RenameSource extends AppCommand {
   RenameSource(

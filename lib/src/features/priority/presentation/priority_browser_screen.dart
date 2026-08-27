@@ -17,7 +17,9 @@ import '../../../application/priority/priority_query.dart';
 import '../../../application/queue/queue_commands.dart';
 import '../../../domain/scheduling/element.dart';
 import '../../../domain/scheduling/sm20_advance.dart';
+import '../../../domain/scheduling/topic_scheduler.dart';
 import '../../queue/presentation/smart_postpone_dialog.dart';
+import '../../shared/element_type_badge.dart';
 import 'priority_dialog.dart';
 import 'priority_view_model.dart';
 
@@ -69,14 +71,10 @@ class PriorityBrowserScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
             Center(child: Text('Could not load priorities.\n$error')),
-        data: (PriorityBrowserState data) => data.entries.isEmpty
-            ? const Center(
-                child: Text(
-                  'Nothing is scheduled yet.',
-                  style: TextStyle(color: AppColors.muted),
-                ),
-              )
-            : _Body(state: data, model: model),
+        // The empty state is rendered inside the body, never instead of it:
+        // replacing the whole body would take the filter bar with it, and a
+        // filter that returns nothing would then have no way back.
+        data: (PriorityBrowserState data) => _Body(state: data, model: model),
       ),
     );
   }
@@ -95,27 +93,73 @@ class _Body extends ConsumerWidget {
       child: Column(
         children: <Widget>[
           _FilterBar(state: state, model: model),
-          Expanded(
-            child: ReorderableListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
-              itemCount: state.entries.length,
-              buildDefaultDragHandles: false,
-              // onReorderItem already accounts for the dragged row having
-              // been removed, so the index needs no adjustment here.
-              onReorderItem: model.reorder,
-              itemBuilder: (BuildContext context, int index) => _Row(
-                key: ValueKey<String>('${state.entries[index].ref}'),
-                entry: state.entries[index],
-                index: index,
-                onBatchPriority: () =>
-                    _promptBatchPriority(context, ref, state.entries[index]),
-                onSmartPostpone: () =>
-                    _confirmSmartPostpone(context, state.entries[index]),
-                onLearningCommand: (_LearningCommand command) =>
-                    _runLearningCommand(context, state.entries[index], command),
+          _HeaderRow(state: state, model: model),
+          if (state.entries.isEmpty)
+            const Expanded(
+              child: Center(
+                child: Text(
+                  'Nothing matches this filter.',
+                  style: TextStyle(color: AppColors.muted),
+                ),
               ),
+            )
+          else
+            Expanded(
+              child: !state.isReorderable
+                  ? ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
+                      itemCount: state.entries.length,
+                      itemBuilder: (BuildContext context, int index) => _Row(
+                        key: ValueKey<String>('${state.entries[index].ref}'),
+                        entry: state.entries[index],
+                        index: index,
+                        draggable: false,
+                        onBatchPriority: () => _promptBatchPriority(
+                          context,
+                          ref,
+                          state.entries[index],
+                        ),
+                        onSmartPostpone: () => _confirmSmartPostpone(
+                          context,
+                          state.entries[index],
+                        ),
+                        onLearningCommand: (_LearningCommand command) =>
+                            _runLearningCommand(
+                              context,
+                              state.entries[index],
+                              command,
+                            ),
+                      ),
+                    )
+                  : ReorderableListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
+                      itemCount: state.entries.length,
+                      buildDefaultDragHandles: false,
+                      // onReorderItem already accounts for the dragged row having
+                      // been removed, so the index needs no adjustment here.
+                      onReorderItem: model.reorder,
+                      itemBuilder: (BuildContext context, int index) => _Row(
+                        key: ValueKey<String>('${state.entries[index].ref}'),
+                        entry: state.entries[index],
+                        index: index,
+                        onBatchPriority: () => _promptBatchPriority(
+                          context,
+                          ref,
+                          state.entries[index],
+                        ),
+                        onSmartPostpone: () => _confirmSmartPostpone(
+                          context,
+                          state.entries[index],
+                        ),
+                        onLearningCommand: (_LearningCommand command) =>
+                            _runLearningCommand(
+                              context,
+                              state.entries[index],
+                              command,
+                            ),
+                      ),
+                    ),
             ),
-          ),
         ],
       ),
     ),
@@ -156,6 +200,12 @@ class _Body extends ConsumerWidget {
     }
 
     switch (command) {
+      case _LearningCommand.learn:
+        await model.startReview(refs, Sm20ReviewMode.learn);
+      case _LearningCommand.reviewAll:
+        await model.startReview(refs, Sm20ReviewMode.reviewAll);
+      case _LearningCommand.reviewTopics:
+        await model.startReview(refs, Sm20ReviewMode.reviewTopics);
       case _LearningCommand.remember:
         await model.remember(refs);
       case _LearningCommand.forget:
@@ -343,23 +393,22 @@ class _Row extends ConsumerWidget {
     required this.onBatchPriority,
     required this.onSmartPostpone,
     required this.onLearningCommand,
+    this.draggable = true,
     super.key,
   });
 
   final PriorityEntry entry;
   final int index;
+
+  /// Whether this row offers a drag handle. Only the priority order can be
+  /// dragged, because only there does "the row above" mean "the rank above".
+  final bool draggable;
   final VoidCallback onBatchPriority;
   final VoidCallback onSmartPostpone;
   final ValueChanged<_LearningCommand> onLearningCommand;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final (IconData icon, Color color) = switch (entry.ref.type) {
-      ElementType.source => (Icons.menu_book_outlined, AppColors.accent),
-      ElementType.extract => (Icons.content_cut, AppColors.extractInk),
-      ElementType.card => (Icons.quiz_outlined, Colors.teal),
-    };
-
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
       decoration: BoxDecoration(
@@ -371,19 +420,22 @@ class _Row extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
         child: Row(
           children: <Widget>[
-            ReorderableDragStartListener(
-              index: index,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6),
-                child: Icon(
-                  Icons.drag_indicator,
-                  size: 18,
-                  color: AppColors.muted,
+            if (!draggable)
+              const SizedBox(width: _kHandleWidth)
+            else
+              ReorderableDragStartListener(
+                index: index,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(
+                    Icons.drag_indicator,
+                    size: 18,
+                    color: AppColors.muted,
+                  ),
                 ),
               ),
-            ),
             SizedBox(
-              width: 52,
+              width: _kPercentWidth,
               child: Text(
                 '${entry.percent.toStringAsFixed(1)}%',
                 style: const TextStyle(
@@ -393,7 +445,13 @@ class _Row extends ConsumerWidget {
                 ),
               ),
             ),
-            Icon(icon, size: 15, color: color),
+            SizedBox(
+              width: _kBadgeWidth,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ElementTypeBadge(type: entry.ref.type),
+              ),
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -421,43 +479,69 @@ class _Row extends ConsumerWidget {
                 ],
               ),
             ),
-            IconButton(
-              tooltip: 'Set priority (Alt+P)',
-              onPressed: () async {
-                final bool changed = await showPriorityDialog(
-                  context,
-                  ref,
-                  elementRef: entry.ref,
-                );
-                if (changed) {
-                  await ref.read(priorityBrowserProvider.notifier).refresh();
-                }
-              },
-              icon: const Icon(Icons.tune, size: 17),
+            _Cell(width: _kIntervalWidth, text: '${entry.intervalDays}'),
+            _Cell(width: _kCountWidth, text: '${entry.repetitions}'),
+            _Cell(width: _kCountWidth, text: '${entry.lapses}'),
+            _Cell(
+              width: _kDateWidth,
+              text: entry.lastRepetition?.toString() ?? '—',
             ),
-            IconButton(
-              tooltip: 'Batch priority for this article',
-              onPressed: onBatchPriority,
-              icon: const Icon(Icons.tune_outlined, size: 17),
-            ),
-            IconButton(
-              tooltip: 'Smart Postpone this article',
-              onPressed: onSmartPostpone,
-              icon: const Icon(Icons.schedule_send_outlined, size: 17),
-            ),
-            PopupMenuButton<_LearningCommand>(
-              tooltip: 'Learning commands',
-              onSelected: onLearningCommand,
-              itemBuilder: (BuildContext context) =>
-                  <PopupMenuEntry<_LearningCommand>>[
-                    for (final _LearningCommand command
-                        in _LearningCommand.values)
-                      PopupMenuItem<_LearningCommand>(
-                        value: command,
-                        child: Text(command.label),
-                      ),
-                  ],
-              icon: const Icon(Icons.more_vert, size: 17),
+            _Cell(width: _kDateWidth, text: entry.nextRepetition.toString()),
+            SizedBox(
+              width: _kActionsWidth,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: 'Set priority (Alt+P)',
+                    onPressed: () async {
+                      final bool changed = await showPriorityDialog(
+                        context,
+                        ref,
+                        elementRef: entry.ref,
+                      );
+                      if (changed) {
+                        await ref
+                            .read(priorityBrowserProvider.notifier)
+                            .refresh();
+                      }
+                    },
+                    constraints: _kActionConstraints,
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.tune, size: 17),
+                  ),
+                  IconButton(
+                    tooltip: 'Batch priority for this article',
+                    onPressed: onBatchPriority,
+                    constraints: _kActionConstraints,
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.tune_outlined, size: 17),
+                  ),
+                  IconButton(
+                    tooltip: 'Smart Postpone this article',
+                    onPressed: onSmartPostpone,
+                    constraints: _kActionConstraints,
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.schedule_send_outlined, size: 17),
+                  ),
+                  PopupMenuButton<_LearningCommand>(
+                    tooltip: 'Learning commands',
+                    onSelected: onLearningCommand,
+                    itemBuilder: (BuildContext context) =>
+                        <PopupMenuEntry<_LearningCommand>>[
+                          for (final _LearningCommand command
+                              in _LearningCommand.values)
+                            PopupMenuItem<_LearningCommand>(
+                              value: command,
+                              child: Text(command.label),
+                            ),
+                        ],
+                    constraints: _kActionConstraints,
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.more_vert, size: 17),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -634,6 +718,9 @@ class _PriorityBatchDialogState extends State<_PriorityBatchDialog> {
 
 /// SM20's browser Learning commands for one element.
 enum _LearningCommand {
+  learn('Learn'),
+  reviewAll('Review all'),
+  reviewTopics('Review topics'),
   remember('Remember'),
   forget('Forget'),
   dismiss('Dismiss'),
@@ -918,5 +1005,164 @@ Future<int?> _promptForSpacing(BuildContext context) async {
     );
   } finally {
     controller.dispose();
+  }
+}
+
+/// Column widths shared by the header and every row.
+///
+/// The header used to guess the width of the type badge and the action
+/// cluster, both of which vary with their content, so the headings drifted out
+/// of line with the numbers beneath them. Both are pinned here instead, and
+/// both layouts read the same constants.
+const double _kBadgeWidth = 84;
+const double _kActionsWidth = 132;
+const double _kHandleWidth = 30;
+
+/// Four of these fill [_kActionsWidth] exactly.
+const BoxConstraints _kActionConstraints = BoxConstraints.tightFor(
+  width: 33,
+  height: 33,
+);
+const double _kIntervalWidth = 52;
+const double _kCountWidth = 44;
+const double _kDateWidth = 92;
+const double _kPercentWidth = 52;
+
+/// One right-aligned numeric or date cell.
+class _Cell extends StatelessWidget {
+  const _Cell({required this.width, required this.text});
+
+  final double width;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    child: Text(
+      text,
+      textAlign: TextAlign.right,
+      maxLines: 1,
+      overflow: TextOverflow.clip,
+      style: const TextStyle(fontSize: 12, color: AppColors.muted),
+    ),
+  );
+}
+
+/// Column headers. Clicking one sorts by it; clicking it again reverses.
+class _HeaderRow extends StatelessWidget {
+  const _HeaderRow({required this.state, required this.model});
+
+  final PriorityBrowserState state;
+  final PriorityBrowserViewModel model;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    // 16 for the list's padding, 6 for the row card's own padding, plus the
+    // one-pixel border the card draws.
+    padding: const EdgeInsets.fromLTRB(23, 6, 23, 2),
+    child: Row(
+      children: <Widget>[
+        // Every spacer below is the same constant the row uses, so the
+        // headings sit over the columns they name by construction rather than
+        // by two layouts happening to agree.
+        const SizedBox(width: _kHandleWidth),
+        _Header(
+          state: state,
+          model: model,
+          sort: PriorityBrowserSort.priority,
+          width: _kPercentWidth,
+          align: TextAlign.left,
+        ),
+        const SizedBox(width: _kBadgeWidth + 8),
+        Expanded(
+          child: _Header(
+            state: state,
+            model: model,
+            sort: PriorityBrowserSort.title,
+            align: TextAlign.left,
+          ),
+        ),
+        _Header(
+          state: state,
+          model: model,
+          sort: PriorityBrowserSort.interval,
+          width: _kIntervalWidth,
+        ),
+        _Header(
+          state: state,
+          model: model,
+          sort: PriorityBrowserSort.repetitions,
+          width: _kCountWidth,
+        ),
+        _Header(
+          state: state,
+          model: model,
+          sort: PriorityBrowserSort.lapses,
+          width: _kCountWidth,
+        ),
+        _Header(
+          state: state,
+          model: model,
+          sort: PriorityBrowserSort.lastRepetition,
+          width: _kDateWidth,
+        ),
+        _Header(
+          state: state,
+          model: model,
+          sort: PriorityBrowserSort.nextRepetition,
+          width: _kDateWidth,
+        ),
+        const SizedBox(width: _kActionsWidth),
+      ],
+    ),
+  );
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.state,
+    required this.model,
+    required this.sort,
+    this.width,
+    this.align = TextAlign.right,
+  });
+
+  final PriorityBrowserState state;
+  final PriorityBrowserViewModel model;
+  final PriorityBrowserSort sort;
+  final double? width;
+  final TextAlign align;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool active = state.sort == sort;
+    final Widget label = InkWell(
+      onTap: () => model.sortBy(sort),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisAlignment: align == TextAlign.right
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              sort.label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                color: active ? AppColors.accent : AppColors.muted,
+              ),
+            ),
+            if (active)
+              Icon(
+                state.ascending ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                size: 15,
+                color: AppColors.accent,
+              ),
+          ],
+        ),
+      ),
+    );
+    return width == null ? label : SizedBox(width: width, child: label);
   }
 }

@@ -180,8 +180,6 @@ final class MercyPreview {
       .where((MercyPreviewItem value) => value.ref.type == ElementType.card)
       .length;
   int get selectedTopicCount => selectedCount - selectedCardCount;
-  int get inputCandidateCount => gatheredCount;
-
   List<MercyDailyLoad> get afterLoad {
     final Map<int, ({int cards, int topics})> counts =
         <int, ({int cards, int topics})>{};
@@ -311,7 +309,6 @@ final class StoredMercyBatch {
   final DateTime? appliedAtUtc;
   final DateTime? undoneAtUtc;
 
-  bool get isApplied => appliedAtUtc != null && undoneAtUtc == null;
   MercyPreview get preview => MercyPreview.fromJson(previewJson);
   MercyAppliedBatchSnapshot get appliedSnapshot =>
       decodeMercyAppliedBatch(appliedSnapshotJson!);

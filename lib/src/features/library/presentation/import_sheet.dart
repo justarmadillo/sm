@@ -16,15 +16,10 @@ import '../../../domain/content/source.dart';
 /// What the user asked to import.
 @immutable
 final class ImportRequest {
-  const ImportRequest({
-    required this.title,
-    required this.markdown,
-    required this.pace,
-  });
+  const ImportRequest({required this.title, required this.markdown});
 
   final String title;
   final String markdown;
-  final ReadingPace pace;
 }
 
 /// Shows the import dialog and returns what the user entered, or null.
@@ -44,7 +39,6 @@ class _ImportDialog extends StatefulWidget {
 class _ImportDialogState extends State<_ImportDialog> {
   final TextEditingController _title = TextEditingController();
   final TextEditingController _markdown = TextEditingController();
-  ReadingPace _pace = ReadingPace.normal;
   bool _titleEditedByHand = false;
 
   @override
@@ -140,20 +134,6 @@ class _ImportDialogState extends State<_ImportDialog> {
             const SizedBox(height: 14),
             Row(
               children: <Widget>[
-                const Text(
-                  'Pace',
-                  style: TextStyle(fontSize: 13, color: AppColors.muted),
-                ),
-                const SizedBox(width: 12),
-                for (final pace in ReadingPace.values)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: ChoiceChip(
-                      label: Text(pace.name),
-                      selected: _pace == pace,
-                      onSelected: (_) => setState(() => _pace = pace),
-                    ),
-                  ),
                 const Spacer(),
                 Text(
                   '${countWords(_markdown.text)} words',
@@ -175,7 +155,6 @@ class _ImportDialogState extends State<_ImportDialog> {
                   ImportRequest(
                     title: _title.text.trim(),
                     markdown: _markdown.text,
-                    pace: _pace,
                   ),
                 )
               : null,

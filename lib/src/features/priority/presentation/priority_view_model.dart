@@ -6,6 +6,8 @@
 /// promoting one element necessarily demotes another.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,6 +22,7 @@ import '../../../core/tracing.dart';
 import '../../../domain/scheduling/element.dart';
 import '../../../domain/scheduling/sm20_advance.dart';
 import '../../../domain/scheduling/study_day.dart';
+import '../../../domain/scheduling/topic_scheduler.dart';
 import '../../../domain/settings/app_settings.dart';
 import '../../library/presentation/library_view_model.dart';
 
@@ -31,6 +34,8 @@ final class PrioritySliderState {
     required this.draftPercent,
     this.isBusy = false,
     this.message,
+    this.draftAbove,
+    this.draftBelow,
   });
 
   /// Where the element currently sits, and what surrounds it.
@@ -42,6 +47,10 @@ final class PrioritySliderState {
   final bool isBusy;
   final UiMessage? message;
 
+  /// Neighbours for the drafted percent, not for the stored rank.
+  final PriorityEntry? draftAbove;
+  final PriorityEntry? draftBelow;
+
   /// Whether the draft differs from what is stored.
   bool get isDirty => (draftPercent - context.percent).abs() >= 0.5;
 
@@ -51,11 +60,16 @@ final class PrioritySliderState {
     bool? isBusy,
     UiMessage? message,
     bool clearMessage = false,
+    PriorityEntry? draftAbove,
+    PriorityEntry? draftBelow,
+    bool clearDraftNeighbours = false,
   }) => PrioritySliderState(
     context: context ?? this.context,
     draftPercent: draftPercent ?? this.draftPercent,
     isBusy: isBusy ?? this.isBusy,
     message: clearMessage ? null : (message ?? this.message),
+    draftAbove: clearDraftNeighbours ? null : (draftAbove ?? this.draftAbove),
+    draftBelow: clearDraftNeighbours ? null : (draftBelow ?? this.draftBelow),
   );
 }
 
@@ -70,15 +84,41 @@ final class PrioritySliderViewModel
     if (context == null) {
       throw StateError('$arg has no schedule, so it has no priority');
     }
-    return PrioritySliderState(context: context, draftPercent: context.percent);
+    return PrioritySliderState(
+      context: context,
+      draftPercent: context.percent,
+      draftAbove: context.above,
+      draftBelow: context.below,
+    );
   }
 
   /// Moves the slider without committing.
   void draft(double percent) {
     final PrioritySliderState? current = state.valueOrNull;
     if (current == null || current.isBusy) return;
+    final double clamped = percent.clamp(0, 100);
     state = AsyncValue<PrioritySliderState>.data(
-      current.copyWith(draftPercent: percent.clamp(0, 100)),
+      current.copyWith(draftPercent: clamped),
+    );
+    unawaited(_refreshNeighbours(clamped));
+  }
+
+  /// Resolves the neighbours for [percent] and applies them if still current.
+  ///
+  /// The slider emits faster than the query returns, so a late answer for a
+  /// percent the user has already moved past is dropped rather than shown.
+  Future<void> _refreshNeighbours(double percent) async {
+    final ({PriorityEntry? above, PriorityEntry? below}) neighbours = await ref
+        .read(priorityQueryProvider)
+        .neighboursAt(ref: arg, percent: percent);
+    final PrioritySliderState? latest = state.valueOrNull;
+    if (latest == null || latest.draftPercent != percent) return;
+    state = AsyncValue<PrioritySliderState>.data(
+      latest.copyWith(
+        clearDraftNeighbours: true,
+        draftAbove: neighbours.above,
+        draftBelow: neighbours.below,
+      ),
     );
   }
 
@@ -172,9 +212,11 @@ final class PriorityBrowserState {
     this.types = const <ElementType>{},
     this.message,
     this.isBusy = false,
+    this.sort = PriorityBrowserSort.priority,
+    this.ascending = true,
   });
 
-  /// Every element, most important first.
+  /// Every element in the order the browser is currently showing.
   final List<PriorityEntry> entries;
 
   /// Type filter. Empty means everything.
@@ -183,17 +225,95 @@ final class PriorityBrowserState {
   final UiMessage? message;
   final bool isBusy;
 
+  final PriorityBrowserSort sort;
+  final bool ascending;
+
+  /// Whether the rows are in collection priority order.
+  ///
+  /// Dragging rewrites one order key against its neighbours, so it is only
+  /// meaningful while the list *is* that order. Under any other sort the row
+  /// above is not the rank above, and a drag would move the element somewhere
+  /// the user did not point at.
+  bool get isReorderable => sort == PriorityBrowserSort.priority && ascending;
+
   PriorityBrowserState copyWith({
     List<PriorityEntry>? entries,
     Set<ElementType>? types,
     UiMessage? message,
     bool clearMessage = false,
     bool? isBusy,
+    PriorityBrowserSort? sort,
+    bool? ascending,
   }) => PriorityBrowserState(
     entries: entries ?? this.entries,
     types: types ?? this.types,
     message: clearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
+    sort: sort ?? this.sort,
+    ascending: ascending ?? this.ascending,
+  );
+}
+
+/// Which column the browser is ordered by.
+enum PriorityBrowserSort {
+  priority('Prior'),
+  title('Title'),
+  interval('Intrv'),
+  repetitions('Reps'),
+  lapses('Laps'),
+  lastRepetition('LastRep'),
+  nextRepetition('NextRep');
+
+  const PriorityBrowserSort(this.label);
+
+  final String label;
+}
+
+/// Orders [entries] by [sort], with a stable tie-break on priority.
+///
+/// The tie-break matters: most of these columns repeat heavily — every new
+/// element has zero repetitions — and without it equal rows would shuffle on
+/// every rebuild.
+List<PriorityEntry> sortPriorityEntries(
+  List<PriorityEntry> entries,
+  PriorityBrowserSort sort,
+  bool ascending,
+) {
+  int byPriority(PriorityEntry a, PriorityEntry b) =>
+      a.schedule.priority.compareTo(b.schedule.priority);
+  int compare(PriorityEntry a, PriorityEntry b) {
+    // Never-repeated elements are placed before the direction is applied, so
+    // reversing the column cannot pull them to the front: an absent
+    // repetition is not an early one, and it is not a late one either.
+    if (sort == PriorityBrowserSort.lastRepetition) {
+      final bool aMissing = a.lastRepetition == null;
+      final bool bMissing = b.lastRepetition == null;
+      if (aMissing || bMissing) {
+        if (aMissing && bMissing) return byPriority(a, b);
+        return aMissing ? 1 : -1;
+      }
+    }
+    final int primary = switch (sort) {
+      PriorityBrowserSort.priority => byPriority(a, b),
+      PriorityBrowserSort.title => a.title.toLowerCase().compareTo(
+        b.title.toLowerCase(),
+      ),
+      PriorityBrowserSort.interval => a.intervalDays.compareTo(b.intervalDays),
+      PriorityBrowserSort.repetitions => a.repetitions.compareTo(b.repetitions),
+      PriorityBrowserSort.lapses => a.lapses.compareTo(b.lapses),
+      PriorityBrowserSort.lastRepetition => a.lastRepetition!.compareTo(
+        b.lastRepetition!,
+      ),
+      PriorityBrowserSort.nextRepetition => a.nextRepetition.compareTo(
+        b.nextRepetition,
+      ),
+    };
+    if (primary != 0) return ascending ? primary : -primary;
+    return byPriority(a, b);
+  }
+
+  return List<PriorityEntry>.unmodifiable(
+    <PriorityEntry>[...entries]..sort(compare),
   );
 }
 
@@ -205,15 +325,38 @@ final class PriorityBrowserViewModel
     entries: await ref.read(priorityQueryProvider).browse(),
   );
 
+  /// Sorts by [sort], flipping direction when the same column is chosen twice.
+  Future<void> sortBy(PriorityBrowserSort sort) async {
+    final PriorityBrowserState? current = state.valueOrNull;
+    if (current == null || current.isBusy) return;
+    final bool ascending = current.sort == sort ? !current.ascending : true;
+    state = AsyncValue<PriorityBrowserState>.data(
+      current.copyWith(
+        sort: sort,
+        ascending: ascending,
+        entries: sortPriorityEntries(current.entries, sort, ascending),
+      ),
+    );
+  }
+
   /// Restricts the list to certain element types.
   Future<void> filterTo(Set<ElementType> types) async {
     state = const AsyncLoading<PriorityBrowserState>();
+    final PriorityBrowserSort sort =
+        state.valueOrNull?.sort ?? PriorityBrowserSort.priority;
+    final bool ascending = state.valueOrNull?.ascending ?? true;
     state = await AsyncValue.guard(
       () async => PriorityBrowserState(
-        entries: await ref
-            .read(priorityQueryProvider)
-            .browse(types: types.isEmpty ? null : types),
+        entries: sortPriorityEntries(
+          await ref
+              .read(priorityQueryProvider)
+              .browse(types: types.isEmpty ? null : types),
+          sort,
+          ascending,
+        ),
         types: types,
+        sort: sort,
+        ascending: ascending,
       ),
     );
   }
@@ -222,12 +365,21 @@ final class PriorityBrowserViewModel
   Future<void> refresh() async {
     final PriorityBrowserState? current = state.valueOrNull;
     final Set<ElementType> types = current?.types ?? const <ElementType>{};
+    final PriorityBrowserSort sort =
+        current?.sort ?? PriorityBrowserSort.priority;
+    final bool ascending = current?.ascending ?? true;
     state = AsyncValue<PriorityBrowserState>.data(
       PriorityBrowserState(
-        entries: await ref
-            .read(priorityQueryProvider)
-            .browse(types: types.isEmpty ? null : types),
+        entries: sortPriorityEntries(
+          await ref
+              .read(priorityQueryProvider)
+              .browse(types: types.isEmpty ? null : types),
+          sort,
+          ascending,
+        ),
         types: types,
+        sort: sort,
+        ascending: ascending,
       ),
     );
   }
@@ -444,6 +596,29 @@ final class PriorityBrowserViewModel
   }
 
   /// Remember: memorize pending or dismissed topics.
+  /// Learn, Review all, Review topics: section 9.7's review modes 4, 5, 6.
+  ///
+  /// Opening a review sets the learning mode and stores the subset queue; it
+  /// does not touch A, because merely opening a review is not a repetition.
+  Future<void> startReview(List<ElementRef> refs, Sm20ReviewMode mode) =>
+      _browserCommand(
+        switch (mode) {
+          Sm20ReviewMode.learn => 'Learning',
+          Sm20ReviewMode.reviewAll => 'Reviewing all',
+          Sm20ReviewMode.reviewTopics => 'Reviewing topics',
+        },
+        (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
+            handlers.startReview(
+              StartBrowserReview(
+                operation,
+                refs: refs,
+                day: day,
+                mode: mode,
+                timestampUtc: ref.read(clockProvider).nowUtc(),
+              ),
+            ),
+      );
+
   Future<void> remember(List<ElementRef> refs) => _browserCommand(
     'Remembered',
     (BrowserHandlers handlers, OperationId operation, StudyDay day) =>

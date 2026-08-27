@@ -14,7 +14,7 @@ import 'tables.dart';
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 9;
+const int kSchemaVersion = 11;
 
 /// Name of the external-content FTS5 index over [SearchDocuments].
 const String kSearchIndexTable = 'search_index';
@@ -34,7 +34,6 @@ const String kSearchIndexTable = 'search_index';
     MercyBatches,
     SearchDocuments,
     ActivityEvents,
-    Folders,
     Settings,
     DatasetMeta,
   ],
@@ -518,6 +517,25 @@ class AppDatabase extends _$AppDatabase {
         // CHECK constraint named both of them.
         await m.alterTable(TableMigration(elementSchedules));
         await m.alterTable(TableMigration(cardMemories));
+        await _createIndexes(m);
+      }
+      if (from < 10) {
+        // Drop the reading-pace column. Pace selected one of three fixed
+        // interval ladders, which is a scheduler this app no longer has: SM20
+        // derives every topic interval from A and the section 5.2 formula, so
+        // the value could not influence anything and keeping it would only
+        // invite a future reader to wire it back up.
+        await m.alterTable(TableMigration(sources));
+        await _createIndexes(m);
+      }
+      if (from < 11) {
+        // Drop the folder layer. The tree the app shows is the content's own
+        // provenance — an extract under the text it was cut from — and the
+        // folder table was never written by anything: no command created a
+        // folder and no query read one. Schema that only looks like a feature
+        // is worse than none, because the next reader assumes it works.
+        await customStatement('DROP TABLE IF EXISTS folders');
+        await m.alterTable(TableMigration(sources));
         await _createIndexes(m);
       }
     },

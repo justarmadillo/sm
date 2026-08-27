@@ -13,8 +13,6 @@ import 'sm20_numeric.dart';
 import 'study_day.dart';
 import 'topic_scheduler.dart';
 
-const String kQueuePolicyVersion = 'sm20-outstanding/1';
-
 enum QueueLane { outstandingItem, outstandingTopic, finalDrill, pending }
 
 @immutable

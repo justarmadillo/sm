@@ -88,12 +88,6 @@ sealed class Result<T> {
     Err<T>(:final failure) => failure,
   };
 
-  /// The value, or [fallback] when this is an [Err].
-  T valueOr(T fallback) => switch (this) {
-    Ok<T>(:final value) => value,
-    Err<T>() => fallback,
-  };
-
   /// Transforms a success value, passing failures through untouched.
   Result<R> map<R>(R Function(T value) transform) => switch (this) {
     Ok<T>(:final value) => Ok<R>(transform(value)),

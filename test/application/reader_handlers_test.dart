@@ -484,32 +484,6 @@ void main() {
       expect(snapshot.storedInterval, 0);
     });
 
-    test('changing pace is content metadata and reschedules nothing', () async {
-      final source = await harness.importFixture();
-      final ref = ElementRef(id: source.id, type: ElementType.source);
-      await harness.reader.completeEncounter(
-        CompleteTopicEncounter(harness.nextOperation(), ref: ref),
-      );
-
-      await harness.reader.setReadingPace(
-        SetReadingPace(
-          harness.nextOperation(),
-          sourceId: source.id,
-          pace: ReadingPace.slow,
-        ),
-      );
-
-      final topic = await harness.learning.findTopic(ref);
-      // Pace is content metadata. It must leave every scheduling field alone,
-      // and SM20 has only one scheduler family to be in.
-      expect(topic!.repetitionCount, 1);
-      expect(topic.status, Sm20ElementStatus.memorized);
-      expect(
-        (await harness.content.findSource(source.id))!.pace,
-        ReadingPace.slow,
-      );
-    });
-
     test(
       'deleting a source retains content and independent descendants',
       () async {

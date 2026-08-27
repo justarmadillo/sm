@@ -35,7 +35,7 @@ enum RevlogEventType {
   /// The user chose Later. Eligibility moved; nothing else did.
   postpone(3, 'postpone'),
 
-  /// The overload valve deferred the element to protect the day's capacity.
+  /// The automatic Smart Postpone pass moved the element.
   autoPostpone(4, 'auto_postpone'),
 
   /// The user set an interval or due date by hand.

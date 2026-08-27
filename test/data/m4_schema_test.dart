@@ -44,8 +44,8 @@ void main() {
     await _addLegacyCardParentColumns(db);
     await db.customStatement(
       'INSERT INTO sources (id, title, markdown, content_hash, word_count, '
-      'imported_at_utc, pace, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      <Object?>['s1', 'Chapter', '# Chapter', 'a' * 64, 12, 1000, 1, 1],
+      'imported_at_utc, revision) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      <Object?>['s1', 'Chapter', '# Chapter', 'a' * 64, 12, 1000, 1],
     );
     await db.customStatement(
       'INSERT INTO extracts (id, markdown, source_id, parent_id, '

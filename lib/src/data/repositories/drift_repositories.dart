@@ -13,7 +13,6 @@ import 'package:drift/drift.dart';
 import '../../application/ports/repositories.dart';
 import '../../application/ports/transaction_runner.dart';
 import '../../application/scheduling/mercy_workflow.dart';
-import '../../core/clock.dart';
 import '../../core/ids.dart';
 import '../../domain/content/card.dart';
 import '../../domain/content/document.dart';
@@ -97,17 +96,15 @@ final class DriftContentRepository implements ContentRepository {
     // Bump the revision in the same statement so concurrent readers can tell
     // a stale projection from a fresh one.
     await _database.customStatement(
-      'UPDATE sources SET title = ?, pace = ?, marker_block_id = ?, '
-      'marker_offset = ?, soft_block_id = ?, soft_offset = ?, folder_id = ?, '
+      'UPDATE sources SET title = ?, marker_block_id = ?, '
+      'marker_offset = ?, soft_block_id = ?, soft_offset = ?, '
       'revision = revision + 1 WHERE id = ?',
       <Object?>[
         source.title,
-        source.pace.index,
         source.resume.marker?.blockId,
         source.resume.marker?.utf8Offset,
         source.resume.softPosition?.blockId,
         source.resume.softPosition?.utf8Offset,
-        source.folderId,
         source.id,
       ],
     );
@@ -306,26 +303,6 @@ final class DriftContentRepository implements ContentRepository {
     return <Card>[
       for (final row in rows) cardFromRow(_database.cards.map(row.data)),
     ];
-  }
-
-  @override
-  Future<Map<String, int>> countCardsByParent(List<String> parentIds) async {
-    if (parentIds.isEmpty) return <String, int>{};
-    final placeholders = List<String>.filled(parentIds.length, '?').join(', ');
-    final variables = <Variable<Object>>[
-      for (final id in parentIds) Variable<String>(id),
-    ];
-    final rows = await _database
-        .customSelect(
-          'SELECT parent_element_id AS parent_id, COUNT(*) AS n FROM cards '
-          'WHERE parent_element_id IN ($placeholders) '
-          'GROUP BY parent_element_id',
-          variables: variables,
-        )
-        .get();
-    return <String, int>{
-      for (final row in rows) row.read<String>('parent_id'): row.read<int>('n'),
-    };
   }
 }
 
@@ -701,24 +678,6 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
-  Future<void> setPriorities(Map<ElementRef, PriorityRank> ranks) async {
-    if (ranks.isEmpty) return;
-    await _database.batch((Batch batch) {
-      for (final entry in ranks.entries) {
-        batch.update(
-          _database.elementSchedules,
-          ElementSchedulesCompanion(
-            priorityKey: Value<String>(entry.value.orderKey),
-          ),
-          where: ($ElementSchedulesTable t) =>
-              t.elementId.equals(entry.key.id) &
-              t.elementType.equals(entry.key.type.index),
-        );
-      }
-    });
-  }
-
-  @override
   Future<void> appendActivity(ActivityRecord record) => _database
       .into(_database.activityEvents)
       .insert(
@@ -827,16 +786,6 @@ final class DriftLearningRepository implements LearningRepository {
       ])
       ..limit(1);
     final row = await query.getSingleOrNull();
-    return row == null ? null : schedulerEventFromRow(row);
-  }
-
-  @override
-  Future<SchedulerEvent?> findSchedulerEvent(String eventId) async {
-    final row =
-        await (_database.select(
-              _database.schedulerEvents,
-            )..where(($SchedulerEventsTable table) => table.id.equals(eventId)))
-            .getSingleOrNull();
     return row == null ? null : schedulerEventFromRow(row);
   }
 
@@ -998,21 +947,6 @@ final class DriftLearningRepository implements LearningRepository {
     return row == null ? null : _toMercyBatch(row);
   }
 
-  @override
-  Future<int> countAppliedMercyBatchesSince(StudyDay day) async {
-    final QueryRow row = await _database
-        .customSelect(
-          'SELECT COUNT(*) AS total FROM mercy_batches '
-          'WHERE applied_at_utc IS NOT NULL AND undone_at_utc IS NULL '
-          'AND applied_at_utc >= ?',
-          variables: <Variable<Object>>[
-            Variable<int>(day.epochDay * Duration.millisecondsPerDay),
-          ],
-        )
-        .getSingle();
-    return row.read<int>('total');
-  }
-
   StoredMercyBatch _toMercyBatch(MercyBatchRow row) => StoredMercyBatch(
     batchId: row.batchId,
     previewOperationId: row.previewOperationId,
@@ -1027,35 +961,6 @@ final class DriftLearningRepository implements LearningRepository {
         : fromEpochMs(row.appliedAtUtc!),
     undoneAtUtc: row.undoneAtUtc == null ? null : fromEpochMs(row.undoneAtUtc!),
   );
-
-  @override
-  Future<SchedulerEvent?> findLastSchedulerEvent(
-    ElementRef ref,
-    SchedulerEventType eventType, {
-    bool excludeUndone = true,
-  }) async {
-    final List<QueryRow> rows = await _database
-        .customSelect(
-          'SELECT original.* FROM scheduler_events original '
-          'WHERE original.element_id = ? AND original.element_type = ? '
-          'AND original.event_type = ? '
-          '${excludeUndone ? 'AND NOT EXISTS (SELECT 1 FROM scheduler_events inverse WHERE inverse.undoes_event_id = original.id) ' : ''}'
-          'ORDER BY original.occurred_at_utc DESC, original.id DESC LIMIT 1',
-          variables: <Variable<Object>>[
-            Variable<String>(ref.id),
-            Variable<int>(ref.type.index),
-            Variable<String>(eventType.wireName),
-          ],
-          readsFrom: <ResultSetImplementation<Table, Object?>>{
-            _database.schedulerEvents,
-          },
-        )
-        .get();
-    if (rows.isEmpty) return null;
-    return schedulerEventFromRow(
-      _database.schedulerEvents.map(rows.single.data),
-    );
-  }
 
   @override
   Future<List<PriorityRank>> listActivePriorities() async {
@@ -1102,37 +1007,6 @@ final class DriftLearningRepository implements LearningRepository {
         );
       }
     });
-  }
-
-  @override
-  Future<void> saveCardStates(List<CardState> cards) async {
-    for (final card in cards) {
-      await saveCardState(card);
-    }
-  }
-
-  @override
-  Future<void> saveTopics(List<TopicState> topics) async {
-    for (final topic in topics) {
-      await saveTopic(topic);
-    }
-  }
-
-  @override
-  Future<List<ElementSchedule>> listBacklog({required StudyDay day}) async {
-    final rows =
-        await (_database.select(_database.elementSchedules)
-              ..where(
-                ($ElementSchedulesTable t) =>
-                    t.lifecycle.equals(ElementLifecycle.active.index) &
-                    t.originalDueDay.isSmallerThanValue(day.epochDay),
-              )
-              ..orderBy(<OrderClauseGenerator<$ElementSchedulesTable>>[
-                ($ElementSchedulesTable t) => OrderingTerm.asc(t.priorityKey),
-                ($ElementSchedulesTable t) => OrderingTerm.asc(t.elementId),
-              ]))
-            .get();
-    return <ElementSchedule>[for (final row in rows) scheduleFromRow(row)];
   }
 
   @override
@@ -1283,13 +1157,6 @@ final class DriftSearchRepository implements SearchRepository {
       );
 
   @override
-  Future<void> upsertDocuments(List<SearchDocument> documents) async {
-    for (final document in documents) {
-      await upsertDocument(document);
-    }
-  }
-
-  @override
   Future<void> deleteDocument(ElementRef ref) async {
     await (_database.delete(_database.searchDocuments)..where(
           ($SearchDocumentsTable t) =>
@@ -1412,47 +1279,4 @@ final class DriftTransferRepository implements TransferRepository {
     await saveIdentity(next);
     return next;
   }
-}
-
-/// Reads the Library projection: sources with their schedules and counts.
-final class DriftLibraryQuery {
-  const DriftLibraryQuery(this._content, this._learning, this._clock);
-
-  final ContentRepository _content;
-  final LearningRepository _learning;
-  // Held so the projection can be extended with due-today flags without
-  // changing every call site.
-  final Clock _clock;
-
-  /// Every source with the scheduling facts the Library shows.
-  Future<List<LibraryEntry>> listEntries() async {
-    final sources = await _content.listSources();
-    if (sources.isEmpty) return <LibraryEntry>[];
-
-    final refs = <ElementRef>[
-      for (final source in sources)
-        ElementRef(id: source.id, type: ElementType.source),
-    ];
-    final topics = await _learning.findTopics(refs);
-    final counts = await _content.countExtractsBySource(
-      sources.map((Source s) => s.id).toList(),
-    );
-
-    final entries = <LibraryEntry>[];
-    for (final source in sources) {
-      final topic = topics[ElementRef(id: source.id, type: ElementType.source)];
-      if (topic == null) continue;
-      entries.add(
-        LibraryEntry(
-          source: source,
-          topic: topic,
-          extractCount: counts[source.id] ?? 0,
-        ),
-      );
-    }
-    return entries;
-  }
-
-  /// The current instant, exposed so callers share one clock.
-  DateTime nowUtc() => _clock.nowUtc();
 }

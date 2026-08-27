@@ -81,6 +81,6 @@ final class PostponeCard extends AppCommand {
   /// interval — a fixed +1 day just returns it tomorrow into the same queue.
   final StudyDay? until;
 
-  /// Whether overload handling issued this, rather than the user.
+  /// Whether the automatic postpone pass issued this, rather than the user.
   final bool isAutomatic;
 }

@@ -171,9 +171,11 @@ class _Body extends StatelessWidget {
         const SizedBox(height: 16),
         // Naming the neighbours is what turns an abstract percent into a
         // judgement the user can actually make.
-        _Neighbour(label: 'Before', entry: state.context.above),
+        // These follow the slider: they name where the element would land at
+        // the drafted percent, not where it sits now.
+        _Neighbour(label: 'Before', entry: state.draftAbove),
         const SizedBox(height: 6),
-        _Neighbour(label: 'After', entry: state.context.below),
+        _Neighbour(label: 'After', entry: state.draftBelow),
         const SizedBox(height: 14),
         const Text(
           'If you hesitate between a lower priority and a higher one, the '

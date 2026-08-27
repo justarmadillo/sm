@@ -1,23 +1,19 @@
-/// ViewModel for the Library.
+/// Element commands shared by the Contents tree and the reader.
 ///
-/// Holds no scheduling logic: every mutation goes out as a named command and
-/// comes back as a refreshed projection. The ViewModel's job is to turn user
-/// intentions into commands, expose immutable state, and surface failures as
-/// ephemeral effects — nothing more.
+/// Holds no scheduling logic and no projection: the tree renders from
+/// `ContentTreeQuery`, so all this owns is turning user intentions into named
+/// commands and surfacing failures as ephemeral effects.
 library;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
-import '../../../application/ports/repositories.dart';
 import '../../../application/reader/reader_commands.dart';
 import '../../../core/result.dart';
 import '../../../core/tracing.dart';
 import '../../../domain/content/source.dart';
 import '../../../domain/scheduling/element.dart';
-import '../../../domain/scheduling/study_day.dart';
-import '../../../domain/scheduling/topic_scheduler.dart';
 
 /// A one-shot thing for the view to do, not durable state.
 @immutable
@@ -28,99 +24,43 @@ final class UiMessage {
   final bool isError;
 }
 
-/// Everything the Library screen renders.
+/// What the shared command surface exposes to a view.
 @immutable
 final class LibraryUiState {
-  const LibraryUiState({
-    required this.entries,
-    required this.today,
-    this.effectiveDue = const <ElementRef, StudyDay>{},
-    this.message,
-    this.isBusy = false,
-  });
-
-  final List<LibraryEntry> entries;
-  final StudyDay today;
-
-  /// When each source may next be read, after Later, automatic overflow, and
-  /// any Mercy override. Never the canonical date: showing that would tell the
-  /// user their own postponement did not take.
-  final Map<ElementRef, StudyDay> effectiveDue;
-
-  /// The day [entry] may next be presented on.
-  StudyDay dueDayOf(LibraryEntry entry) =>
-      effectiveDue[entry.schedule.ref] ?? entry.schedule.algorithmicDueDay;
+  const LibraryUiState({this.message, this.isBusy = false});
 
   /// Ephemeral: shown once, then cleared.
   final UiMessage? message;
 
   final bool isBusy;
 
-  bool _isDue(LibraryEntry entry) =>
-      entry.schedule.lifecycle.isSchedulable && dueDayOf(entry) <= today;
-
-  /// Sources eligible to be read today.
-  List<LibraryEntry> get dueToday => <LibraryEntry>[
-    for (final entry in entries)
-      if (_isDue(entry)) entry,
-  ];
-
-  /// Everything else, including dismissed sources.
-  List<LibraryEntry> get later => <LibraryEntry>[
-    for (final entry in entries)
-      if (!_isDue(entry)) entry,
-  ];
-
   LibraryUiState copyWith({
-    List<LibraryEntry>? entries,
-    StudyDay? today,
     UiMessage? message,
-    Map<ElementRef, StudyDay>? effectiveDue,
-    bool clearMessage = false,
     bool? isBusy,
+    bool clearMessage = false,
   }) => LibraryUiState(
-    entries: entries ?? this.entries,
-    today: today ?? this.today,
-    effectiveDue: effectiveDue ?? this.effectiveDue,
     message: clearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
   );
 }
 
-/// The Library screen's ViewModel.
+/// The shared element-command ViewModel.
 final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
   @override
   Future<LibraryUiState> build() async => _load();
 
-  Future<LibraryUiState> _load() async {
-    final entries = await ref.read(libraryQueryProvider).listEntries();
-    final today = await ref.read(readerHandlersProvider).today();
-    final effectiveDue = await ref.read(effectiveDueQueryProvider).forTopics(
-      <TopicState>[for (final entry in entries) entry.topic],
-    );
-    return LibraryUiState(
-      entries: entries,
-      today: today,
-      effectiveDue: effectiveDue,
-    );
-  }
+  Future<LibraryUiState> _load() async => const LibraryUiState();
 
   /// Imports pasted or opened markdown as a new source.
   Future<String?> importMarkdown({
     required String title,
     required String markdown,
-    ReadingPace pace = ReadingPace.normal,
   }) async {
     final result = await _command<Source>(
       (OperationId operation) => ref
           .read(readerHandlersProvider)
           .importSource(
-            ImportSource(
-              operation,
-              title: title,
-              markdown: markdown,
-              pace: pace,
-            ),
+            ImportSource(operation, title: title, markdown: markdown),
           ),
       success: (Source source) => 'Imported "${source.title}"',
     );
@@ -137,15 +77,6 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
   );
 
   /// Changes how quickly a source comes back.
-  Future<void> setPace(String sourceId, ReadingPace pace) => _command<Source>(
-    (OperationId operation) => ref
-        .read(readerHandlersProvider)
-        .setReadingPace(
-          SetReadingPace(operation, sourceId: sourceId, pace: pace),
-        ),
-    success: (Source source) => 'Pace set to ${pace.name}',
-  );
-
   /// Undismiss: returns a dismissed source to the pending store.
   ///
   /// It does not restore the schedule or the priority Dismiss cleared, so the

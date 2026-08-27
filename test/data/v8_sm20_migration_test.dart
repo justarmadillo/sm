@@ -89,7 +89,7 @@ void main() {
       ]) {
         await database.customStatement(
           'INSERT INTO sources (id, title, markdown, content_hash, word_count, '
-          'imported_at_utc, pace, revision) VALUES (?, ?, ?, ?, 1, 0, 1, 1)',
+          'imported_at_utc, revision) VALUES (?, ?, ?, ?, 1, 0, 1)',
           <Object?>[id, id, id, id.padRight(64, '0')],
         );
         await database.customStatement(

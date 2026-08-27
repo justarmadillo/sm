@@ -83,9 +83,6 @@ final class RotatingLogSink implements DiagnosticSink {
     unawaited(_append(line));
   }
 
-  /// Waits for every queued line to reach the file. For tests and shutdown.
-  Future<void> flush() => _pending;
-
   Future<void> _append(String line) {
     _pending = _pending
         .then((_) async {

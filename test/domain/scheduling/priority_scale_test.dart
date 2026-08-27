@@ -124,33 +124,6 @@ void main() {
     });
   });
 
-  group('the protected floor', () {
-    test('covers the top slice and nothing else', () {
-      final List<PriorityRank> ranks = ranksOf(20);
-      final PriorityScale scale = PriorityScale(ranks);
-
-      expect(scale.isProtected(ranks[0], 0.1), isTrue);
-      expect(scale.isProtected(ranks[1], 0.1), isTrue);
-      expect(scale.isProtected(ranks[2], 0.1), isFalse);
-      expect(scale.isProtected(ranks.last, 0.1), isFalse);
-    });
-
-    test('protects at least one element whenever it is enabled', () {
-      final List<PriorityRank> ranks = ranksOf(3);
-      final PriorityScale scale = PriorityScale(ranks);
-      expect(
-        scale.isProtected(ranks.first, 0.01),
-        isTrue,
-        reason: 'a floor that rounds to nobody is not a floor',
-      );
-    });
-
-    test('is off at zero', () {
-      final List<PriorityRank> ranks = ranksOf(5);
-      expect(PriorityScale(ranks).isProtected(ranks.first, 0), isFalse);
-    });
-  });
-
   group('order keys', () {
     test('stay strictly between their bounds under repeated insertion', () {
       var low = PriorityRank.middle;

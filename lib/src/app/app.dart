@@ -2,7 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
-import '../features/library/presentation/library_screen.dart';
+import '../features/queue/presentation/queue_screen.dart';
 import 'theme.dart';
 
 /// Root widget.
@@ -17,6 +17,8 @@ class IncrementalReaderApp extends StatelessWidget {
     title: 'Incremental Reader',
     debugShowCheckedModeBanner: false,
     theme: buildAppTheme(),
-    home: const LibraryScreen(),
+    // Studying is what the app is for, so it is what opens. The knowledge
+    // tree is one click away rather than in front of every session.
+    home: const QueueScreen(),
   );
 }
