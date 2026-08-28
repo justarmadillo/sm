@@ -69,7 +69,7 @@ final class ReviewOutcome {
   final bool isLeech;
 }
 
-/// Handlers for grading, undoing, editing, and deferring cards.
+/// Runs the commands for grading, undoing, editing, and deferring cards.
 final class ReviewCommandRunner {
   ReviewCommandRunner({
     required ContentRepository content,

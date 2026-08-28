@@ -2,8 +2,8 @@
 ///
 /// Compound operations — creating an extract, formulating cards, running
 /// auto-postpone — touch several repositories and must commit as one unit.
-/// Handlers own the transaction boundary. Repositories and DAOs never open
-/// one themselves.
+/// Command runners own the transaction boundary. Repositories never open one
+/// themselves.
 library;
 
 /// Runs a unit of work inside a single database transaction.

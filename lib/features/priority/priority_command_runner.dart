@@ -1,4 +1,4 @@
-/// Handlers for every priority change.
+/// Runs every command that changes relative priority.
 ///
 /// One rule runs through all of them: a priority change rewrites order keys
 /// and nothing else. No due date moves, no interval changes, no lifecycle
@@ -38,7 +38,7 @@ const String kPrioritySetKind = 'element.priority_set';
 /// Activity kind recorded when a range is spread across many elements.
 const String kPrioritySpreadKind = 'element.priority_spread';
 
-/// Handlers for the priority slider, the browser, and bulk spread.
+/// Runs the commands behind the priority slider, the browser, and Spread.
 final class PriorityCommandRunner {
   PriorityCommandRunner({
     required LearningRepository learning,

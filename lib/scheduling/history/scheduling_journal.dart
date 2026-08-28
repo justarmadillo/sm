@@ -1,6 +1,6 @@
 /// Writes the repetition log.
 ///
-/// Every handler that changes a schedule appends here, inside the same
+/// Every command runner that changes a schedule appends here, inside the same
 /// transaction as the change. Centralizing it is not tidiness: it is the only
 /// way to guarantee that the snapshots are taken the same way everywhere, so
 /// that "what happened to this element" is answerable months later without

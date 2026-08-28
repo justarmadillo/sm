@@ -4,7 +4,7 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/review/review_command_runner.dart';
-/// Exactly-once FSRS review handler, plus undo, edit, and burying.
+/// Applies an FSRS review exactly once, plus undo, edit, and burying.
 final Provider<ReviewCommandRunner> reviewCommandRunnerProvider =
     Provider<ReviewCommandRunner>(
       (Ref ref) => ReviewCommandRunner(

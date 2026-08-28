@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/extract/extraction_command_runner.dart';
 import 'package:incremental_reader/features/extract/formulation_command_runner.dart';
-/// Handlers for creating, undoing, and editing extracts.
+/// Runs the commands for creating, undoing, and editing extracts.
 final Provider<ExtractionCommandRunner> extractionCommandRunnerProvider =
     Provider<ExtractionCommandRunner>(
       (Ref ref) => ExtractionCommandRunner(

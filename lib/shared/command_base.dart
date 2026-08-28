@@ -10,7 +10,7 @@ import 'package:meta/meta.dart';
 /// exhaustively. Every command carries both an operation id and the instant at
 /// which the intent was issued. The id makes terminal actions safe to retry;
 /// the timestamp keeps delayed/replayed work auditable without substituting
-/// the handler's later execution time.
+/// the runner's later execution time.
 @immutable
 abstract base class AppCommand {
   AppCommand(this.operationId, {DateTime? timestampUtc})

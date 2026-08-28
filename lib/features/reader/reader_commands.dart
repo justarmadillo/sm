@@ -3,7 +3,7 @@
 /// Every mutation is a named, immutable value carrying an operation id. That
 /// id is what makes terminal actions safe: a Done that is retried after a
 /// crash, a double-click, or a queue advancing twice must commit once, and the
-/// handler decides that by looking for the id in the activity log rather than
+/// command runner decides that by looking for the id in the activity log
 /// by hoping the UI never fires twice.
 library;
 

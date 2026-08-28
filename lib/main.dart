@@ -1,3 +1,11 @@
+/// Where the app starts.
+///
+/// Four things have to happen before the first frame, in this order: find the
+/// folders, copy the database if a migration is about to run, open it, and
+/// load the user's settings. Everything after that is wired in
+/// `app/providers.dart` and drawn by `app/incremental_reader_app.dart`.
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/incremental_reader_app.dart';

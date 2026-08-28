@@ -7,9 +7,8 @@
 /// * the collection's current priority order, because priority is *relative*
 ///   and a percentile only exists in relation to everything else.
 ///
-/// Handlers therefore depend on this one object rather than on a calendar, a
-/// profile set, and a scheduler each. It is a factory, not a cache of domain
-/// state: the priority scale is rebuilt per call, because a queue built from a
+/// Command runners therefore depend on this one object rather than on a
+/// calendar, a profile set, and a scheduler each. It is a factory, not a cache: the priority scale is rebuilt per call, because a queue built from a
 /// stale order would place elements where they no longer belong.
 library;
 
@@ -30,8 +29,8 @@ import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 
 /// Resolves a stored zone identifier into offset rules.
 ///
-/// Injected rather than imported so the domain and application layers stay
-/// free of platform timezone code, and so a test can hand in a fake zone with
+/// Injected rather than imported so scheduling/ stays free of platform
+/// timezone code, and so a test can hand in a fake zone with
 /// a known DST transition.
 typedef TimeZoneResolver = TimeZoneRules Function(String zoneId);
 

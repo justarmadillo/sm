@@ -106,8 +106,8 @@ final Provider<DiagnosticSink> diagnosticsProvider = Provider<DiagnosticSink>((
 
 /// Turns a stored zone identifier into offset rules.
 ///
-/// Injected as a function so the domain and application layers never import
-/// platform timezone code, and so a test can supply a fake DST transition.
+/// Injected as a function so scheduling/ never imports platform timezone
+/// code, and so a test can supply a fake DST transition.
 final Provider<TimeZoneResolver> timeZoneResolverProvider =
     Provider<TimeZoneResolver>((Ref ref) => resolveTimeZone);
 

@@ -62,6 +62,13 @@ abstract interface class LearningRepository {
 
   /// Replaces one canonical topic only if the stored snapshot is still
   /// current. Both the common-element and topic revisions must advance once.
+  ///
+  /// The name has an "and" in it because the comparing and the swapping are
+  /// one indivisible step. Splitting them into `checkTopicIsUnchanged` and
+  /// `saveTopic` would open a gap in which another write could land between
+  /// the two, and the second grade of a double-tap would overwrite the first.
+  /// Returns false instead of throwing when the snapshot is stale, so the
+  /// caller can retry or report a conflict.
   Future<bool> compareAndSwapTopic({
     required TopicState expected,
     required TopicState replacement,
@@ -77,6 +84,10 @@ abstract interface class LearningRepository {
   /// caller's transaction.
   Future<void> saveCardState(CardState card);
 
+  /// Replaces one card only if the stored snapshot is still current.
+  ///
+  /// One indivisible step, for the same reason as [compareAndSwapTopic]: this
+  /// is what makes grading a card exactly-once when the button is tapped twice.
   Future<bool> compareAndSwapCardState({
     required CardState expected,
     required CardState replacement,

@@ -4,7 +4,7 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/reader/reader_command_runner.dart';
-/// Handlers for every Reader and Library mutation.
+/// Runs every command the Reader and the Library can issue.
 final Provider<ReaderCommandRunner> readerCommandRunnerProvider =
     Provider<ReaderCommandRunner>(
       (Ref ref) => ReaderCommandRunner(

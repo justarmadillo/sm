@@ -807,6 +807,8 @@ final class CardScheduler implements FsrsAdapter {
   }
 
   fsrs.Scheduler _engineFor(String operationId) {
+    // `enableFuzzing` is the dart-fsrs package's own parameter name, so it
+    // stays as the package spells it even though ours is isFuzzingEnabled.
     if (!settings.isFuzzingEnabled) {
       return fsrs.Scheduler(
         parameters: settings.parameters,

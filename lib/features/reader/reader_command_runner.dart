@@ -1,6 +1,6 @@
-/// Handlers for every Reader and Library mutation.
+/// Runs every command the Reader and the Library can issue.
 ///
-/// One handler owns validation, transaction scope, domain invocation,
+/// One runner owns validation, transaction scope, the scheduling call,
 /// persistence, and the emitted events — in that order, for every command.
 /// Nothing above this layer knows about intervals or lifecycles, and nothing
 /// below it decides policy.
@@ -97,7 +97,7 @@ final class SourceEdited {
   bool get didChange => outcome != null;
 }
 
-/// Handlers for reading, marking, and pacing sources.
+/// Runs the commands for reading, marking, and pacing sources.
 final class ReaderCommandRunner {
   ReaderCommandRunner({
     required ContentRepository content,

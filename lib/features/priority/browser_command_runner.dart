@@ -1,10 +1,10 @@
 /// Application transactions for SM20's browser Learning command group.
 ///
-/// Three properties hold across every handler here:
+/// Three properties hold across every command here:
 ///
 /// * **The selection order is the algorithm's order.** Add to outstanding
 ///   counts insertions as it walks, and Advance draws once per draw-eligible
-///   record, so a handler that reordered or parallelized the selection would
+///   record, so a runner that reordered or parallelized the selection would
 ///   produce a different collection and a different PRNG stream.
 /// * **One global random stream.** Any command that can draw takes the
 ///   persisted seed, runs, and writes the advanced seed back in the same

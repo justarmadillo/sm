@@ -2,8 +2,14 @@
 ///
 /// Invariants live in SQL, not only in Dart: check constraints on enums and
 /// ranges, foreign keys with explicit delete behaviour, and unique indexes on
-/// the one-to-one subtype rows. A bug in a handler should hit a constraint,
-/// not quietly write a collection that no longer makes sense.
+/// the one-to-one subtype rows. A bug in a command runner should hit a
+/// constraint, not quietly write a collection that no longer makes sense.
+///
+/// **Renaming a getter here renames a database column.** Drift derives the SQL
+/// name from the Dart name (`parentIsSource` becomes `parent_is_source`), so a
+/// rename that looks cosmetic will make every existing collection unreadable.
+/// If a name really has to change, add `.named('old_column')` to keep the SQL
+/// side fixed, and regenerate `app_database.g.dart`.
 library;
 
 // Drift's check() idiom names the column inside its own definition. The

@@ -1,4 +1,4 @@
-/// Handlers for extraction.
+/// Runs every command that creates or changes an extract.
 ///
 /// The invariants this file enforces, in order of how easy they are to break:
 ///
@@ -40,7 +40,7 @@ const String kExtractCreatedKind = 'extract.created';
 /// Activity kind recorded when an extract is undone.
 const String kExtractUndoneKind = 'extract.undone';
 
-/// Handlers for creating, undoing, and editing extracts.
+/// Runs the commands for creating, undoing, and editing extracts.
 final class ExtractionCommandRunner {
   ExtractionCommandRunner({
     required ContentRepository content,

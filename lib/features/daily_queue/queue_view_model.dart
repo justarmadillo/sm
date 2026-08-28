@@ -1,7 +1,7 @@
 /// Presentation state for the daily heterogeneous queue.
 ///
 /// The ViewModel holds no scheduling logic. Loading the queue runs the day's
-/// admission valve inside the application layer, so what the screen shows and
+/// admission valve in the command runner, so what the screen shows and
 /// what the collection recorded as deferred are one decision rather than two.
 library;
 

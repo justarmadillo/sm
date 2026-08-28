@@ -471,7 +471,7 @@ final class ReaderViewModel
 
   /// Later: moves eligibility without growing the interval.
   ///
-  /// With no explicit day the handler scales the delay by the source's own
+  /// With no explicit day the command runner scales the delay by the source's
   /// interval, because a fixed one day just returns it tomorrow into an
   /// equally full queue.
   Future<void> later({int? days}) async {

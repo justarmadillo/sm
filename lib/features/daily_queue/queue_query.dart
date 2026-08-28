@@ -126,7 +126,7 @@ final class QueueQuery {
     if (outcome.isErr) return QueueProjection.emptyOn(today);
 
     final AdmissionOutcome value = outcome.unwrap();
-    // The handler owns the durable remaining plan. Rebuilding here would
+    // The command runner owns the durable remaining plan. Rebuilding here
     // discard its completion set and merge cursor and reshuffle a live day.
     final QueuePlan plan = value.plan;
     final QueueCounters counters = plan.counters;

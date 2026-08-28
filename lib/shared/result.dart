@@ -1,7 +1,7 @@
 /// Typed success/failure values used across application boundaries.
 ///
 /// Domain and application code never throws for expected failures; it returns
-/// a [Result]. Unexpected exceptions are caught at the handler boundary,
+/// a [Result]. Unexpected exceptions are caught at the command-runner
 /// wrapped in an [UnexpectedFailure], and reported to a diagnostic sink with
 /// their original stack trace preserved.
 library;

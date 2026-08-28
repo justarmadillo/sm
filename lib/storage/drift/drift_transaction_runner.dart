@@ -9,7 +9,7 @@ library;
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 
-/// Runs handler bodies inside one Drift transaction.
+/// Runs a command runner's body inside one Drift transaction.
 final class DriftTransactionRunner implements TransactionRunner {
   const DriftTransactionRunner(this._database);
 
