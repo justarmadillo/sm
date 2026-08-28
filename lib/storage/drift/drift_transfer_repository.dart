@@ -21,7 +21,7 @@ final class DriftTransferRepository implements TransferRepository {
   final String _deviceId;
 
   @override
-  Future<DatasetIdentity> currentIdentity() async {
+  Future<DatasetIdentity> findIdentity() async {
     final row = await (_database.select(
       _database.datasetMeta,
     )..where(($DatasetMetaTable t) => t.id.equals(1))).getSingleOrNull();
@@ -59,7 +59,7 @@ final class DriftTransferRepository implements TransferRepository {
 
   @override
   Future<DatasetIdentity> advanceGeneration() async {
-    final next = (await currentIdentity()).advanced();
+    final next = (await findIdentity()).advanced();
     await saveIdentity(next);
     return next;
   }

@@ -100,10 +100,10 @@ final class SearchQuery {
   }
 
   /// How many elements are currently indexed.
-  Future<int> indexedCount() => _search.documentCount();
+  Future<int> indexedCount() => _search.countDocuments();
 
   /// Whether the index agrees with its content table.
-  Future<bool> indexIsValid() => _search.indexIsValid();
+  Future<bool> isIndexValid() => _search.isIndexValid();
 }
 
 /// Turns free text into a safe FTS5 MATCH expression.

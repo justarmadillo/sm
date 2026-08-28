@@ -8,7 +8,7 @@ import 'package:incremental_reader/storage/dataset_lineage.dart';
 /// Dataset lineage, backups, and export snapshots.
 abstract interface class TransferRepository {
   /// Current dataset identity, creating it on first use.
-  Future<DatasetIdentity> currentIdentity();
+  Future<DatasetIdentity> findIdentity();
 
   /// Records an advanced generation after a domain transaction.
   Future<void> saveIdentity(DatasetIdentity identity);

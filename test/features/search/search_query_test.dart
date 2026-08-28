@@ -175,7 +175,7 @@ void main() {
       await harness.import('Cardiology', _cardiology);
 
       expect(await harness.searchQuery.indexedCount(), 2);
-      expect(await harness.searchQuery.indexIsValid(), isTrue);
+      expect(await harness.searchQuery.isIndexValid(), isTrue);
     });
 
     test(
@@ -184,7 +184,7 @@ void main() {
         await harness.import('Pulmonology', _pulmonology);
         await harness.search.rebuildIndex();
 
-        expect(await harness.searchQuery.indexIsValid(), isTrue);
+        expect(await harness.searchQuery.isIndexValid(), isTrue);
         expect(await harness.searchQuery.run('surfactant'), hasLength(1));
       },
     );
@@ -196,7 +196,7 @@ void main() {
       );
 
       expect(await harness.searchQuery.run('surfactant'), isEmpty);
-      expect(await harness.searchQuery.indexIsValid(), isTrue);
+      expect(await harness.searchQuery.isIndexValid(), isTrue);
     });
 
     test('a malformed query yields no results rather than an error', () async {

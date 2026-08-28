@@ -455,7 +455,7 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
-  Future<List<RevlogEntry>> recentRevlog({int limit = 100}) async {
+  Future<List<RevlogEntry>> listRecentRevlog({int limit = 100}) async {
     final rows =
         await (_database.select(_database.revlogEntries)
               ..orderBy(<OrderClauseGenerator<$RevlogEntriesTable>>[
@@ -771,7 +771,7 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
-  Future<List<ActivityRecord>> recentActivity({int limit = 50}) async {
+  Future<List<ActivityRecord>> listRecentActivity({int limit = 50}) async {
     final rows =
         await (_database.select(_database.activityEvents)
               ..orderBy(<OrderClauseGenerator<$ActivityEventsTable>>[

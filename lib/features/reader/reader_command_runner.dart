@@ -213,7 +213,7 @@ final class ReaderCommandRunner {
         ],
       ),
     );
-    await _search.upsertDocument(
+    await _search.saveDocument(
       SearchDocument(
         ref: ref,
         title: source.title,
@@ -253,7 +253,7 @@ final class ReaderCommandRunner {
           );
         }
 
-        final Source? updated = await _content.setResumeMarker(
+        final Source? updated = await _content.saveResumeMarker(
           source.id,
           command.anchor,
         );
@@ -283,7 +283,7 @@ final class ReaderCommandRunner {
     if (source.resume.softPosition == command.anchor) {
       return Ok<Source>(source);
     }
-    final Source? updated = await _content.setSoftPosition(
+    final Source? updated = await _content.saveSoftPosition(
       source.id,
       command.anchor,
     );
@@ -641,7 +641,7 @@ final class ReaderCommandRunner {
         if (source == null) return _missingSource<Source>(command.sourceId);
         final Source updated = source.copyWith(title: title);
         await _content.updateSource(updated);
-        await _search.upsertDocument(
+        await _search.saveDocument(
           SearchDocument(
             ref: ElementRef(id: source.id, type: ElementType.source),
             title: title,
@@ -884,7 +884,7 @@ final class ReaderCommandRunner {
 
   /// Reverses the most recent edit, as a new forward edit.
   Future<Result<SourceEdited>> undoSourceEdit(UndoSourceEdit command) async {
-    final SourceEdit? last = await _content.latestSourceEdit(command.sourceId);
+    final SourceEdit? last = await _content.findLatestSourceEdit(command.sourceId);
     if (last == null) {
       return const Err<SourceEdited>(
         ConflictFailure('there is nothing to undo on this source'),
@@ -982,7 +982,7 @@ final class ReaderCommandRunner {
 
           case SourceEditApplied(:final source, :final outcome):
             final Document? next = await _content.findDocument(sourceId);
-            await _search.upsertDocument(
+            await _search.saveDocument(
               SearchDocument(
                 ref: ElementRef(id: sourceId, type: ElementType.source),
                 title: source.title,

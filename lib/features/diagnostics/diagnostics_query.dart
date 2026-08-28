@@ -161,15 +161,15 @@ final class DiagnosticsQuery {
       counters: counters,
       byLifecycle: await _learning.countByLifecycle(),
       eventsToday: await _learning.countRevlogOn(today),
-      indexedDocuments: await _search.documentCount(),
-      isSearchIndexValid: await _search.indexIsValid(),
+      indexedDocuments: await _search.countDocuments(),
+      isSearchIndexValid: await _search.isIndexValid(),
       settings: await _context.settings(),
     );
   }
 
   /// The most recent commands, newest first.
   Future<List<ActivityRecord>> recentCommands({int limit = 50}) =>
-      _learning.recentActivity(limit: limit);
+      _learning.listRecentActivity(limit: limit);
 
   Future<String?> _titleOf(ElementRef ref) async => switch (ref.type) {
     ElementType.source => (await _content.findSource(ref.id))?.title,

@@ -47,7 +47,7 @@ final class DriftSettingsRepository implements SettingsRepository {
   }
 
   @override
-  Future<void> remove(String key) async {
+  Future<void> deleteKey(String key) async {
     await (_database.delete(
       _database.settings,
     )..where(($SettingsTable t) => t.key.equals(key))).go();

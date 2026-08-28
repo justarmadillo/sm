@@ -241,7 +241,7 @@ void main() {
 
       final logged = await container
           .read(learningRepositoryProvider)
-          .recentActivity();
+          .listRecentActivity();
       final encounter = logged.firstWhere(
         (r) => r.kind == 'topic.encounter_completed',
       );

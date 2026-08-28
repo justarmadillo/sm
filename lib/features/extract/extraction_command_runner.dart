@@ -222,7 +222,7 @@ final class ExtractionCommandRunner {
       }
       await _learning.insertTopic(topic);
       await _context.savePrngState(extraction.prngState);
-      await _search.upsertDocument(
+      await _search.saveDocument(
         SearchDocument(
           ref: ref,
           title:
@@ -283,7 +283,7 @@ final class ExtractionCommandRunner {
     }
 
     final ref = ElementRef(id: extract.id, type: ElementType.extract);
-    final recent = await _learning.recentActivity(limit: 1);
+    final recent = await _learning.listRecentActivity(limit: 1);
     if (recent.isEmpty ||
         recent.single.kind != kExtractCreatedKind ||
         recent.single.ref != ref) {
@@ -355,7 +355,7 @@ final class ExtractionCommandRunner {
     final String rootTitle =
         (await _content.findSource(extract.provenance.sourceId))?.title ??
         'Extract';
-    await _search.upsertDocument(
+    await _search.saveDocument(
       SearchDocument(
         ref: extractRef,
         title: rootTitle,

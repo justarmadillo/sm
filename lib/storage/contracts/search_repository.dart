@@ -56,7 +56,7 @@ final class SearchHit {
 /// Full-text search over sources, extracts, and cards.
 abstract interface class SearchRepository {
   /// Inserts or replaces one document, inside the caller's transaction.
-  Future<void> upsertDocument(SearchDocument document);
+  Future<void> saveDocument(SearchDocument document);
 
   /// Removes one document and its index entry.
   Future<void> deleteDocument(ElementRef ref);
@@ -72,8 +72,8 @@ abstract interface class SearchRepository {
   Future<void> rebuildIndex();
 
   /// Whether the index reports itself consistent with its content table.
-  Future<bool> indexIsValid();
+  Future<bool> isIndexValid();
 
   /// How many documents are materialized.
-  Future<int> documentCount();
+  Future<int> countDocuments();
 }

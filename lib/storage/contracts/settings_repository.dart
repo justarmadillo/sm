@@ -19,5 +19,5 @@ abstract interface class SettingsRepository {
   Future<void> writeAll(Map<String, String> values);
 
   /// Removes the setting [key], returning it to its shipped default.
-  Future<void> remove(String key);
+  Future<void> deleteKey(String key);
 }

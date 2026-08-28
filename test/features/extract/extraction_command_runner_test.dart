@@ -618,7 +618,7 @@ void main() {
         END
       ''');
       final generationBefore =
-          (await harness.transfer.currentIdentity()).generation;
+          (await harness.transfer.findIdentity()).generation;
 
       final result = await extract(
         selectRendered(blockOf(BlockType.paragraph), 'capacity'),
@@ -627,7 +627,7 @@ void main() {
       expect(result.failureOrNull, isA<UnexpectedFailure>());
       expect(await harness.content.listExtractsOfParent(source.id), isEmpty);
       expect(
-        (await harness.transfer.currentIdentity()).generation,
+        (await harness.transfer.findIdentity()).generation,
         generationBefore,
       );
     });
@@ -636,7 +636,7 @@ void main() {
   group('activity log', () {
     test('records creation metadata without the extracted text', () async {
       await extract(selectRendered(blockOf(BlockType.paragraph), 'capacity'));
-      final record = (await harness.learning.recentActivity()).firstWhere(
+      final record = (await harness.learning.listRecentActivity()).firstWhere(
         (ActivityRecord r) => r.kind == kExtractCreatedKind,
       );
 
@@ -657,7 +657,7 @@ void main() {
         ),
       );
 
-      final record = (await harness.learning.recentActivity()).firstWhere(
+      final record = (await harness.learning.listRecentActivity()).firstWhere(
         (ActivityRecord r) => r.kind == kExtractCreatedKind,
       );
       expect(record.atUtc, timestamp);

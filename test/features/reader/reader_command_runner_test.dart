@@ -165,7 +165,7 @@ void main() {
 
     test('records what was imported without recording the content', () async {
       await harness.importFixture();
-      final activity = await harness.learning.recentActivity();
+      final activity = await harness.learning.listRecentActivity();
       final imported = activity.firstWhere(
         (ActivityRecord r) => r.kind == kSourceImportedKind,
       );
@@ -219,7 +219,7 @@ void main() {
     test('a soft position is not an event worth logging', () async {
       final source = await harness.importFixture();
       final document = await harness.content.findDocument(source.id);
-      final before = (await harness.learning.recentActivity()).length;
+      final before = (await harness.learning.listRecentActivity()).length;
 
       for (var i = 0; i < 3; i++) {
         await harness.reader.saveSoftPosition(
@@ -230,7 +230,7 @@ void main() {
           ),
         );
       }
-      expect((await harness.learning.recentActivity()).length, before);
+      expect((await harness.learning.listRecentActivity()).length, before);
     });
 
     test('confirming the soft position promotes it to the marker', () async {
@@ -287,7 +287,7 @@ void main() {
       expect(snapshot.status, Sm20ElementStatus.memorized);
       expect(snapshot.storedInterval, 1);
 
-      final logged = (await harness.learning.recentActivity()).firstWhere(
+      final logged = (await harness.learning.listRecentActivity()).firstWhere(
         (ActivityRecord r) => r.kind == 'topic.encounter_completed',
       );
       expect(logged.durationMs, 90000);
@@ -325,7 +325,7 @@ void main() {
       );
       expect(snapshot.dueDay, first.unwrap().schedule.dueDay.toString());
       expect(
-        (await harness.learning.recentActivity()).where(
+        (await harness.learning.listRecentActivity()).where(
           (ActivityRecord r) => r.kind == 'topic.encounter_completed',
         ),
         hasLength(1),
@@ -351,7 +351,7 @@ void main() {
 
     test('advances the dataset generation', () async {
       final source = await harness.importFixture();
-      final before = (await harness.transfer.currentIdentity()).generation;
+      final before = (await harness.transfer.findIdentity()).generation;
       await harness.reader.completeEncounter(
         CompleteTopicEncounter(
           harness.nextOperation(),
@@ -359,7 +359,7 @@ void main() {
         ),
       );
       expect(
-        (await harness.transfer.currentIdentity()).generation,
+        (await harness.transfer.findIdentity()).generation,
         greaterThan(before),
       );
     });

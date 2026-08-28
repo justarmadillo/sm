@@ -32,10 +32,10 @@ abstract interface class ContentRepository {
   Future<void> updateSource(Source source);
 
   /// Updates only the authoritative marker and returns the stored source.
-  Future<Source?> setResumeMarker(String sourceId, ReaderAnchor anchor);
+  Future<Source?> saveResumeMarker(String sourceId, ReaderAnchor anchor);
 
   /// Updates only the scratch scroll position and returns the stored source.
-  Future<Source?> setSoftPosition(String sourceId, ReaderAnchor anchor);
+  Future<Source?> saveSoftPosition(String sourceId, ReaderAnchor anchor);
 
   /// Atomically promotes the stored soft position to the marker.
   Future<Source?> confirmSoftPosition(String sourceId);
@@ -64,7 +64,7 @@ abstract interface class ContentRepository {
   Future<List<SourceEdit>> listSourceEdits(String sourceId);
 
   /// The most recent edit applied to [sourceId], or null.
-  Future<SourceEdit?> latestSourceEdit(String sourceId);
+  Future<SourceEdit?> findLatestSourceEdit(String sourceId);
 
   /// Stores a new extract.
   Future<void> insertExtract(Extract extract);

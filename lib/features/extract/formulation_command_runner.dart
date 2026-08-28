@@ -203,7 +203,7 @@ final class FormulationCommandRunner {
             memory: CardMemory.newCard(cardId: card.id, dueAtUtc: now),
           );
           await _learning.insertCardState(state);
-          await _search.upsertDocument(
+          await _search.saveDocument(
             SearchDocument(
               ref: ref,
               title: 'Card',

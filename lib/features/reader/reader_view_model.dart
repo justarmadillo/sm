@@ -311,7 +311,7 @@ final class ReaderViewModel
           : (source.resume.openAt ?? document.startAnchor),
       extracts: await content.listExtractsOfParent(source.id),
       cardsFromSource: (await content.listCardsOfSource(source.id)).length,
-      canUndoEdit: (await content.latestSourceEdit(source.id)) != null,
+      canUndoEdit: (await content.findLatestSourceEdit(source.id)) != null,
     );
   }
 
@@ -810,7 +810,7 @@ final class ReaderViewModel
         isBusy: false,
         shouldClearEditing: true,
         canUndoEdit:
-            (await content.latestSourceEdit(edited.source.id)) != null,
+            (await content.findLatestSourceEdit(edited.source.id)) != null,
         openedAt: edited.source.resume.openAt,
         message: edited.didChange
             ? _editMessage(edited.outcome!)

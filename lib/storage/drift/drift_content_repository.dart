@@ -93,7 +93,7 @@ final class DriftContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Source?> setResumeMarker(String sourceId, ReaderAnchor anchor) async {
+  Future<Source?> saveResumeMarker(String sourceId, ReaderAnchor anchor) async {
     await _database.customStatement(
       'UPDATE sources SET marker_utf8 = ?, marker_revision = ?, '
       'revision = revision + 1 WHERE id = ?',
@@ -103,7 +103,7 @@ final class DriftContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Source?> setSoftPosition(String sourceId, ReaderAnchor anchor) async {
+  Future<Source?> saveSoftPosition(String sourceId, ReaderAnchor anchor) async {
     await _database.customStatement(
       'UPDATE sources SET soft_utf8 = ?, soft_revision = ?, '
       'revision = revision + 1 WHERE id = ?',
@@ -310,7 +310,7 @@ final class DriftContentRepository implements ContentRepository {
   }
 
   @override
-  Future<SourceEdit?> latestSourceEdit(String sourceId) async {
+  Future<SourceEdit?> findLatestSourceEdit(String sourceId) async {
     final SourceEditRow? row =
         await (_database.select(_database.sourceEdits)
               ..where(($SourceEditsTable t) => t.sourceId.equals(sourceId))

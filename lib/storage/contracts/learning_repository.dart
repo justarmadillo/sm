@@ -131,7 +131,7 @@ abstract interface class LearningRepository {
   Future<bool> hasActivity(String operationId, String kind);
 
   /// Recent activity, newest first. For the diagnostics panel.
-  Future<List<ActivityRecord>> recentActivity({int limit = 50});
+  Future<List<ActivityRecord>> listRecentActivity({int limit = 50});
 
   /// Appends one repetition-log entry.
   ///
@@ -147,7 +147,7 @@ abstract interface class LearningRepository {
   Future<List<RevlogEntry>> listRevlogFor(ElementRef ref, {int? limit});
 
   /// The most recent entries across the whole collection, newest first.
-  Future<List<RevlogEntry>> recentRevlog({int limit = 100});
+  Future<List<RevlogEntry>> listRecentRevlog({int limit = 100});
 
   /// Appends the authoritative scheduler event. Events are never updated or
   /// deleted; an undo is another event referencing its target.

@@ -181,7 +181,7 @@ final class SchedulerMetricsQuery {
     required StudyDayCalendar calendar,
     required PriorityScale scale,
   }) async {
-    final List<RevlogEntry> recent = await _learning.recentRevlog(limit: 2000);
+    final List<RevlogEntry> recent = await _learning.listRecentRevlog(limit: 2000);
     final List<PriorityOutcomeMetricSample> outcomes =
         <PriorityOutcomeMetricSample>[];
     for (final RevlogEntry entry in recent) {

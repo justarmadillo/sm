@@ -49,7 +49,7 @@ final class SettingsStore {
       if (changedValues.isNotEmpty) await _repository.writeAll(changedValues);
       for (final String key in stored.keys) {
         if (!next.containsKey(key) && _isReplacedSchedulerKey(key)) {
-          await _repository.remove(key);
+          await _repository.deleteKey(key);
         }
       }
       _cached = canonical;

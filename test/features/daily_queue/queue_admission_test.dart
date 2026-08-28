@@ -236,7 +236,7 @@ void main() {
       expect(applied.isErr, isTrue);
       // A refused apply writes nothing, so no element carries a Mercy row.
       expect(
-        await harness.learning.recentRevlog(limit: 200),
+        await harness.learning.listRecentRevlog(limit: 200),
         isNot(
           contains(
             predicate<RevlogEntry>(
@@ -271,7 +271,7 @@ void main() {
         ),
       );
       expect(
-        (await harness.learning.recentRevlog(
+        (await harness.learning.listRecentRevlog(
           limit: 200,
         )).where((RevlogEntry e) => e.eventType == RevlogEventType.mercy),
         isNotEmpty,
@@ -399,7 +399,7 @@ void main() {
       );
       // Anything the automatic pass did move carries that same id.
       for (final RevlogEntry entry
-          in (await harness.learning.recentRevlog(limit: 200)).where(
+          in (await harness.learning.listRecentRevlog(limit: 200)).where(
             (RevlogEntry e) => e.eventType == RevlogEventType.autoPostpone,
           )) {
         expect(entry.operationId, expected);
@@ -412,7 +412,7 @@ void main() {
       await harness.queueQuery.load();
 
       final Map<String, Object?> metadata =
-          (await harness.learning.recentActivity(
+          (await harness.learning.listRecentActivity(
             limit: 50,
           )).firstWhere((r) => r.kind == kDailyAdmissionKind).metadata!;
 

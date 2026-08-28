@@ -68,7 +68,7 @@ final class _MemorySettingsRepository implements SettingsRepository {
   }
 
   @override
-  Future<void> remove(String key) async {
+  Future<void> deleteKey(String key) async {
     values.remove(key);
   }
 }

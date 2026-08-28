@@ -302,7 +302,7 @@ void main() {
         ),
       );
 
-      final metadata = (await harness.learning.recentActivity())
+      final metadata = (await harness.learning.listRecentActivity())
           .firstWhere((r) => r.kind == kCardEditedKind)
           .metadata!;
       expect(metadata.values.join(' '), isNot(contains('secret')));

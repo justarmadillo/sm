@@ -201,7 +201,7 @@ void main() {
       expect(rejected.failureOrNull, isA<ValidationFailure>());
       expect(await harness.learning.listRevlogFor(ref), hasLength(logBefore));
       expect(
-        (await harness.learning.recentActivity()).where(
+        (await harness.learning.listRecentActivity()).where(
           (r) => r.kind == 'topic.rescheduled',
         ),
         isEmpty,
@@ -219,7 +219,7 @@ void main() {
 
       expect(missing.failureOrNull, isA<NotFoundFailure>());
       expect(
-        await harness.learning.recentRevlog(),
+        await harness.learning.listRecentRevlog(),
         isEmpty,
         reason: 'nothing happened, so nothing is recorded as having happened',
       );

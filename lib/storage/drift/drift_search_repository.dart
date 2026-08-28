@@ -24,7 +24,7 @@ final class DriftSearchRepository implements SearchRepository {
   final AppDatabase _database;
 
   @override
-  Future<void> upsertDocument(SearchDocument document) => _database
+  Future<void> saveDocument(SearchDocument document) => _database
       .into(_database.searchDocuments)
       .insertOnConflictUpdate(
         SearchDocumentsCompanion.insert(
@@ -98,10 +98,10 @@ final class DriftSearchRepository implements SearchRepository {
   Future<void> rebuildIndex() => _database.rebuildSearchIndex();
 
   @override
-  Future<bool> indexIsValid() => _database.isSearchIndexValid();
+  Future<bool> isIndexValid() => _database.isSearchIndexValid();
 
   @override
-  Future<int> documentCount() async {
+  Future<int> countDocuments() async {
     final row = await _database
         .customSelect('SELECT COUNT(*) AS n FROM search_documents')
         .getSingle();
