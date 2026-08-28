@@ -4,6 +4,7 @@ import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/features/library/content_tree_query.dart';
 import 'package:incremental_reader/features/library/import_sheet.dart';
+import 'package:incremental_reader/features/library/library_providers.dart';
 import 'package:incremental_reader/features/library/library_view_model.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/scheduling/element.dart';

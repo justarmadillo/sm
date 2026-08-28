@@ -9,9 +9,9 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/library/content_tree_query.dart';
 import 'package:incremental_reader/features/library/import_sheet.dart';
+import 'package:incremental_reader/features/library/library_providers.dart';
 import 'package:incremental_reader/features/library/library_view_model.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';

@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:incremental_reader/app/incremental_reader_app.dart';
 import 'package:incremental_reader/app/providers.dart';
+import 'package:incremental_reader/app/startup_tasks.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
