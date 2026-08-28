@@ -8,18 +8,25 @@ library;
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:fsrs/fsrs.dart' as fsrs;
+import 'package:fsrs_dart/fsrs.dart' as fsrs;
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/settings/card_settings.dart';
 import 'package:meta/meta.dart';
 
 /// The exact scheduler implementation used to produce a review.
-const String kCardSchedulerVersion = 'dart-fsrs/2.0.1+FSRS-6';
+///
+/// Every review row records this, so a schedule can always be traced back to
+/// the code that produced it. Rows written before the move to fsrs_dart still
+/// carry `dart-fsrs/2.0.1+FSRS-6`, and that is the point of the field.
+const String kCardSchedulerVersion = 'fsrs_dart/5.4.1+FSRS-6';
 
-/// The pinned FSRS-6 default parameter set shipped by dart-fsrs 2.0.1.
-const String kCardParametersVersion = 'dart-fsrs/2.0.1/defaultParameters';
+/// The pinned FSRS-6 default weights shipped by fsrs_dart.
+const String kCardParametersVersion = 'fsrs_dart/5.4.1/defaultW';
 
+/// Frozen by the database: it is the default of the `scheduler_name` column and
+/// is written by name in the v6 migration, so it names the FSRS engine family
+/// rather than the package of the day. Changing it is a migration (RULES 4).
 const String kCardSchedulerName = 'dart-fsrs';
 
 /// The four recall outcomes accepted by FSRS.
@@ -72,7 +79,7 @@ enum CardLearningState {
 @immutable
 final class CardSchedulerSettings {
   const CardSchedulerSettings({
-    this.parameters = fsrs.defaultParameters,
+    this.parameters = fsrs.defaultW,
     this.desiredRetention = 0.90,
     this.learningSteps = const <Duration>[
       Duration(minutes: 1),
@@ -638,34 +645,32 @@ final class CardScheduler implements FsrsAdapter {
     // FSRS adapter must not repeat a canonical-only due check here.
 
     final String preStateJson = state.memory.toJson();
-    final fsrs.Card external = _toFsrsCard(state.memory);
-    final fsrs.Scheduler engine = _engineFor(operationId);
-    final ({fsrs.Card card, fsrs.ReviewLog reviewLog}) result = engine
-        .reviewCard(
-          external,
-          _toFsrsRating(rating),
-          reviewDateTime: reviewedAtUtc,
-          reviewDuration: elapsedMs,
-        );
+    final fsrs.RecordLogItem result = _engineFor(
+      operationId,
+    ).next(_toFsrsCard(state.memory), reviewedAtUtc, _toFsrsRating(rating));
+    final fsrs.Card reviewed = result.card;
+    final DateTime dueAtUtc = reviewed.due.toUtc();
 
-    final bool hasLapsed =
-        state.memory.state == CardLearningState.review &&
-        rating == CardRating.again;
     final CardMemory memory = CardMemory(
       cardId: state.memory.cardId,
-      state: _fromFsrsState(result.card.state),
-      step: result.card.step,
-      stability: result.card.stability,
-      difficulty: result.card.difficulty,
-      repetitionCount: state.memory.repetitionCount + 1,
-      lapses: state.memory.lapses + (hasLapsed ? 1 : 0),
-      lastReviewAtUtc: result.card.lastReview,
-      dueAtUtc: result.card.due,
-      originalDueAtUtc: result.card.due,
+      state: _fromFsrsState(reviewed.state),
+      // A review-state card holds no learning step. FSRS carries an index
+      // there only when a configured step is a whole day or longer, which the
+      // database column cannot represent and the previous engine dropped too.
+      step: reviewed.state == fsrs.State.review ? null : reviewed.learningSteps,
+      stability: reviewed.stability,
+      difficulty: reviewed.difficulty,
+      // The engine keeps both counters itself, including the lapse a failed
+      // review-state card costs, so they are read back rather than recomputed.
+      repetitionCount: reviewed.reps,
+      lapses: reviewed.lapses,
+      lastReviewAtUtc: reviewed.lastReview?.toUtc(),
+      dueAtUtc: dueAtUtc,
+      originalDueAtUtc: dueAtUtc,
       schedulerVersion: settings.schedulerVersion,
       parametersVersion: settings.parametersVersion,
       postponeCount: state.memory.postponeCount,
-      scheduledDays: result.card.due.difference(reviewedAtUtc).inMinutes / 1440,
+      scheduledDays: dueAtUtc.difference(reviewedAtUtc).inMinutes / 1440,
       schedulerName: kCardSchedulerName,
       revision: state.memory.revision + 1,
     );
@@ -798,51 +803,62 @@ final class CardScheduler implements FsrsAdapter {
   }
 
   /// Predicted probability that [memory] is currently recallable.
+  ///
+  /// A card with no review behind it reads as 0: nothing has been learned yet,
+  /// so there is no memory that could have decayed.
   @override
   double retrievability(CardMemory memory, {required DateTime atUtc}) {
     _requireUtc(atUtc, 'atUtc');
     return _engineFor(
       'retrievability',
-    ).getCardRetrievability(_toFsrsCard(memory), currentDateTime: atUtc);
+    ).getRetrievability(_toFsrsCard(memory), atUtc);
   }
 
-  fsrs.Scheduler _engineFor(String operationId) {
-    // `enableFuzzing` is the dart-fsrs package's own parameter name, so it
-    // stays as the package spells it even though ours is isFuzzingEnabled.
-    if (!settings.isFuzzingEnabled) {
-      return fsrs.Scheduler(
-        parameters: settings.parameters,
-        desiredRetention: settings.desiredRetention,
-        learningSteps: settings.learningSteps,
-        relearningSteps: settings.relearningSteps,
-        maximumInterval: settings.maximumIntervalDays,
-        enableFuzzing: false,
-      );
-    }
-    // dart-fsrs exposes seeded randomness for its own vector tests. A stable
-    // operation-derived seed makes production retries deterministic too.
-    // ignore: invalid_use_of_visible_for_testing_member
-    return fsrs.Scheduler.customRandom(
-      math.Random(_stableSeed(operationId)),
-      parameters: settings.parameters,
-      desiredRetention: settings.desiredRetention,
-      learningSteps: settings.learningSteps,
-      relearningSteps: settings.relearningSteps,
+  /// The engine, configured for one operation.
+  ///
+  /// Built per call rather than held as a field, because it carries the fuzz
+  /// seed of the operation it was built for.
+  fsrs.FSRS _engineFor(String operationId) {
+    final fsrs.FSRS engine = fsrs.fsrs(
+      requestRetention: settings.desiredRetention,
       maximumInterval: settings.maximumIntervalDays,
-      enableFuzzing: true,
+      w: settings.parameters,
+      enableFuzz: settings.isFuzzingEnabled,
+      learningSteps: _toFsrsSteps(settings.learningSteps),
+      relearningSteps: _toFsrsSteps(settings.relearningSteps),
+    );
+    if (!settings.isFuzzingEnabled) {
+      return engine;
+    }
+    // Fuzzing stays on, but its random stream is derived from the operation id
+    // rather than from the review instant, so retrying one command lands on the
+    // same day again instead of rolling a second interval.
+    return engine.useStrategy(
+      fsrs.StrategyMode.seed,
+      (fsrs.SchedulerContext context) => operationId,
     );
   }
 }
 
+/// The step list in the `10m` spelling fsrs_dart parses.
+List<String> _toFsrsSteps(List<Duration> steps) => <String>[
+  for (final Duration step in steps) '${step.inMinutes}m',
+];
+
+/// Rebuilds the card fsrs_dart expects out of our own stored memory.
+///
+/// Stability and difficulty are 0 rather than null for a card FSRS has not
+/// measured yet: that pair of zeroes is how the engine recognises a card whose
+/// first memory state is still to be derived from the grade it is about to get.
 fsrs.Card _toFsrsCard(CardMemory memory) => fsrs.Card(
-  // FSRS does not use this identity in interval calculations. A stable value
-  // is still supplied so its review log remains internally coherent.
-  cardId: _stableSeed(memory.cardId),
-  state: _toFsrsState(memory.state),
-  step: memory.step,
-  stability: memory.stability,
-  difficulty: memory.difficulty,
   due: memory.dueAtUtc,
+  stability: memory.stability ?? 0,
+  difficulty: memory.difficulty ?? 0,
+  scheduledDays: memory.scheduledDays?.round() ?? 0,
+  learningSteps: memory.step ?? 0,
+  reps: memory.repetitionCount,
+  lapses: memory.lapses,
+  state: _toFsrsState(memory),
   lastReview: memory.lastReviewAtUtc,
 );
 
@@ -853,28 +869,33 @@ fsrs.Rating _toFsrsRating(CardRating rating) => switch (rating) {
   CardRating.easy => fsrs.Rating.easy,
 };
 
-fsrs.State _toFsrsState(CardLearningState state) => switch (state) {
-  CardLearningState.learning => fsrs.State.learning,
-  CardLearningState.review => fsrs.State.review,
-  CardLearningState.relearning => fsrs.State.relearning,
-};
+/// FSRS's New state means exactly "no review has happened yet".
+///
+/// The app has no such state: it stores an unreviewed card as Learning at step
+/// 0, because that is the shape the database column already holds. The two
+/// spellings are bridged here rather than on disk, so nothing is migrated.
+fsrs.State _toFsrsState(CardMemory memory) {
+  if (memory.isNew || memory.lastReviewAtUtc == null) {
+    return fsrs.State.newState;
+  }
+  return switch (memory.state) {
+    CardLearningState.learning => fsrs.State.learning,
+    CardLearningState.review => fsrs.State.review,
+    CardLearningState.relearning => fsrs.State.relearning,
+  };
+}
 
 CardLearningState _fromFsrsState(fsrs.State state) => switch (state) {
   fsrs.State.learning => CardLearningState.learning,
   fsrs.State.review => CardLearningState.review,
   fsrs.State.relearning => CardLearningState.relearning,
+  // Unreachable: a graded review always leaves New behind.
+  fsrs.State.newState => throw ArgumentError.value(
+    state,
+    'state',
+    'a reviewed card cannot be new',
+  ),
 };
-
-/// Stable 32-bit FNV-1a hash. Unlike [String.hashCode], it is specified here
-/// and therefore stays identical across processes and Dart versions.
-int _stableSeed(String value) {
-  var hash = 0x811c9dc5;
-  for (final int byte in utf8.encode(value)) {
-    hash ^= byte;
-    hash = (hash * 0x01000193) & 0x7fffffff;
-  }
-  return hash;
-}
 
 void _requireUtc(DateTime instant, String name) {
   if (!instant.isUtc) {

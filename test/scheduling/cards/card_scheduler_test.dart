@@ -84,9 +84,10 @@ void main() {
   });
 
   group('CardScheduler', () {
-    test('matches the official dart-fsrs 2.0.1 reference vector', () {
-      // Copied from open-spaced-repetition/dart-fsrs basic_test.dart,
-      // test_review_card. Fuzzing is disabled in the upstream vector too.
+    test('matches the fsrs_dart engine driven directly, grade for grade', () {
+      // The same thirteen grades run straight through `fsrs_dart` produce these
+      // intervals, so the expectation is the engine's answer and not this
+      // adapter's. Fuzzing is off, as it is in the package's own vectors.
       const CardScheduler scheduler = CardScheduler(
         calendar: calendar,
         settings: CardSchedulerSettings(isFuzzingEnabled: false),
@@ -108,18 +109,18 @@ void main() {
       ];
       const List<int> expectedIntervals = <int>[
         0,
-        4,
-        14,
-        45,
-        135,
-        372,
+        2,
+        11,
+        46,
+        163,
+        498,
         0,
         0,
         2,
-        5,
-        10,
-        20,
-        40,
+        4,
+        7,
+        12,
+        21,
       ];
 
       var state = newCard();
