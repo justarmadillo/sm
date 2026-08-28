@@ -14,7 +14,7 @@ final class CreateExtract extends AppCommand {
   CreateExtract(
     super.operationId, {
     required this.parentId,
-    required this.parentIsSource,
+    required this.hasSourceAsParent,
     required this.range,
     super.timestampUtc,
   });
@@ -23,7 +23,7 @@ final class CreateExtract extends AppCommand {
   final String parentId;
 
   /// Whether [parentId] names a source rather than another extract.
-  final bool parentIsSource;
+  final bool hasSourceAsParent;
 
   /// The selection, including the hash of exactly what was selected.
   final SelectionRange range;

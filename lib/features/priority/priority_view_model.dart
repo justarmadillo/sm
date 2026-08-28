@@ -26,7 +26,7 @@ import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/settings/postpone_settings.dart';
 import 'package:incremental_reader/settings/smart_postpone_settings.dart';
-import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 
 /// State of the Alt+P dialog for one element.
@@ -436,7 +436,7 @@ final class PriorityBrowserViewModel
     required double lowPercent,
     required double highPercent,
     required double changePercent,
-    required bool limitChanges,
+    required bool shouldLimitChanges,
   }) async {
     final PriorityBrowserState? current = state.valueOrNull;
     if (current == null || current.isBusy) return;
@@ -459,7 +459,7 @@ final class PriorityBrowserViewModel
             lowPercent: lowPercent,
             highPercent: highPercent,
             changePercent: changePercent,
-            limitChanges: limitChanges,
+            shouldLimitChanges: shouldLimitChanges,
             timestampUtc: ref.read(clockProvider).nowUtc(),
           ),
         );
@@ -484,7 +484,7 @@ final class PriorityBrowserViewModel
   /// Outstanding queue, which is the whole reason SM20 offers a browser scope:
   /// it can reach elements that are not due at all.
   Future<AppliedSmartPostpone?> smartPostpone({
-    required bool simulate,
+    required bool isSimulationOnly,
     String? branchSourceId,
   }) async {
     final PriorityBrowserState? current = state.valueOrNull;
@@ -505,7 +505,7 @@ final class PriorityBrowserViewModel
               ? SmartPostponeScope.browser
               : SmartPostponeScope.branch,
           rootElementId: int.tryParse(branchSourceId ?? '') ?? 0,
-          simulate: simulate,
+          isSimulationOnly: isSimulationOnly,
         );
 
     final Result<AppliedSmartPostpone> result = await ref
@@ -527,7 +527,7 @@ final class PriorityBrowserViewModel
         );
 
     // A simulation wrote nothing, so the rows on screen are still accurate.
-    if (!simulate && result.isOk) {
+    if (!isSimulationOnly && result.isOk) {
       await refresh();
     } else {
       state = AsyncValue<PriorityBrowserState>.data(
@@ -537,7 +537,7 @@ final class PriorityBrowserViewModel
     final PriorityBrowserState latest = state.valueOrNull ?? current;
     return result.fold(
       (AppliedSmartPostpone applied) {
-        if (!simulate) {
+        if (!isSimulationOnly) {
           state = AsyncValue<PriorityBrowserState>.data(
             latest.copyWith(
               message: UiMessage(
@@ -709,7 +709,7 @@ final class PriorityBrowserViewModel
   Future<void> addToOutstanding(
     List<ElementRef> refs, {
     int everyWhich = 5,
-    bool rescheduleSameDay = false,
+    bool shouldRescheduleSameDay = false,
   }) => _browserCommand(
     'Added to Outstanding',
     (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
@@ -719,7 +719,7 @@ final class PriorityBrowserViewModel
             refs: refs,
             day: day,
             everyWhich: everyWhich,
-            rescheduleSameDay: rescheduleSameDay,
+            shouldRescheduleSameDay: shouldRescheduleSameDay,
             timestampUtc: ref.read(clockProvider).nowUtc(),
           ),
         ),

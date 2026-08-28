@@ -483,11 +483,11 @@ class _LoadPanel extends StatelessWidget {
   /// built by different code. The real run re-evaluates against live state.
   Future<void> _confirmSmartPostpone(BuildContext context) async {
     final AppliedSmartPostpone? simulated = await model.smartPostpone(
-      simulate: true,
+      isSimulationOnly: true,
     );
     if (simulated == null || !context.mounted) return;
     if (!await confirmSmartPostpone(context, simulated.result)) return;
-    await model.smartPostpone(simulate: false);
+    await model.smartPostpone(isSimulationOnly: false);
   }
 }
 

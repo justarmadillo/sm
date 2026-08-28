@@ -11,7 +11,7 @@ import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/clock.dart';
-import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/shared/utf8_offsets.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
@@ -100,7 +100,7 @@ void main() {
         CreateExtract(
           harness.nextOperation(),
           parentId: source.id,
-          parentIsSource: true,
+          hasSourceAsParent: true,
           range: range,
         ),
       );
@@ -292,7 +292,7 @@ void main() {
         final created = (await extract(range)).unwrap();
 
         expect(created.provenance.parentId, source.id);
-        expect(created.provenance.parentIsSource, isTrue);
+        expect(created.provenance.hasSourceAsParent, isTrue);
         expect(created.provenance.sourceId, source.id);
         expect(created.provenance.startAnchor, range.startAnchor);
         expect(created.provenance.selectedTextHash, range.selectedTextHash);
@@ -392,7 +392,7 @@ void main() {
         CreateExtract(
           operation,
           parentId: source.id,
-          parentIsSource: true,
+          hasSourceAsParent: true,
           range: range,
         ),
       );
@@ -400,7 +400,7 @@ void main() {
         CreateExtract(
           operation,
           parentId: source.id,
-          parentIsSource: true,
+          hasSourceAsParent: true,
           range: range,
         ),
       );
@@ -488,7 +488,7 @@ void main() {
         CreateExtract(
           harness.nextOperation(),
           parentId: created.id,
-          parentIsSource: false,
+          hasSourceAsParent: false,
           range: SelectionRange.of(
             startAnchor: const ReaderAnchor(utf8Offset: 0),
             endAnchor: ReaderAnchor(
@@ -539,7 +539,7 @@ void main() {
         CreateExtract(
           harness.nextOperation(),
           parentId: 'ghost',
-          parentIsSource: true,
+          hasSourceAsParent: true,
           range: selectRendered(blockOf(BlockType.paragraph), 'capacity'),
         ),
       );
@@ -573,7 +573,7 @@ void main() {
         CreateExtract(
           harness.nextOperation(),
           parentId: first.id,
-          parentIsSource: false,
+          hasSourceAsParent: false,
           range: SelectionRange.of(
             startAnchor: startAnchor,
             endAnchor: endAnchor,
@@ -585,7 +585,7 @@ void main() {
       final created = second.unwrap();
       expect(created.markdown, 'working memory');
       expect(created.provenance.parentId, first.id);
-      expect(created.provenance.parentIsSource, isFalse);
+      expect(created.provenance.hasSourceAsParent, isFalse);
       expect(
         created.provenance.sourceId,
         source.id,
@@ -651,7 +651,7 @@ void main() {
         CreateExtract(
           harness.nextOperation(),
           parentId: source.id,
-          parentIsSource: true,
+          hasSourceAsParent: true,
           range: selectRendered(blockOf(BlockType.paragraph), 'capacity'),
           timestampUtc: timestamp,
         ),

@@ -241,10 +241,10 @@ class _Body extends StatelessWidget {
             'Sort once when Today changes and Outstanding is nonempty. '
             'Sorting does not reseed the collection PRNG.',
         control: SwitchField(
-          value: draft.queue.autoSort,
+          value: draft.queue.shouldSortAutomatically,
           onChanged: (bool value) => model.edit(
             (AppSettings settings) => settings.copyWith(
-              queue: settings.queue.copyWith(autoSort: value),
+              queue: settings.queue.copyWith(shouldSortAutomatically: value),
             ),
           ),
         ),
@@ -255,10 +255,10 @@ class _Body extends StatelessWidget {
             'Use SM20’s fixed-size full-range swap routine before the Final '
             'Drill stage. It consumes one global PRNG value per entry.',
         control: SwitchField(
-          value: draft.queue.randomizeFinalDrill,
+          value: draft.queue.shouldRandomizeFinalDrill,
           onChanged: (bool value) => model.edit(
             (AppSettings settings) => settings.copyWith(
-              queue: settings.queue.copyWith(randomizeFinalDrill: value),
+              queue: settings.queue.copyWith(shouldRandomizeFinalDrill: value),
             ),
           ),
         ),
@@ -269,10 +269,10 @@ class _Body extends StatelessWidget {
             'When enabled, collections over 100 elements ask before moving '
             'from Outstanding into Final Drill or Pending.',
         control: SwitchField(
-          value: draft.queue.confirmStageTransitions,
+          value: draft.queue.shouldConfirmStageTransitions,
           onChanged: (bool value) => model.edit(
             (AppSettings settings) => settings.copyWith(
-              queue: settings.queue.copyWith(confirmStageTransitions: value),
+              queue: settings.queue.copyWith(shouldConfirmStageTransitions: value),
             ),
           ),
         ),
@@ -389,10 +389,10 @@ class _Body extends StatelessWidget {
         label: 'Fuzz card intervals',
         hint: 'Apply the card scheduler’s interval fuzzing.',
         control: SwitchField(
-          value: draft.cards.enableFuzzing,
+          value: draft.cards.isFuzzingEnabled,
           onChanged: (bool value) => model.edit(
             (AppSettings settings) => settings.copyWith(
-              cards: settings.cards.copyWith(enableFuzzing: value),
+              cards: settings.cards.copyWith(isFuzzingEnabled: value),
             ),
           ),
         ),
@@ -415,10 +415,10 @@ class _Body extends StatelessWidget {
         label: 'Bury card siblings',
         hint: 'Keep related cards from appearing in the same study day.',
         control: SwitchField(
-          value: draft.cards.burySiblings,
+          value: draft.cards.shouldBurySiblings,
           onChanged: (bool value) => model.edit(
             (AppSettings settings) => settings.copyWith(
-              cards: settings.cards.copyWith(burySiblings: value),
+              cards: settings.cards.copyWith(shouldBurySiblings: value),
             ),
           ),
         ),
@@ -437,10 +437,10 @@ class _Body extends StatelessWidget {
         label: 'Automatic postponement',
         hint: 'Allow the once-per-day Default-profile automatic path.',
         control: SwitchField(
-          value: draft.postpone.autoEnabled,
+          value: draft.postpone.isAutomaticPostponeEnabled,
           onChanged: (bool value) => model.edit(
             (AppSettings settings) => settings.copyWith(
-              postpone: settings.postpone.copyWith(autoEnabled: value),
+              postpone: settings.postpone.copyWith(isAutomaticPostponeEnabled: value),
             ),
           ),
         ),
@@ -519,9 +519,9 @@ class _Body extends StatelessWidget {
             'Calculate and report candidates without dispersion, record '
             'writes, or PRNG consumption.',
         control: SwitchField(
-          value: smart.simulate,
+          value: smart.isSimulationOnly,
           onChanged: (bool value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(simulate: value),
+            (SmartPostponeSettings s) => s.copyWith(isSimulationOnly: value),
           ),
         ),
       ),
@@ -621,9 +621,9 @@ class _Body extends StatelessWidget {
         label: 'Skip all items',
         hint: 'Reject the item family in a normal parameter pass.',
         control: SwitchField(
-          value: smart.skipItems,
+          value: smart.shouldSkipItems,
           onChanged: (bool value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(skipItems: value),
+            (SmartPostponeSettings s) => s.copyWith(shouldSkipItems: value),
           ),
         ),
       ),
@@ -631,9 +631,9 @@ class _Body extends StatelessWidget {
         label: 'Skip all topics',
         hint: 'Reject topics and extracts in a normal parameter pass.',
         control: SwitchField(
-          value: smart.skipTopics,
+          value: smart.shouldSkipTopics,
           onChanged: (bool value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(skipTopics: value),
+            (SmartPostponeSettings s) => s.copyWith(shouldSkipTopics: value),
           ),
         ),
       ),
@@ -780,10 +780,10 @@ class _Body extends StatelessWidget {
             'Bypass only the Outstanding-membership exclusion. Pending '
             'elements can consequently be admitted by a manual run.',
         control: SwitchField(
-          value: smart.includeNonOutstanding,
+          value: smart.shouldIncludeNonOutstanding,
           onChanged: (bool value) => _editSmart(
             (SmartPostponeSettings s) =>
-                s.copyWith(includeNonOutstanding: value),
+                s.copyWith(shouldIncludeNonOutstanding: value),
           ),
         ),
       ),
@@ -793,10 +793,10 @@ class _Body extends StatelessWidget {
             'Preserved inert SM20 checkbox. Changing it does not alter the '
             'evaluator’s delay calculation.',
         control: SwitchField(
-          value: smart.modifyItemByForgettingIndex,
+          value: smart.shouldModifyItemByForgettingIndex,
           onChanged: (bool value) => _editSmart(
             (SmartPostponeSettings s) =>
-                s.copyWith(modifyItemByForgettingIndex: value),
+                s.copyWith(shouldModifyItemByForgettingIndex: value),
           ),
         ),
       ),
@@ -804,10 +804,10 @@ class _Body extends StatelessWidget {
         label: 'Modify topic delay by A-factor',
         hint: 'Preserved inert SM20 checkbox. The evaluator does not read it.',
         control: SwitchField(
-          value: smart.modifyTopicByAFactor,
+          value: smart.shouldModifyTopicByAFactor,
           onChanged: (bool value) => _editSmart(
             (SmartPostponeSettings s) =>
-                s.copyWith(modifyTopicByAFactor: value),
+                s.copyWith(shouldModifyTopicByAFactor: value),
           ),
         ),
       ),
@@ -851,7 +851,7 @@ class _Body extends StatelessWidget {
             return settings.copyWith(
               mercy: mercy.copyWith(
                 reschedulingDays: value,
-                gatheringDays: mercy.includeFuture
+                gatheringDays: mercy.shouldIncludeFuture
                     ? mercy.gatheringDays.clamp(value, 3650)
                     : value,
               ),
@@ -873,7 +873,7 @@ class _Body extends StatelessWidget {
             final MercySettings mercy = settings.mercy;
             return settings.copyWith(
               mercy: mercy.copyWith(
-                gatheringDays: mercy.includeFuture
+                gatheringDays: mercy.shouldIncludeFuture
                     ? value.clamp(mercy.reschedulingDays, 3650)
                     : mercy.reschedulingDays,
               ),
@@ -901,11 +901,11 @@ class _Body extends StatelessWidget {
             'Use future-mode horizon behavior. Turning this off makes G '
             'equal R, matching SM20’s nonfuture planner.',
         control: SwitchField(
-          value: draft.mercy.includeFuture,
+          value: draft.mercy.shouldIncludeFuture,
           onChanged: (bool value) => model.edit(
             (AppSettings settings) => settings.copyWith(
               mercy: settings.mercy.copyWith(
-                includeFuture: value,
+                shouldIncludeFuture: value,
                 gatheringDays: value
                     ? settings.mercy.gatheringDays.clamp(
                         settings.mercy.reschedulingDays,
@@ -1023,10 +1023,10 @@ class _Body extends StatelessWidget {
         label: 'Write a log file',
         hint: 'Enable the local rotating diagnostic log.',
         control: SwitchField(
-          value: draft.diagnostics.logEnabled,
+          value: draft.diagnostics.isLogEnabled,
           onChanged: (bool value) => model.edit(
             (AppSettings settings) => settings.copyWith(
-              diagnostics: settings.diagnostics.copyWith(logEnabled: value),
+              diagnostics: settings.diagnostics.copyWith(isLogEnabled: value),
             ),
           ),
         ),
@@ -1069,11 +1069,11 @@ class _Body extends StatelessWidget {
         hint:
             'Off by default so diagnostics screenshots do not reveal study content.',
         control: SwitchField(
-          value: draft.diagnostics.showContentInPanel,
+          value: draft.diagnostics.shouldShowContentInPanel,
           onChanged: (bool value) => model.edit(
             (AppSettings settings) => settings.copyWith(
               diagnostics: settings.diagnostics.copyWith(
-                showContentInPanel: value,
+                shouldShowContentInPanel: value,
               ),
             ),
           ),

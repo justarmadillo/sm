@@ -27,7 +27,7 @@ import 'package:incremental_reader/features/reader/reader_providers.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
-import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 
 /// How the Reader was opened.
@@ -206,7 +206,7 @@ final class ReaderUiState {
   /// degraded and no longer describes a place here.
   String? _startBlockId(Extract extract) {
     final provenance = extract.provenance;
-    if (!provenance.parentIsSource || !provenance.isIntact) return null;
+    if (!provenance.hasSourceAsParent || !provenance.isIntact) return null;
     if (provenance.parentId != document.sourceId) return null;
     return document.blockAtOffset(provenance.startUtf8)?.id;
   }
@@ -561,7 +561,7 @@ final class ReaderViewModel
           CreateExtract(
             OperationId(ref.read(idGeneratorProvider).newId()),
             parentId: current.source.id,
-            parentIsSource: true,
+            hasSourceAsParent: true,
             range: range,
           ),
         );

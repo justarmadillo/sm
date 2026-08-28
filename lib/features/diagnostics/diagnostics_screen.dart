@@ -158,7 +158,7 @@ class _CollectionPanel extends ConsumerWidget {
                 _Stat(
                   label: 'Indexed',
                   value: '${data.indexedDocuments}',
-                  hint: data.searchIndexValid
+                  hint: data.isSearchIndexValid
                       ? 'Search index consistent'
                       : 'Search index needs a rebuild',
                 ),

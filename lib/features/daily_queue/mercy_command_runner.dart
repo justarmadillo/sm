@@ -82,8 +82,8 @@ final class MercyCommandRunner {
               for (final QueueCandidate value in loaded) value.ref: value,
             };
 
-        final bool includeFuture =
-            command.includeFuture ?? settings.includeFuture;
+        final bool shouldIncludeFuture =
+            command.shouldIncludeFuture ?? settings.shouldIncludeFuture;
         var reschedulingDays =
             command.reschedulingDays ?? settings.reschedulingDays;
         var gatheringDays = command.gatheringDays ?? settings.gatheringDays;
@@ -102,13 +102,13 @@ final class MercyCommandRunner {
           ),
         );
         final Sm20MercyCapacity capacity =
-            !command.solveFromDailyCap || command.elementsPerDay == null
+            !command.shouldSolveFromDailyCap || command.elementsPerDay == null
             ? const Sm20MercyCapacityPlanner().afterHorizonEdit(
                 today: command.day,
                 collectionLearningStartDay: learningStart,
                 reschedulingDays: reschedulingDays,
                 gatheringDays: gatheringDays,
-                includeFuture: includeFuture,
+                shouldIncludeFuture: shouldIncludeFuture,
                 scheduledCounts: scheduledCounts,
                 subsetCandidateCount: command.subset?.length,
               )
@@ -117,7 +117,7 @@ final class MercyCommandRunner {
                 collectionLearningStartDay: learningStart,
                 elementsPerDay: command.elementsPerDay!,
                 gatheringDays: gatheringDays,
-                includeFuture: includeFuture,
+                shouldIncludeFuture: shouldIncludeFuture,
                 scheduledCounts: scheduledCounts,
                 subsetCandidateCount: command.subset?.length,
               );

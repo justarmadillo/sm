@@ -35,7 +35,7 @@ final class Provenance {
   const Provenance({
     required this.sourceId,
     required this.parentId,
-    required this.parentIsSource,
+    required this.hasSourceAsParent,
     required this.startAnchor,
     required this.endAnchor,
     required this.selectedTextHash,
@@ -50,7 +50,7 @@ final class Provenance {
   final String parentId;
 
   /// Whether [parentId] names a source rather than an extract.
-  final bool parentIsSource;
+  final bool hasSourceAsParent;
 
   /// Start of the selection in the parent's document coordinates.
   final ReaderAnchor startAnchor;
@@ -93,7 +93,7 @@ final class Provenance {
   }) => Provenance(
     sourceId: sourceId,
     parentId: parentId,
-    parentIsSource: parentIsSource,
+    hasSourceAsParent: hasSourceAsParent,
     startAnchor: ReaderAnchor(
       utf8Offset: startUtf8,
       contentRevision: contentRevision,
@@ -111,7 +111,7 @@ final class Provenance {
       other is Provenance &&
       other.sourceId == sourceId &&
       other.parentId == parentId &&
-      other.parentIsSource == parentIsSource &&
+      other.hasSourceAsParent == hasSourceAsParent &&
       other.startAnchor == startAnchor &&
       other.endAnchor == endAnchor &&
       other.selectedTextHash == selectedTextHash &&
@@ -121,7 +121,7 @@ final class Provenance {
   int get hashCode => Object.hash(
     sourceId,
     parentId,
-    parentIsSource,
+    hasSourceAsParent,
     startAnchor,
     endAnchor,
     selectedTextHash,

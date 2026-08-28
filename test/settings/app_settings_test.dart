@@ -28,9 +28,9 @@ void main() {
           topicPercent: 37,
           itemRandomization: 18,
           topicRandomization: 72,
-          autoSort: false,
-          randomizeFinalDrill: true,
-          confirmStageTransitions: false,
+          shouldSortAutomatically: false,
+          shouldRandomizeFinalDrill: true,
+          shouldConfirmStageTransitions: false,
         ),
         remember: const RememberSettings(
           firstIntervalLowDays: 3,
@@ -41,12 +41,12 @@ void main() {
           learningStepMinutes: <int>[2, 15, 45],
           relearningStepMinutes: <int>[5, 20],
           maximumIntervalDays: 1000,
-          enableFuzzing: false,
+          isFuzzingEnabled: false,
           leechLapses: 5,
-          burySiblings: false,
+          shouldBurySiblings: false,
         ),
         postpone: const PostponeSettings(
-          autoEnabled: false,
+          isAutomaticPostponeEnabled: false,
           defaultProfile: SmartPostponeSettings(
             rootElementId: 42,
             scope: SmartPostponeScope.branch,
@@ -54,16 +54,16 @@ void main() {
             profileName: 'Research branch',
             subbranchMode: SmartPostponeSubbranchMode.conservative,
             protectedCount: 123,
-            includeNonOutstanding: true,
-            simulate: true,
+            shouldIncludeNonOutstanding: true,
+            isSimulationOnly: true,
             itemDelayPercent: 31,
             topicDelayPercent: 81,
             itemMaximumDelayDays: 75,
             topicMaximumDelayDays: 180,
             itemMinimumDelayDays: 4,
             topicMinimumDelayDays: 9,
-            skipItems: true,
-            skipTopics: true,
+            shouldSkipItems: true,
+            shouldSkipTopics: true,
             itemAgeCutoffDays: 700,
             topicAgeCutoffDays: 900,
             itemForgettingIndexCutoff: 9,
@@ -72,8 +72,8 @@ void main() {
             topicPostponeCountCutoff: 131,
             itemPriorityThreshold: 7.5,
             topicPriorityThreshold: 2.25,
-            modifyItemByForgettingIndex: false,
-            modifyTopicByAFactor: false,
+            shouldModifyItemByForgettingIndex: false,
+            shouldModifyTopicByAFactor: false,
           ),
         ),
         mercy: MercySettings(
@@ -81,7 +81,7 @@ void main() {
           reschedulingDays: 28,
           gatheringDays: 45,
           dailyCap: 77,
-          includeFuture: true,
+          shouldIncludeFuture: true,
           importanceWeight: 8,
           latenessWeight: 6,
           investmentWeight: 5,
@@ -91,10 +91,10 @@ void main() {
         ),
         reader: const ReaderSettings(reminderWords: 800),
         diagnostics: const DiagnosticsSettings(
-          logEnabled: false,
+          isLogEnabled: false,
           logMaxBytes: 65536,
           logRetainedFiles: 9,
-          showContentInPanel: true,
+          shouldShowContentInPanel: true,
         ),
       );
 
@@ -149,7 +149,7 @@ void main() {
 
       const AppSettings defaults = AppSettings();
       expect(settings.queue.topicPercent, defaults.queue.topicPercent);
-      expect(settings.queue.autoSort, defaults.queue.autoSort);
+      expect(settings.queue.shouldSortAutomatically, defaults.queue.shouldSortAutomatically);
       expect(
         settings.remember.firstIntervalLowDays,
         defaults.remember.firstIntervalLowDays,
@@ -169,7 +169,7 @@ void main() {
       );
       expect(settings.mercy.mode, defaults.mercy.mode);
       expect(settings.mercy.intervalFactorMatrix, isNull);
-      expect(settings.diagnostics.logEnabled, defaults.diagnostics.logEnabled);
+      expect(settings.diagnostics.isLogEnabled, defaults.diagnostics.isLogEnabled);
     });
 
     test('out-of-range values use the executable and UI bounds', () {
@@ -245,7 +245,7 @@ void main() {
         expect(
           AppSettings.fromMap(<String, String>{
             'queue.auto_sort': yes,
-          }).queue.autoSort,
+          }).queue.shouldSortAutomatically,
           isTrue,
         );
       }
@@ -253,7 +253,7 @@ void main() {
         expect(
           AppSettings.fromMap(<String, String>{
             'queue.auto_sort': no,
-          }).queue.autoSort,
+          }).queue.shouldSortAutomatically,
           isFalse,
         );
       }
@@ -266,7 +266,7 @@ void main() {
       expect(queue.topicPercent, 20);
       expect(queue.itemRandomization, 0);
       expect(queue.topicRandomization, 0);
-      expect(queue.autoSort, isTrue);
+      expect(queue.shouldSortAutomatically, isTrue);
       expect(const RememberSettings().firstIntervalLowDays, 1);
       expect(const RememberSettings().firstIntervalHighDays, 1);
     });
@@ -290,8 +290,8 @@ void main() {
       expect(smart.itemPriorityThreshold, 6);
       expect(smart.topicPriorityThreshold, 3);
       expect(smart.subbranchMode, SmartPostponeSubbranchMode.ignore);
-      expect(smart.modifyItemByForgettingIndex, isTrue);
-      expect(smart.modifyTopicByAFactor, isTrue);
+      expect(smart.shouldModifyItemByForgettingIndex, isTrue);
+      expect(smart.shouldModifyTopicByAFactor, isTrue);
     });
 
     test('Mercy weights use the executable record order defaults', () {
@@ -309,7 +309,7 @@ void main() {
       expect(cards.learningStepMinutes, <int>[1, 10]);
       expect(cards.relearningStepMinutes, <int>[10]);
       expect(cards.maximumIntervalDays, 36500);
-      expect(cards.enableFuzzing, isTrue);
+      expect(cards.isFuzzingEnabled, isTrue);
     });
 
     test('the study day rolls over at 04:00', () {
@@ -325,16 +325,16 @@ void main() {
       subbranchMode: SmartPostponeSubbranchMode.conservative,
       rootElementId: 91,
       protectedCount: 12,
-      includeNonOutstanding: true,
-      simulate: true,
+      shouldIncludeNonOutstanding: true,
+      isSimulationOnly: true,
       itemDelayPercent: 33,
       topicDelayPercent: 77,
       itemMaximumDelayDays: 60,
       topicMaximumDelayDays: 150,
       itemMinimumDelayDays: 2,
       topicMinimumDelayDays: 8,
-      skipItems: true,
-      skipTopics: false,
+      shouldSkipItems: true,
+      shouldSkipTopics: false,
       itemAgeCutoffDays: 600,
       topicAgeCutoffDays: 900,
       itemForgettingIndexCutoff: 11,
@@ -343,8 +343,8 @@ void main() {
       topicPostponeCountCutoff: 88,
       itemPriorityThreshold: 7.5,
       topicPriorityThreshold: 2.5,
-      modifyItemByForgettingIndex: false,
-      modifyTopicByAFactor: false,
+      shouldModifyItemByForgettingIndex: false,
+      shouldModifyTopicByAFactor: false,
     );
 
     test('every profile field survives the flat storage round trip', () {

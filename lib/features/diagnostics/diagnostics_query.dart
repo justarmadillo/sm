@@ -69,7 +69,7 @@ final class CollectionDiagnostics {
     required this.byLifecycle,
     required this.eventsToday,
     required this.indexedDocuments,
-    required this.searchIndexValid,
+    required this.isSearchIndexValid,
     required this.settings,
   });
 
@@ -84,7 +84,7 @@ final class CollectionDiagnostics {
   final Map<RevlogEventType, int> eventsToday;
 
   final int indexedDocuments;
-  final bool searchIndexValid;
+  final bool isSearchIndexValid;
 
   /// The configuration the schedulers are actually running on.
   final AppSettings settings;
@@ -146,7 +146,7 @@ final class DiagnosticsQuery {
       )).reversed.toList(growable: false),
       topic: topic,
       card: card,
-      title: settings.diagnostics.showContentInPanel
+      title: settings.diagnostics.shouldShowContentInPanel
           ? await _titleOf(ref)
           : null,
       nextIntervalPreview: preview,
@@ -162,7 +162,7 @@ final class DiagnosticsQuery {
       byLifecycle: await _learning.countByLifecycle(),
       eventsToday: await _learning.countRevlogOn(today),
       indexedDocuments: await _search.documentCount(),
-      searchIndexValid: await _search.indexIsValid(),
+      isSearchIndexValid: await _search.indexIsValid(),
       settings: await _context.settings(),
     );
   }

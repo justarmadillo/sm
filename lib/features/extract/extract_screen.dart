@@ -268,7 +268,7 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
 
   Future<void> _openParent(BuildContext context, ExtractUiState state) async {
     final provenance = state.extract.provenance;
-    if (provenance.parentIsSource) {
+    if (provenance.hasSourceAsParent) {
       await openReader(
         context,
         ref,

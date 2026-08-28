@@ -29,6 +29,7 @@ import 'package:incremental_reader/settings/settings_store.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
 import 'package:incremental_reader/storage/drift/drift_content_repository.dart';

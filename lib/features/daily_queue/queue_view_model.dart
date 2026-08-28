@@ -22,7 +22,7 @@ import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/settings/mercy_settings.dart';
 import 'package:incremental_reader/settings/smart_postpone_settings.dart';
-import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 
 @immutable
@@ -85,8 +85,8 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
     int? reschedulingDays,
     int? gatheringDays,
     int? elementsPerDay,
-    bool solveFromDailyCap = false,
-    bool? includeFuture,
+    bool shouldSolveFromDailyCap = false,
+    bool? shouldIncludeFuture,
     MercyMode? mode,
   }) async {
     final QueueUiState? current = state.valueOrNull;
@@ -102,8 +102,8 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
             reschedulingDays: reschedulingDays,
             gatheringDays: gatheringDays,
             elementsPerDay: elementsPerDay,
-            solveFromDailyCap: solveFromDailyCap,
-            includeFuture: includeFuture,
+            shouldSolveFromDailyCap: shouldSolveFromDailyCap,
+            shouldIncludeFuture: shouldIncludeFuture,
             mode: mode,
           ),
         );
@@ -137,7 +137,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
   /// the confirmation dialog shows is produced by the engine that will write —
   /// not by a second estimate that could disagree with it.
   Future<AppliedSmartPostpone?> smartPostpone({
-    required bool simulate,
+    required bool isSimulationOnly,
     SmartPostponeSettings? profile,
     List<ElementRef>? sourcePopulation,
     List<SmartPostponeSettings> applicableSubbranchProfiles =
@@ -154,7 +154,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
           RunSmartPostpone(
             OperationId(ref.read(idGeneratorProvider).newId()),
             day: current.projection.today,
-            profile: base.copyWith(simulate: simulate),
+            profile: base.copyWith(isSimulationOnly: isSimulationOnly),
             sourcePopulation: sourcePopulation,
             applicableSubbranchProfiles: applicableSubbranchProfiles,
             timestampUtc: ref.read(clockProvider).nowUtc(),
@@ -163,7 +163,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
 
     // A simulation wrote nothing, so the projection it was computed from is
     // still current and reloading it would only cost a rebuild.
-    final QueueProjection projection = simulate || result.isErr
+    final QueueProjection projection = isSimulationOnly || result.isErr
         ? current.projection
         : await ref.read(queueQueryProvider).load();
 
@@ -173,7 +173,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
           current.copyWith(
             projection: projection,
             isBusy: false,
-            message: simulate
+            message: isSimulationOnly
                 ? null
                 : UiMessage(
                     applied.written == 0

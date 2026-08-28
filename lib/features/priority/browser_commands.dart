@@ -106,7 +106,7 @@ final class AddToFinalDrill extends BrowserSelectionCommand {
 ///
 /// [everyWhich] is SM20's `Every which element?` spacing, default 5 and bounds
 /// 1..100. Both variants raise importance by multiplying the priority target
-/// by `0.9`; only [rescheduleSameDay] (Add all) additionally reschedules a
+/// by `0.9`; only [shouldRescheduleSameDay] (Add all) additionally reschedules a
 /// record already reviewed today onto today.
 final class AddToOutstanding extends BrowserSelectionCommand {
   AddToOutstanding(
@@ -114,12 +114,12 @@ final class AddToOutstanding extends BrowserSelectionCommand {
     required super.refs,
     required super.day,
     this.everyWhich = 5,
-    this.rescheduleSameDay = false,
+    this.shouldRescheduleSameDay = false,
     super.timestampUtc,
   });
 
   final int everyWhich;
-  final bool rescheduleSameDay;
+  final bool shouldRescheduleSameDay;
 }
 
 /// Reset history: drop the external history block and nothing else.

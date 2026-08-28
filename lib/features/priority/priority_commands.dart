@@ -101,7 +101,7 @@ final class BatchPriority extends AppCommand {
     required this.lowPercent,
     required this.highPercent,
     required this.changePercent,
-    this.limitChanges = true,
+    this.shouldLimitChanges = true,
     super.timestampUtc,
   });
 
@@ -111,5 +111,5 @@ final class BatchPriority extends AppCommand {
   final double lowPercent;
   final double highPercent;
   final double changePercent;
-  final bool limitChanges;
+  final bool shouldLimitChanges;
 }

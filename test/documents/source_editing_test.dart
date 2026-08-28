@@ -86,7 +86,7 @@ void main() {
       CreateExtract(
         harness.operation(),
         parentId: sourceId,
-        parentIsSource: true,
+        hasSourceAsParent: true,
         range: SelectionRange.of(
           startAnchor: start,
           endAnchor: end,

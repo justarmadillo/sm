@@ -13,7 +13,7 @@ void main() {
     provenance: const Provenance(
       sourceId: 'source-1',
       parentId: 'source-1',
-      parentIsSource: true,
+      hasSourceAsParent: true,
       startAnchor: ReaderAnchor(utf8Offset: 0),
       endAnchor: ReaderAnchor(utf8Offset: 5),
       selectedTextHash:

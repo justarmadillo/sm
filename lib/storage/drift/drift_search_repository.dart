@@ -98,7 +98,7 @@ final class DriftSearchRepository implements SearchRepository {
   Future<void> rebuildIndex() => _database.rebuildSearchIndex();
 
   @override
-  Future<bool> indexIsValid() => _database.searchIndexValid();
+  Future<bool> indexIsValid() => _database.isSearchIndexValid();
 
   @override
   Future<int> documentCount() async {

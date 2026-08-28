@@ -166,7 +166,7 @@ final class PriorityCommandRunner {
     final bool remapsRange =
         command.mode == Sm20BatchPriorityMode.spread ||
         command.mode == Sm20BatchPriorityMode.adjust;
-    if (!remapsRange && !command.limitChanges) {
+    if (!remapsRange && !command.shouldLimitChanges) {
       low = 0;
       high = 100;
     }

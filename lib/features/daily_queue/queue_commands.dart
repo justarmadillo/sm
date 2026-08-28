@@ -166,8 +166,8 @@ final class PreviewMercy extends AppCommand {
     this.reschedulingDays,
     this.gatheringDays,
     this.elementsPerDay,
-    this.solveFromDailyCap = false,
-    this.includeFuture,
+    this.shouldSolveFromDailyCap = false,
+    this.shouldIncludeFuture,
     this.mode,
     this.subset,
     super.timestampUtc,
@@ -187,10 +187,10 @@ final class PreviewMercy extends AppCommand {
 
   /// True when C was the last edited capacity control. False means R/G were
   /// edited and C is recomputed from them.
-  final bool solveFromDailyCap;
+  final bool shouldSolveFromDailyCap;
 
   /// Whether G may extend into future scheduled repetitions.
-  final bool? includeFuture;
+  final bool? shouldIncludeFuture;
 
   /// Exact score ordering mode. Null uses the persisted setting.
   final MercyMode? mode;

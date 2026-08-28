@@ -21,7 +21,9 @@ import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/settings/settings_store.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/fan_out_diagnostic_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
+import 'package:incremental_reader/shared/in_memory_diagnostic_sink.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/search_repository.dart';
@@ -90,7 +92,7 @@ final Provider<DiagnosticSink> diagnosticsProvider = Provider<DiagnosticSink>((
   final AppSettings settings = ref
       .watch(settingsStoreProvider)
       .currentOrDefaults;
-  if (directory == null || !settings.diagnostics.logEnabled) return buffer;
+  if (directory == null || !settings.diagnostics.isLogEnabled) return buffer;
   return FanOutDiagnosticSink(<DiagnosticSink>[
     buffer,
     RotatingLogSink(

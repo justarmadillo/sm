@@ -45,7 +45,7 @@ Extract _extractOf(Block block, String text, {String id = 'x1'}) {
     provenance: Provenance(
       sourceId: 's',
       parentId: 's',
-      parentIsSource: true,
+      hasSourceAsParent: true,
       startAnchor: startAnchor,
       endAnchor: endAnchor,
       selectedTextHash: hashSelection(text),
@@ -100,7 +100,7 @@ void main() {
         provenance: const Provenance(
           sourceId: 's',
           parentId: 'other-extract',
-          parentIsSource: false,
+          hasSourceAsParent: false,
           startAnchor: ReaderAnchor(utf8Offset: 0),
           endAnchor: ReaderAnchor(utf8Offset: 3),
           selectedTextHash: 'deadbeef',
@@ -119,7 +119,7 @@ void main() {
         provenance: Provenance(
           sourceId: 's',
           parentId: 's',
-          parentIsSource: true,
+          hasSourceAsParent: true,
           startAnchor: anchorIn(document.blocks[1], 0),
           endAnchor: anchorIn(document.blocks[2], 5),
           selectedTextHash: 'irrelevant',

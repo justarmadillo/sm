@@ -89,7 +89,7 @@ void main() {
       // test_review_card. Fuzzing is disabled in the upstream vector too.
       const CardScheduler scheduler = CardScheduler(
         calendar: calendar,
-        settings: CardSchedulerSettings(enableFuzzing: false),
+        settings: CardSchedulerSettings(isFuzzingEnabled: false),
       );
       const List<CardRating> ratings = <CardRating>[
         CardRating.good,
@@ -143,7 +143,7 @@ void main() {
     test('learning, review, and relearning transitions keep exact history', () {
       const CardScheduler scheduler = CardScheduler(
         calendar: calendar,
-        settings: CardSchedulerSettings(enableFuzzing: false),
+        settings: CardSchedulerSettings(isFuzzingEnabled: false),
       );
       final CardState initial = newCard();
       final CardReviewTransition first = scheduler.review(
@@ -217,7 +217,7 @@ void main() {
     test('review synchronizes the generic due day with the exact due', () {
       const CardScheduler scheduler = CardScheduler(
         calendar: calendar,
-        settings: CardSchedulerSettings(enableFuzzing: false),
+        settings: CardSchedulerSettings(isFuzzingEnabled: false),
       );
       // There is no deferral overlay to clear: a card carries one due instant,
       // and the day on the shared schedule row is its projection. They must

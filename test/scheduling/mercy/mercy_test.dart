@@ -219,7 +219,7 @@ void main() {
             collectionLearningStartDay: _day(98),
             reschedulingDays: 3,
             gatheringDays: 10,
-            includeFuture: false,
+            shouldIncludeFuture: false,
             scheduledCounts: counts,
           );
       final Sm20MercyCapacity future = const Sm20MercyCapacityPlanner()
@@ -228,7 +228,7 @@ void main() {
             collectionLearningStartDay: _day(98),
             reschedulingDays: 3,
             gatheringDays: 2,
-            includeFuture: true,
+            shouldIncludeFuture: true,
             scheduledCounts: counts,
           );
       final Sm20MercyCapacity gatheringEdited = const Sm20MercyCapacityPlanner()
@@ -237,7 +237,7 @@ void main() {
             collectionLearningStartDay: _day(98),
             reschedulingDays: 5,
             gatheringDays: 2,
-            includeFuture: true,
+            shouldIncludeFuture: true,
             scheduledCounts: counts,
             editedField: Sm20MercyHorizonField.gatheringDays,
           );
@@ -261,7 +261,7 @@ void main() {
             collectionLearningStartDay: _day(98),
             elementsPerDay: 3,
             gatheringDays: 1,
-            includeFuture: false,
+            shouldIncludeFuture: false,
             scheduledCounts: _counts(<int, int>{98: 3, 99: 2, 100: 4, 101: 1}),
           );
 
@@ -277,7 +277,7 @@ void main() {
             collectionLearningStartDay: _day(98),
             elementsPerDay: 3,
             gatheringDays: 2,
-            includeFuture: true,
+            shouldIncludeFuture: true,
             scheduledCounts: _counts(<int, int>{
               98: 3,
               99: 2,
@@ -299,7 +299,7 @@ void main() {
             collectionLearningStartDay: _day(0),
             elementsPerDay: 7,
             gatheringDays: 1,
-            includeFuture: false,
+            shouldIncludeFuture: false,
             scheduledCounts: Sm20ScheduledCounts(const <StudyDay, int>{}),
             subsetCandidateCount: 15,
           );
@@ -316,7 +316,7 @@ void main() {
           collectionLearningStartDay: _day(0),
           elementsPerDay: 5001,
           gatheringDays: 1,
-          includeFuture: false,
+          shouldIncludeFuture: false,
           scheduledCounts: Sm20ScheduledCounts(const <StudyDay, int>{}),
         ),
         throwsRangeError,
@@ -327,7 +327,7 @@ void main() {
           elementsPerDay: 1,
           reschedulingDays: 1825,
           gatheringDays: 1825,
-          includeFuture: false,
+          shouldIncludeFuture: false,
         ).warnsAboutLongHorizon,
         isFalse,
       );
@@ -337,7 +337,7 @@ void main() {
           elementsPerDay: 1,
           reschedulingDays: 1826,
           gatheringDays: 1825,
-          includeFuture: false,
+          shouldIncludeFuture: false,
         ).warnsAboutLongHorizon,
         isTrue,
       );

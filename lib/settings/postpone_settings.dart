@@ -13,7 +13,7 @@ import 'package:meta/meta.dart';
 @immutable
 final class PostponeSettings {
   const PostponeSettings({
-    this.autoEnabled = true,
+    this.isAutomaticPostponeEnabled = true,
     this.defaultProfile = const SmartPostponeSettings(),
     this.namedProfiles = const <String, SmartPostponeSettings>{},
     this.branchProfileAssignments = const <int, String>{},
@@ -21,7 +21,7 @@ final class PostponeSettings {
 
   static const String defaultProfileName = 'Default';
 
-  final bool autoEnabled;
+  final bool isAutomaticPostponeEnabled;
 
   /// The undeletable profile used by automatic postponement.
   final SmartPostponeSettings defaultProfile;
@@ -129,12 +129,12 @@ final class PostponeSettings {
   );
 
   PostponeSettings copyWith({
-    bool? autoEnabled,
+    bool? isAutomaticPostponeEnabled,
     SmartPostponeSettings? defaultProfile,
     Map<String, SmartPostponeSettings>? namedProfiles,
     Map<int, String>? branchProfileAssignments,
   }) => PostponeSettings(
-    autoEnabled: autoEnabled ?? this.autoEnabled,
+    isAutomaticPostponeEnabled: isAutomaticPostponeEnabled ?? this.isAutomaticPostponeEnabled,
     defaultProfile: defaultProfile ?? this.defaultProfile,
     namedProfiles: namedProfiles ?? this.namedProfiles,
     branchProfileAssignments:
@@ -144,14 +144,14 @@ final class PostponeSettings {
   @override
   bool operator ==(Object other) =>
       other is PostponeSettings &&
-      other.autoEnabled == autoEnabled &&
+      other.isAutomaticPostponeEnabled == isAutomaticPostponeEnabled &&
       other.defaultProfile == defaultProfile &&
       _sameMap(other.namedProfiles, namedProfiles) &&
       _sameMap(other.branchProfileAssignments, branchProfileAssignments);
 
   @override
   int get hashCode => Object.hash(
-    autoEnabled,
+    isAutomaticPostponeEnabled,
     _mapHash(namedProfiles),
     _mapHash(branchProfileAssignments),
     defaultProfile,

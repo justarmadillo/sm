@@ -80,7 +80,7 @@ final class CardSchedulerSettings {
     ],
     this.relearningSteps = const <Duration>[Duration(minutes: 10)],
     this.maximumIntervalDays = 36500,
-    this.enableFuzzing = true,
+    this.isFuzzingEnabled = true,
     this.leechLapses = 8,
     this.schedulerVersion = kCardSchedulerVersion,
     this.parametersVersion = kCardParametersVersion,
@@ -104,7 +104,7 @@ final class CardSchedulerSettings {
             Duration(minutes: minutes),
         ],
         maximumIntervalDays: settings.maximumIntervalDays,
-        enableFuzzing: settings.enableFuzzing,
+        isFuzzingEnabled: settings.isFuzzingEnabled,
         leechLapses: settings.leechLapses,
       );
 
@@ -113,7 +113,7 @@ final class CardSchedulerSettings {
   final List<Duration> learningSteps;
   final List<Duration> relearningSteps;
   final int maximumIntervalDays;
-  final bool enableFuzzing;
+  final bool isFuzzingEnabled;
 
   /// Lapses after which a card is flagged for reformulation.
   final int leechLapses;
@@ -807,7 +807,7 @@ final class CardScheduler implements FsrsAdapter {
   }
 
   fsrs.Scheduler _engineFor(String operationId) {
-    if (!settings.enableFuzzing) {
+    if (!settings.isFuzzingEnabled) {
       return fsrs.Scheduler(
         parameters: settings.parameters,
         desiredRetention: settings.desiredRetention,

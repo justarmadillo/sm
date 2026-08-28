@@ -14,6 +14,7 @@ import 'dart:io';
 
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;

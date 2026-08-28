@@ -126,7 +126,7 @@ Map<String, int> extractMarksByCoveredBlock(
 /// back has degraded.
 (int, int)? _paintableRange(Document document, Extract extract) {
   final provenance = extract.provenance;
-  if (!provenance.parentIsSource) return null;
+  if (!provenance.hasSourceAsParent) return null;
   if (provenance.parentId != document.sourceId) return null;
   if (!provenance.isIntact) return null;
   if (provenance.endUtf8 <= provenance.startUtf8) return null;

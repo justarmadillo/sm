@@ -1,26 +1,19 @@
-/// A local rotating structured log.
-///
-/// Writes one JSON object per line: operation metadata, failures, and the
-/// schema and app versions the event happened under. When something scheduled
-/// wrongly three weeks ago, the repetition log says *what* the collection
-/// decided and this says *which build decided it and what else was happening
-/// at the time*.
+/// A local rotating structured log, one JSON object per line.
 ///
 /// Two properties it must have and one it must not:
 ///
-/// * **Never throws.** A [DiagnosticSink] is called from inside command
-///   command runner; a full disk or a locked file must not roll back a review.
+/// * **Never throws.** A [DiagnosticSink] is called from inside a command
+///   runner; a full disk or a locked file must not roll back a review.
 /// * **Bounded.** It rotates at a size limit and keeps a fixed number of
 ///   files, so a long-running collection cannot fill the disk with logs.
-/// * **No element content.** Fields carry ids, counts, and versions. A log the
-///   user might paste into a bug report must not contain what they are
+/// * **No element content.** Fields carry ids, counts, and versions. A log
+///   the user might paste into a bug report must not contain what they are
 ///   studying.
 library;
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 
@@ -151,43 +144,4 @@ final class RotatingLogSink implements DiagnosticSink {
     final List<String> lines = stack.split('\n');
     return lines.length <= 12 ? stack : lines.take(12).join('\n');
   }
-}
-
-/// Sends events to several sinks. Used to keep the in-memory diagnostics
-/// panel and the on-disk log fed from one call site.
-final class FanOutDiagnosticSink implements DiagnosticSink {
-  const FanOutDiagnosticSink(this._sinks);
-
-  final List<DiagnosticSink> _sinks;
-
-  @override
-  void record(DiagnosticEvent event) {
-    for (final DiagnosticSink sink in _sinks) {
-      sink.record(event);
-    }
-  }
-}
-
-/// Keeps the most recent events in memory for the diagnostics panel.
-///
-/// Bounded on purpose: the panel shows what just happened, and the durable
-/// record is the rotating file and the repetition log.
-final class InMemoryDiagnosticSink implements DiagnosticSink {
-  InMemoryDiagnosticSink({this.capacity = 200});
-
-  final int capacity;
-  final List<DiagnosticEvent> _events = <DiagnosticEvent>[];
-
-  /// Newest first.
-  List<DiagnosticEvent> get events =>
-      List<DiagnosticEvent>.unmodifiable(_events.reversed);
-
-  @override
-  void record(DiagnosticEvent event) {
-    _events.add(event);
-    if (_events.length > capacity) _events.removeAt(0);
-  }
-
-  /// Drops everything recorded so far.
-  void clear() => _events.clear();
 }

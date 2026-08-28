@@ -11,9 +11,9 @@ final class QueueSettings {
     this.topicPercent = 20,
     this.itemRandomization = 0,
     this.topicRandomization = 0,
-    this.autoSort = true,
-    this.randomizeFinalDrill = false,
-    this.confirmStageTransitions = true,
+    this.shouldSortAutomatically = true,
+    this.shouldRandomizeFinalDrill = false,
+    this.shouldConfirmStageTransitions = true,
   });
 
   /// Percentage of topic-family elements in the merged Outstanding queue.
@@ -26,29 +26,29 @@ final class QueueSettings {
   final int topicRandomization;
 
   /// Whether Outstanding is sorted automatically once per study day.
-  final bool autoSort;
+  final bool shouldSortAutomatically;
 
   /// Whether Final Drill is randomized before it is served.
-  final bool randomizeFinalDrill;
+  final bool shouldRandomizeFinalDrill;
 
   /// Whether transitions into Final Drill and Pending require confirmation.
-  final bool confirmStageTransitions;
+  final bool shouldConfirmStageTransitions;
 
   QueueSettings copyWith({
     int? topicPercent,
     int? itemRandomization,
     int? topicRandomization,
-    bool? autoSort,
-    bool? randomizeFinalDrill,
-    bool? confirmStageTransitions,
+    bool? shouldSortAutomatically,
+    bool? shouldRandomizeFinalDrill,
+    bool? shouldConfirmStageTransitions,
   }) => QueueSettings(
     topicPercent: topicPercent ?? this.topicPercent,
     itemRandomization: itemRandomization ?? this.itemRandomization,
     topicRandomization: topicRandomization ?? this.topicRandomization,
-    autoSort: autoSort ?? this.autoSort,
-    randomizeFinalDrill: randomizeFinalDrill ?? this.randomizeFinalDrill,
-    confirmStageTransitions:
-        confirmStageTransitions ?? this.confirmStageTransitions,
+    shouldSortAutomatically: shouldSortAutomatically ?? this.shouldSortAutomatically,
+    shouldRandomizeFinalDrill: shouldRandomizeFinalDrill ?? this.shouldRandomizeFinalDrill,
+    shouldConfirmStageTransitions:
+        shouldConfirmStageTransitions ?? this.shouldConfirmStageTransitions,
   );
 
   @override
@@ -57,17 +57,17 @@ final class QueueSettings {
       other.topicPercent == topicPercent &&
       other.itemRandomization == itemRandomization &&
       other.topicRandomization == topicRandomization &&
-      other.autoSort == autoSort &&
-      other.randomizeFinalDrill == randomizeFinalDrill &&
-      other.confirmStageTransitions == confirmStageTransitions;
+      other.shouldSortAutomatically == shouldSortAutomatically &&
+      other.shouldRandomizeFinalDrill == shouldRandomizeFinalDrill &&
+      other.shouldConfirmStageTransitions == shouldConfirmStageTransitions;
 
   @override
   int get hashCode => Object.hash(
     topicPercent,
     itemRandomization,
     topicRandomization,
-    autoSort,
-    randomizeFinalDrill,
-    confirmStageTransitions,
+    shouldSortAutomatically,
+    shouldRandomizeFinalDrill,
+    shouldConfirmStageTransitions,
   );
 }

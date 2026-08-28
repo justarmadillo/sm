@@ -123,7 +123,7 @@ final class QueueCommandRunner {
         );
         if (automatic.disableAutoPostpone) {
           settings = settings.copyWith(
-            postpone: settings.postpone.copyWith(autoEnabled: false),
+            postpone: settings.postpone.copyWith(isAutomaticPostponeEnabled: false),
           );
         }
         final Set<ElementRef> automaticallyPostponed =
@@ -187,7 +187,7 @@ final class QueueCommandRunner {
         };
         final bool alreadySorted = runtime.lastAutomaticSortDay == command.day;
         final bool shouldSort =
-            settings.queue.autoSort && !alreadySorted && outstanding.isNotEmpty;
+            settings.queue.shouldSortAutomatically && !alreadySorted && outstanding.isNotEmpty;
         final QueuePolicy policy = await _context.queuePolicy();
         final QueuePlan outstandingPlan = policy.build(
           candidates: candidates,
@@ -257,7 +257,7 @@ final class QueueCommandRunner {
             for (final ElementRef ref in finalDrill)
               if (byRef[ref] case final QueueCandidate candidate) candidate,
           ];
-          if (settings.queue.randomizeFinalDrill && runtime.learningMode != 1) {
+          if (settings.queue.shouldRandomizeFinalDrill && runtime.learningMode != 1) {
             QueuePolicy.randomizeFixedSize<QueueCandidate>(drill, prng);
             finalDrill
               ..clear()
@@ -571,7 +571,7 @@ final class QueueCommandRunner {
           prng: prng,
           applicableSubbranchProfiles: command.applicableSubbranchProfiles,
         );
-        if (result.profile.simulate) {
+        if (result.profile.isSimulationOnly) {
           return Ok<AppliedSmartPostpone>(
             AppliedSmartPostpone(result: result, written: 0),
           );
@@ -651,7 +651,7 @@ final class QueueCommandRunner {
       AutoPostponeRequest(
         today: command.day,
         nowUtc: command.timestampUtc,
-        autoEnabled: settings.postpone.autoEnabled,
+        isAutomaticPostponeEnabled: settings.postpone.isAutomaticPostponeEnabled,
         lastAutoRunDay: runtime.lastAutomaticPostponeDay,
         collectionNonempty: candidates.isNotEmpty,
         lastCollectionUseUtc: runtime.lastCollectionUseUtc,
@@ -668,7 +668,7 @@ final class QueueCommandRunner {
     if (automatic.disableAutoPostpone) {
       final Result<AppSettings> saved = await _context.saveSettings(
         settings.copyWith(
-          postpone: settings.postpone.copyWith(autoEnabled: false),
+          postpone: settings.postpone.copyWith(isAutomaticPostponeEnabled: false),
         ),
       );
       if (saved case Err<AppSettings>(:final failure)) {

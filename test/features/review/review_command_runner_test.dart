@@ -198,7 +198,7 @@ void main() {
       final List<Card> cards = await harness.formulateSiblings(source.id);
       await harness.tuneSettings(
         (AppSettings s) =>
-            s.copyWith(cards: s.cards.copyWith(burySiblings: false)),
+            s.copyWith(cards: s.cards.copyWith(shouldBurySiblings: false)),
       );
 
       await harness.grade(cards[0].id, CardRating.good);
@@ -354,7 +354,7 @@ void main() {
     test('can be switched off', () async {
       await harness.tuneSettings(
         (AppSettings s) =>
-            s.copyWith(cards: s.cards.copyWith(burySiblings: false)),
+            s.copyWith(cards: s.cards.copyWith(shouldBurySiblings: false)),
       );
       final Source source = await harness.importSource();
       final List<Card> cards = await harness.formulateSiblings(source.id);
@@ -390,7 +390,7 @@ void main() {
       () async {
         await harness.tuneSettings(
           (AppSettings s) => s.copyWith(
-            cards: s.cards.copyWith(leechLapses: 2, burySiblings: false),
+            cards: s.cards.copyWith(leechLapses: 2, shouldBurySiblings: false),
           ),
         );
         final Source source = await harness.importSource();

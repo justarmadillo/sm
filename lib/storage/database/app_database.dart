@@ -908,10 +908,10 @@ class AppDatabase extends _$AppDatabase {
 
     for (final QueryRow row in extracts) {
       final String parentId = row.read<String>('parent_id');
-      final bool parentIsSource = row.read<int>('parent_is_source') != 0;
+      final bool hasSourceAsParent = row.read<int>('parent_is_source') != 0;
 
       final Map<String, int> starts;
-      if (parentIsSource) {
+      if (hasSourceAsParent) {
         starts = sourceBlockStarts;
       } else {
         // Extracts never had persisted blocks: their anchors addressed a
@@ -1055,7 +1055,7 @@ class AppDatabase extends _$AppDatabase {
 
   /// Whether the full-text index reports itself consistent with its content
   /// table. Checked by the diagnostics panel alongside the integrity check.
-  Future<bool> searchIndexValid() async {
+  Future<bool> isSearchIndexValid() async {
     try {
       await customStatement(
         'INSERT INTO $kSearchIndexTable($kSearchIndexTable) '

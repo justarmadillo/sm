@@ -22,7 +22,7 @@ void main() {
         source: <Sm20PostponeCandidate>[candidate],
         profile: const SmartPostponeSettings(
           method: SmartPostponeMethod.parameters,
-          simulate: true,
+          isSimulationOnly: true,
           itemDelayPercent: 20,
           itemMinimumDelayDays: 1,
           itemMaximumDelayDays: 50,
@@ -191,8 +191,8 @@ void main() {
         ],
         profile: const SmartPostponeSettings(
           method: SmartPostponeMethod.parameters,
-          includeNonOutstanding: true,
-          simulate: true,
+          shouldIncludeNonOutstanding: true,
+          isSimulationOnly: true,
           topicPriorityThreshold: 0.0001,
         ),
         priorityScale: PriorityScale(<PriorityRank>[
@@ -227,7 +227,7 @@ void main() {
 
       const SmartPostponeSettings item = SmartPostponeSettings(
         method: SmartPostponeMethod.parameters,
-        simulate: true,
+        isSimulationOnly: true,
         itemAgeCutoffDays: 10,
         itemForgettingIndexCutoff: 6,
         itemPostponeCountCutoff: 50,
@@ -290,7 +290,7 @@ void main() {
 
       const SmartPostponeSettings topic = SmartPostponeSettings(
         method: SmartPostponeMethod.parameters,
-        simulate: true,
+        isSimulationOnly: true,
         topicAFactorCutoff: 1.2,
         topicPriorityThreshold: 0.0001,
       );
@@ -338,7 +338,7 @@ void main() {
           profile: const SmartPostponeSettings(
             method: SmartPostponeMethod.topCount,
             protectedCount: 2,
-            skipItems: true,
+            shouldSkipItems: true,
             itemMinimumDelayDays: 1,
             itemMaximumDelayDays: 5,
           ),
@@ -475,8 +475,8 @@ void main() {
         source: <Sm20PostponeCandidate>[candidate],
         profile: SmartPostponeSettings(
           method: SmartPostponeMethod.parameters,
-          includeNonOutstanding: include,
-          simulate: true,
+          shouldIncludeNonOutstanding: include,
+          isSimulationOnly: true,
           topicPriorityThreshold: 0.0001,
         ),
         priorityScale: PriorityScale(<PriorityRank>[
@@ -503,7 +503,7 @@ void main() {
         itemPriorityThreshold: 9,
         itemForgettingIndexCutoff: 4,
         topicAFactorCutoff: 1.02,
-        skipItems: true,
+        shouldSkipItems: true,
       );
       final SmartPostponeSettings conservative = mergeSmartPostponeProfiles(
         const SmartPostponeSettings(
@@ -527,7 +527,7 @@ void main() {
       expect(conservative.itemPriorityThreshold, 6);
       expect(conservative.itemForgettingIndexCutoff, 6);
       expect(conservative.topicAFactorCutoff, 1.03);
-      expect(conservative.skipItems, isTrue);
+      expect(conservative.shouldSkipItems, isTrue);
 
       final SmartPostponeSettings liberal = mergeSmartPostponeProfiles(
         const SmartPostponeSettings(
@@ -540,7 +540,7 @@ void main() {
           itemPriorityThreshold: 6,
           itemForgettingIndexCutoff: 6,
           topicAFactorCutoff: 1.03,
-          skipItems: true,
+          shouldSkipItems: true,
         ),
         const <SmartPostponeSettings>[child],
       );
@@ -552,7 +552,7 @@ void main() {
       expect(liberal.itemPriorityThreshold, 9);
       expect(liberal.itemForgettingIndexCutoff, 4);
       expect(liberal.topicAFactorCutoff, 1.02);
-      expect(liberal.skipItems, isTrue);
+      expect(liberal.shouldSkipItems, isTrue);
     });
 
     test('Respect copies the most specific profile and Ignore keeps base', () {
@@ -594,7 +594,7 @@ void main() {
       }) => AutoPostponeRequest(
         today: _day(100),
         nowUtc: now,
-        autoEnabled: true,
+        isAutomaticPostponeEnabled: true,
         lastAutoRunDay: null,
         collectionNonempty: true,
         lastCollectionUseUtc: now.subtract(idle),
@@ -637,7 +637,7 @@ void main() {
         AutoPostponeRequest(
           today: _day(100),
           nowUtc: DateTime.utc(2024, 1, 20),
-          autoEnabled: true,
+          isAutomaticPostponeEnabled: true,
           lastAutoRunDay: null,
           collectionNonempty: true,
           lastCollectionUseUtc: DateTime.utc(2024, 1, 19),
@@ -661,7 +661,7 @@ void main() {
       expect(result.overdueCount, 11);
       expect(result.lastAutoRunDay, _day(100));
       expect(result.smartPostpone!.profile.profileName, isEmpty);
-      expect(result.smartPostpone!.profile.includeNonOutstanding, isFalse);
+      expect(result.smartPostpone!.profile.shouldIncludeNonOutstanding, isFalse);
       expect(result.smartPostpone!.decisions, hasLength(11));
       expect(result.smartPostpone!.randomDraws, 22);
     });

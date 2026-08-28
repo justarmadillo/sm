@@ -84,13 +84,13 @@ final class ExtractionCommandRunner {
     () async {
       final parent = await _resolveParent(
         command.parentId,
-        command.parentIsSource,
+        command.hasSourceAsParent,
       );
       if (parent == null) {
         return Err<Extract>(
           NotFoundFailure(
             'no such parent',
-            entity: command.parentIsSource ? 'source' : 'extract',
+            entity: command.hasSourceAsParent ? 'source' : 'extract',
             id: command.parentId,
           ),
         );
@@ -144,7 +144,7 @@ final class ExtractionCommandRunner {
         provenance: Provenance(
           sourceId: parent.rootSourceId,
           parentId: command.parentId,
-          parentIsSource: command.parentIsSource,
+          hasSourceAsParent: command.hasSourceAsParent,
           startAnchor: command.range.startAnchor,
           endAnchor: command.range.endAnchor,
           selectedTextHash: command.range.selectedTextHash,
@@ -377,8 +377,8 @@ final class ExtractionCommandRunner {
   /// An extract's own text is parsed on demand rather than stored as blocks:
   /// extracts are short, and deriving them keeps one coordinate system for
   /// every level of the chain.
-  Future<_Parent?> _resolveParent(String parentId, bool parentIsSource) async {
-    if (parentIsSource) {
+  Future<_Parent?> _resolveParent(String parentId, bool hasSourceAsParent) async {
+    if (hasSourceAsParent) {
       final document = await _content.findDocument(parentId);
       if (document == null) return null;
       return _Parent(

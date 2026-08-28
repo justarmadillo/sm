@@ -709,7 +709,7 @@ final class ReaderCommandRunner {
     );
     final int uncovered = document.wordsOutside(<(ReaderAnchor, ReaderAnchor)>[
       for (final Extract extract in extracts)
-        if (extract.provenance.parentIsSource &&
+        if (extract.provenance.hasSourceAsParent &&
             extract.provenance.parentId == source.id)
           (extract.provenance.startAnchor, extract.provenance.endAnchor),
     ]);

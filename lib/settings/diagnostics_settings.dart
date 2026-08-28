@@ -8,42 +8,42 @@ import 'package:meta/meta.dart';
 @immutable
 final class DiagnosticsSettings {
   const DiagnosticsSettings({
-    this.logEnabled = true,
+    this.isLogEnabled = true,
     this.logMaxBytes = 2097152,
     this.logRetainedFiles = 5,
-    this.showContentInPanel = false,
+    this.shouldShowContentInPanel = false,
   });
 
-  final bool logEnabled;
+  final bool isLogEnabled;
   final int logMaxBytes;
   final int logRetainedFiles;
-  final bool showContentInPanel;
+  final bool shouldShowContentInPanel;
 
   DiagnosticsSettings copyWith({
-    bool? logEnabled,
+    bool? isLogEnabled,
     int? logMaxBytes,
     int? logRetainedFiles,
-    bool? showContentInPanel,
+    bool? shouldShowContentInPanel,
   }) => DiagnosticsSettings(
-    logEnabled: logEnabled ?? this.logEnabled,
+    isLogEnabled: isLogEnabled ?? this.isLogEnabled,
     logMaxBytes: logMaxBytes ?? this.logMaxBytes,
     logRetainedFiles: logRetainedFiles ?? this.logRetainedFiles,
-    showContentInPanel: showContentInPanel ?? this.showContentInPanel,
+    shouldShowContentInPanel: shouldShowContentInPanel ?? this.shouldShowContentInPanel,
   );
 
   @override
   bool operator ==(Object other) =>
       other is DiagnosticsSettings &&
-      other.logEnabled == logEnabled &&
+      other.isLogEnabled == isLogEnabled &&
       other.logMaxBytes == logMaxBytes &&
       other.logRetainedFiles == logRetainedFiles &&
-      other.showContentInPanel == showContentInPanel;
+      other.shouldShowContentInPanel == shouldShowContentInPanel;
 
   @override
   int get hashCode => Object.hash(
-    logEnabled,
+    isLogEnabled,
     logMaxBytes,
     logRetainedFiles,
-    showContentInPanel,
+    shouldShowContentInPanel,
   );
 }

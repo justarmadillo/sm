@@ -59,7 +59,7 @@ extension _Fixtures on AppHarness {
       CreateExtract(
         operation(),
         parentId: source.id,
-        parentIsSource: true,
+        hasSourceAsParent: true,
         range: SelectionRange.of(
           startAnchor: anchors.$1,
           endAnchor: anchors.$2,
@@ -432,7 +432,7 @@ void main() {
       // right in a session and wrong in a test about the mix itself.
       await harness.tuneSettings(
         (settings) => settings.copyWith(
-          cards: settings.cards.copyWith(burySiblings: false),
+          cards: settings.cards.copyWith(shouldBurySiblings: false),
         ),
       );
       // Outstanding is a queue of memorized elements. A freshly formulated

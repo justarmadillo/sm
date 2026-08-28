@@ -10,7 +10,7 @@ import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/clock.dart';
-import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/database/connection.dart';

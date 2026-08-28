@@ -23,16 +23,16 @@ final class SmartPostponeSettings {
     this.profileName = 'Default',
     this.subbranchMode = SmartPostponeSubbranchMode.ignore,
     this.protectedCount = 50,
-    this.includeNonOutstanding = false,
-    this.simulate = false,
+    this.shouldIncludeNonOutstanding = false,
+    this.isSimulationOnly = false,
     this.itemDelayPercent = 20,
     this.topicDelayPercent = 50,
     this.itemMaximumDelayDays = 50,
     this.topicMaximumDelayDays = 100,
     this.itemMinimumDelayDays = 1,
     this.topicMinimumDelayDays = 6,
-    this.skipItems = false,
-    this.skipTopics = false,
+    this.shouldSkipItems = false,
+    this.shouldSkipTopics = false,
     this.itemAgeCutoffDays = 500,
     this.topicAgeCutoffDays = 800,
     this.itemForgettingIndexCutoff = 6,
@@ -41,8 +41,8 @@ final class SmartPostponeSettings {
     this.topicPostponeCountCutoff = 100,
     this.itemPriorityThreshold = 6,
     this.topicPriorityThreshold = 3,
-    this.modifyItemByForgettingIndex = true,
-    this.modifyTopicByAFactor = true,
+    this.shouldModifyItemByForgettingIndex = true,
+    this.shouldModifyTopicByAFactor = true,
   });
 
   final int rootElementId;
@@ -51,16 +51,16 @@ final class SmartPostponeSettings {
   final String profileName;
   final SmartPostponeSubbranchMode subbranchMode;
   final int protectedCount;
-  final bool includeNonOutstanding;
-  final bool simulate;
+  final bool shouldIncludeNonOutstanding;
+  final bool isSimulationOnly;
   final int itemDelayPercent;
   final int topicDelayPercent;
   final int itemMaximumDelayDays;
   final int topicMaximumDelayDays;
   final int itemMinimumDelayDays;
   final int topicMinimumDelayDays;
-  final bool skipItems;
-  final bool skipTopics;
+  final bool shouldSkipItems;
+  final bool shouldSkipTopics;
   final int itemAgeCutoffDays;
   final int topicAgeCutoffDays;
   final int itemForgettingIndexCutoff;
@@ -71,10 +71,10 @@ final class SmartPostponeSettings {
   final double topicPriorityThreshold;
 
   /// Preserved profile flag; the SM20 evaluator does not read it.
-  final bool modifyItemByForgettingIndex;
+  final bool shouldModifyItemByForgettingIndex;
 
   /// Preserved profile flag; the SM20 evaluator does not read it.
-  final bool modifyTopicByAFactor;
+  final bool shouldModifyTopicByAFactor;
 
   /// Lossless storage form of the complete SM20 `0x47` profile record.
   ///
@@ -88,16 +88,16 @@ final class SmartPostponeSettings {
     'profile_name': profileName,
     'subbranch_mode': subbranchMode.name,
     'protected_count': protectedCount,
-    'include_non_outstanding': includeNonOutstanding,
-    'simulate': simulate,
+    'include_non_outstanding': shouldIncludeNonOutstanding,
+    'simulate': isSimulationOnly,
     'item_delay_percent': itemDelayPercent,
     'topic_delay_percent': topicDelayPercent,
     'item_maximum_delay_days': itemMaximumDelayDays,
     'topic_maximum_delay_days': topicMaximumDelayDays,
     'item_minimum_delay_days': itemMinimumDelayDays,
     'topic_minimum_delay_days': topicMinimumDelayDays,
-    'skip_items': skipItems,
-    'skip_topics': skipTopics,
+    'skip_items': shouldSkipItems,
+    'skip_topics': shouldSkipTopics,
     'item_age_cutoff_days': itemAgeCutoffDays,
     'topic_age_cutoff_days': topicAgeCutoffDays,
     'item_forgetting_index_cutoff': itemForgettingIndexCutoff,
@@ -106,8 +106,8 @@ final class SmartPostponeSettings {
     'topic_postpone_count_cutoff': topicPostponeCountCutoff,
     'item_priority_threshold': itemPriorityThreshold,
     'topic_priority_threshold': topicPriorityThreshold,
-    'modify_item_by_forgetting_index': modifyItemByForgettingIndex,
-    'modify_topic_by_a_factor': modifyTopicByAFactor,
+    'modify_item_by_forgetting_index': shouldModifyItemByForgettingIndex,
+    'modify_topic_by_a_factor': shouldModifyTopicByAFactor,
   };
 
   /// Rebuilds a record, falling back to [fallback] field by field.
@@ -145,11 +145,11 @@ final class SmartPostponeSettings {
       min: 0,
       max: 10000,
     ),
-    includeNonOutstanding: _jsonBool(
+    shouldIncludeNonOutstanding: _jsonBool(
       json['include_non_outstanding'],
-      fallback.includeNonOutstanding,
+      fallback.shouldIncludeNonOutstanding,
     ),
-    simulate: _jsonBool(json['simulate'], fallback.simulate),
+    isSimulationOnly: _jsonBool(json['simulate'], fallback.isSimulationOnly),
     itemDelayPercent: _jsonInt(
       json['item_delay_percent'],
       fallback.itemDelayPercent,
@@ -186,8 +186,8 @@ final class SmartPostponeSettings {
       min: 1,
       max: 10000,
     ),
-    skipItems: _jsonBool(json['skip_items'], fallback.skipItems),
-    skipTopics: _jsonBool(json['skip_topics'], fallback.skipTopics),
+    shouldSkipItems: _jsonBool(json['skip_items'], fallback.shouldSkipItems),
+    shouldSkipTopics: _jsonBool(json['skip_topics'], fallback.shouldSkipTopics),
     itemAgeCutoffDays: _jsonInt(
       json['item_age_cutoff_days'],
       fallback.itemAgeCutoffDays,
@@ -236,13 +236,13 @@ final class SmartPostponeSettings {
       min: 0.0001,
       max: 100,
     ),
-    modifyItemByForgettingIndex: _jsonBool(
+    shouldModifyItemByForgettingIndex: _jsonBool(
       json['modify_item_by_forgetting_index'],
-      fallback.modifyItemByForgettingIndex,
+      fallback.shouldModifyItemByForgettingIndex,
     ),
-    modifyTopicByAFactor: _jsonBool(
+    shouldModifyTopicByAFactor: _jsonBool(
       json['modify_topic_by_a_factor'],
-      fallback.modifyTopicByAFactor,
+      fallback.shouldModifyTopicByAFactor,
     ),
   );
 
@@ -253,16 +253,16 @@ final class SmartPostponeSettings {
     String? profileName,
     SmartPostponeSubbranchMode? subbranchMode,
     int? protectedCount,
-    bool? includeNonOutstanding,
-    bool? simulate,
+    bool? shouldIncludeNonOutstanding,
+    bool? isSimulationOnly,
     int? itemDelayPercent,
     int? topicDelayPercent,
     int? itemMaximumDelayDays,
     int? topicMaximumDelayDays,
     int? itemMinimumDelayDays,
     int? topicMinimumDelayDays,
-    bool? skipItems,
-    bool? skipTopics,
+    bool? shouldSkipItems,
+    bool? shouldSkipTopics,
     int? itemAgeCutoffDays,
     int? topicAgeCutoffDays,
     int? itemForgettingIndexCutoff,
@@ -271,8 +271,8 @@ final class SmartPostponeSettings {
     int? topicPostponeCountCutoff,
     double? itemPriorityThreshold,
     double? topicPriorityThreshold,
-    bool? modifyItemByForgettingIndex,
-    bool? modifyTopicByAFactor,
+    bool? shouldModifyItemByForgettingIndex,
+    bool? shouldModifyTopicByAFactor,
   }) => SmartPostponeSettings(
     rootElementId: rootElementId ?? this.rootElementId,
     scope: scope ?? this.scope,
@@ -280,16 +280,16 @@ final class SmartPostponeSettings {
     profileName: profileName ?? this.profileName,
     subbranchMode: subbranchMode ?? this.subbranchMode,
     protectedCount: protectedCount ?? this.protectedCount,
-    includeNonOutstanding: includeNonOutstanding ?? this.includeNonOutstanding,
-    simulate: simulate ?? this.simulate,
+    shouldIncludeNonOutstanding: shouldIncludeNonOutstanding ?? this.shouldIncludeNonOutstanding,
+    isSimulationOnly: isSimulationOnly ?? this.isSimulationOnly,
     itemDelayPercent: itemDelayPercent ?? this.itemDelayPercent,
     topicDelayPercent: topicDelayPercent ?? this.topicDelayPercent,
     itemMaximumDelayDays: itemMaximumDelayDays ?? this.itemMaximumDelayDays,
     topicMaximumDelayDays: topicMaximumDelayDays ?? this.topicMaximumDelayDays,
     itemMinimumDelayDays: itemMinimumDelayDays ?? this.itemMinimumDelayDays,
     topicMinimumDelayDays: topicMinimumDelayDays ?? this.topicMinimumDelayDays,
-    skipItems: skipItems ?? this.skipItems,
-    skipTopics: skipTopics ?? this.skipTopics,
+    shouldSkipItems: shouldSkipItems ?? this.shouldSkipItems,
+    shouldSkipTopics: shouldSkipTopics ?? this.shouldSkipTopics,
     itemAgeCutoffDays: itemAgeCutoffDays ?? this.itemAgeCutoffDays,
     topicAgeCutoffDays: topicAgeCutoffDays ?? this.topicAgeCutoffDays,
     itemForgettingIndexCutoff:
@@ -302,9 +302,9 @@ final class SmartPostponeSettings {
     itemPriorityThreshold: itemPriorityThreshold ?? this.itemPriorityThreshold,
     topicPriorityThreshold:
         topicPriorityThreshold ?? this.topicPriorityThreshold,
-    modifyItemByForgettingIndex:
-        modifyItemByForgettingIndex ?? this.modifyItemByForgettingIndex,
-    modifyTopicByAFactor: modifyTopicByAFactor ?? this.modifyTopicByAFactor,
+    shouldModifyItemByForgettingIndex:
+        shouldModifyItemByForgettingIndex ?? this.shouldModifyItemByForgettingIndex,
+    shouldModifyTopicByAFactor: shouldModifyTopicByAFactor ?? this.shouldModifyTopicByAFactor,
   );
 
   @override
@@ -316,16 +316,16 @@ final class SmartPostponeSettings {
       other.profileName == profileName &&
       other.subbranchMode == subbranchMode &&
       other.protectedCount == protectedCount &&
-      other.includeNonOutstanding == includeNonOutstanding &&
-      other.simulate == simulate &&
+      other.shouldIncludeNonOutstanding == shouldIncludeNonOutstanding &&
+      other.isSimulationOnly == isSimulationOnly &&
       other.itemDelayPercent == itemDelayPercent &&
       other.topicDelayPercent == topicDelayPercent &&
       other.itemMaximumDelayDays == itemMaximumDelayDays &&
       other.topicMaximumDelayDays == topicMaximumDelayDays &&
       other.itemMinimumDelayDays == itemMinimumDelayDays &&
       other.topicMinimumDelayDays == topicMinimumDelayDays &&
-      other.skipItems == skipItems &&
-      other.skipTopics == skipTopics &&
+      other.shouldSkipItems == shouldSkipItems &&
+      other.shouldSkipTopics == shouldSkipTopics &&
       other.itemAgeCutoffDays == itemAgeCutoffDays &&
       other.topicAgeCutoffDays == topicAgeCutoffDays &&
       other.itemForgettingIndexCutoff == itemForgettingIndexCutoff &&
@@ -334,8 +334,8 @@ final class SmartPostponeSettings {
       other.topicPostponeCountCutoff == topicPostponeCountCutoff &&
       other.itemPriorityThreshold == itemPriorityThreshold &&
       other.topicPriorityThreshold == topicPriorityThreshold &&
-      other.modifyItemByForgettingIndex == modifyItemByForgettingIndex &&
-      other.modifyTopicByAFactor == modifyTopicByAFactor;
+      other.shouldModifyItemByForgettingIndex == shouldModifyItemByForgettingIndex &&
+      other.shouldModifyTopicByAFactor == shouldModifyTopicByAFactor;
 
   @override
   int get hashCode => Object.hashAll(<Object>[
@@ -345,16 +345,16 @@ final class SmartPostponeSettings {
     profileName,
     subbranchMode,
     protectedCount,
-    includeNonOutstanding,
-    simulate,
+    shouldIncludeNonOutstanding,
+    isSimulationOnly,
     itemDelayPercent,
     topicDelayPercent,
     itemMaximumDelayDays,
     topicMaximumDelayDays,
     itemMinimumDelayDays,
     topicMinimumDelayDays,
-    skipItems,
-    skipTopics,
+    shouldSkipItems,
+    shouldSkipTopics,
     itemAgeCutoffDays,
     topicAgeCutoffDays,
     itemForgettingIndexCutoff,
@@ -363,8 +363,8 @@ final class SmartPostponeSettings {
     topicPostponeCountCutoff,
     itemPriorityThreshold,
     topicPriorityThreshold,
-    modifyItemByForgettingIndex,
-    modifyTopicByAFactor,
+    shouldModifyItemByForgettingIndex,
+    shouldModifyTopicByAFactor,
   ]);
 }
 

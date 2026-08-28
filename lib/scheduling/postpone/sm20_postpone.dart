@@ -109,7 +109,7 @@ final class SmartPostponeDecision {
     required this.factor,
     required this.newIntervalDays,
     required this.targetDay,
-    required this.simulation,
+    required this.isSimulationOnly,
     required this.warnsAboveTwoHundredDays,
     required this.randomDraws,
   });
@@ -127,12 +127,12 @@ final class SmartPostponeDecision {
   /// rescheduler applies its memorized/nonmemorized branch.
   final int newIntervalDays;
   final StudyDay targetDay;
-  final bool simulation;
+  final bool isSimulationOnly;
   final bool warnsAboveTwoHundredDays;
   final int randomDraws;
 
   ElementRef get ref => candidate.ref;
-  bool get writesRecord => !simulation;
+  bool get writesRecord => !isSimulationOnly;
 }
 
 /// Complete output of one Smart Postpone pass (or simulation).
@@ -274,7 +274,7 @@ final class SmartPostponeEngine {
     Set<ElementRef> postponed,
   ) =>
       candidate.deleted ||
-      (!profile.includeNonOutstanding && !candidate.isOutstanding) ||
+      (!profile.shouldIncludeNonOutstanding && !candidate.isOutstanding) ||
       postponed.contains(candidate.ref);
 
   SmartPostponeDecision? _ordinaryDecision({
@@ -293,7 +293,7 @@ final class SmartPostponeEngine {
     final bool generic = !candidate.isItem && !candidate.isTopicFamily;
 
     if (candidate.isItem) {
-      if (profile.skipItems ||
+      if (profile.shouldSkipItems ||
           age >= profile.itemAgeCutoffDays ||
           candidate.forgettingIndex < profile.itemForgettingIndexCutoff ||
           candidate.totalPostponements >= profile.itemPostponeCountCutoff ||
@@ -301,7 +301,7 @@ final class SmartPostponeEngine {
         return null;
       }
     } else if (!generic) {
-      if (profile.skipTopics ||
+      if (profile.shouldSkipTopics ||
           age >= profile.topicAgeCutoffDays ||
           candidate.aFactor <= profile.topicAFactorCutoff ||
           candidate.totalPostponements >= profile.topicPostponeCountCutoff ||
@@ -330,7 +330,7 @@ final class SmartPostponeEngine {
     }
     final bool warns = delay > 200;
     var randomDraws = 0;
-    if (!profile.simulate) {
+    if (!profile.isSimulationOnly) {
       delay = sm20RoundEven(
         sm20Spread(center: delay.toDouble(), width: delay / 2, prng: prng),
       );
@@ -345,7 +345,7 @@ final class SmartPostponeEngine {
       age: age,
       factor: factor,
       today: today,
-      simulation: profile.simulate,
+      isSimulationOnly: profile.isSimulationOnly,
       warnsAboveTwoHundredDays: warns,
       randomDraws: randomDraws,
       exactDelay: delay,
@@ -375,7 +375,7 @@ final class SmartPostponeEngine {
       age: age,
       factor: (age + delay) / age,
       today: today,
-      simulation: profile.simulate,
+      isSimulationOnly: profile.isSimulationOnly,
       warnsAboveTwoHundredDays: false,
       randomDraws: 0,
       exactDelay: delay,
@@ -389,7 +389,7 @@ final class SmartPostponeEngine {
     required int age,
     required double factor,
     required StudyDay today,
-    required bool simulation,
+    required bool isSimulationOnly,
     required bool warnsAboveTwoHundredDays,
     required int randomDraws,
     int? exactDelay,
@@ -415,7 +415,7 @@ final class SmartPostponeEngine {
       factor: factor,
       newIntervalDays: newInterval,
       targetDay: last.addDays(newInterval),
-      simulation: simulation,
+      isSimulationOnly: isSimulationOnly,
       warnsAboveTwoHundredDays: warnsAboveTwoHundredDays,
       randomDraws: randomDraws,
     );
@@ -509,12 +509,12 @@ SmartPostponeSettings mergeSmartPostponeProfiles(
         merged.topicAFactorCutoff,
         child.topicAFactorCutoff,
       ),
-      skipItems: conservative
-          ? merged.skipItems || child.skipItems
-          : merged.skipItems && child.skipItems,
-      skipTopics: conservative
-          ? merged.skipTopics || child.skipTopics
-          : merged.skipTopics && child.skipTopics,
+      shouldSkipItems: conservative
+          ? merged.shouldSkipItems || child.shouldSkipItems
+          : merged.shouldSkipItems && child.shouldSkipItems,
+      shouldSkipTopics: conservative
+          ? merged.shouldSkipTopics || child.shouldSkipTopics
+          : merged.shouldSkipTopics && child.shouldSkipTopics,
     );
   }
   return merged;
@@ -535,7 +535,7 @@ final class AutoPostponeRequest {
   AutoPostponeRequest({
     required this.today,
     required this.nowUtc,
-    required this.autoEnabled,
+    required this.isAutomaticPostponeEnabled,
     required this.lastAutoRunDay,
     required this.collectionNonempty,
     required this.lastCollectionUseUtc,
@@ -572,7 +572,7 @@ final class AutoPostponeRequest {
 
   final StudyDay today;
   final DateTime nowUtc;
-  final bool autoEnabled;
+  final bool isAutomaticPostponeEnabled;
   final StudyDay? lastAutoRunDay;
   final bool collectionNonempty;
   final DateTime? lastCollectionUseUtc;
@@ -608,7 +608,7 @@ final class AutoPostponeEngine {
   final SmartPostponeEngine smart;
 
   AutoPostponeResult run(AutoPostponeRequest request, Sm20Prng prng) {
-    if (!request.autoEnabled) {
+    if (!request.isAutomaticPostponeEnabled) {
       return AutoPostponeResult(
         outcome: AutoPostponeOutcome.disabled,
         lastAutoRunDay: request.lastAutoRunDay,
@@ -672,9 +672,9 @@ final class AutoPostponeEngine {
     }
 
     final SmartPostponeSettings profile = request.defaultProfile.copyWith(
-      includeNonOutstanding: false,
+      shouldIncludeNonOutstanding: false,
       profileName: '',
-      simulate: false,
+      isSimulationOnly: false,
     );
     final SmartPostponeResult result = smart.run(
       source: overdue,

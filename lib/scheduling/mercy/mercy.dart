@@ -561,14 +561,14 @@ final class Sm20MercyCapacity {
     required this.elementsPerDay,
     required this.reschedulingDays,
     required this.gatheringDays,
-    required this.includeFuture,
+    required this.shouldIncludeFuture,
   });
 
   final int candidateCount;
   final int elementsPerDay;
   final int reschedulingDays;
   final int gatheringDays;
-  final bool includeFuture;
+  final bool shouldIncludeFuture;
 
   bool get warnsAboutLongHorizon =>
       reschedulingDays > kSm20MercyLongHorizonWarningDays ||
@@ -588,7 +588,7 @@ final class Sm20MercyCapacityPlanner {
     required StudyDay collectionLearningStartDay,
     required int reschedulingDays,
     required int gatheringDays,
-    required bool includeFuture,
+    required bool shouldIncludeFuture,
     required Sm20ScheduledCounts scheduledCounts,
     int? subsetCandidateCount,
     Sm20MercyHorizonField editedField = Sm20MercyHorizonField.reschedulingDays,
@@ -602,7 +602,7 @@ final class Sm20MercyCapacityPlanner {
     );
     var adjustedRescheduling = reschedulingDays;
     var adjustedGathering = gatheringDays;
-    if (!includeFuture) {
+    if (!shouldIncludeFuture) {
       if (editedField == Sm20MercyHorizonField.reschedulingDays) {
         adjustedGathering = adjustedRescheduling;
       } else {
@@ -631,7 +631,7 @@ final class Sm20MercyCapacityPlanner {
       elementsPerDay: perDay,
       reschedulingDays: adjustedRescheduling,
       gatheringDays: adjustedGathering,
-      includeFuture: includeFuture,
+      shouldIncludeFuture: shouldIncludeFuture,
     );
   }
 
@@ -642,7 +642,7 @@ final class Sm20MercyCapacityPlanner {
     required StudyDay collectionLearningStartDay,
     required int elementsPerDay,
     required int gatheringDays,
-    required bool includeFuture,
+    required bool shouldIncludeFuture,
     required Sm20ScheduledCounts scheduledCounts,
     int? subsetCandidateCount,
   }) {
@@ -658,7 +658,7 @@ final class Sm20MercyCapacityPlanner {
       collectionLearningStartDay,
       'collectionLearningStartDay',
     );
-    if (!includeFuture && subsetCandidateCount != null) {
+    if (!shouldIncludeFuture && subsetCandidateCount != null) {
       if (subsetCandidateCount < 0) {
         throw RangeError.value(subsetCandidateCount, 'subsetCandidateCount');
       }
@@ -670,10 +670,10 @@ final class Sm20MercyCapacityPlanner {
         elementsPerDay: elementsPerDay,
         reschedulingDays: days,
         gatheringDays: days,
-        includeFuture: false,
+        shouldIncludeFuture: false,
       );
     }
-    return includeFuture
+    return shouldIncludeFuture
         ? _solveFuture(
             today: today,
             learningStart: collectionLearningStartDay,
@@ -717,7 +717,7 @@ final class Sm20MercyCapacityPlanner {
       elementsPerDay: elementsPerDay,
       reschedulingDays: days,
       gatheringDays: days,
-      includeFuture: false,
+      shouldIncludeFuture: false,
     );
   }
 
@@ -750,7 +750,7 @@ final class Sm20MercyCapacityPlanner {
       elementsPerDay: elementsPerDay,
       reschedulingDays: days,
       gatheringDays: math.max(gatheringDays, days),
-      includeFuture: true,
+      shouldIncludeFuture: true,
     );
   }
 

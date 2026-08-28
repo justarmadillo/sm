@@ -17,7 +17,7 @@ final class MercySettings {
     this.reschedulingDays = 14,
     this.gatheringDays = 14,
     this.dailyCap = 100,
-    this.includeFuture = false,
+    this.shouldIncludeFuture = false,
     this.importanceWeight = 10,
     this.latenessWeight = 3,
     this.investmentWeight = 4,
@@ -30,7 +30,7 @@ final class MercySettings {
   final int reschedulingDays;
   final int gatheringDays;
   final int dailyCap;
-  final bool includeFuture;
+  final bool shouldIncludeFuture;
   final double importanceWeight;
   final double latenessWeight;
   final double investmentWeight;
@@ -48,7 +48,7 @@ final class MercySettings {
     int? reschedulingDays,
     int? gatheringDays,
     int? dailyCap,
-    bool? includeFuture,
+    bool? shouldIncludeFuture,
     double? importanceWeight,
     double? latenessWeight,
     double? investmentWeight,
@@ -60,7 +60,7 @@ final class MercySettings {
     reschedulingDays: reschedulingDays ?? this.reschedulingDays,
     gatheringDays: gatheringDays ?? this.gatheringDays,
     dailyCap: dailyCap ?? this.dailyCap,
-    includeFuture: includeFuture ?? this.includeFuture,
+    shouldIncludeFuture: shouldIncludeFuture ?? this.shouldIncludeFuture,
     importanceWeight: importanceWeight ?? this.importanceWeight,
     latenessWeight: latenessWeight ?? this.latenessWeight,
     investmentWeight: investmentWeight ?? this.investmentWeight,
@@ -78,7 +78,7 @@ final class MercySettings {
       other.reschedulingDays == reschedulingDays &&
       other.gatheringDays == gatheringDays &&
       other.dailyCap == dailyCap &&
-      other.includeFuture == includeFuture &&
+      other.shouldIncludeFuture == shouldIncludeFuture &&
       other.importanceWeight == importanceWeight &&
       other.latenessWeight == latenessWeight &&
       other.investmentWeight == investmentWeight &&
@@ -92,7 +92,7 @@ final class MercySettings {
     reschedulingDays,
     gatheringDays,
     dailyCap,
-    includeFuture,
+    shouldIncludeFuture,
     importanceWeight,
     latenessWeight,
     investmentWeight,

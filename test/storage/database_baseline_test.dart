@@ -91,7 +91,7 @@ void main() {
           )
           .get();
       expect(index, hasLength(1));
-      expect(await db.searchIndexValid(), isTrue);
+      expect(await db.isSearchIndexValid(), isTrue);
 
       // The triggers are what keep the index in step inside whatever
       // transaction wrote the content, so a search can never observe a

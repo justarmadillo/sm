@@ -674,7 +674,7 @@ final class ReviewCommandRunner {
   /// Pushes same-parent cards that are due today to the next day.
   Future<int> _burySiblings(ReviewCard command, CardState reviewed) async {
     final AppSettings settings = await _context.settings();
-    if (!settings.cards.burySiblings) return 0;
+    if (!settings.cards.shouldBurySiblings) return 0;
 
     final List<Card> siblings = await _content.listSiblingCards(command.cardId);
     if (siblings.isEmpty) return 0;

@@ -130,7 +130,7 @@ void main() {
         postpone: settings.postpone.copyWith(
           // Automatic postponement would move the same backlog before the
           // manual run could see it, which is a different code path.
-          autoEnabled: false,
+          isAutomaticPostponeEnabled: false,
           defaultProfile: settings.postpone.defaultProfile.copyWith(
             protectedCount: 2,
           ),
@@ -168,7 +168,7 @@ void main() {
               profile: (await harness.settingsStore.load())
                   .postpone
                   .defaultProfile
-                  .copyWith(simulate: true),
+                  .copyWith(isSimulationOnly: true),
               timestampUtc: clock.nowUtc(),
             ),
           );
@@ -179,7 +179,7 @@ void main() {
       expect(applied.result.decisions, isNotEmpty);
       expect(
         applied.result.decisions.every(
-          (SmartPostponeDecision decision) => decision.simulation,
+          (SmartPostponeDecision decision) => decision.isSimulationOnly,
         ),
         isTrue,
       );
@@ -294,7 +294,7 @@ void main() {
               profile: (await harness.settingsStore.load())
                   .postpone
                   .defaultProfile
-                  .copyWith(protectedCount: 1, skipTopics: true),
+                  .copyWith(protectedCount: 1, shouldSkipTopics: true),
               timestampUtc: clock.nowUtc(),
             ),
           );

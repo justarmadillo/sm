@@ -212,7 +212,7 @@ Extract extractFromRow(ExtractRow row) => Extract(
   provenance: Provenance(
     sourceId: row.sourceId,
     parentId: row.parentId,
-    parentIsSource: row.parentIsSource,
+    hasSourceAsParent: row.parentIsSource,
     startAnchor: ReaderAnchor(
       utf8Offset: row.startUtf8,
       contentRevision: row.anchorRevision,
@@ -237,7 +237,7 @@ ExtractsCompanion extractToCompanion(Extract extract) {
     markdown: extract.markdown,
     sourceId: provenance.sourceId,
     parentId: provenance.parentId,
-    parentIsSource: provenance.parentIsSource,
+    parentIsSource: provenance.hasSourceAsParent,
     startUtf8: provenance.startUtf8,
     endUtf8: provenance.endUtf8,
     anchorRevision: Value<int>(provenance.contentRevision),

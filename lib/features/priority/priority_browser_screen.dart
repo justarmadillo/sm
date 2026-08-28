@@ -228,7 +228,7 @@ class _Body extends ConsumerWidget {
           await model.addToOutstanding(
             refs,
             everyWhich: everyAll,
-            rescheduleSameDay: true,
+            shouldRescheduleSameDay: true,
           );
         }
       case _LearningCommand.resetHistory:
@@ -272,12 +272,12 @@ class _Body extends ConsumerWidget {
       return;
     }
     final AppliedSmartPostpone? simulated = await model.smartPostpone(
-      simulate: true,
+      isSimulationOnly: true,
       branchSourceId: sourceId,
     );
     if (simulated == null || !context.mounted) return;
     if (!await confirmSmartPostpone(context, simulated.result)) return;
-    await model.smartPostpone(simulate: false, branchSourceId: sourceId);
+    await model.smartPostpone(isSimulationOnly: false, branchSourceId: sourceId);
   }
 
   Future<void> _promptBatchPriority(
@@ -301,7 +301,7 @@ class _Body extends ConsumerWidget {
       lowPercent: draft.low,
       highPercent: draft.high,
       changePercent: draft.change,
-      limitChanges: draft.limitChanges,
+      shouldLimitChanges: draft.shouldLimitChanges,
     );
   }
 }
@@ -374,11 +374,11 @@ class _FilterBar extends StatelessWidget {
   /// Runs the browser scope over exactly the filtered rows on screen.
   Future<void> _confirmSmartPostpone(BuildContext context) async {
     final AppliedSmartPostpone? simulated = await model.smartPostpone(
-      simulate: true,
+      isSimulationOnly: true,
     );
     if (simulated == null || !context.mounted) return;
     if (!await confirmSmartPostpone(context, simulated.result)) return;
-    await model.smartPostpone(simulate: false);
+    await model.smartPostpone(isSimulationOnly: false);
   }
 
   bool _sameSet(Set<ElementType> a, Set<ElementType> b) =>
@@ -562,14 +562,14 @@ final class _PriorityBatchDraft {
     required this.low,
     required this.high,
     required this.change,
-    required this.limitChanges,
+    required this.shouldLimitChanges,
   });
 
   final Sm20BatchPriorityMode mode;
   final double low;
   final double high;
   final double change;
-  final bool limitChanges;
+  final bool shouldLimitChanges;
 }
 
 class _PriorityBatchDialog extends StatefulWidget {
@@ -584,7 +584,7 @@ class _PriorityBatchDialogState extends State<_PriorityBatchDialog> {
   final TextEditingController _low = TextEditingController(text: '20');
   final TextEditingController _high = TextEditingController(text: '80');
   final TextEditingController _change = TextEditingController(text: '0');
-  bool _limitChanges = true;
+  bool _shouldLimitChanges = true;
   String? _error;
 
   @override
@@ -681,8 +681,8 @@ class _PriorityBatchDialogState extends State<_PriorityBatchDialog> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Limit changes to the selected range'),
-              value: _limitChanges,
-              onChanged: (bool value) => setState(() => _limitChanges = value),
+              value: _shouldLimitChanges,
+              onChanged: (bool value) => setState(() => _shouldLimitChanges = value),
             ),
           ],
           if (_error != null)
@@ -716,7 +716,7 @@ class _PriorityBatchDialogState extends State<_PriorityBatchDialog> {
         low: low,
         high: high,
         change: change,
-        limitChanges: _limitChanges,
+        shouldLimitChanges: _shouldLimitChanges,
       ),
     );
   }

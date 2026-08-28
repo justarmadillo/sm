@@ -17,7 +17,7 @@ import 'package:incremental_reader/features/reader/reader_providers.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
-import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 
 /// Whether the extract is being processed or only consulted for context.
@@ -221,7 +221,7 @@ final class ExtractViewModel
           CreateExtract(
             OperationId(ref.read(idGeneratorProvider).newId()),
             parentId: current.extract.id,
-            parentIsSource: false,
+            hasSourceAsParent: false,
             range: range,
           ),
         );

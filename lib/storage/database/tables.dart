@@ -181,7 +181,7 @@ class Extracts extends Table {
   /// Immediate parent: a source or another extract.
   TextColumn get parentId => text()();
 
-  BoolColumn get parentIsSource => boolean()();
+  BoolColumn get hasSourceAsParent => boolean()();
 
   /// Byte range of the parent's markdown this passage was taken from.
   IntColumn get startUtf8 => integer()();

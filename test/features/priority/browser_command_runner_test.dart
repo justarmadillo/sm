@@ -424,7 +424,7 @@ void main() {
               harness.operation(),
               refs: <ElementRef>[ref],
               day: today,
-              rescheduleSameDay: true,
+              shouldRescheduleSameDay: true,
               timestampUtc: clock.nowUtc(),
             ),
           );

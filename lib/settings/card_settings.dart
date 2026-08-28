@@ -13,35 +13,35 @@ final class CardSettings {
     this.learningStepMinutes = const <int>[1, 10],
     this.relearningStepMinutes = const <int>[10],
     this.maximumIntervalDays = 36500,
-    this.enableFuzzing = true,
+    this.isFuzzingEnabled = true,
     this.leechLapses = 8,
-    this.burySiblings = true,
+    this.shouldBurySiblings = true,
   });
 
   final double desiredRetention;
   final List<int> learningStepMinutes;
   final List<int> relearningStepMinutes;
   final int maximumIntervalDays;
-  final bool enableFuzzing;
+  final bool isFuzzingEnabled;
   final int leechLapses;
-  final bool burySiblings;
+  final bool shouldBurySiblings;
 
   CardSettings copyWith({
     double? desiredRetention,
     List<int>? learningStepMinutes,
     List<int>? relearningStepMinutes,
     int? maximumIntervalDays,
-    bool? enableFuzzing,
+    bool? isFuzzingEnabled,
     int? leechLapses,
-    bool? burySiblings,
+    bool? shouldBurySiblings,
   }) => CardSettings(
     desiredRetention: desiredRetention ?? this.desiredRetention,
     learningStepMinutes: learningStepMinutes ?? this.learningStepMinutes,
     relearningStepMinutes: relearningStepMinutes ?? this.relearningStepMinutes,
     maximumIntervalDays: maximumIntervalDays ?? this.maximumIntervalDays,
-    enableFuzzing: enableFuzzing ?? this.enableFuzzing,
+    isFuzzingEnabled: isFuzzingEnabled ?? this.isFuzzingEnabled,
     leechLapses: leechLapses ?? this.leechLapses,
-    burySiblings: burySiblings ?? this.burySiblings,
+    shouldBurySiblings: shouldBurySiblings ?? this.shouldBurySiblings,
   );
 
   @override
@@ -51,9 +51,9 @@ final class CardSettings {
       intListsAreEqual(other.learningStepMinutes, learningStepMinutes) &&
       intListsAreEqual(other.relearningStepMinutes, relearningStepMinutes) &&
       other.maximumIntervalDays == maximumIntervalDays &&
-      other.enableFuzzing == enableFuzzing &&
+      other.isFuzzingEnabled == isFuzzingEnabled &&
       other.leechLapses == leechLapses &&
-      other.burySiblings == burySiblings;
+      other.shouldBurySiblings == shouldBurySiblings;
 
   @override
   int get hashCode => Object.hashAll(<Object>[
@@ -61,8 +61,8 @@ final class CardSettings {
     Object.hashAll(learningStepMinutes),
     Object.hashAll(relearningStepMinutes),
     maximumIntervalDays,
-    enableFuzzing,
+    isFuzzingEnabled,
     leechLapses,
-    burySiblings,
+    shouldBurySiblings,
   ]);
 }

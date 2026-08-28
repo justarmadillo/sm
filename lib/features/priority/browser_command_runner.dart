@@ -214,7 +214,7 @@ final class BrowserCommandRunner {
           );
           changed.add(ref);
         }
-        await _removeFromQueues(changed, includeFinalDrill: true);
+        await _removeFromQueues(changed, shouldIncludeFinalDrill: true);
         return BrowserCommandOutcome(changed: changed, skipped: skipped);
       });
 
@@ -285,7 +285,7 @@ final class BrowserCommandRunner {
           );
           changed.add(ref);
         }
-        await _removeFromQueues(changed, includeFinalDrill: true);
+        await _removeFromQueues(changed, shouldIncludeFinalDrill: true);
         return BrowserCommandOutcome(changed: changed, skipped: skipped);
       });
 
@@ -396,7 +396,7 @@ final class BrowserCommandRunner {
           );
           changed.add(ref);
         }
-        await _removeFromQueues(changed, includeFinalDrill: true);
+        await _removeFromQueues(changed, shouldIncludeFinalDrill: true);
         return BrowserCommandOutcome(changed: changed, skipped: skipped);
       });
 
@@ -459,7 +459,7 @@ final class BrowserCommandRunner {
         continue;
       }
       if (record.lastReviewDay == day) {
-        if (!command.rescheduleSameDay) {
+        if (!command.shouldRescheduleSameDay) {
           skipped += 1;
           continue;
         }
@@ -795,7 +795,7 @@ final class BrowserCommandRunner {
   /// Drops [refs] from every durable queue store.
   Future<void> _removeFromQueues(
     List<ElementRef> refs, {
-    required bool includeFinalDrill,
+    required bool shouldIncludeFinalDrill,
   }) async {
     if (refs.isEmpty) return;
     final Set<ElementRef> gone = refs.toSet();
@@ -810,7 +810,7 @@ final class BrowserCommandRunner {
         outstandingItems: without(runtime.outstandingItems),
         outstandingTopics: without(runtime.outstandingTopics),
         pending: without(runtime.pending),
-        finalDrill: includeFinalDrill
+        finalDrill: shouldIncludeFinalDrill
             ? without(runtime.finalDrill)
             : runtime.finalDrill,
       ),

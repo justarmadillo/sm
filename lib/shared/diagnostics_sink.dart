@@ -1,30 +1,12 @@
-/// Operation tracing and structured diagnostics.
+/// Where the app writes what it just did, for later diagnosis.
 ///
-/// Every mutation carries an [OperationId] so a user-visible failure can be
-/// traced through ViewModel, handler, domain transition, and DAO without
-/// recording user content.
+/// Events carry ids, counts, and versions -- never what the user is
+/// studying, so a log pasted into a bug report stays safe to share.
 library;
 
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:meta/meta.dart';
-
-/// Correlates one user-initiated operation across every layer.
-@immutable
-final class OperationId {
-  const OperationId(this.value);
-
-  final String value;
-
-  @override
-  bool operator ==(Object other) =>
-      other is OperationId && other.value == value;
-
-  @override
-  int get hashCode => value.hashCode;
-
-  @override
-  String toString() => value;
-}
 
 /// Severity of a diagnostic record.
 enum DiagnosticLevel { debug, info, warning, error }

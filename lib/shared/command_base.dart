@@ -1,7 +1,7 @@
 /// The base of every application command.
 library;
 
-import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:meta/meta.dart';
 
 /// A named, immutable request to change something.

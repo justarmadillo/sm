@@ -70,14 +70,14 @@ final class AppSettings {
           min: 0,
           max: 100,
         ),
-        autoSort: _bool(stored['queue.auto_sort'], fallback.queue.autoSort),
-        randomizeFinalDrill: _bool(
+        shouldSortAutomatically: _bool(stored['queue.auto_sort'], fallback.queue.shouldSortAutomatically),
+        shouldRandomizeFinalDrill: _bool(
           stored['queue.randomize_final_drill'],
-          fallback.queue.randomizeFinalDrill,
+          fallback.queue.shouldRandomizeFinalDrill,
         ),
-        confirmStageTransitions: _bool(
+        shouldConfirmStageTransitions: _bool(
           stored['queue.confirm_stage_transitions'],
-          fallback.queue.confirmStageTransitions,
+          fallback.queue.shouldConfirmStageTransitions,
         ),
       ),
       remember: RememberSettings(
@@ -115,9 +115,9 @@ final class AppSettings {
           min: 1,
           max: 36500,
         ),
-        enableFuzzing: _bool(
+        isFuzzingEnabled: _bool(
           stored['card.enable_fuzzing'],
-          fallback.cards.enableFuzzing,
+          fallback.cards.isFuzzingEnabled,
         ),
         leechLapses: _int(
           stored['card.leech_lapses'],
@@ -125,15 +125,15 @@ final class AppSettings {
           min: 1,
           max: 999,
         ),
-        burySiblings: _bool(
+        shouldBurySiblings: _bool(
           stored['card.bury_siblings'],
-          fallback.cards.burySiblings,
+          fallback.cards.shouldBurySiblings,
         ),
       ),
       postpone: PostponeSettings(
-        autoEnabled: _bool(
+        isAutomaticPostponeEnabled: _bool(
           stored['postpone.auto_enabled'],
-          fallback.postpone.autoEnabled,
+          fallback.postpone.isAutomaticPostponeEnabled,
         ),
         namedProfiles: _namedProfilesOr(
           stored['postpone.named_profiles'],
@@ -174,13 +174,13 @@ final class AppSettings {
             min: 1,
             max: 20000,
           ),
-          includeNonOutstanding: _bool(
+          shouldIncludeNonOutstanding: _bool(
             stored['postpone.default.include_non_outstanding'],
-            smartFallback.includeNonOutstanding,
+            smartFallback.shouldIncludeNonOutstanding,
           ),
-          simulate: _bool(
+          isSimulationOnly: _bool(
             stored['postpone.default.simulate'],
-            smartFallback.simulate,
+            smartFallback.isSimulationOnly,
           ),
           itemDelayPercent: _int(
             stored['postpone.default.item_delay_percent'],
@@ -218,13 +218,13 @@ final class AppSettings {
             min: 1,
             max: 100,
           ),
-          skipItems: _bool(
+          shouldSkipItems: _bool(
             stored['postpone.default.skip_items'],
-            smartFallback.skipItems,
+            smartFallback.shouldSkipItems,
           ),
-          skipTopics: _bool(
+          shouldSkipTopics: _bool(
             stored['postpone.default.skip_topics'],
-            smartFallback.skipTopics,
+            smartFallback.shouldSkipTopics,
           ),
           itemAgeCutoffDays: _int(
             stored['postpone.default.item_age_cutoff_days'],
@@ -274,13 +274,13 @@ final class AppSettings {
             min: 0.0001,
             max: 100,
           ),
-          modifyItemByForgettingIndex: _bool(
+          shouldModifyItemByForgettingIndex: _bool(
             stored['postpone.default.modify_item_by_forgetting_index'],
-            smartFallback.modifyItemByForgettingIndex,
+            smartFallback.shouldModifyItemByForgettingIndex,
           ),
-          modifyTopicByAFactor: _bool(
+          shouldModifyTopicByAFactor: _bool(
             stored['postpone.default.modify_topic_by_a_factor'],
-            smartFallback.modifyTopicByAFactor,
+            smartFallback.shouldModifyTopicByAFactor,
           ),
         ),
       ),
@@ -308,9 +308,9 @@ final class AppSettings {
           min: 1,
           max: 5000,
         ),
-        includeFuture: _bool(
+        shouldIncludeFuture: _bool(
           stored['mercy.include_future'],
-          fallback.mercy.includeFuture,
+          fallback.mercy.shouldIncludeFuture,
         ),
         importanceWeight: _weight(
           stored['mercy.importance_weight'],
@@ -346,9 +346,9 @@ final class AppSettings {
         ),
       ),
       diagnostics: DiagnosticsSettings(
-        logEnabled: _bool(
+        isLogEnabled: _bool(
           stored['diagnostics.log_enabled'],
-          fallback.diagnostics.logEnabled,
+          fallback.diagnostics.isLogEnabled,
         ),
         logMaxBytes: _int(
           stored['diagnostics.log_max_bytes'],
@@ -362,9 +362,9 @@ final class AppSettings {
           min: 1,
           max: 100,
         ),
-        showContentInPanel: _bool(
+        shouldShowContentInPanel: _bool(
           stored['diagnostics.show_content'],
-          fallback.diagnostics.showContentInPanel,
+          fallback.diagnostics.shouldShowContentInPanel,
         ),
       ),
     );
@@ -388,19 +388,19 @@ final class AppSettings {
       'queue.topic_percent': '${queue.topicPercent}',
       'queue.item_randomization': '${queue.itemRandomization}',
       'queue.topic_randomization': '${queue.topicRandomization}',
-      'queue.auto_sort': '${queue.autoSort}',
-      'queue.randomize_final_drill': '${queue.randomizeFinalDrill}',
-      'queue.confirm_stage_transitions': '${queue.confirmStageTransitions}',
+      'queue.auto_sort': '${queue.shouldSortAutomatically}',
+      'queue.randomize_final_drill': '${queue.shouldRandomizeFinalDrill}',
+      'queue.confirm_stage_transitions': '${queue.shouldConfirmStageTransitions}',
       'remember.first_interval_low_days': '${remember.firstIntervalLowDays}',
       'remember.first_interval_high_days': '${remember.firstIntervalHighDays}',
       'card.desired_retention': '${cards.desiredRetention}',
       'card.learning_steps': cards.learningStepMinutes.join(','),
       'card.relearning_steps': cards.relearningStepMinutes.join(','),
       'card.maximum_interval_days': '${cards.maximumIntervalDays}',
-      'card.enable_fuzzing': '${cards.enableFuzzing}',
+      'card.enable_fuzzing': '${cards.isFuzzingEnabled}',
       'card.leech_lapses': '${cards.leechLapses}',
-      'card.bury_siblings': '${cards.burySiblings}',
-      'postpone.auto_enabled': '${postpone.autoEnabled}',
+      'card.bury_siblings': '${cards.shouldBurySiblings}',
+      'postpone.auto_enabled': '${postpone.isAutomaticPostponeEnabled}',
       'postpone.named_profiles': _encodeNamedProfiles(postpone.namedProfiles),
       'postpone.branch_profiles': _encodeBranchAssignments(
         postpone.branchProfileAssignments,
@@ -412,8 +412,8 @@ final class AppSettings {
       'postpone.default.subbranch_mode': smart.subbranchMode.name,
       'postpone.default.protected_count': '${smart.protectedCount}',
       'postpone.default.include_non_outstanding':
-          '${smart.includeNonOutstanding}',
-      'postpone.default.simulate': '${smart.simulate}',
+          '${smart.shouldIncludeNonOutstanding}',
+      'postpone.default.simulate': '${smart.isSimulationOnly}',
       'postpone.default.item_delay_percent': '${smart.itemDelayPercent}',
       'postpone.default.topic_delay_percent': '${smart.topicDelayPercent}',
       'postpone.default.item_maximum_delay_days':
@@ -424,8 +424,8 @@ final class AppSettings {
           '${smart.itemMinimumDelayDays}',
       'postpone.default.topic_minimum_delay_days':
           '${smart.topicMinimumDelayDays}',
-      'postpone.default.skip_items': '${smart.skipItems}',
-      'postpone.default.skip_topics': '${smart.skipTopics}',
+      'postpone.default.skip_items': '${smart.shouldSkipItems}',
+      'postpone.default.skip_topics': '${smart.shouldSkipTopics}',
       'postpone.default.item_age_cutoff_days': '${smart.itemAgeCutoffDays}',
       'postpone.default.topic_age_cutoff_days': '${smart.topicAgeCutoffDays}',
       'postpone.default.item_forgetting_index_cutoff':
@@ -440,14 +440,14 @@ final class AppSettings {
       'postpone.default.topic_priority_threshold':
           '${smart.topicPriorityThreshold}',
       'postpone.default.modify_item_by_forgetting_index':
-          '${smart.modifyItemByForgettingIndex}',
+          '${smart.shouldModifyItemByForgettingIndex}',
       'postpone.default.modify_topic_by_a_factor':
-          '${smart.modifyTopicByAFactor}',
+          '${smart.shouldModifyTopicByAFactor}',
       'mercy.mode': mercy.mode.name,
       'mercy.rescheduling_days': '${mercy.reschedulingDays}',
       'mercy.gathering_days': '${mercy.gatheringDays}',
       'mercy.daily_cap': '${mercy.dailyCap}',
-      'mercy.include_future': '${mercy.includeFuture}',
+      'mercy.include_future': '${mercy.shouldIncludeFuture}',
       'mercy.importance_weight': '${mercy.importanceWeight}',
       'mercy.lateness_weight': '${mercy.latenessWeight}',
       'mercy.investment_weight': '${mercy.investmentWeight}',
@@ -457,10 +457,10 @@ final class AppSettings {
       'mercy.interval_factor_matrix':
           mercy.intervalFactorMatrix?.join(',') ?? '',
       'reader.reminder_words': '${reader.reminderWords}',
-      'diagnostics.log_enabled': '${diagnostics.logEnabled}',
+      'diagnostics.log_enabled': '${diagnostics.isLogEnabled}',
       'diagnostics.log_max_bytes': '${diagnostics.logMaxBytes}',
       'diagnostics.log_retained_files': '${diagnostics.logRetainedFiles}',
-      'diagnostics.show_content': '${diagnostics.showContentInPanel}',
+      'diagnostics.show_content': '${diagnostics.shouldShowContentInPanel}',
     };
   }
 
