@@ -3,7 +3,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
-import 'package:incremental_reader/features/daily_queue/daily_queue_providers.dart';
+import 'package:incremental_reader/features/daily_queue/queue_providers.dart';
 import 'package:incremental_reader/features/diagnostics/diagnostics_query.dart';
 import 'package:incremental_reader/features/diagnostics/scheduler_metrics_query.dart';
 /// Scheduler safety metrics for the diagnostics panel.

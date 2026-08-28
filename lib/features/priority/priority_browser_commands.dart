@@ -1,4 +1,7 @@
-/// SM20's browser Learning command group, as explicit commands.
+/// The Learn menu on the priority browser, as explicit commands.
+///
+/// SM20 calls this screen "the browser"; here it is the priority browser, the
+/// one list that shows the whole collection in order.
 ///
 /// These are the bulk operations the executable dispatches from a subset:
 /// Learn/Review, Remember, Forget, Dismiss, Undismiss, Done, the two queue
@@ -15,8 +18,8 @@ import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/command_base.dart';
 
 /// Base for every command that acts on an ordered browser selection.
-abstract base class BrowserSelectionCommand extends AppCommand {
-  BrowserSelectionCommand(
+abstract base class PriorityBrowserSelectionCommand extends AppCommand {
+  PriorityBrowserSelectionCommand(
     super.operationId, {
     required this.refs,
     required this.day,
@@ -30,7 +33,7 @@ abstract base class BrowserSelectionCommand extends AppCommand {
 }
 
 /// Build a review source and enter a browser learning mode (4, 5, or 6).
-final class StartBrowserReview extends BrowserSelectionCommand {
+final class StartBrowserReview extends PriorityBrowserSelectionCommand {
   StartBrowserReview(
     super.operationId, {
     required super.refs,
@@ -43,7 +46,7 @@ final class StartBrowserReview extends BrowserSelectionCommand {
 }
 
 /// Remember: memorize a pending or dismissed record with a first interval.
-final class RememberElements extends BrowserSelectionCommand {
+final class RememberElements extends PriorityBrowserSelectionCommand {
   RememberElements(
     super.operationId, {
     required super.refs,
@@ -53,7 +56,7 @@ final class RememberElements extends BrowserSelectionCommand {
 }
 
 /// Forget: return a memorized record to the pending store, clearing history.
-final class ForgetElements extends BrowserSelectionCommand {
+final class ForgetElements extends PriorityBrowserSelectionCommand {
   ForgetElements(
     super.operationId, {
     required super.refs,
@@ -63,7 +66,7 @@ final class ForgetElements extends BrowserSelectionCommand {
 }
 
 /// Dismiss: stop scheduling, clear repetition state, and send priority to 100.
-final class DismissElements extends BrowserSelectionCommand {
+final class DismissElements extends PriorityBrowserSelectionCommand {
   DismissElements(
     super.operationId, {
     required super.refs,
@@ -73,7 +76,7 @@ final class DismissElements extends BrowserSelectionCommand {
 }
 
 /// Undismiss: status only. The schedule and priority Dismiss cleared stay gone.
-final class UndismissElements extends BrowserSelectionCommand {
+final class UndismissElements extends PriorityBrowserSelectionCommand {
   UndismissElements(
     super.operationId, {
     required super.refs,
@@ -83,7 +86,7 @@ final class UndismissElements extends BrowserSelectionCommand {
 }
 
 /// Done: the scheduler-visible half of deletion.
-final class DoneElements extends BrowserSelectionCommand {
+final class DoneElements extends PriorityBrowserSelectionCommand {
   DoneElements(
     super.operationId, {
     required super.refs,
@@ -93,7 +96,7 @@ final class DoneElements extends BrowserSelectionCommand {
 }
 
 /// Add to drill: queue membership only, no record field changes at all.
-final class AddToFinalDrill extends BrowserSelectionCommand {
+final class AddToFinalDrill extends PriorityBrowserSelectionCommand {
   AddToFinalDrill(
     super.operationId, {
     required super.refs,
@@ -108,7 +111,7 @@ final class AddToFinalDrill extends BrowserSelectionCommand {
 /// 1..100. Both variants raise importance by multiplying the priority target
 /// by `0.9`; only [shouldRescheduleSameDay] (Add all) additionally reschedules a
 /// record already reviewed today onto today.
-final class AddToOutstanding extends BrowserSelectionCommand {
+final class AddToOutstanding extends PriorityBrowserSelectionCommand {
   AddToOutstanding(
     super.operationId, {
     required super.refs,
@@ -123,7 +126,7 @@ final class AddToOutstanding extends BrowserSelectionCommand {
 }
 
 /// Reset history: drop the external history block and nothing else.
-final class ResetElementHistory extends BrowserSelectionCommand {
+final class ResetElementHistory extends PriorityBrowserSelectionCommand {
   ResetElementHistory(
     super.operationId, {
     required super.refs,
@@ -133,7 +136,7 @@ final class ResetElementHistory extends BrowserSelectionCommand {
 }
 
 /// Set A: store an A-factor directly, for normal topics only (1.01..3.00).
-final class SetTopicAFactor extends BrowserSelectionCommand {
+final class SetTopicAFactor extends PriorityBrowserSelectionCommand {
   SetTopicAFactor(
     super.operationId, {
     required super.refs,
@@ -146,7 +149,7 @@ final class SetTopicAFactor extends BrowserSelectionCommand {
 }
 
 /// Modify A: `A = 1.01 + m * (A - 1.01)`, for normal topics only (0.20..2.00).
-final class ModifyTopicAFactor extends BrowserSelectionCommand {
+final class ModifyTopicAFactor extends PriorityBrowserSelectionCommand {
   ModifyTopicAFactor(
     super.operationId, {
     required super.refs,
@@ -159,7 +162,7 @@ final class ModifyTopicAFactor extends BrowserSelectionCommand {
 }
 
 /// Advance Topics, Items, or All elements across a horizon of D days.
-final class AdvanceElements extends BrowserSelectionCommand {
+final class AdvanceElements extends PriorityBrowserSelectionCommand {
   AdvanceElements(
     super.operationId, {
     required super.refs,
@@ -178,14 +181,14 @@ final class AdvanceElements extends BrowserSelectionCommand {
 /// SM20's commands are filters as much as actions — most of a selection is
 /// routinely ineligible — so the skipped count is reported rather than hidden,
 /// and the changed refs are returned in the order they were written.
-final class BrowserCommandOutcome {
-  const BrowserCommandOutcome({
+final class PriorityBrowserCommandOutcome {
+  const PriorityBrowserCommandOutcome({
     required this.changedRefs,
     required this.skipped,
     this.randomDraws = 0,
   });
 
-  const BrowserCommandOutcome.empty()
+  const PriorityBrowserCommandOutcome.empty()
     : changedRefs = const <ElementRef>[],
       skipped = 0,
       randomDraws = 0;

@@ -9,9 +9,9 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:incremental_reader/features/library/content_tree_query.dart';
 import 'package:incremental_reader/features/library/import_sheet.dart';
 import 'package:incremental_reader/features/library/library_providers.dart';
+import 'package:incremental_reader/features/library/library_tree_query.dart';
 import 'package:incremental_reader/features/library/library_view_model.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
@@ -33,9 +33,9 @@ Future<void> openContents(BuildContext context, WidgetRef ref) async {
 }
 
 /// The whole tree, rebuilt on demand.
-final FutureProvider<List<ContentNode>> contentTreeProvider =
-    FutureProvider<List<ContentNode>>(
-      (Ref ref) => ref.watch(contentTreeQueryProvider).load(),
+final FutureProvider<List<LibraryTreeNode>> contentTreeProvider =
+    FutureProvider<List<LibraryTreeNode>>(
+      (Ref ref) => ref.watch(libraryTreeQueryProvider).load(),
     );
 
 class ContentsScreen extends ConsumerStatefulWidget {
@@ -55,7 +55,7 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<List<ContentNode>> tree = ref.watch(contentTreeProvider);
+    final AsyncValue<List<LibraryTreeNode>> tree = ref.watch(contentTreeProvider);
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         kSearchShortcut: () => openSearch(context, ref),
@@ -64,7 +64,7 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
     );
   }
 
-  Widget _scaffold(BuildContext context, AsyncValue<List<ContentNode>> tree) {
+  Widget _scaffold(BuildContext context, AsyncValue<List<LibraryTreeNode>> tree) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Contents'),
@@ -84,7 +84,7 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
             onPressed: () => setState(() {
               _expanded
                 ..clear()
-                ..addAll(_allRefs(tree.valueOrNull ?? const <ContentNode>[]));
+                ..addAll(_allRefs(tree.valueOrNull ?? const <LibraryTreeNode>[]));
             }),
             icon: const Icon(Icons.unfold_more),
           ),
@@ -105,7 +105,7 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
             Center(child: Text('Could not load the tree.\n$error')),
-        data: (List<ContentNode> roots) => Column(
+        data: (List<LibraryTreeNode> roots) => Column(
           children: <Widget>[
             _TypeFilter(
               selected: _types,
@@ -137,7 +137,7 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
     ref.invalidate(contentTreeProvider);
   }
 
-  Future<void> _runAction(String action, ContentNode node) async {
+  Future<void> _runAction(String action, LibraryTreeNode node) async {
     final LibraryViewModel model = ref.read(libraryViewModelProvider.notifier);
     switch (action) {
       case 'open':
@@ -164,9 +164,9 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
     ref.invalidate(contentTreeProvider);
   }
 
-  Widget _buildBody(List<ContentNode> roots) {
+  Widget _buildBody(List<LibraryTreeNode> roots) {
     final List<_TreeRow> rows = <_TreeRow>[];
-    for (final ContentNode root in roots) {
+    for (final LibraryTreeNode root in roots) {
       _flatten(root, 0, rows);
     }
     if (rows.isEmpty) {
@@ -205,19 +205,19 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
   /// A filtered-out node still yields its children: hiding a source would
   /// otherwise hide every card underneath it, which is the opposite of what
   /// filtering to cards means.
-  void _flatten(ContentNode node, int depth, List<_TreeRow> rows) {
+  void _flatten(LibraryTreeNode node, int depth, List<_TreeRow> rows) {
     final bool matches = _types.isEmpty || _types.contains(node.ref.type);
     if (matches) rows.add(_TreeRow(node: node, depth: depth));
     final bool shouldShowChildren =
         _expanded.contains(node.ref) || (!matches && _types.isNotEmpty);
     if (!shouldShowChildren) return;
-    for (final ContentNode child in node.children) {
+    for (final LibraryTreeNode child in node.children) {
       _flatten(child, matches ? depth + 1 : depth, rows);
     }
   }
 
-  Iterable<ElementRef> _allRefs(List<ContentNode> nodes) sync* {
-    for (final ContentNode node in nodes) {
+  Iterable<ElementRef> _allRefs(List<LibraryTreeNode> nodes) sync* {
+    for (final LibraryTreeNode node in nodes) {
       yield node.ref;
       yield* _allRefs(node.children);
     }
@@ -228,7 +228,7 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
 @immutable
 final class _TreeRow {
   const _TreeRow({required this.node, required this.depth});
-  final ContentNode node;
+  final LibraryTreeNode node;
   final int depth;
 }
 
@@ -282,7 +282,7 @@ class _NodeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ContentNode node = row.node;
+    final LibraryTreeNode node = row.node;
     final bool hasChildren = node.children.isNotEmpty;
     final bool isDismissed =
         node.status == Sm20ElementStatus.dismissed ||

@@ -14,7 +14,7 @@ import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/features/daily_queue/queue_query.dart';
-import 'package:incremental_reader/features/extract/extraction_commands.dart';
+import 'package:incremental_reader/features/extract/extract_commands.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/priority/priority_commands.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';

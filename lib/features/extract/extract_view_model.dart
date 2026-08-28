@@ -8,8 +8,8 @@ import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/features/extract/extract_commands.dart';
 import 'package:incremental_reader/features/extract/extract_providers.dart';
-import 'package:incremental_reader/features/extract/extraction_commands.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/library/library_view_model.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
@@ -187,7 +187,7 @@ final class ExtractViewModel
     if (current == null || !current.canMutate) return;
     await _command<Extract>(
       (OperationId operation) => ref
-          .read(extractionCommandRunnerProvider)
+          .read(extractCommandRunnerProvider)
           .editExtract(
             EditExtract(
               operation,
@@ -216,7 +216,7 @@ final class ExtractViewModel
     }
     state = AsyncValue<ExtractUiState>.data(current.copyWith(isBusy: true));
     final result = await ref
-        .read(extractionCommandRunnerProvider)
+        .read(extractCommandRunnerProvider)
         .createExtract(
           CreateExtract(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -256,7 +256,7 @@ final class ExtractViewModel
     }
     state = AsyncValue<ExtractUiState>.data(current.copyWith(isBusy: true));
     final result = await ref
-        .read(extractionCommandRunnerProvider)
+        .read(extractCommandRunnerProvider)
         .undoExtract(
           UndoExtract(
             OperationId(ref.read(idGeneratorProvider).newId()),

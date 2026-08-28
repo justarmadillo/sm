@@ -12,9 +12,9 @@ import 'package:incremental_reader/features/daily_queue/queue_command_runner.dar
 import 'package:incremental_reader/features/daily_queue/queue_query.dart';
 import 'package:incremental_reader/features/diagnostics/diagnostics_query.dart';
 import 'package:incremental_reader/features/diagnostics/scheduler_metrics_query.dart';
-import 'package:incremental_reader/features/extract/extraction_command_runner.dart';
+import 'package:incremental_reader/features/extract/extract_command_runner.dart';
 import 'package:incremental_reader/features/extract/formulation_command_runner.dart';
-import 'package:incremental_reader/features/priority/browser_command_runner.dart';
+import 'package:incremental_reader/features/priority/priority_browser_command_runner.dart';
 import 'package:incremental_reader/features/priority/priority_command_runner.dart';
 import 'package:incremental_reader/features/priority/priority_query.dart';
 import 'package:incremental_reader/features/reader/reader_command_runner.dart';
@@ -102,7 +102,7 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
-  late final ExtractionCommandRunner extraction = ExtractionCommandRunner(
+  late final ExtractCommandRunner extraction = ExtractCommandRunner(
     content: content,
     learning: learning,
     search: search,
@@ -158,7 +158,7 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
-  late final BrowserCommandRunner browser = BrowserCommandRunner(
+  late final PriorityBrowserCommandRunner browser = PriorityBrowserCommandRunner(
     learning: learning,
     transfer: transfer,
     transactions: transactions,

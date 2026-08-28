@@ -21,8 +21,8 @@ import 'package:meta/meta.dart';
 
 /// One element in the tree, with the children it owns.
 @immutable
-final class ContentNode {
-  const ContentNode({
+final class LibraryTreeNode {
+  const LibraryTreeNode({
     required this.ref,
     required this.title,
     required this.preview,
@@ -39,7 +39,7 @@ final class ContentNode {
   final String preview;
 
   /// Extracts and cards taken from this element, in creation order.
-  final List<ContentNode> children;
+  final List<LibraryTreeNode> children;
 
   /// Canonical due day for a scheduled element, or null for a card, whose due
   /// instant is finer-grained than a day.
@@ -55,13 +55,13 @@ final class ContentNode {
       1 +
       children.fold<int>(
         0,
-        (int total, ContentNode c) => total + c.subtreeSize,
+        (int total, LibraryTreeNode c) => total + c.subtreeSize,
       );
 }
 
 /// Builds the collection's knowledge tree.
-final class ContentTreeQuery {
-  ContentTreeQuery({
+final class LibraryTreeQuery {
+  LibraryTreeQuery({
     required ContentRepository content,
     required LearningRepository learning,
     required SchedulingContext context,
@@ -74,26 +74,26 @@ final class ContentTreeQuery {
   final SchedulingContext _context;
 
   /// Every source, with its descendants nested beneath it.
-  Future<List<ContentNode>> load() async {
+  Future<List<LibraryTreeNode>> load() async {
     final List<Source> sources = await _content.listSources();
-    final List<ContentNode> roots = <ContentNode>[];
+    final List<LibraryTreeNode> roots = <LibraryTreeNode>[];
     for (final Source source in sources) {
       roots.add(await _sourceNode(source));
     }
     return roots;
   }
 
-  Future<ContentNode> _sourceNode(Source source) async {
+  Future<LibraryTreeNode> _sourceNode(Source source) async {
     final ElementRef ref = ElementRef(id: source.id, type: ElementType.source);
     final TopicState? topic = await _learning.findTopic(ref);
-    return ContentNode(
+    return LibraryTreeNode(
       ref: ref,
       title: source.title,
       preview: _excerpt(source.markdown),
       dueDay: topic?.schedule.algorithmicDueDay,
       status: topic?.status,
       lifecycle: topic?.schedule.lifecycle,
-      children: <ContentNode>[
+      children: <LibraryTreeNode>[
         for (final Extract extract in await _content.listExtractsOfSource(
           source.id,
         ))
@@ -105,20 +105,20 @@ final class ContentTreeQuery {
   }
 
   /// Recurses, because an extract can be cut from another extract.
-  Future<ContentNode> _extractNode(Extract extract) async {
+  Future<LibraryTreeNode> _extractNode(Extract extract) async {
     final ElementRef ref = ElementRef(
       id: extract.id,
       type: ElementType.extract,
     );
     final TopicState? topic = await _learning.findTopic(ref);
-    return ContentNode(
+    return LibraryTreeNode(
       ref: ref,
       title: _titleOf(extract.markdown),
       preview: _excerpt(extract.markdown),
       dueDay: topic?.schedule.algorithmicDueDay,
       status: topic?.status,
       lifecycle: topic?.schedule.lifecycle,
-      children: <ContentNode>[
+      children: <LibraryTreeNode>[
         for (final Extract child in await _content.listExtractsOfParent(
           extract.id,
         ))
@@ -129,17 +129,17 @@ final class ContentTreeQuery {
     );
   }
 
-  Future<ContentNode> _cardNode(Card card) async {
+  Future<LibraryTreeNode> _cardNode(Card card) async {
     final ElementRef ref = ElementRef(id: card.id, type: ElementType.card);
     final CardState? state = await _learning.findCardState(card.id);
     final StudyDayCalendar calendar = await _context.calendar();
-    return ContentNode(
+    return LibraryTreeNode(
       ref: ref,
       title: _titleOf(card.front),
       preview: '',
       dueDay: state == null ? null : calendar.dayOf(state.memory.dueAtUtc),
       lifecycle: state?.schedule.lifecycle,
-      children: const <ContentNode>[],
+      children: const <LibraryTreeNode>[],
     );
   }
 

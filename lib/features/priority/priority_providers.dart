@@ -3,7 +3,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
-import 'package:incremental_reader/features/priority/browser_command_runner.dart';
+import 'package:incremental_reader/features/priority/priority_browser_command_runner.dart';
 import 'package:incremental_reader/features/priority/priority_command_runner.dart';
 import 'package:incremental_reader/features/priority/priority_query.dart';
 /// Relative priority: slider, browser, and bulk spread.
@@ -21,9 +21,9 @@ final Provider<PriorityCommandRunner> priorityCommandRunnerProvider =
     );
 
 /// SM20's browser Learning command group.
-final Provider<BrowserCommandRunner> browserCommandRunnerProvider =
-    Provider<BrowserCommandRunner>(
-      (Ref ref) => BrowserCommandRunner(
+final Provider<PriorityBrowserCommandRunner> priorityBrowserCommandRunnerProvider =
+    Provider<PriorityBrowserCommandRunner>(
+      (Ref ref) => PriorityBrowserCommandRunner(
         learning: ref.watch(learningRepositoryProvider),
         transfer: ref.watch(transferRepositoryProvider),
         transactions: ref.watch(transactionRunnerProvider),

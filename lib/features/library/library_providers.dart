@@ -6,12 +6,12 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
-import 'package:incremental_reader/features/library/content_tree_query.dart';
+import 'package:incremental_reader/features/library/library_tree_query.dart';
 /// Library read projection.
 /// The knowledge tree: every element nested under the one it came from.
-final Provider<ContentTreeQuery> contentTreeQueryProvider =
-    Provider<ContentTreeQuery>(
-      (Ref ref) => ContentTreeQuery(
+final Provider<LibraryTreeQuery> libraryTreeQueryProvider =
+    Provider<LibraryTreeQuery>(
+      (Ref ref) => LibraryTreeQuery(
         content: ref.watch(contentRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
         context: ref.watch(schedulingContextProvider),

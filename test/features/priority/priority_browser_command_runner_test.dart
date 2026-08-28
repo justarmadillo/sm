@@ -9,7 +9,7 @@ library;
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
-import 'package:incremental_reader/features/priority/browser_commands.dart';
+import 'package:incremental_reader/features/priority/priority_browser_commands.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/review/review_command_runner.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
@@ -106,7 +106,7 @@ void main() {
       final StudyDay today = await harness.today();
       expect((await harness.topicOf(source)).status, Sm20ElementStatus.pending);
 
-      final Result<BrowserCommandOutcome> first = await harness.browser
+      final Result<PriorityBrowserCommandOutcome> first = await harness.browser
           .remember(
             RememberElements(
               harness.operation(),
@@ -123,7 +123,7 @@ void main() {
       expect(memorized.repetitionCount, 1);
       expect(memorized.lastReviewDay, today);
 
-      final Result<BrowserCommandOutcome> second = await harness.browser
+      final Result<PriorityBrowserCommandOutcome> second = await harness.browser
           .remember(
             RememberElements(
               harness.operation(),
@@ -144,7 +144,7 @@ void main() {
       clock.advance(const Duration(days: 3));
       final StudyDay today = await harness.today();
 
-      final Result<BrowserCommandOutcome> result = await harness.browser.forget(
+      final Result<PriorityBrowserCommandOutcome> result = await harness.browser.forget(
         ForgetElements(
           harness.operation(),
           refs: <ElementRef>[harness.refOf(source)],
@@ -232,7 +232,7 @@ void main() {
       final TopicState before = await harness.topicOf(source);
       expect(before.historyBlockId, 0);
 
-      final Result<BrowserCommandOutcome> result = await harness.browser
+      final Result<PriorityBrowserCommandOutcome> result = await harness.browser
           .resetHistory(
             ResetElementHistory(
               harness.operation(),
@@ -336,7 +336,7 @@ void main() {
           timestampUtc: clock.nowUtc(),
         ),
       );
-      final Result<BrowserCommandOutcome> again = await harness.browser
+      final Result<PriorityBrowserCommandOutcome> again = await harness.browser
           .addToFinalDrill(
             AddToFinalDrill(
               harness.operation(),
@@ -375,7 +375,7 @@ void main() {
           ),
       };
 
-      final Result<BrowserCommandOutcome> result = await harness.browser
+      final Result<PriorityBrowserCommandOutcome> result = await harness.browser
           .addToOutstanding(
             AddToOutstanding(
               harness.operation(),
@@ -406,7 +406,7 @@ void main() {
       final StudyDay today = await harness.today();
       final ElementRef ref = harness.refOf(source);
 
-      final Result<BrowserCommandOutcome> ordinary = await harness.browser
+      final Result<PriorityBrowserCommandOutcome> ordinary = await harness.browser
           .addToOutstanding(
             AddToOutstanding(
               harness.operation(),
@@ -418,7 +418,7 @@ void main() {
       expect(ordinary.unwrap().changedRefCount, 0);
       expect(ordinary.unwrap().skipped, 1);
 
-      final Result<BrowserCommandOutcome> addAll = await harness.browser
+      final Result<PriorityBrowserCommandOutcome> addAll = await harness.browser
           .addToOutstanding(
             AddToOutstanding(
               harness.operation(),
@@ -479,7 +479,7 @@ void main() {
       final Sm20CollectionState runtimeBefore = await harness.context
           .runtimeState();
 
-      final Result<BrowserCommandOutcome> result = await harness.browser
+      final Result<PriorityBrowserCommandOutcome> result = await harness.browser
           .advance(
             AdvanceElements(
               harness.operation(),
@@ -524,7 +524,7 @@ void main() {
         card.memory.cardId,
       ))!;
 
-      final Result<BrowserCommandOutcome> result = await harness.browser
+      final Result<PriorityBrowserCommandOutcome> result = await harness.browser
           .advance(
             AdvanceElements(
               harness.operation(),
@@ -573,7 +573,7 @@ void main() {
       final ElementRef ref = harness.refOf(source);
       final operation = harness.operation();
 
-      final Result<BrowserCommandOutcome> first = await harness.browser
+      final Result<PriorityBrowserCommandOutcome> first = await harness.browser
           .addToFinalDrill(
             AddToFinalDrill(
               operation,
@@ -582,7 +582,7 @@ void main() {
               timestampUtc: clock.nowUtc(),
             ),
           );
-      final Result<BrowserCommandOutcome> resent = await harness.browser
+      final Result<PriorityBrowserCommandOutcome> resent = await harness.browser
           .addToFinalDrill(
             AddToFinalDrill(
               operation,

@@ -11,7 +11,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:incremental_reader/features/daily_queue/daily_queue_providers.dart';
+import 'package:incremental_reader/features/daily_queue/queue_providers.dart';
 import 'package:incremental_reader/features/diagnostics/diagnostics_providers.dart';
 import 'package:incremental_reader/features/diagnostics/diagnostics_query.dart';
 import 'package:incremental_reader/scheduling/element.dart';

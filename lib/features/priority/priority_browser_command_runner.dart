@@ -1,4 +1,4 @@
-/// Application transactions for SM20's browser Learning command group.
+/// Runs the Learn-menu commands issued from the priority browser.
 ///
 /// Three properties hold across every command here:
 ///
@@ -14,7 +14,7 @@
 ///   none of it may adapt A or invent a review.
 library;
 
-import 'package:incremental_reader/features/priority/browser_commands.dart';
+import 'package:incremental_reader/features/priority/priority_browser_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/history/revlog.dart';
@@ -49,8 +49,8 @@ const String kBrowserModifyAKind = 'sm20.browser.modify_a';
 const String kBrowserAdvanceKind = 'sm20.browser.advance';
 
 /// The browser's bulk Learning commands.
-final class BrowserCommandRunner {
-  BrowserCommandRunner({
+final class PriorityBrowserCommandRunner {
+  PriorityBrowserCommandRunner({
     required LearningRepository learning,
     required TransferRepository transfer,
     required TransactionRunner transactions,
@@ -81,7 +81,7 @@ final class BrowserCommandRunner {
   /// Opening a review changes no record. The mode is collection state because
   /// it decides which interval branch a later commit uses — mode 4 the
   /// ordinary one, modes 5 and 6 the forced-topic one.
-  Future<Result<BrowserCommandOutcome>> startReview(
+  Future<Result<PriorityBrowserCommandOutcome>> startReview(
     StartBrowserReview command,
   ) => _run(command, kBrowserReviewKind, (StudyDay _) async {
     final List<ElementRef> source = <ElementRef>[];
@@ -104,7 +104,7 @@ final class BrowserCommandRunner {
         },
       ),
     );
-    return BrowserCommandOutcome(
+    return PriorityBrowserCommandOutcome(
       changedRefs: source,
       skipped: command.refs.length - source.length,
     );
@@ -114,7 +114,7 @@ final class BrowserCommandRunner {
   ///
   /// Cards are skipped: FSRS owns item memory here, and its own first
   /// interval comes from the first genuine grade rather than from a dialog.
-  Future<Result<BrowserCommandOutcome>> remember(RememberElements command) =>
+  Future<Result<PriorityBrowserCommandOutcome>> remember(RememberElements command) =>
       _run(command, kBrowserRememberKind, (StudyDay day) async {
         final AppSettings settings = await _context.settings();
         final TopicScheduler scheduler = await _context.topicScheduler();
@@ -148,7 +148,7 @@ final class BrowserCommandRunner {
           changedRefs.add(ref);
         }
         await _context.savePrngState(scheduler.prng.state);
-        return BrowserCommandOutcome(
+        return PriorityBrowserCommandOutcome(
           changedRefs: changedRefs,
           skipped: skipped,
           randomDraws: scheduler.prng.drawCount,
@@ -161,7 +161,7 @@ final class BrowserCommandRunner {
   /// item branch also writes its own difficulty constant, which belongs to
   /// SM20's item model and has no FSRS counterpart; resetting to a new card
   /// is the FSRS-native meaning of the same command.
-  Future<Result<BrowserCommandOutcome>> forget(ForgetElements command) =>
+  Future<Result<PriorityBrowserCommandOutcome>> forget(ForgetElements command) =>
       _run(command, kBrowserForgetKind, (StudyDay day) async {
         final TopicScheduler scheduler = await _context.topicScheduler();
         final List<ElementRef> changedRefs = <ElementRef>[];
@@ -215,11 +215,11 @@ final class BrowserCommandRunner {
           changedRefs.add(ref);
         }
         await _removeFromQueues(changedRefs, shouldIncludeFinalDrill: true);
-        return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+        return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
       });
 
   /// Dismiss: stop scheduling and send the record to priority 100.
-  Future<Result<BrowserCommandOutcome>> dismiss(DismissElements command) =>
+  Future<Result<PriorityBrowserCommandOutcome>> dismiss(DismissElements command) =>
       _run(command, kBrowserDismissKind, (StudyDay day) async {
         final TopicScheduler scheduler = await _context.topicScheduler();
         var scale = await _context.priorityScale();
@@ -286,11 +286,11 @@ final class BrowserCommandRunner {
           changedRefs.add(ref);
         }
         await _removeFromQueues(changedRefs, shouldIncludeFinalDrill: true);
-        return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+        return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
       });
 
   /// Undismiss: the status byte only. Dismiss's cleared fields stay cleared.
-  Future<Result<BrowserCommandOutcome>> undismiss(UndismissElements command) =>
+  Future<Result<PriorityBrowserCommandOutcome>> undismiss(UndismissElements command) =>
       _run(command, kBrowserUndismissKind, (StudyDay day) async {
         final TopicScheduler scheduler = await _context.topicScheduler();
         final List<ElementRef> changedRefs = <ElementRef>[];
@@ -339,7 +339,7 @@ final class BrowserCommandRunner {
           );
           changedRefs.add(ref);
         }
-        return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+        return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
       });
 
   /// Done: the scheduler-visible half of deletion.
@@ -347,7 +347,7 @@ final class BrowserCommandRunner {
   /// Content and tree placement are the content model's business; what this
   /// owes the scheduler is removal from every store, queue, and the rankable
   /// population, which the deleted status is.
-  Future<Result<BrowserCommandOutcome>> done(DoneElements command) =>
+  Future<Result<PriorityBrowserCommandOutcome>> done(DoneElements command) =>
       _run(command, kBrowserDoneKind, (StudyDay day) async {
         final TopicScheduler scheduler = await _context.topicScheduler();
         final List<ElementRef> changedRefs = <ElementRef>[];
@@ -397,11 +397,11 @@ final class BrowserCommandRunner {
           changedRefs.add(ref);
         }
         await _removeFromQueues(changedRefs, shouldIncludeFinalDrill: true);
-        return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+        return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
       });
 
   /// Add to drill: queue membership only, appended once, in selection order.
-  Future<Result<BrowserCommandOutcome>> addToFinalDrill(
+  Future<Result<PriorityBrowserCommandOutcome>> addToFinalDrill(
     AddToFinalDrill command,
   ) => _run(command, kBrowserFinalDrillKind, (StudyDay _) async {
     final Sm20CollectionState runtime = await _context.runtimeState();
@@ -424,7 +424,7 @@ final class BrowserCommandRunner {
     if (changedRefs.isNotEmpty) {
       await _context.saveRuntimeState(runtime.copyWith(finalDrill: drill));
     }
-    return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+    return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
   });
 
   /// Add to outstanding, or Add all.
@@ -432,7 +432,7 @@ final class BrowserCommandRunner {
   /// This is not a queue-only command: every successful insertion also
   /// multiplies the element's numeric priority target by `0.9`, which is what
   /// makes repeatedly pulling something forward compound into importance.
-  Future<Result<BrowserCommandOutcome>> addToOutstanding(
+  Future<Result<PriorityBrowserCommandOutcome>> addToOutstanding(
     AddToOutstanding command,
   ) => _run(command, kBrowserOutstandingKind, (StudyDay day) async {
     if (command.everyWhich < 1 || command.everyWhich > 100) {
@@ -508,7 +508,7 @@ final class BrowserCommandRunner {
         ),
       );
     }
-    return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+    return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
   });
 
   /// Reset history: drop the external history block and nothing else.
@@ -516,7 +516,7 @@ final class BrowserCommandRunner {
   /// Despite the caption it resets no counter, interval, A, or due date. The
   /// name is the executable's, and matching it exactly matters more than
   /// making it read sensibly.
-  Future<Result<BrowserCommandOutcome>> resetHistory(
+  Future<Result<PriorityBrowserCommandOutcome>> resetHistory(
     ResetElementHistory command,
   ) => _run(command, kBrowserResetHistoryKind, (StudyDay _) async {
     final TopicScheduler scheduler = await _context.topicScheduler();
@@ -532,11 +532,11 @@ final class BrowserCommandRunner {
       await _learning.saveTopic(scheduler.resetHistory(topic));
       changedRefs.add(ref);
     }
-    return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+    return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
   });
 
   /// Set A: store an A-factor directly on normal topics.
-  Future<Result<BrowserCommandOutcome>> setAFactor(SetTopicAFactor command) =>
+  Future<Result<PriorityBrowserCommandOutcome>> setAFactor(SetTopicAFactor command) =>
       _run(command, kBrowserSetAKind, (StudyDay _) async {
         final TopicScheduler scheduler = await _context.topicScheduler();
         return _editAFactor(
@@ -546,7 +546,7 @@ final class BrowserCommandRunner {
       });
 
   /// Modify A: `A = 1.01 + m * (A - 1.01)` on normal topics.
-  Future<Result<BrowserCommandOutcome>> modifyAFactor(
+  Future<Result<PriorityBrowserCommandOutcome>> modifyAFactor(
     ModifyTopicAFactor command,
   ) => _run(command, kBrowserModifyAKind, (StudyDay _) async {
     final TopicScheduler scheduler = await _context.topicScheduler();
@@ -561,7 +561,7 @@ final class BrowserCommandRunner {
   /// A topic Advance is a real forced bulk repetition — it adapts A and
   /// priority with the bulk denominators — while an item Advance is only a
   /// low-level reschedule. Both share the one draw the engine already took.
-  Future<Result<BrowserCommandOutcome>> advance(AdvanceElements command) =>
+  Future<Result<PriorityBrowserCommandOutcome>> advance(AdvanceElements command) =>
       _run(command, kBrowserAdvanceKind, (StudyDay day) async {
         final Sm20CollectionState runtime = await _context.runtimeState();
         final Sm20Prng prng = Sm20Prng(seed: runtime.prngSeed);
@@ -625,15 +625,15 @@ final class BrowserCommandRunner {
         // The draws are consumed whether or not a decision survived, so the
         // seed is written back even for a run that changed nothing.
         await _context.savePrngState(prng.state);
-        return BrowserCommandOutcome(
+        return PriorityBrowserCommandOutcome(
           changedRefs: changedRefs,
           skipped: command.refs.length - changedRefs.length,
           randomDraws: result.randomDraws,
         );
       });
 
-  Future<BrowserCommandOutcome> _editAFactor(
-    BrowserSelectionCommand command,
+  Future<PriorityBrowserCommandOutcome> _editAFactor(
+    PriorityBrowserSelectionCommand command,
     TopicState Function(TopicState topic) edit,
   ) async {
     final List<ElementRef> changedRefs = <ElementRef>[];
@@ -655,7 +655,7 @@ final class BrowserCommandRunner {
       await _learning.saveTopic(edited);
       changedRefs.add(ref);
     }
-    return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+    return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
   }
 
   Future<TopicState?> _topic(ElementRef ref) async =>
@@ -674,7 +674,7 @@ final class BrowserCommandRunner {
 
   /// A low-level reschedule, shared by Add all and the Advance item branch.
   Future<void> _rescheduleTo(
-    BrowserSelectionCommand command,
+    PriorityBrowserSelectionCommand command,
     _BrowserRecord record, {
     required StudyDay targetDay,
     required StudyDay today,
@@ -714,7 +714,7 @@ final class BrowserCommandRunner {
   }
 
   Future<void> _setPriority(
-    BrowserSelectionCommand command,
+    PriorityBrowserSelectionCommand command,
     ElementRef ref,
     PriorityRank rank,
   ) async {
@@ -730,7 +730,7 @@ final class BrowserCommandRunner {
   }
 
   Future<void> _writeTopic(
-    BrowserSelectionCommand command, {
+    PriorityBrowserSelectionCommand command, {
     required TopicState before,
     required TopicState after,
     required RevlogEventType eventType,
@@ -763,7 +763,7 @@ final class BrowserCommandRunner {
   }
 
   Future<void> _logCard(
-    BrowserSelectionCommand command, {
+    PriorityBrowserSelectionCommand command, {
     required CardState before,
     required CardState after,
     required RevlogEventType eventType,
@@ -789,7 +789,7 @@ final class BrowserCommandRunner {
     );
   }
 
-  String _itemOperation(BrowserSelectionCommand command, ElementRef ref) =>
+  String _itemOperation(PriorityBrowserSelectionCommand command, ElementRef ref) =>
       '${command.operationId.value}:${ref.type.name}:${ref.id}';
 
   /// Drops [refs] from every durable queue store.
@@ -818,19 +818,19 @@ final class BrowserCommandRunner {
   }
 
   /// One transaction, one activity row, one diagnostic event.
-  Future<Result<BrowserCommandOutcome>> _run(
-    BrowserSelectionCommand command,
+  Future<Result<PriorityBrowserCommandOutcome>> _run(
+    PriorityBrowserSelectionCommand command,
     String kind,
-    Future<BrowserCommandOutcome> Function(StudyDay day) body,
+    Future<PriorityBrowserCommandOutcome> Function(StudyDay day) body,
   ) async {
     try {
-      return await _transactions.run<Result<BrowserCommandOutcome>>(() async {
+      return await _transactions.run<Result<PriorityBrowserCommandOutcome>>(() async {
         if (await _learning.hasActivity(command.operationId.value, kind)) {
           // A resent bulk command is the same command: replaying it would
           // insert, raise, or advance a second time.
-          return const Ok<BrowserCommandOutcome>(BrowserCommandOutcome.empty());
+          return const Ok<PriorityBrowserCommandOutcome>(PriorityBrowserCommandOutcome.empty());
         }
-        final BrowserCommandOutcome outcome = await body(command.day);
+        final PriorityBrowserCommandOutcome outcome = await body(command.day);
         await _learning.appendActivity(
           ActivityRecord(
             id: _ids.newId(),
@@ -860,7 +860,7 @@ final class BrowserCommandRunner {
             },
           ),
         );
-        return Ok<BrowserCommandOutcome>(outcome);
+        return Ok<PriorityBrowserCommandOutcome>(outcome);
       });
     } on Object catch (error, stackTrace) {
       final UnexpectedFailure failure = UnexpectedFailure(
@@ -877,7 +877,7 @@ final class BrowserCommandRunner {
           failure: failure,
         ),
       );
-      return Err<BrowserCommandOutcome>(failure);
+      return Err<PriorityBrowserCommandOutcome>(failure);
     }
   }
 }

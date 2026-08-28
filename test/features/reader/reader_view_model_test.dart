@@ -2,9 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/source.dart';
-import 'package:incremental_reader/features/library/content_tree_query.dart';
 import 'package:incremental_reader/features/library/import_sheet.dart';
 import 'package:incremental_reader/features/library/library_providers.dart';
+import 'package:incremental_reader/features/library/library_tree_query.dart';
 import 'package:incremental_reader/features/library/library_view_model.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/scheduling/element.dart';
@@ -77,8 +77,8 @@ void main() {
   group('element commands', () {
     test('an imported source enters the knowledge tree', () async {
       await importFixture();
-      final List<ContentNode> tree = await container
-          .read(contentTreeQueryProvider)
+      final List<LibraryTreeNode> tree = await container
+          .read(libraryTreeQueryProvider)
           .load();
 
       expect(tree, hasLength(1));
@@ -96,7 +96,7 @@ void main() {
       expect(id, isNull);
       final state = container.read(libraryViewModelProvider).requireValue;
       expect(state.message!.isError, isTrue);
-      expect(await container.read(contentTreeQueryProvider).load(), isEmpty);
+      expect(await container.read(libraryTreeQueryProvider).load(), isEmpty);
     });
 
     test('dismissing keeps the element in the tree', () async {
@@ -106,8 +106,8 @@ void main() {
 
       // Dismissing stops scheduling; it never removes content, so the tree
       // still shows the element and says it is dismissed.
-      final List<ContentNode> tree = await container
-          .read(contentTreeQueryProvider)
+      final List<LibraryTreeNode> tree = await container
+          .read(libraryTreeQueryProvider)
           .load();
       expect(tree.single.ref.id, sourceId);
       expect(tree.single.status, Sm20ElementStatus.dismissed);

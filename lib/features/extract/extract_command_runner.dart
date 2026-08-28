@@ -15,7 +15,7 @@ library;
 
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
-import 'package:incremental_reader/features/extract/extraction_commands.dart';
+import 'package:incremental_reader/features/extract/extract_commands.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/history/revlog.dart';
 import 'package:incremental_reader/scheduling/history/scheduling_journal.dart';
@@ -41,8 +41,8 @@ const String kExtractCreatedKind = 'extract.created';
 const String kExtractUndoneKind = 'extract.undone';
 
 /// Runs the commands for creating, undoing, and editing extracts.
-final class ExtractionCommandRunner {
-  ExtractionCommandRunner({
+final class ExtractCommandRunner {
+  ExtractCommandRunner({
     required ContentRepository content,
     required LearningRepository learning,
     required SearchRepository search,
