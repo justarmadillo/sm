@@ -135,9 +135,14 @@ final class ReaderSelectionController extends ChangeNotifier {
     _paragraphs[blockId] = key;
   }
 
-  /// Removes a paragraph that has scrolled out of the viewport.
-  void unregisterParagraph(String blockId) {
-    _paragraphs.remove(blockId);
+  /// Removes a paragraph only if it is still the registered render object.
+  ///
+  /// Flutter can mount a replacement sliver before disposing the old one. An
+  /// old paragraph must not unregister the new paragraph that replaced it.
+  void unregisterParagraph(String blockId, GlobalKey key) {
+    if (identical(_paragraphs[blockId], key)) {
+      _paragraphs.remove(blockId);
+    }
   }
 
   /// Whether [blockId] currently has a paragraph that can be hit-tested.

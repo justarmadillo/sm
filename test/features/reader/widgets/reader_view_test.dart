@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
@@ -227,6 +228,59 @@ void main() {
         ].reduce((int a, int b) => a > b ? a : b);
       }
       expect(worstMounted, lessThan(80));
+    });
+
+    testWidgets('the scrollbar range stays fixed while travelling', (
+      WidgetTester tester,
+    ) async {
+      final document = Document.parse(
+        sourceId: 'big',
+        markdown: generateSampleMarkdown(targetWords: 50000),
+      );
+      final controller = ReaderSelectionController(document);
+      addTearDown(controller.dispose);
+      await pumpReader(tester, document, controller);
+
+      final verticalScrollable = find
+          .descendant(
+            of: find.byType(ReaderView),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      final scrollableState = tester.state<ScrollableState>(verticalScrollable);
+      final initialMaximum = scrollableState.position.maxScrollExtent;
+
+      await tester.drag(find.byType(ReaderView), const Offset(0, -12000));
+      await tester.pumpAndSettle();
+
+      expect(scrollableState.position.maxScrollExtent, initialMaximum);
+    });
+
+    testWidgets('up and down arrow keys move the reading surface', (
+      WidgetTester tester,
+    ) async {
+      final document = Document.parse(
+        sourceId: 'big',
+        markdown: generateSampleMarkdown(targetWords: 5000),
+      );
+      final controller = ReaderSelectionController(document);
+      addTearDown(controller.dispose);
+      await pumpReader(tester, document, controller);
+
+      final verticalScrollable = find
+          .descendant(
+            of: find.byType(ReaderView),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      final scrollableState = tester.state<ScrollableState>(verticalScrollable);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      expect(scrollableState.position.pixels, greaterThan(0));
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pumpAndSettle();
+      expect(scrollableState.position.pixels, 0);
     });
   });
 

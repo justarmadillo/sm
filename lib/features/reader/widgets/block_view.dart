@@ -18,6 +18,51 @@ const double kReaderGutterWidth = 30;
 /// Diameter of the resume-marker dot.
 const double _kMarkerDotSize = 10;
 
+/// Returns the vertical extent used by a reader block at [bodyWidth].
+///
+/// The reader supplies these extents to a varied-extent sliver. Knowing every
+/// extent up front gives its scrollbar an exact, stable range while the sliver
+/// still mounts only the blocks near the viewport.
+double measureBlockHeight(
+  Block block,
+  ReaderTypography typography, {
+  required double bodyWidth,
+  required TextDirection textDirection,
+  required TextScaler textScaler,
+}) {
+  double textHeight(double maxWidth, {TextStyle? markerStyle}) {
+    final paragraph = TextPainter(
+      text: buildBlockSpan(block, typography),
+      textDirection: textDirection,
+      textScaler: textScaler,
+    )..layout(maxWidth: maxWidth.clamp(0, double.infinity));
+    if (markerStyle == null) return paragraph.height;
+    final marker = TextPainter(
+      text: TextSpan(
+        text: block.isOrderedListItem ? '${block.listMarker}' : '•',
+        style: markerStyle,
+      ),
+      textDirection: textDirection,
+      textScaler: textScaler,
+    )..layout(maxWidth: 26);
+    return paragraph.height > marker.height ? paragraph.height : marker.height;
+  }
+
+  final double contentHeight = switch (block.type) {
+    BlockType.thematicBreak => 17 + textHeight(bodyWidth),
+    BlockType.codeBlock => 24 + textHeight(double.infinity),
+    BlockType.mathBlock => 24 + textHeight(bodyWidth - 28),
+    BlockType.quote => textHeight(bodyWidth - 14),
+    BlockType.listItem => textHeight(
+      bodyWidth - 16 * block.listDepth - 26,
+      markerStyle: typography.body.copyWith(color: AppColors.muted),
+    ),
+    BlockType.table => textHeight(double.infinity),
+    BlockType.heading || BlockType.paragraph => textHeight(bodyWidth),
+  };
+  return contentHeight + typography.paragraphSpacing;
+}
+
 /// One rendered block, with a stable key on its paragraph for hit-testing.
 class BlockView extends StatefulWidget {
   const BlockView({
@@ -46,7 +91,7 @@ class BlockView extends StatefulWidget {
   final void Function(String blockId, GlobalKey key) onParagraphMounted;
 
   /// Called when it leaves, so stale render objects are never hit-tested.
-  final void Function(String blockId) onParagraphUnmounted;
+  final void Function(String blockId, GlobalKey key) onParagraphUnmounted;
 
   /// Whether the authoritative resume marker sits at this block.
   final bool isMarkerPainted;
@@ -95,7 +140,7 @@ class _BlockViewState extends State<BlockView> {
   void didUpdateWidget(BlockView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.block.id != widget.block.id) {
-      widget.onParagraphUnmounted(oldWidget.block.id);
+      widget.onParagraphUnmounted(oldWidget.block.id, _paragraphKey);
       if (!widget.isEditing) {
         widget.onParagraphMounted(widget.block.id, _paragraphKey);
       }
@@ -104,7 +149,7 @@ class _BlockViewState extends State<BlockView> {
     if (oldWidget.isEditing == widget.isEditing) return;
     // Entering the editor removes the paragraph; leaving it puts one back.
     if (widget.isEditing) {
-      widget.onParagraphUnmounted(widget.block.id);
+      widget.onParagraphUnmounted(widget.block.id, _paragraphKey);
     } else {
       widget.onParagraphMounted(widget.block.id, _paragraphKey);
     }
@@ -112,7 +157,7 @@ class _BlockViewState extends State<BlockView> {
 
   @override
   void dispose() {
-    widget.onParagraphUnmounted(widget.block.id);
+    widget.onParagraphUnmounted(widget.block.id, _paragraphKey);
     super.dispose();
   }
 

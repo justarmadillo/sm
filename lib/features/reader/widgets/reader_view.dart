@@ -19,7 +19,6 @@ import 'package:incremental_reader/features/reader/widgets/block_span_builder.da
 import 'package:incremental_reader/features/reader/widgets/block_view.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
-import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 /// Distance a mouse must travel before a press becomes a drag at all.
 ///
@@ -98,10 +97,16 @@ class ReaderView extends StatefulWidget {
 
 /// Public so callers can drive navigation from a toolbar or a queue action.
 class ReaderViewState extends State<ReaderView> {
-  final ItemScrollController _scrollController = ItemScrollController();
-  final ScrollOffsetController _offsetController = ScrollOffsetController();
-  final ItemPositionsListener _positions = ItemPositionsListener.create();
+  final ScrollController _scrollController = ScrollController();
   final FocusNode _keyboardFocus = FocusNode(debugLabel: 'reader');
+
+  List<double> _blockExtents = const <double>[];
+  List<double> _blockOffsets = const <double>[];
+  double? _measuredWidth;
+  TextScaler? _measuredTextScaler;
+  TextDirection? _measuredDirection;
+  Document? _measuredDocument;
+  ReaderTypography? _measuredTypography;
 
   /// The reading column itself, which is narrower than this widget and is
   /// where the scrollbar actually sits.
@@ -114,7 +119,7 @@ class ReaderViewState extends State<ReaderView> {
   @override
   void initState() {
     super.initState();
-    _positions.itemPositions.addListener(_onVisibleBlocksChanged);
+    _scrollController.addListener(_onVisibleBlocksChanged);
     final anchor = widget.initialAnchor;
     if (anchor != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => jumpToAnchor(anchor));
@@ -137,7 +142,9 @@ class ReaderViewState extends State<ReaderView> {
 
   @override
   void dispose() {
-    _positions.itemPositions.removeListener(_onVisibleBlocksChanged);
+    _scrollController
+      ..removeListener(_onVisibleBlocksChanged)
+      ..dispose();
     _keyboardFocus.dispose();
     super.dispose();
   }
@@ -147,8 +154,12 @@ class ReaderViewState extends State<ReaderView> {
   /// Works for unmounted blocks: the list resolves an index, not an offset.
   void jumpToAnchor(ReaderAnchor anchor, {double alignment = 0.08}) {
     final index = widget.document.blockIndexAtOffset(anchor.utf8Offset);
-    if (index == null || !_scrollController.isAttached) return;
-    _scrollController.jumpTo(index: index, alignment: alignment);
+    if (index == null ||
+        !_scrollController.hasClients ||
+        _blockOffsets.isEmpty) {
+      return;
+    }
+    _scrollController.jumpTo(_offsetForIndex(index, alignment));
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _alignMountedAnchor(
         anchor,
@@ -165,10 +176,13 @@ class ReaderViewState extends State<ReaderView> {
     Duration duration = const Duration(milliseconds: 250),
   }) async {
     final index = widget.document.blockIndexAtOffset(anchor.utf8Offset);
-    if (index == null || !_scrollController.isAttached) return;
-    await _scrollController.scrollTo(
-      index: index,
-      alignment: alignment,
+    if (index == null ||
+        !_scrollController.hasClients ||
+        _blockOffsets.isEmpty) {
+      return;
+    }
+    await _scrollController.animateTo(
+      _offsetForIndex(index, alignment),
       duration: duration,
       curve: Curves.easeOutCubic,
     );
@@ -177,19 +191,8 @@ class ReaderViewState extends State<ReaderView> {
 
   /// The topmost block currently visible, or null before first layout.
   Block? get topVisibleBlock {
-    final positions = _positions.itemPositions.value;
-    if (positions.isEmpty) return null;
-    final top = positions
-        .where((ItemPosition position) => position.itemTrailingEdge > 0)
-        .fold<ItemPosition?>(
-          null,
-          (ItemPosition? best, ItemPosition position) =>
-              best == null || position.itemLeadingEdge < best.itemLeadingEdge
-              ? position
-              : best,
-        );
-    if (top == null) return null;
-    return widget.document.blocks[top.index];
+    if (!_scrollController.hasClients || _blockOffsets.isEmpty) return null;
+    return widget.document.blocks[_indexAtOffset(_scrollController.offset)];
   }
 
   /// Exact text position currently nearest the top of the viewport.
@@ -225,8 +228,11 @@ class ReaderViewState extends State<ReaderView> {
     final target = top + renderObject.size.height * alignment;
     final delta = caret.dy - target;
     if (delta.abs() < 1) return;
-    await _offsetController.animateScroll(
-      offset: delta,
+    await _scrollController.animateTo(
+      (_scrollController.offset + delta).clamp(
+        0,
+        _scrollController.position.maxScrollExtent,
+      ),
       duration: duration,
       curve: Curves.easeOutCubic,
     );
@@ -234,9 +240,12 @@ class ReaderViewState extends State<ReaderView> {
 
   /// Scrolls by [pixels], positive downward.
   Future<void> scrollBy(double pixels, {Duration? duration}) async {
-    if (!_scrollController.isAttached) return;
-    await _offsetController.animateScroll(
-      offset: pixels,
+    if (!_scrollController.hasClients) return;
+    await _scrollController.animateTo(
+      (_scrollController.offset + pixels).clamp(
+        0,
+        _scrollController.position.maxScrollExtent,
+      ),
       duration: duration ?? const Duration(milliseconds: 90),
       curve: Curves.easeOutCubic,
     );
@@ -256,14 +265,14 @@ class ReaderViewState extends State<ReaderView> {
 
   /// Jumps to the top of the document.
   void scrollToStart() {
-    if (widget.document.blocks.isEmpty || !_scrollController.isAttached) return;
-    _scrollController.jumpTo(index: 0);
+    if (widget.document.blocks.isEmpty || !_scrollController.hasClients) return;
+    _scrollController.jumpTo(0);
   }
 
   /// Jumps to the end of the document.
   void scrollToEnd() {
-    if (widget.document.blocks.isEmpty || !_scrollController.isAttached) return;
-    _scrollController.jumpTo(index: widget.document.blocks.length - 1);
+    if (widget.document.blocks.isEmpty || !_scrollController.hasClients) return;
+    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
   }
 
   /// Gives the reading surface keyboard focus.
@@ -332,10 +341,15 @@ class ReaderViewState extends State<ReaderView> {
               maxWidth: widget.typography.columnWidth,
             ),
             child: _scrollbarTheme(
-              child: ListenableBuilder(
-                listenable: widget.controller,
-                builder: (BuildContext context, Widget? child) =>
-                    _blockList(markerBlockId),
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  _measureBlocks(context, constraints.maxWidth - 32);
+                  return ListenableBuilder(
+                    listenable: widget.controller,
+                    builder: (BuildContext context, Widget? child) =>
+                        _blockList(markerBlockId),
+                  );
+                },
               ),
             ),
           ),
@@ -401,39 +415,128 @@ class ReaderViewState extends State<ReaderView> {
               : AppColors.muted.withValues(alpha: 0.35),
         ),
       ),
-      child: child,
+      child: Scrollbar(
+        controller: _scrollController,
+        thumbVisibility: true,
+        interactive: true,
+        child: ScrollConfiguration(
+          behavior: const _ReaderScrollBehavior(),
+          child: child,
+        ),
+      ),
     );
   }
 
   /// One [BlockView] per block, built lazily so a long document costs only
   /// what is on screen.
   Widget _blockList(String? markerBlockId) {
-    return ScrollablePositionedList.builder(
-      itemScrollController: _scrollController,
-      scrollOffsetController: _offsetController,
-      itemPositionsListener: _positions,
+    if (widget.editingBlockId != null) {
+      // The editor grows with typed lines and wrapped controls. Let that one
+      // transient view report its natural size; forcing its old paragraph
+      // extent would clip the field and put its buttons outside hit-testing.
+      return ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 120),
+        itemCount: widget.document.blocks.length,
+        itemBuilder: (BuildContext context, int index) =>
+            _blockView(index, markerBlockId),
+      );
+    }
+    return ListView.custom(
+      controller: _scrollController,
+      itemExtentBuilder: (int index, _) => _blockExtents[index],
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 120),
-      itemCount: widget.document.blocks.length,
-      itemBuilder: (BuildContext context, int index) {
-        final block = widget.document.blocks[index];
-        return BlockView(
-          block: block,
-          typography: widget.typography,
-          highlights: _highlightsFor(block),
-          isMarkerPainted: block.id == markerBlockId,
-          extractMarks: widget.extractMarks[block.id] ?? 0,
-          onGutterTap: widget.onGutterTap == null ? null : _onBlockGutterTap,
-          onExtractMarksTap: widget.onExtractMarksTap,
-          isEditing: widget.editingBlockId == block.id,
-          isBusy: widget.isBusy,
-          onEditCommit: widget.onEditCommit,
-          onEditCancel: widget.onEditCancel,
-          onEditDelete: widget.onEditDelete,
-          onParagraphMounted: widget.controller.registerParagraph,
-          onParagraphUnmounted: widget.controller.unregisterParagraph,
-        );
-      },
+      childrenDelegate: _ExactScrollRangeDelegate(
+        childCount: widget.document.blocks.length,
+        totalExtent: _blockExtents.fold<double>(
+          0,
+          (double total, double extent) => total + extent,
+        ),
+        builder: (BuildContext context, int index) =>
+            _blockView(index, markerBlockId),
+      ),
     );
+  }
+
+  Widget _blockView(int index, String? markerBlockId) {
+    final block = widget.document.blocks[index];
+    return BlockView(
+      key: ValueKey<String>(block.id),
+      block: block,
+      typography: widget.typography,
+      highlights: _highlightsFor(block),
+      isMarkerPainted: block.id == markerBlockId,
+      extractMarks: widget.extractMarks[block.id] ?? 0,
+      onGutterTap: widget.onGutterTap == null ? null : _onBlockGutterTap,
+      onExtractMarksTap: widget.onExtractMarksTap,
+      isEditing: widget.editingBlockId == block.id,
+      isBusy: widget.isBusy,
+      onEditCommit: widget.onEditCommit,
+      onEditCancel: widget.onEditCancel,
+      onEditDelete: widget.onEditDelete,
+      onParagraphMounted: widget.controller.registerParagraph,
+      onParagraphUnmounted: widget.controller.unregisterParagraph,
+    );
+  }
+
+  void _measureBlocks(BuildContext context, double itemWidth) {
+    final direction = Directionality.of(context);
+    final textScaler = MediaQuery.textScalerOf(context);
+    if (_measuredWidth == itemWidth &&
+        _measuredTextScaler == textScaler &&
+        _measuredDirection == direction &&
+        identical(_measuredDocument, widget.document) &&
+        _measuredTypography == widget.typography) {
+      return;
+    }
+    final double bodyWidth = (itemWidth - kReaderGutterWidth).clamp(
+      0.0,
+      double.infinity,
+    );
+    final extents = <double>[];
+    final offsets = <double>[];
+    var offset = 24.0;
+    for (final block in widget.document.blocks) {
+      offsets.add(offset);
+      final extent = measureBlockHeight(
+        block,
+        widget.typography,
+        bodyWidth: bodyWidth,
+        textDirection: direction,
+        textScaler: textScaler,
+      );
+      extents.add(extent);
+      offset += extent;
+    }
+    _blockExtents = extents;
+    _blockOffsets = offsets;
+    _measuredWidth = itemWidth;
+    _measuredTextScaler = textScaler;
+    _measuredDirection = direction;
+    _measuredDocument = widget.document;
+    _measuredTypography = widget.typography;
+  }
+
+  double _offsetForIndex(int index, double alignment) {
+    final viewport = _scrollController.position.viewportDimension;
+    return (_blockOffsets[index] - viewport * alignment).clamp(
+      0,
+      _scrollController.position.maxScrollExtent,
+    );
+  }
+
+  int _indexAtOffset(double offset) {
+    var low = 0;
+    var high = _blockOffsets.length - 1;
+    while (low < high) {
+      final mid = (low + high + 1) >> 1;
+      if (_blockOffsets[mid] <= offset) {
+        low = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return low;
   }
 
   /// Resolves a gutter click to a precise in-block anchor, falling back to the
@@ -518,4 +621,39 @@ class ReaderViewState extends State<ReaderView> {
     _pressOrigin = null;
     _isDragging = false;
   }
+}
+
+/// The explicit reader scrollbar owns the controller. Suppress the automatic
+/// desktop scrollbar so Flutter does not paint a second, competing thumb.
+class _ReaderScrollBehavior extends MaterialScrollBehavior {
+  const _ReaderScrollBehavior();
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => child;
+}
+
+/// A varied-extent list normally extrapolates its scroll range from whichever
+/// blocks happen to be mounted. The reader has already measured every block,
+/// so returning that exact sum prevents the scrollbar thumb changing size as
+/// the user travels through paragraphs of different lengths.
+class _ExactScrollRangeDelegate extends SliverChildBuilderDelegate {
+  _ExactScrollRangeDelegate({
+    required NullableIndexedWidgetBuilder builder,
+    required int childCount,
+    required this.totalExtent,
+  }) : super(builder, childCount: childCount);
+
+  final double totalExtent;
+
+  @override
+  double estimateMaxScrollOffset(
+    int firstIndex,
+    int lastIndex,
+    double leadingScrollOffset,
+    double trailingScrollOffset,
+  ) => totalExtent;
 }

@@ -270,6 +270,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           // Not while a block is open in the editor: a rebuild that re-attaches
           // this node would otherwise reclaim focus from the field mid-word.
           autofocus: !state.isEditing,
+          onKeyEvent: (FocusNode node, KeyEvent event) =>
+              _onReaderScrollKey(state, event),
           child: Column(
             children: <Widget>[
               _StatusBar(state: state),
@@ -318,6 +320,23 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         ),
       ),
     );
+  }
+
+  /// Keeps document scrolling available after a toolbar or side-panel control
+  /// takes focus. The ReaderView handles these keys while its page owns focus;
+  /// this screen-level fallback handles the rest of the non-editing reader.
+  KeyEventResult _onReaderScrollKey(ReaderUiState state, KeyEvent event) {
+    if (state.isEditing || event is KeyUpEvent) {
+      return KeyEventResult.ignored;
+    }
+    final double delta = switch (event.logicalKey) {
+      LogicalKeyboardKey.arrowDown => 64,
+      LogicalKeyboardKey.arrowUp => -64,
+      _ => 0,
+    };
+    if (delta == 0) return KeyEventResult.ignored;
+    unawaited(_readerKey.currentState?.scrollBy(delta));
+    return KeyEventResult.handled;
   }
 
   /// The title bar: the source's name, and the three things reachable from it.

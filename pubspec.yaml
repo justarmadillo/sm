@@ -49,7 +49,6 @@ dependencies:
   # Pinned because scheduler day boundaries must use reproducible named-zone
   # rules rather than the machine's current offset.
   timezone: 0.11.1
-  scrollable_positioned_list: ^0.3.8
   file_selector: ^1.1.0
   # Vendored in this repository, not fetched from pub.dev: the scheduler is the
   # one thing a review log can never be replayed without, so it is kept where a
