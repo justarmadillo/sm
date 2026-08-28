@@ -8,19 +8,19 @@ library;
 
 import 'dart:io';
 
-import 'package:incremental_reader/src/application/priority/priority_commands.dart';
-import 'package:incremental_reader/src/application/priority/priority_query.dart';
-import 'package:incremental_reader/src/application/reader/reader_commands.dart';
-import 'package:incremental_reader/src/core/clock.dart';
-import 'package:incremental_reader/src/core/result.dart';
-import 'package:incremental_reader/src/data/database/app_database.dart';
-import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/domain/content/source.dart';
-import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
-import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
-import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
-import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/features/priority/priority_commands.dart';
+import 'package:incremental_reader/features/priority/priority_query.dart';
+import 'package:incremental_reader/features/reader/reader_commands.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/priority_rank.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
+import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
+import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/shared/result.dart';
+import 'package:incremental_reader/storage/database/app_database.dart';
+import 'package:incremental_reader/storage/database/connection.dart';
 import 'package:test/test.dart';
 
 import '../support/app_harness.dart';

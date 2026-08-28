@@ -5,11 +5,11 @@
 /// ties, and what happens to elements that have never been repeated.
 library;
 
-import 'package:incremental_reader/src/application/priority/priority_query.dart';
-import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
-import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
-import 'package:incremental_reader/src/features/priority/presentation/priority_view_model.dart';
+import 'package:incremental_reader/features/priority/priority_query.dart';
+import 'package:incremental_reader/features/priority/priority_view_model.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/priority_rank.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:test/test.dart';
 
 StudyDay _day(String value) => StudyDay.parse(value, zoneId: 'UTC');

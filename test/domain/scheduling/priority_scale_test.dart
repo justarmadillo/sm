@@ -5,7 +5,7 @@
 /// number is stored that could inflate.
 library;
 
-import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:test/test.dart';
 
 void main() {

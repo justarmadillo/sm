@@ -4,9 +4,9 @@ library;
 import 'dart:io';
 
 import 'package:drift/drift.dart';
-import 'package:incremental_reader/src/data/database/app_database.dart';
-import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/storage/database/app_database.dart';
+import 'package:incremental_reader/storage/database/connection.dart';
 import 'package:test/test.dart';
 
 void main() {

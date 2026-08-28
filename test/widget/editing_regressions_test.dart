@@ -9,11 +9,11 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:incremental_reader/src/domain/content/document.dart';
-import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
-import 'package:incremental_reader/src/features/reader/presentation/block_editor.dart';
-import 'package:incremental_reader/src/features/reader/presentation/reader_selection.dart';
-import 'package:incremental_reader/src/features/reader/presentation/reader_view.dart';
+import 'package:incremental_reader/documents/document.dart';
+import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/features/reader/widgets/block_editor.dart';
+import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
+import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
 
 import '../support/anchors.dart';
 

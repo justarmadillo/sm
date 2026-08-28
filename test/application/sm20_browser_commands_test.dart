@@ -6,21 +6,21 @@
 /// Advance really is a repetition for a topic but not for a card.
 library;
 
-import 'package:incremental_reader/src/application/browser/browser_commands.dart';
-import 'package:incremental_reader/src/application/formulation/formulation_commands.dart';
-import 'package:incremental_reader/src/application/reader/reader_commands.dart';
-import 'package:incremental_reader/src/application/review/review_commands.dart';
-import 'package:incremental_reader/src/application/review/review_handlers.dart';
-import 'package:incremental_reader/src/core/clock.dart';
-import 'package:incremental_reader/src/core/result.dart';
-import 'package:incremental_reader/src/domain/content/card.dart';
-import 'package:incremental_reader/src/domain/content/source.dart';
-import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
-import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/sm20_advance.dart';
-import 'package:incremental_reader/src/domain/scheduling/sm20_collection_state.dart';
-import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
-import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/documents/card.dart';
+import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/features/extract/formulation_commands.dart';
+import 'package:incremental_reader/features/priority/browser_commands.dart';
+import 'package:incremental_reader/features/reader/reader_commands.dart';
+import 'package:incremental_reader/features/review/review_command_runner.dart';
+import 'package:incremental_reader/features/review/review_commands.dart';
+import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/postpone/sm20_advance.dart';
+import 'package:incremental_reader/scheduling/sm20_collection_state.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
+import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
+import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/shared/result.dart';
 import 'package:test/test.dart';
 
 import '../support/app_harness.dart';

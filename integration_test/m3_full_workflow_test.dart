@@ -2,11 +2,11 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:incremental_reader/src/app/app.dart';
-import 'package:incremental_reader/src/app/providers.dart';
-import 'package:incremental_reader/src/core/clock.dart';
-import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/data/repositories/drift_repositories.dart';
+import 'package:incremental_reader/app/incremental_reader_app.dart';
+import 'package:incremental_reader/app/providers.dart';
+import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/storage/database/connection.dart';
+import 'package:incremental_reader/storage/drift/drift_repositories.dart';
 import 'package:integration_test/integration_test.dart';
 
 /// Opens the Contents tab when it is showing.

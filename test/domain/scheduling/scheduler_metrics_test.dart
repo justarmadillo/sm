@@ -1,6 +1,6 @@
-import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/scheduler_metrics.dart';
-import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/metrics/scheduler_metrics.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:test/test.dart';
 
 void main() {

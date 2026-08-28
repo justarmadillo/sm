@@ -8,12 +8,12 @@ library;
 
 import 'dart:io';
 
-import 'package:incremental_reader/src/data/database/app_database.dart';
-import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/domain/content/document.dart';
-import 'package:incremental_reader/src/domain/content/extract.dart';
-import 'package:incremental_reader/src/domain/content/markdown_block_parser.dart';
-import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/documents/document.dart';
+import 'package:incremental_reader/documents/extract.dart';
+import 'package:incremental_reader/documents/markdown_block_parser.dart';
+import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/storage/database/app_database.dart';
+import 'package:incremental_reader/storage/database/connection.dart';
 import 'package:test/test.dart';
 
 const String _markdown = '''

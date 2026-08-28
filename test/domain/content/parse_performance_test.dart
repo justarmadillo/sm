@@ -5,11 +5,12 @@
 /// document per block will blow through them by orders of magnitude.
 library;
 
-import 'package:incremental_reader/src/domain/content/block.dart';
-import 'package:incremental_reader/src/domain/content/document.dart';
-import 'package:incremental_reader/src/domain/content/source.dart';
-import 'package:incremental_reader/src/features/reader/presentation/sample_corpus.dart';
+import 'package:incremental_reader/documents/block.dart';
+import 'package:incremental_reader/documents/document.dart';
+import 'package:incremental_reader/documents/source.dart';
 import 'package:test/test.dart';
+
+import '../../support/sample_document_generator.dart';
 
 void main() {
   group('50k-word document', () {

@@ -5,20 +5,20 @@
 /// deferral is recorded as a deferral rather than as a review.
 library;
 
-import 'package:incremental_reader/src/application/queue/queue_commands.dart';
-import 'package:incremental_reader/src/application/queue/queue_handlers.dart';
-import 'package:incremental_reader/src/application/queue/queue_query.dart';
-import 'package:incremental_reader/src/application/reader/reader_commands.dart';
-import 'package:incremental_reader/src/application/scheduling/mercy_workflow.dart';
-import 'package:incremental_reader/src/core/clock.dart';
-import 'package:incremental_reader/src/core/result.dart';
-import 'package:incremental_reader/src/core/tracing.dart';
-import 'package:incremental_reader/src/domain/content/source.dart';
-import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
-import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
-import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
-import 'package:incremental_reader/src/domain/settings/app_settings.dart';
+import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/features/daily_queue/queue_command_runner.dart';
+import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
+import 'package:incremental_reader/features/daily_queue/queue_query.dart';
+import 'package:incremental_reader/features/reader/reader_commands.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
+import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
+import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/result.dart';
 import 'package:test/test.dart';
 
 import '../support/app_harness.dart';

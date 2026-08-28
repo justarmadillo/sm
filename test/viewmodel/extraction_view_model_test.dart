@@ -1,15 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:incremental_reader/src/app/providers.dart';
-import 'package:incremental_reader/src/core/clock.dart';
-import 'package:incremental_reader/src/core/ids.dart';
-import 'package:incremental_reader/src/data/database/app_database.dart';
-import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/domain/content/block.dart';
-import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
-import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/features/library/presentation/library_view_model.dart';
-import 'package:incremental_reader/src/features/reader/presentation/reader_view_model.dart';
+import 'package:incremental_reader/app/providers.dart';
+import 'package:incremental_reader/documents/block.dart';
+import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/features/library/library_view_model.dart';
+import 'package:incremental_reader/features/reader/reader_view_model.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/shared/id_generator.dart';
+import 'package:incremental_reader/storage/database/app_database.dart';
+import 'package:incremental_reader/storage/database/connection.dart';
+
 import '../support/anchors.dart';
 
 const String _markdown = '''

@@ -1,11 +1,11 @@
 import 'dart:io';
 
 import 'package:drift/drift.dart';
-import 'package:incremental_reader/src/core/clock.dart';
-import 'package:incremental_reader/src/core/tracing.dart';
-import 'package:incremental_reader/src/data/database/app_database.dart';
-import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/data/files/backup_service.dart';
+import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/storage/database/app_database.dart';
+import 'package:incremental_reader/storage/database/connection.dart';
+import 'package:incremental_reader/storage/files/backup_service.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:test/test.dart';
 

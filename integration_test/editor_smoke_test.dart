@@ -12,12 +12,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:incremental_reader/src/app/app.dart';
-import 'package:incremental_reader/src/app/providers.dart';
-import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
-import 'package:incremental_reader/src/features/reader/presentation/block_editor.dart';
-import 'package:incremental_reader/src/features/reader/presentation/reader_view.dart';
+import 'package:incremental_reader/app/incremental_reader_app.dart';
+import 'package:incremental_reader/app/providers.dart';
+import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/features/reader/widgets/block_editor.dart';
+import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
+import 'package:incremental_reader/storage/database/connection.dart';
 import 'package:integration_test/integration_test.dart';
 
 const String _markdown = '''

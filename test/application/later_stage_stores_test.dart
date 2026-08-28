@@ -5,13 +5,13 @@
 /// leave Pending as it joins Outstanding.
 library;
 
-import 'package:incremental_reader/src/application/queue/queue_query.dart';
-import 'package:incremental_reader/src/application/reader/reader_commands.dart';
-import 'package:incremental_reader/src/domain/content/source.dart';
-import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/queue_policy.dart';
-import 'package:incremental_reader/src/domain/scheduling/sm20_collection_state.dart';
-import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/features/daily_queue/queue_query.dart';
+import 'package:incremental_reader/features/reader/reader_commands.dart';
+import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/sm20_collection_state.dart';
+import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:test/test.dart';
 
 import '../support/app_harness.dart';

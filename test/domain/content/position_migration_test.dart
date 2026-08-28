@@ -10,10 +10,10 @@ library;
 
 import 'dart:math';
 
-import 'package:incremental_reader/src/core/utf8_offsets.dart';
-import 'package:incremental_reader/src/domain/content/position_migration.dart';
-import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
-import 'package:incremental_reader/src/domain/content/text_splice.dart';
+import 'package:incremental_reader/documents/position_migration.dart';
+import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/documents/text_splice.dart';
+import 'package:incremental_reader/shared/utf8_offsets.dart';
 import 'package:test/test.dart';
 
 void main() {

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:incremental_reader/src/application/formulation/formulation_commands.dart';
-import 'package:incremental_reader/src/domain/content/card.dart';
-import 'package:incremental_reader/src/domain/content/extract.dart';
-import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
-import 'package:incremental_reader/src/features/extract/presentation/formulation_dialog.dart';
+import 'package:incremental_reader/documents/card.dart';
+import 'package:incremental_reader/documents/extract.dart';
+import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/features/extract/formulation_commands.dart';
+import 'package:incremental_reader/features/extract/formulation_dialog.dart';
 
 void main() {
   final extract = Extract(

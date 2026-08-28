@@ -5,10 +5,10 @@
 /// every later feature sharing the one global stream stays reproducible.
 library;
 
-import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/sm20_advance.dart';
-import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
-import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/postpone/sm20_advance.dart';
+import 'package:incremental_reader/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:test/test.dart';
 
 void main() {

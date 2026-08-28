@@ -1,15 +1,16 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:incremental_reader/src/app/theme.dart';
-import 'package:incremental_reader/src/domain/content/document.dart';
-import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
-import 'package:incremental_reader/src/domain/content/source.dart';
-import 'package:incremental_reader/src/features/reader/presentation/block_view.dart';
-import 'package:incremental_reader/src/features/reader/presentation/reader_selection.dart';
-import 'package:incremental_reader/src/features/reader/presentation/reader_view.dart';
-import 'package:incremental_reader/src/features/reader/presentation/sample_corpus.dart';
+import 'package:incremental_reader/documents/document.dart';
+import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/features/reader/widgets/block_view.dart';
+import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
+import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
+import 'package:incremental_reader/shared/ui/app_theme.dart';
+
 import '../support/anchors.dart';
+import '../support/sample_document_generator.dart';
 
 const String _shortMarkdown = '''
 # Chapter One

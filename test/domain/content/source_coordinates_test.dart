@@ -1,7 +1,7 @@
-import 'package:incremental_reader/src/domain/content/block.dart';
-import 'package:incremental_reader/src/domain/content/document.dart';
-import 'package:incremental_reader/src/domain/content/inline_markup.dart';
-import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/documents/block.dart';
+import 'package:incremental_reader/documents/document.dart';
+import 'package:incremental_reader/documents/inline_markup.dart';
+import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:test/test.dart';
 import '../../support/anchors.dart';
 

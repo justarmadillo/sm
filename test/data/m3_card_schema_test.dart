@@ -1,11 +1,11 @@
 import 'dart:io';
 
 import 'package:drift/drift.dart' show QueryRow;
-import 'package:incremental_reader/src/data/database/app_database.dart';
-import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/data/repositories/drift_repositories.dart';
-import 'package:incremental_reader/src/domain/content/card.dart';
-import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/documents/card.dart';
+import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
+import 'package:incremental_reader/storage/database/app_database.dart';
+import 'package:incremental_reader/storage/database/connection.dart';
+import 'package:incremental_reader/storage/drift/drift_repositories.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:test/test.dart';
 

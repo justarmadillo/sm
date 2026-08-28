@@ -7,11 +7,11 @@
 /// dispersion primitives they rest on are covered by `sm20_numeric_test`.
 library;
 
-import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
-import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
-import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
-import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/priority_rank.dart';
+import 'package:incremental_reader/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
+import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:test/test.dart';
 
 /// A source topic carrying [interval] and a raw A of [aFactor].

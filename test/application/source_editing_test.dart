@@ -7,15 +7,15 @@
 /// repetition of it.
 library;
 
-import 'package:incremental_reader/src/application/extraction/extraction_commands.dart';
-import 'package:incremental_reader/src/application/reader/reader_commands.dart';
-import 'package:incremental_reader/src/application/reader/reader_handlers.dart';
-import 'package:incremental_reader/src/core/result.dart';
-import 'package:incremental_reader/src/domain/content/block.dart';
-import 'package:incremental_reader/src/domain/content/document.dart';
-import 'package:incremental_reader/src/domain/content/extract.dart';
-import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
-import 'package:incremental_reader/src/domain/content/source.dart';
+import 'package:incremental_reader/documents/block.dart';
+import 'package:incremental_reader/documents/document.dart';
+import 'package:incremental_reader/documents/extract.dart';
+import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/features/extract/extraction_commands.dart';
+import 'package:incremental_reader/features/reader/reader_command_runner.dart';
+import 'package:incremental_reader/features/reader/reader_commands.dart';
+import 'package:incremental_reader/shared/result.dart';
 import 'package:test/test.dart';
 
 import '../support/anchors.dart';

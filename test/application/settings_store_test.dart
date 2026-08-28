@@ -1,6 +1,6 @@
-import 'package:incremental_reader/src/application/ports/repositories.dart';
-import 'package:incremental_reader/src/application/settings/settings_store.dart';
-import 'package:incremental_reader/src/domain/settings/app_settings.dart';
+import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/settings_store.dart';
+import 'package:incremental_reader/storage/contracts/repositories.dart';
 import 'package:test/test.dart';
 
 void main() {

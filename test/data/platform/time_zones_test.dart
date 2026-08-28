@@ -1,5 +1,5 @@
-import 'package:incremental_reader/src/data/platform/time_zones.dart';
-import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
+import 'package:incremental_reader/storage/platform/time_zones.dart';
 import 'package:test/test.dart';
 
 void main() {

@@ -2,7 +2,7 @@ library;
 
 import 'dart:typed_data';
 
-import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/scheduling/sm20_numeric.dart';
 import 'package:test/test.dart';
 
 void main() {

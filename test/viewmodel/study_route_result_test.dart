@@ -5,7 +5,7 @@
 /// neither advances a schedule.
 library;
 
-import 'package:incremental_reader/src/features/queue/presentation/study_route_result.dart';
+import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dart';
 import 'package:test/test.dart';
 
 void main() {

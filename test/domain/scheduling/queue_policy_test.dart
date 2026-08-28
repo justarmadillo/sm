@@ -7,14 +7,14 @@
 /// values it takes from the shared random stream.
 library;
 
-import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
-import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
-import 'package:incremental_reader/src/domain/scheduling/queue_policy.dart';
-import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
-import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
-import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
-import 'package:incremental_reader/src/domain/settings/app_settings.dart';
+import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
+import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/priority_rank.dart';
+import 'package:incremental_reader/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
+import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
+import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:test/test.dart';
 
 final StudyDay _today = StudyDay.parse('2026-03-05', zoneId: 'UTC');

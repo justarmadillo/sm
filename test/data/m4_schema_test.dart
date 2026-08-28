@@ -5,12 +5,12 @@ library;
 import 'dart:io';
 
 import 'package:drift/drift.dart';
-import 'package:incremental_reader/src/data/database/app_database.dart';
-import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/data/database/mappers.dart';
-import 'package:incremental_reader/src/data/repositories/drift_repositories.dart';
-import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/storage/database/app_database.dart';
+import 'package:incremental_reader/storage/database/connection.dart';
+import 'package:incremental_reader/storage/database/row_converters.dart';
+import 'package:incremental_reader/storage/drift/drift_repositories.dart';
 import 'package:test/test.dart';
 
 void main() {

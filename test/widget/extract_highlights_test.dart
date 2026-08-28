@@ -9,15 +9,16 @@ library;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:incremental_reader/src/app/theme.dart';
-import 'package:incremental_reader/src/domain/content/block.dart';
-import 'package:incremental_reader/src/domain/content/document.dart';
-import 'package:incremental_reader/src/domain/content/extract.dart';
-import 'package:incremental_reader/src/domain/content/inline_markup.dart';
-import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
-import 'package:incremental_reader/src/features/reader/presentation/extract_highlights.dart';
-import 'package:incremental_reader/src/features/reader/presentation/reader_selection.dart';
-import 'package:incremental_reader/src/features/reader/presentation/reader_view.dart';
+import 'package:incremental_reader/documents/block.dart';
+import 'package:incremental_reader/documents/document.dart';
+import 'package:incremental_reader/documents/extract.dart';
+import 'package:incremental_reader/documents/inline_markup.dart';
+import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/features/reader/widgets/extract_highlights.dart';
+import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
+import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
+import 'package:incremental_reader/shared/ui/app_theme.dart';
+
 import '../support/anchors.dart';
 
 const String _markdown = '''

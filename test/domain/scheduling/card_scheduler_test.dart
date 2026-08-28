@@ -1,7 +1,7 @@
-import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
-import 'package:incremental_reader/src/domain/scheduling/element.dart';
-import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
-import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/priority_rank.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:test/test.dart';
 
 void main() {

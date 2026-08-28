@@ -1,4 +1,4 @@
-import 'package:incremental_reader/src/domain/settings/app_settings.dart';
+import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:test/test.dart';
 
 void main() {

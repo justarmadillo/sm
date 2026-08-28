@@ -7,13 +7,13 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:incremental_reader/src/app/theme.dart';
-import 'package:incremental_reader/src/domain/content/block.dart';
-import 'package:incremental_reader/src/domain/content/document.dart';
-import 'package:incremental_reader/src/features/reader/presentation/block_editor.dart';
-import 'package:incremental_reader/src/features/reader/presentation/block_view.dart';
-import 'package:incremental_reader/src/features/reader/presentation/reader_selection.dart';
-import 'package:incremental_reader/src/features/reader/presentation/reader_view.dart';
+import 'package:incremental_reader/documents/block.dart';
+import 'package:incremental_reader/documents/document.dart';
+import 'package:incremental_reader/features/reader/widgets/block_editor.dart';
+import 'package:incremental_reader/features/reader/widgets/block_view.dart';
+import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
+import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
+import 'package:incremental_reader/shared/ui/app_theme.dart';
 
 const String _markdown = '''
 # A Chapter

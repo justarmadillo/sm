@@ -7,31 +7,31 @@
 /// how the running app changes them too.
 library;
 
-import 'package:incremental_reader/src/application/browser/browser_handlers.dart';
-import 'package:incremental_reader/src/application/diagnostics/diagnostics_query.dart';
-import 'package:incremental_reader/src/application/diagnostics/scheduler_metrics_query.dart';
-import 'package:incremental_reader/src/application/extraction/extraction_handlers.dart';
-import 'package:incremental_reader/src/application/formulation/formulation_handlers.dart';
-import 'package:incremental_reader/src/application/priority/priority_handlers.dart';
-import 'package:incremental_reader/src/application/priority/priority_query.dart';
-import 'package:incremental_reader/src/application/queue/queue_handlers.dart';
-import 'package:incremental_reader/src/application/queue/queue_query.dart';
-import 'package:incremental_reader/src/application/reader/reader_handlers.dart';
-import 'package:incremental_reader/src/application/review/review_handlers.dart';
-import 'package:incremental_reader/src/application/scheduling/effective_due_query.dart';
-import 'package:incremental_reader/src/application/scheduling/mercy_handlers.dart';
-import 'package:incremental_reader/src/application/scheduling/scheduling_context.dart';
-import 'package:incremental_reader/src/application/search/search_query.dart';
-import 'package:incremental_reader/src/application/settings/settings_store.dart';
-import 'package:incremental_reader/src/application/settings/sm20_runtime_store.dart';
-import 'package:incremental_reader/src/core/clock.dart';
-import 'package:incremental_reader/src/core/ids.dart';
-import 'package:incremental_reader/src/core/tracing.dart';
-import 'package:incremental_reader/src/data/database/app_database.dart';
-import 'package:incremental_reader/src/data/database/connection.dart';
-import 'package:incremental_reader/src/data/repositories/drift_repositories.dart';
-import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
-import 'package:incremental_reader/src/domain/settings/app_settings.dart';
+import 'package:incremental_reader/features/daily_queue/mercy_command_runner.dart';
+import 'package:incremental_reader/features/daily_queue/queue_command_runner.dart';
+import 'package:incremental_reader/features/daily_queue/queue_query.dart';
+import 'package:incremental_reader/features/diagnostics/diagnostics_query.dart';
+import 'package:incremental_reader/features/diagnostics/scheduler_metrics_query.dart';
+import 'package:incremental_reader/features/extract/extraction_command_runner.dart';
+import 'package:incremental_reader/features/extract/formulation_command_runner.dart';
+import 'package:incremental_reader/features/priority/browser_command_runner.dart';
+import 'package:incremental_reader/features/priority/priority_command_runner.dart';
+import 'package:incremental_reader/features/priority/priority_query.dart';
+import 'package:incremental_reader/features/reader/reader_command_runner.dart';
+import 'package:incremental_reader/features/review/review_command_runner.dart';
+import 'package:incremental_reader/features/search/search_query.dart';
+import 'package:incremental_reader/scheduling/effective_due_query.dart';
+import 'package:incremental_reader/scheduling/scheduling_context.dart';
+import 'package:incremental_reader/scheduling/sm20_runtime_store.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
+import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/settings_store.dart';
+import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/id_generator.dart';
+import 'package:incremental_reader/storage/database/app_database.dart';
+import 'package:incremental_reader/storage/database/connection.dart';
+import 'package:incremental_reader/storage/drift/drift_repositories.dart';
 
 /// A fully wired application stack over an in-memory database.
 final class AppHarness {

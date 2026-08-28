@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:incremental_reader/src/core/utf8_offsets.dart';
+import 'package:incremental_reader/shared/utf8_offsets.dart';
 import 'package:test/test.dart';
 
 void main() {
