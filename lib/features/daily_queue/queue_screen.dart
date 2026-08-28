@@ -142,10 +142,10 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
             _QueueError(error: error, onRetry: model.refresh),
-        data: (QueueUiState data) => data.entries.isEmpty
-            ? _QueueEmpty(state: data, model: model)
+        data: (QueueUiState queue) => queue.entries.isEmpty
+            ? _QueueEmpty(state: queue, model: model)
             : _QueueBody(
-                state: data,
+                state: queue,
                 model: model,
                 isRunning: _isOpeningRoutes,
                 onStart: _runQueue,
@@ -301,9 +301,9 @@ class _LoadPanel extends StatelessWidget {
               runSpacing: 6,
               children: <Widget>[
                 _StageBadge(lane: state.projection.lane),
-                _Metric(label: 'due', value: '${counters.dueTotal}'),
-                _Metric(label: 'items', value: '${counters.dueCards}'),
-                _Metric(label: 'topics', value: '${counters.dueTopics}'),
+                _CounterChip(label: 'due', value: '${counters.dueTotal}'),
+                _CounterChip(label: 'items', value: '${counters.dueCards}'),
+                _CounterChip(label: 'topics', value: '${counters.dueTopics}'),
               ],
             ),
           ),
@@ -491,8 +491,8 @@ class _LoadPanel extends StatelessWidget {
   }
 }
 
-class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value});
+class _CounterChip extends StatelessWidget {
+  const _CounterChip({required this.label, required this.value});
 
   final String label;
   final String value;

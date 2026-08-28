@@ -91,7 +91,7 @@ List<Block> parseMarkdownBlocks(String markdown, {required String sourceId}) {
         j > i + 1
             ? <Utf16Span>[Utf16Span(contentStart, contentEnd)]
             : const <Utf16Span>[],
-        codeLanguage: fence.info.isEmpty ? null : fence.info,
+        codeLanguage: fence.language.isEmpty ? null : fence.language,
       );
       i = j + 1;
       continue;
@@ -166,11 +166,11 @@ List<Block> parseMarkdownBlocks(String markdown, {required String sourceId}) {
       continue;
     }
 
-    final item = _matchListItem(text);
-    if (item != null) {
+    final listItem = _matchListItem(text);
+    if (listItem != null) {
       var j = i;
       final spans = <Utf16Span>[
-        Utf16Span(line.start + item.contentStart, line.endWithBreak),
+        Utf16Span(line.start + listItem.contentStart, line.endWithBreak),
       ];
       j++;
       while (j < lines.length) {
@@ -179,7 +179,7 @@ List<Block> parseMarkdownBlocks(String markdown, {required String sourceId}) {
         if (_matchListItem(lineText) != null) break;
         if (_startsNewBlock(lineText)) break;
         final indent = _leadingSpaces(lineText);
-        final keep = indent >= item.contentStart ? item.contentStart : indent;
+        final keep = indent >= listItem.contentStart ? listItem.contentStart : indent;
         spans.add(Utf16Span(lines[j].start + keep, lines[j].endWithBreak));
         j++;
       }
@@ -191,9 +191,9 @@ List<Block> parseMarkdownBlocks(String markdown, {required String sourceId}) {
         line.start,
         lines[j - 1].end,
         spans,
-        ordered: item.ordered,
-        listMarker: item.marker,
-        listDepth: item.indent ~/ 2,
+        ordered: listItem.ordered,
+        listMarker: listItem.marker,
+        listDepth: listItem.indent ~/ 2,
       );
       i = j;
       continue;
@@ -236,8 +236,8 @@ List<Block> parseMarkdownBlocks(String markdown, {required String sourceId}) {
 /// Deterministic block identifier for block [index] of [sourceId].
 String blockId(String sourceId, int index) => '$sourceId:$index';
 
-final class _Line {
-  const _Line(this.start, this.end, this.endWithBreak);
+final class _SourceLine {
+  const _SourceLine(this.start, this.end, this.endWithBreak);
 
   /// UTF-16 index of the first character.
   final int start;
@@ -251,27 +251,27 @@ final class _Line {
   String text(String source) => source.substring(start, end);
 }
 
-List<_Line> _splitLines(String source) {
-  final lines = <_Line>[];
+List<_SourceLine> _splitLines(String source) {
+  final lines = <_SourceLine>[];
   var start = 0;
   for (var i = 0; i < source.length; i++) {
     if (source.codeUnitAt(i) == 0x0A) {
-      lines.add(_Line(start, i, i + 1));
+      lines.add(_SourceLine(start, i, i + 1));
       start = i + 1;
     }
   }
   if (start <= source.length - 1 || source.isEmpty) {
-    lines.add(_Line(start, source.length, source.length));
+    lines.add(_SourceLine(start, source.length, source.length));
   }
   return lines;
 }
 
 final class _Fence {
-  const _Fence(this.marker, this.length, this.info);
+  const _Fence(this.marker, this.length, this.language);
 
   final String marker;
   final int length;
-  final String info;
+  final String language;
 }
 
 _Fence? _matchFence(String text) {

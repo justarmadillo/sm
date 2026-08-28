@@ -165,7 +165,7 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
   }
 
   Widget _buildBody(List<ContentNode> roots) {
-    final List<_Row> rows = <_Row>[];
+    final List<_TreeRow> rows = <_TreeRow>[];
     for (final ContentNode root in roots) {
       _flatten(root, 0, rows);
     }
@@ -205,9 +205,9 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
   /// A filtered-out node still yields its children: hiding a source would
   /// otherwise hide every card underneath it, which is the opposite of what
   /// filtering to cards means.
-  void _flatten(ContentNode node, int depth, List<_Row> rows) {
+  void _flatten(ContentNode node, int depth, List<_TreeRow> rows) {
     final bool matches = _types.isEmpty || _types.contains(node.ref.type);
-    if (matches) rows.add(_Row(node: node, depth: depth));
+    if (matches) rows.add(_TreeRow(node: node, depth: depth));
     final bool shouldShowChildren =
         _expanded.contains(node.ref) || (!matches && _types.isNotEmpty);
     if (!shouldShowChildren) return;
@@ -226,8 +226,8 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
 
 /// One visible line: a node and how deep it sits.
 @immutable
-final class _Row {
-  const _Row({required this.node, required this.depth});
+final class _TreeRow {
+  const _TreeRow({required this.node, required this.depth});
   final ContentNode node;
   final int depth;
 }
@@ -274,7 +274,7 @@ class _NodeRow extends StatelessWidget {
     required this.onAction,
   });
 
-  final _Row row;
+  final _TreeRow row;
   final bool isExpanded;
   final VoidCallback onToggle;
   final VoidCallback onPriority;

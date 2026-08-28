@@ -277,7 +277,7 @@ final class _InlineParser {
   }
 
   /// Scans a backtick code span starting at [i].
-  _Span? _scanCodeSpan(int i, int end) {
+  _DelimitedSpan? _scanCodeSpan(int i, int end) {
     var runEnd = i;
     while (runEnd < end && s.codeUnitAt(runEnd) == _kBacktick) {
       runEnd++;
@@ -294,7 +294,7 @@ final class _InlineParser {
         closeEnd++;
       }
       if (closeEnd - j == runLength) {
-        return _Span(innerStart: runEnd, innerEnd: j, end: closeEnd);
+        return _DelimitedSpan(innerStart: runEnd, innerEnd: j, end: closeEnd);
       }
       j = closeEnd;
     }
@@ -302,7 +302,7 @@ final class _InlineParser {
   }
 
   /// Scans an inline `$...$` math span starting at [i].
-  _Span? _scanMath(int i, int end) {
+  _DelimitedSpan? _scanMath(int i, int end) {
     if (i + 1 >= end) return null;
     if (s.codeUnitAt(i + 1) == _kDollar) {
       return null; // display math, not inline
@@ -317,7 +317,7 @@ final class _InlineParser {
       }
       if (unit == _kNewline) return null;
       if (unit == _kDollar && !_isWhitespace(s.codeUnitAt(j - 1))) {
-        return _Span(innerStart: i + 1, innerEnd: j, end: j + 1);
+        return _DelimitedSpan(innerStart: i + 1, innerEnd: j, end: j + 1);
       }
       j++;
     }
@@ -405,8 +405,8 @@ bool _isWordCharacter(int unit) =>
     (unit >= 0x61 && unit <= 0x7A) ||
     unit >= 0x80;
 
-final class _Span {
-  const _Span({
+final class _DelimitedSpan {
+  const _DelimitedSpan({
     required this.innerStart,
     required this.innerEnd,
     required this.end,

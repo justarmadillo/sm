@@ -237,8 +237,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         appBar: AppBar(),
         body: Center(child: Text('Could not open this source.\n$error')),
       ),
-      data: (ReaderUiState data) =>
-          _buildReader(context, data, model, typography),
+      data: (ReaderUiState reader) =>
+          _buildReader(context, reader, model, typography),
     );
   }
 
@@ -665,11 +665,11 @@ class _StatusBar extends StatelessWidget {
         child: Row(
           children: <Widget>[
             if (state.mode == ReaderMode.browse) ...<Widget>[
-              const _Pill(text: 'Browsing', color: AppColors.softMarker),
+              const _StatusPillButton(text: 'Browsing', color: AppColors.softMarker),
               const SizedBox(width: 12),
               const Text('Nothing here changes progress or scheduling'),
             ] else ...<Widget>[
-              const _Pill(text: 'Reading today', color: AppColors.accent),
+              const _StatusPillButton(text: 'Reading today', color: AppColors.accent),
               const SizedBox(width: 12),
               Text(
                 state.marker == null
@@ -686,8 +686,8 @@ class _StatusBar extends StatelessWidget {
   }
 }
 
-class _Pill extends StatelessWidget {
-  const _Pill({required this.text, required this.color});
+class _StatusPillButton extends StatelessWidget {
+  const _StatusPillButton({required this.text, required this.color});
 
   final String text;
   final Color color;

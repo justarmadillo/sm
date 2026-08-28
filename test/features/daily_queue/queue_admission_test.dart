@@ -137,7 +137,7 @@ void main() {
         reason: 'a preview is a proposal, not a change',
       );
       expect(
-        batch.preview.items,
+        batch.preview.moves,
         isNotEmpty,
         reason: 'the proposal exists only in the batch until it is applied',
       );
@@ -170,8 +170,8 @@ void main() {
       expect(applied.unwrap(), batch.preview.selectedCount);
 
       final Map<ElementRef, StudyDay> destinations = <ElementRef, StudyDay>{
-        for (final MercyPreviewItem item in batch.preview.items)
-          item.ref: item.toDay,
+        for (final MercyPlannedMove move in batch.preview.moves)
+          move.ref: move.toDay,
       };
       final ElementRef best = ElementRef(
         id: sources.first.id,
@@ -289,13 +289,13 @@ void main() {
       expect(undone.unwrap(), batch.preview.selectedCount);
       // SM20 stores no adjustment set to clear. Undo restores each element's
       // canonical due to the exact day the preview recorded it leaving.
-      for (final MercyPreviewItem item in batch.preview.items) {
+      for (final MercyPlannedMove move in batch.preview.moves) {
         final ElementSchedule? schedule = await harness.learning.findSchedule(
-          item.ref,
+          move.ref,
         );
         expect(
           schedule!.algorithmicDueDay,
-          item.fromDay,
+          move.fromDay,
           reason: 'undo is a restore, not another reschedule',
         );
       }
@@ -339,9 +339,9 @@ void main() {
       final int horizon =
           (await harness.context.settings()).mercy.reschedulingDays;
       expect(batch.preview.selectedCount, 3);
-      for (final MercyPreviewItem item in batch.preview.items) {
-        expect(item.toDay >= today, isTrue, reason: 'never into the past');
-        expect(item.toDay <= today.addDays(horizon - 1), isTrue);
+      for (final MercyPlannedMove move in batch.preview.moves) {
+        expect(move.toDay >= today, isTrue, reason: 'never into the past');
+        expect(move.toDay <= today.addDays(horizon - 1), isTrue);
       }
     });
   });

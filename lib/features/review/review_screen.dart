@@ -64,7 +64,7 @@ class ReviewScreen extends ConsumerWidget {
         appBar: AppBar(),
         body: Center(child: Text('Could not open this card.\n$error')),
       ),
-      data: (ReviewUiState data) => _ReviewBody(state: data, model: model),
+      data: (ReviewUiState review) => _ReviewBody(state: review, model: model),
     );
   }
 }

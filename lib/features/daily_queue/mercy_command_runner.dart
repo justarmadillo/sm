@@ -290,25 +290,25 @@ final class MercyCommandRunner {
 
         final Map<ElementRef, TopicState> topics = await _learning
             .findTopics(<ElementRef>[
-              for (final MercyPreviewItem item in preview.items)
-                if (item.ref.type.isTopic) item.ref,
+              for (final MercyPlannedMove move in preview.moves)
+                if (move.ref.type.isTopic) move.ref,
             ]);
         final Map<String, CardState> cards = await _learning
             .findCardStates(<String>[
-              for (final MercyPreviewItem item in preview.items)
-                if (item.ref.type == ElementType.card) item.ref.id,
+              for (final MercyPlannedMove move in preview.moves)
+                if (move.ref.type == ElementType.card) move.ref.id,
             ]);
         final List<ElementRef> changedRefs = <ElementRef>[];
-        for (final MercyPreviewItem item in preview.items) {
+        for (final MercyPlannedMove move in preview.moves) {
           String? current;
-          if (item.ref.type == ElementType.card) {
-            final CardState? value = cards[item.ref.id];
+          if (move.ref.type == ElementType.card) {
+            final CardState? value = cards[move.ref.id];
             if (value != null) current = encodeMercyCardState(value);
           } else {
-            final TopicState? value = topics[item.ref];
+            final TopicState? value = topics[move.ref];
             if (value != null) current = encodeMercyTopicState(value);
           }
-          if (current != item.canonicalBefore) changedRefs.add(item.ref);
+          if (current != move.canonicalBefore) changedRefs.add(move.ref);
         }
         if (changedRefs.isNotEmpty) {
           throw StaleMercyPreview(
@@ -324,18 +324,18 @@ final class MercyCommandRunner {
         final String batchEventId = _ids.newId();
         final List<SchedulerEvent> events = <SchedulerEvent>[];
         final List<RevlogEntry> revlog = <RevlogEntry>[];
-        final List<MercyAppliedItemSnapshot> snapshots =
-            <MercyAppliedItemSnapshot>[];
+        final List<MercyAppliedMove> snapshots =
+            <MercyAppliedMove>[];
 
-        for (final MercyPreviewItem item in preview.items) {
+        for (final MercyPlannedMove move in preview.moves) {
           final String itemOperation =
-              '${command.operationId.value}:item:${item.ref.type.name}:${item.ref.id}';
+              '${command.operationId.value}:item:${move.ref.type.name}:${move.ref.id}';
           final String eventId = _ids.newId();
-          if (item.ref.type == ElementType.card) {
-            final CardState before = cards[item.ref.id]!;
+          if (move.ref.type == ElementType.card) {
+            final CardState before = cards[move.ref.id]!;
             final CardState moved = cardScheduler.rescheduleElement(
               before,
-              targetDay: item.toDay,
+              targetDay: move.toDay,
               today: command.day,
             );
             final CardState after = moved.copyWith(
@@ -352,12 +352,12 @@ final class MercyCommandRunner {
             final String beforeJson = encodeMercyCardState(before);
             final String afterJson = encodeMercyCardState(after);
             snapshots.add(
-              MercyAppliedItemSnapshot(
-                ref: item.ref,
+              MercyAppliedMove(
+                ref: move.ref,
                 beforeState: beforeJson,
                 afterState: afterJson,
-                fromDay: item.fromDay,
-                toDay: item.toDay,
+                fromDay: move.fromDay,
+                toDay: move.toDay,
                 appliedEventId: eventId,
               ),
             );
@@ -368,20 +368,20 @@ final class MercyCommandRunner {
                 type: SchedulerEventType.mercyApplied,
                 command: command,
                 stored: stored,
-                ref: item.ref,
+                ref: move.ref,
                 schedulerName: after.memory.schedulerName,
                 schedulerVersion: after.memory.schedulerVersion,
                 beforeState: beforeJson,
                 afterState: afterJson,
                 dueBefore: SchedulerEvent.encodeUtcDue(before.memory.dueAtUtc),
                 dueAfter: SchedulerEvent.encodeUtcDue(after.memory.dueAtUtc),
-                item: item,
+                move: move,
               ),
             );
             revlog.add(
               _journal.build(
                 operationId: itemOperation,
-                ref: item.ref,
+                ref: move.ref,
                 eventType: RevlogEventType.mercy,
                 atUtc: command.timestampUtc,
                 before: _journal.cardSnapshot(
@@ -396,14 +396,14 @@ final class MercyCommandRunner {
                 postponeCount: after.memory.postponeCount,
                 schedulerVersion: after.memory.schedulerVersion,
                 parametersVersion: after.memory.parametersVersion,
-                metadata: _itemMetadata(item),
+                metadata: _moveMetadata(move),
               ),
             );
           } else {
-            final TopicState before = topics[item.ref]!;
+            final TopicState before = topics[move.ref]!;
             final TopicTransition moved = topicScheduler.rescheduleElement(
               before,
-              targetDay: item.toDay,
+              targetDay: move.toDay,
               today: command.day,
             );
             final TopicState after = moved.state.copyWith(
@@ -420,12 +420,12 @@ final class MercyCommandRunner {
             final String beforeJson = encodeMercyTopicState(before);
             final String afterJson = encodeMercyTopicState(after);
             snapshots.add(
-              MercyAppliedItemSnapshot(
-                ref: item.ref,
+              MercyAppliedMove(
+                ref: move.ref,
                 beforeState: beforeJson,
                 afterState: afterJson,
-                fromDay: item.fromDay,
-                toDay: item.toDay,
+                fromDay: move.fromDay,
+                toDay: move.toDay,
                 appliedEventId: eventId,
               ),
             );
@@ -436,7 +436,7 @@ final class MercyCommandRunner {
                 type: SchedulerEventType.mercyApplied,
                 command: command,
                 stored: stored,
-                ref: item.ref,
+                ref: move.ref,
                 schedulerName: after.schedulerName,
                 schedulerVersion: after.schedulerVersion,
                 beforeState: beforeJson,
@@ -447,13 +447,13 @@ final class MercyCommandRunner {
                 dueAfter: SchedulerEvent.encodeStudyDayDue(
                   after.schedule.algorithmicDueDay,
                 ),
-                item: item,
+                move: move,
               ),
             );
             revlog.add(
               _journal.build(
                 operationId: itemOperation,
-                ref: item.ref,
+                ref: move.ref,
                 eventType: RevlogEventType.mercy,
                 atUtc: command.timestampUtc,
                 before: _journal.topicSnapshot(
@@ -469,7 +469,7 @@ final class MercyCommandRunner {
                 scheduledDays: after.intervalDays,
                 postponeCount: after.totalPostponementCount,
                 schedulerVersion: after.schedulerVersion,
-                metadata: _itemMetadata(item),
+                metadata: _moveMetadata(move),
               ),
             );
           }
@@ -498,14 +498,14 @@ final class MercyCommandRunner {
 
         final Sm20CollectionState runtime = await _context.runtimeState();
         await _context.saveRuntimeState(
-          _runtimeAfterMercy(runtime, preview.items, today: command.day),
+          _runtimeAfterMercy(runtime, preview.moves, today: command.day),
         );
         final MercyAppliedBatchSnapshot undo = MercyAppliedBatchSnapshot(
           batchId: stored.batchId,
           appliedEventId: batchEventId,
           policyVersion: stored.policyVersion,
           studyDay: command.day,
-          items: List<MercyAppliedItemSnapshot>.unmodifiable(snapshots),
+          moves: List<MercyAppliedMove>.unmodifiable(snapshots),
         );
         await _learning.saveMercyBatch(
           stored.copyWith(
@@ -577,25 +577,25 @@ final class MercyCommandRunner {
         final MercyAppliedBatchSnapshot applied = stored.appliedSnapshot;
         final Map<ElementRef, TopicState> topics = await _learning
             .findTopics(<ElementRef>[
-              for (final MercyAppliedItemSnapshot item in applied.items)
-                if (item.ref.type.isTopic) item.ref,
+              for (final MercyAppliedMove move in applied.moves)
+                if (move.ref.type.isTopic) move.ref,
             ]);
         final Map<String, CardState> cards = await _learning
             .findCardStates(<String>[
-              for (final MercyAppliedItemSnapshot item in applied.items)
-                if (item.ref.type == ElementType.card) item.ref.id,
+              for (final MercyAppliedMove move in applied.moves)
+                if (move.ref.type == ElementType.card) move.ref.id,
             ]);
         final List<ElementRef> changedRefs = <ElementRef>[];
-        for (final MercyAppliedItemSnapshot item in applied.items) {
+        for (final MercyAppliedMove move in applied.moves) {
           String? current;
-          if (item.ref.type == ElementType.card) {
-            final CardState? value = cards[item.ref.id];
+          if (move.ref.type == ElementType.card) {
+            final CardState? value = cards[move.ref.id];
             if (value != null) current = encodeMercyCardState(value);
           } else {
-            final TopicState? value = topics[item.ref];
+            final TopicState? value = topics[move.ref];
             if (value != null) current = encodeMercyTopicState(value);
           }
-          if (current != item.afterState) changedRefs.add(item.ref);
+          if (current != move.afterState) changedRefs.add(move.ref);
         }
         if (changedRefs.isNotEmpty) {
           throw StaleMercyPreview(
@@ -608,12 +608,12 @@ final class MercyCommandRunner {
         final PriorityScale scale = await _context.priorityScale();
         final List<SchedulerEvent> events = <SchedulerEvent>[];
         final List<RevlogEntry> revlog = <RevlogEntry>[];
-        for (final MercyAppliedItemSnapshot item in applied.items) {
+        for (final MercyAppliedMove move in applied.moves) {
           final String itemOperation =
-              '${command.operationId.value}:item:${item.ref.type.name}:${item.ref.id}';
-          if (item.ref.type == ElementType.card) {
-            final CardState current = cards[item.ref.id]!;
-            final CardState prior = decodeMercyCardState(item.beforeState);
+              '${command.operationId.value}:item:${move.ref.type.name}:${move.ref.id}';
+          if (move.ref.type == ElementType.card) {
+            final CardState current = cards[move.ref.id]!;
+            final CardState prior = decodeMercyCardState(move.beforeState);
             final CardState restored = CardState(
               schedule: prior.schedule.copyWith(
                 revision: current.schedule.revision + 1,
@@ -635,14 +635,14 @@ final class MercyCommandRunner {
               SchedulerEvent(
                 id: _ids.newId(),
                 operationId: itemOperation,
-                element: item.ref,
+                element: move.ref,
                 eventType: SchedulerEventType.mercyUndone,
                 occurredAtUtc: command.timestampUtc,
                 studyDay: command.day,
                 schedulerName: restored.memory.schedulerName,
                 schedulerVersion: restored.memory.schedulerVersion,
                 policyVersion: applied.policyVersion,
-                stateBefore: item.afterState,
+                stateBefore: move.afterState,
                 stateAfter: restoredJson,
                 algorithmicDueBefore: SchedulerEvent.encodeUtcDue(
                   current.memory.dueAtUtc,
@@ -650,14 +650,14 @@ final class MercyCommandRunner {
                 algorithmicDueAfter: SchedulerEvent.encodeUtcDue(
                   restored.memory.dueAtUtc,
                 ),
-                undoesEventId: item.appliedEventId,
+                undoesEventId: move.appliedEventId,
                 batchId: applied.batchId,
               ),
             );
             revlog.add(
               _journal.build(
                 operationId: itemOperation,
-                ref: item.ref,
+                ref: move.ref,
                 eventType: RevlogEventType.undo,
                 atUtc: command.timestampUtc,
                 before: _journal.cardSnapshot(
@@ -678,8 +678,8 @@ final class MercyCommandRunner {
               ),
             );
           } else {
-            final TopicState current = topics[item.ref]!;
-            final TopicState prior = decodeMercyTopicState(item.beforeState);
+            final TopicState current = topics[move.ref]!;
+            final TopicState prior = decodeMercyTopicState(move.beforeState);
             final TopicState restored = prior.copyWith(
               revision: current.revision + 1,
               schedule: prior.schedule.copyWith(
@@ -698,14 +698,14 @@ final class MercyCommandRunner {
               SchedulerEvent(
                 id: _ids.newId(),
                 operationId: itemOperation,
-                element: item.ref,
+                element: move.ref,
                 eventType: SchedulerEventType.mercyUndone,
                 occurredAtUtc: command.timestampUtc,
                 studyDay: command.day,
                 schedulerName: restored.schedulerName,
                 schedulerVersion: restored.schedulerVersion,
                 policyVersion: applied.policyVersion,
-                stateBefore: item.afterState,
+                stateBefore: move.afterState,
                 stateAfter: restoredJson,
                 algorithmicDueBefore: SchedulerEvent.encodeStudyDayDue(
                   current.schedule.algorithmicDueDay,
@@ -713,14 +713,14 @@ final class MercyCommandRunner {
                 algorithmicDueAfter: SchedulerEvent.encodeStudyDayDue(
                   restored.schedule.algorithmicDueDay,
                 ),
-                undoesEventId: item.appliedEventId,
+                undoesEventId: move.appliedEventId,
                 batchId: applied.batchId,
               ),
             );
             revlog.add(
               _journal.build(
                 operationId: itemOperation,
-                ref: item.ref,
+                ref: move.ref,
                 eventType: RevlogEventType.undo,
                 atUtc: command.timestampUtc,
                 before: _journal.topicSnapshot(
@@ -754,19 +754,19 @@ final class MercyCommandRunner {
             policyVersion: applied.policyVersion,
             undoesEventId: applied.appliedEventId,
             batchId: applied.batchId,
-            metadata: <String, Object?>{'item_count': applied.items.length},
+            metadata: <String, Object?>{'item_count': applied.moves.length},
           ),
         );
         await _learning.appendSchedulerEvents(events);
         await _journal.appendAll(revlog);
 
         final Sm20CollectionState runtime = await _context.runtimeState();
-        final List<MercyPreviewItem> original = <MercyPreviewItem>[
-          for (var index = 0; index < applied.items.length; index += 1)
-            MercyPreviewItem(
-              ref: applied.items[index].ref,
-              fromDay: applied.items[index].toDay,
-              toDay: applied.items[index].fromDay,
+        final List<MercyPlannedMove> original = <MercyPlannedMove>[
+          for (var index = 0; index < applied.moves.length; index += 1)
+            MercyPlannedMove(
+              ref: applied.moves[index].ref,
+              fromDay: applied.moves[index].toDay,
+              toDay: applied.moves[index].fromDay,
               score: 0,
               sourceIndex: index,
               orderedIndex: index,
@@ -790,11 +790,11 @@ final class MercyCommandRunner {
           command.timestampUtc,
           <String, Object?>{
             'batch_id': applied.batchId,
-            'restored': applied.items.length,
+            'restored': applied.moves.length,
           },
         );
         await _transfer.advanceGeneration();
-        return Ok<int>(applied.items.length);
+        return Ok<int>(applied.moves.length);
       });
     } on StaleMercyPreview catch (error) {
       return Err<int>(ConflictFailure(error.message));
@@ -898,7 +898,7 @@ SchedulerEvent _itemEvent({
   required String afterState,
   required String dueBefore,
   required String dueAfter,
-  required MercyPreviewItem item,
+  required MercyPlannedMove move,
 }) => SchedulerEvent(
   id: id,
   operationId: operationId,
@@ -914,29 +914,29 @@ SchedulerEvent _itemEvent({
   algorithmicDueBefore: dueBefore,
   algorithmicDueAfter: dueAfter,
   batchId: stored.batchId,
-  metadata: _itemMetadata(item),
+  metadata: _moveMetadata(move),
 );
 
-Map<String, Object?> _itemMetadata(MercyPreviewItem item) => <String, Object?>{
-  'from_study_day': item.fromDay.epochDay,
-  'to_study_day': item.toDay.epochDay,
-  'zone_id': item.toDay.zoneId,
-  'score': item.score,
-  'source_index': item.sourceIndex,
-  'ordered_index': item.orderedIndex,
+Map<String, Object?> _moveMetadata(MercyPlannedMove move) => <String, Object?>{
+  'from_study_day': move.fromDay.epochDay,
+  'to_study_day': move.toDay.epochDay,
+  'zone_id': move.toDay.zoneId,
+  'score': move.score,
+  'source_index': move.sourceIndex,
+  'ordered_index': move.orderedIndex,
 };
 
 Sm20CollectionState _runtimeAfterMercy(
   Sm20CollectionState runtime,
-  Iterable<MercyPreviewItem> assignments, {
+  Iterable<MercyPlannedMove> assignments, {
   required StudyDay today,
 }) {
-  final List<MercyPreviewItem> values = assignments.toList();
+  final List<MercyPlannedMove> values = assignments.toList();
   final Set<ElementRef> scope = <ElementRef>{
-    for (final MercyPreviewItem value in values) value.ref,
+    for (final MercyPlannedMove value in values) value.ref,
   };
   final List<ElementRef> dueNow = <ElementRef>[
-    for (final MercyPreviewItem value in values)
+    for (final MercyPlannedMove value in values)
       if (value.toDay <= today) value.ref,
   ];
   final Set<ElementRef> dueItems = <ElementRef>{

@@ -136,13 +136,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       const Center(child: CircularProgressIndicator()),
                   error: (Object error, StackTrace stack) =>
                       Center(child: Text('Search failed.\n$error')),
-                  data: (List<SearchResult> data) => data.isEmpty
+                  data: (List<SearchResult> results) => results.isEmpty
                       ? _Empty(query: _controller.text)
                       : ListView.builder(
                           padding: const EdgeInsets.fromLTRB(20, 12, 20, 60),
-                          itemCount: data.length,
+                          itemCount: results.length,
                           itemBuilder: (BuildContext context, int index) =>
-                              _ResultTile(result: data[index]),
+                              _ResultTile(result: results[index]),
                         ),
                 ),
               ),

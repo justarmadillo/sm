@@ -130,7 +130,7 @@ class _CollectionPanel extends ConsumerWidget {
     final AsyncValue<CollectionDiagnostics> state = ref.watch(
       collectionDiagnosticsProvider,
     );
-    return _Panel(
+    return _DiagnosticsPanel(
       title: 'Today',
       child: state.when(
         loading: () => const Padding(
@@ -138,27 +138,27 @@ class _CollectionPanel extends ConsumerWidget {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (Object error, StackTrace stack) => Text('$error'),
-        data: (CollectionDiagnostics data) => Column(
+        data: (CollectionDiagnostics collection) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Wrap(
               spacing: 26,
               runSpacing: 12,
               children: <Widget>[
-                _Stat(label: 'Study day', value: data.today.toString()),
-                _Stat(label: 'Elements', value: '${data.totalElements}'),
-                _Stat(
+                _LabelledStat(label: 'Study day', value: collection.today.toString()),
+                _LabelledStat(label: 'Elements', value: '${collection.totalElements}'),
+                _LabelledStat(
                   label: 'Outstanding items',
-                  value: '${data.counters.dueCards}',
+                  value: '${collection.counters.dueCards}',
                 ),
-                _Stat(
+                _LabelledStat(
                   label: 'Outstanding topics',
-                  value: '${data.counters.dueTopics}',
+                  value: '${collection.counters.dueTopics}',
                 ),
-                _Stat(
+                _LabelledStat(
                   label: 'Indexed',
-                  value: '${data.indexedDocuments}',
-                  hint: data.isSearchIndexValid
+                  value: '${collection.indexedDocuments}',
+                  hint: collection.isSearchIndexValid
                       ? 'Search index consistent'
                       : 'Search index needs a rebuild',
                 ),
@@ -174,7 +174,7 @@ class _CollectionPanel extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 6),
-            if (data.eventsToday.isEmpty)
+            if (collection.eventsToday.isEmpty)
               const Text(
                 'Nothing recorded yet.',
                 style: TextStyle(fontSize: 12, color: AppColors.muted),
@@ -185,8 +185,8 @@ class _CollectionPanel extends ConsumerWidget {
                 runSpacing: 8,
                 children: <Widget>[
                   for (final MapEntry<RevlogEventType, int> entry
-                      in data.eventsToday.entries)
-                    _Stat(
+                      in collection.eventsToday.entries)
+                    _LabelledStat(
                       label: entry.key.storageName,
                       value: '${entry.value}',
                     ),
@@ -208,7 +208,7 @@ class _SchedulerMetricsPanel extends ConsumerWidget {
     final AsyncValue<SchedulerMetricsSnapshot> state = ref.watch(
       schedulerMetricsProvider,
     );
-    return _Panel(
+    return _DiagnosticsPanel(
       title: 'Scheduler metrics',
       child: state.when(
         loading: () => const Padding(
@@ -244,22 +244,22 @@ class _MetricsBody extends StatelessWidget {
           spacing: 26,
           runSpacing: 14,
           children: <Widget>[
-            _Stat(
+            _LabelledStat(
               label: 'Overdue now',
               value:
                   '${metrics.overdueCards} cards, '
                   '${metrics.overdueTopics} topics',
             ),
-            _Stat(
+            _LabelledStat(
               label: 'Next 7 days',
               value: '${_cards(7)} cards, ${_topics(7)} topics',
             ),
-            _Stat(
+            _LabelledStat(
               label: 'Next 30 days',
               value: '${_cards(30)} cards, ${_topics(30)} topics',
             ),
-            _Stat(label: 'Manual Later', value: '${metrics.manualLaterCount}'),
-            _Stat(
+            _LabelledStat(label: 'Manual Later', value: '${metrics.manualLaterCount}'),
+            _LabelledStat(
               label: 'Mercy',
               value: metrics.mercyCount == 0
                   ? 'none'
@@ -268,13 +268,13 @@ class _MetricsBody extends StatelessWidget {
                   ? null
                   : 'Sizes: ${metrics.mercyBatchSizes.join(', ')}.',
             ),
-            _Stat(
+            _LabelledStat(
               label: 'Reviews / encounters',
               value:
                   '${metrics.actualCardReviews} / ${metrics.topicsCompleted}',
               hint: 'Genuine only: practice and undone events are excluded.',
             ),
-            _Stat(
+            _LabelledStat(
               label: 'Card/topic mix',
               value: metrics.cardTopicOpportunityRatio.value == null
                   ? 'none'
@@ -344,7 +344,7 @@ class _CommandsPanel extends ConsumerWidget {
     final AsyncValue<List<ActivityRecord>> state = ref.watch(
       recentCommandsProvider,
     );
-    return _Panel(
+    return _DiagnosticsPanel(
       title: 'Recent commands',
       child: state.when(
         loading: () => const Padding(
@@ -424,7 +424,7 @@ class _ElementPanel extends ConsumerWidget {
     final AsyncValue<ElementDiagnostics?> state = ref.watch(
       elementDiagnosticsProvider(elementRef),
     );
-    return _Panel(
+    return _DiagnosticsPanel(
       title: 'Element  $elementRef',
       child: state.when(
         loading: () => const Padding(
@@ -432,17 +432,17 @@ class _ElementPanel extends ConsumerWidget {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (Object error, StackTrace stack) => Text('$error'),
-        data: (ElementDiagnostics? data) {
-          if (data == null) {
+        data: (ElementDiagnostics? element) {
+          if (element == null) {
             return const Text('That element has no schedule.');
           }
-          final TopicState? topic = data.topic;
+          final TopicState? topic = element.topic;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              if (data.title != null) ...<Widget>[
+              if (element.title != null) ...<Widget>[
                 Text(
-                  data.title!,
+                  element.title!,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13),
@@ -453,52 +453,52 @@ class _ElementPanel extends ConsumerWidget {
                 spacing: 26,
                 runSpacing: 12,
                 children: <Widget>[
-                  _Stat(
+                  _LabelledStat(
                     label: 'Lifecycle',
-                    value: data.schedule.lifecycle.name,
+                    value: element.schedule.lifecycle.name,
                   ),
-                  _Stat(
+                  _LabelledStat(
                     label: 'Priority',
-                    value: data.position == null
-                        ? data.schedule.priority.orderKey
-                        : '${data.position!.percent.toStringAsFixed(1)}%',
+                    value: element.position == null
+                        ? element.schedule.priority.orderKey
+                        : '${element.position!.percent.toStringAsFixed(1)}%',
                   ),
-                  _Stat(
+                  _LabelledStat(
                     label: 'Due',
-                    value: data.schedule.algorithmicDueDay.toString(),
+                    value: element.schedule.algorithmicDueDay.toString(),
                   ),
-                  _Stat(
+                  _LabelledStat(
                     label: 'Original due',
-                    value: data.schedule.originalDueDay.toString(),
+                    value: element.schedule.originalDueDay.toString(),
                   ),
                   if (topic != null) ...<Widget>[
-                    _Stat(
+                    _LabelledStat(
                       label: 'Interval',
                       value: '${topic.intervalDays.toStringAsFixed(2)}d',
                     ),
-                    _Stat(
+                    _LabelledStat(
                       label: 'A-factor',
                       value: topic.aFactor.toStringAsFixed(3),
                     ),
-                    _Stat(label: 'Encounters', value: '${topic.encounters}'),
-                    _Stat(label: 'Postponed', value: '${topic.postponeCount}'),
+                    _LabelledStat(label: 'Encounters', value: '${topic.encounters}'),
+                    _LabelledStat(label: 'Postponed', value: '${topic.postponeCount}'),
                   ],
-                  if (data.card case final card?) ...<Widget>[
-                    _Stat(label: 'State', value: card.memory.state.name),
-                    _Stat(label: 'Reps', value: '${card.memory.reps}'),
-                    _Stat(label: 'Lapses', value: '${card.memory.lapses}'),
-                    _Stat(
+                  if (element.card case final card?) ...<Widget>[
+                    _LabelledStat(label: 'State', value: card.memory.state.name),
+                    _LabelledStat(label: 'Reps', value: '${card.memory.reps}'),
+                    _LabelledStat(label: 'Lapses', value: '${card.memory.lapses}'),
+                    _LabelledStat(
                       label: 'Stability',
                       value: card.memory.stability?.toStringAsFixed(2) ?? '—',
                     ),
-                    _Stat(
+                    _LabelledStat(
                       label: 'Difficulty',
                       value: card.memory.difficulty?.toStringAsFixed(2) ?? '—',
                     ),
                   ],
                 ],
               ),
-              if (data.nextIntervalPreview case final preview?) ...<Widget>[
+              if (element.nextIntervalPreview case final preview?) ...<Widget>[
                 const SizedBox(height: 14),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -529,13 +529,13 @@ class _ElementPanel extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              if (data.history.isEmpty)
+              if (element.history.isEmpty)
                 const Text(
                   'Nothing recorded yet.',
                   style: TextStyle(fontSize: 12, color: AppColors.muted),
                 )
               else
-                for (final RevlogEntry entry in data.history.take(60))
+                for (final RevlogEntry entry in element.history.take(60))
                   _HistoryRow(entry: entry),
             ],
           );
@@ -608,8 +608,8 @@ class _HistoryRow extends StatelessWidget {
   );
 }
 
-class _Panel extends StatelessWidget {
-  const _Panel({required this.title, required this.child});
+class _DiagnosticsPanel extends StatelessWidget {
+  const _DiagnosticsPanel({required this.title, required this.child});
 
   final String title;
   final Widget child;
@@ -638,8 +638,8 @@ class _Panel extends StatelessWidget {
   );
 }
 
-class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value, this.hint});
+class _LabelledStat extends StatelessWidget {
+  const _LabelledStat({required this.label, required this.value, this.hint});
 
   final String label;
   final String value;

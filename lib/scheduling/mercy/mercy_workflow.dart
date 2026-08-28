@@ -22,8 +22,8 @@ const String kSm20MercyPolicyVersion = 'sm20-mercy/1';
 
 /// One fixed assignment shown in a preview and later applied verbatim.
 @immutable
-final class MercyPreviewItem {
-  const MercyPreviewItem({
+final class MercyPlannedMove {
+  const MercyPlannedMove({
     required this.ref,
     required this.fromDay,
     required this.toDay,
@@ -73,7 +73,7 @@ final class MercyPreview {
     required this.gatheringDays,
     required this.reschedulingDays,
     required this.mode,
-    required this.items,
+    required this.moves,
     required this.gatheredCount,
     required this.blockSize,
     required this.randomDraws,
@@ -105,9 +105,9 @@ final class MercyPreview {
     prngSeedBefore: prngSeedBefore,
     prngSeedAfter: plan.prngState.seed,
     deletedPlaceholderCount: plan.deletedPlaceholderCount,
-    items: List<MercyPreviewItem>.unmodifiable(<MercyPreviewItem>[
+    moves: List<MercyPlannedMove>.unmodifiable(<MercyPlannedMove>[
       for (final Sm20MercyAssignment assignment in plan.assignments)
-        MercyPreviewItem(
+        MercyPlannedMove(
           ref: assignment.ref,
           fromDay: assignment.candidate.scheduledDay,
           toDay: assignment.targetDay,
@@ -140,11 +140,11 @@ final class MercyPreview {
       prngSeedBefore: map['prng_seed_before']! as int,
       prngSeedAfter: map['prng_seed_after']! as int,
       deletedPlaceholderCount: map['deleted_placeholder_count']! as int,
-      items: List<MercyPreviewItem>.unmodifiable(<MercyPreviewItem>[
+      moves: List<MercyPlannedMove>.unmodifiable(<MercyPlannedMove>[
         for (final Object? raw in map['items']! as List<Object?>)
           (() {
             final Map<String, Object?> value = _object(raw, 'preview item');
-            return MercyPreviewItem(
+            return MercyPlannedMove(
               ref: _ref(value),
               fromDay: _day(value['from_day']! as int, zoneId),
               toDay: _day(value['to_day']! as int, zoneId),
@@ -166,7 +166,7 @@ final class MercyPreview {
   final int reschedulingDays;
   final MercyMode mode;
   final Sm20MercyGatherMode gatherMode;
-  final List<MercyPreviewItem> items;
+  final List<MercyPlannedMove> moves;
   final int gatheredCount;
   final int blockSize;
   final int randomDraws;
@@ -174,17 +174,17 @@ final class MercyPreview {
   final int prngSeedAfter;
   final int deletedPlaceholderCount;
 
-  int get selectedCount => items.length;
-  int get selectedCardCount => items
-      .where((MercyPreviewItem value) => value.ref.type == ElementType.card)
+  int get selectedCount => moves.length;
+  int get selectedCardCount => moves
+      .where((MercyPlannedMove value) => value.ref.type == ElementType.card)
       .length;
   int get selectedTopicCount => selectedCount - selectedCardCount;
   List<MercyDailyLoad> get afterLoad {
     final Map<int, ({int cards, int topics})> counts =
         <int, ({int cards, int topics})>{};
-    for (final MercyPreviewItem item in items) {
-      final current = counts[item.toDay.epochDay] ?? (cards: 0, topics: 0);
-      counts[item.toDay.epochDay] = item.ref.type == ElementType.card
+    for (final MercyPlannedMove move in moves) {
+      final current = counts[move.toDay.epochDay] ?? (cards: 0, topics: 0);
+      counts[move.toDay.epochDay] = move.ref.type == ElementType.card
           ? (cards: current.cards + 1, topics: current.topics)
           : (cards: current.cards, topics: current.topics + 1);
     }
@@ -216,17 +216,17 @@ final class MercyPreview {
     'prng_seed_after': prngSeedAfter,
     'deleted_placeholder_count': deletedPlaceholderCount,
     'items': <Map<String, Object?>>[
-      for (final MercyPreviewItem item in items)
+      for (final MercyPlannedMove move in moves)
         <String, Object?>{
-          ..._refMap(item.ref),
-          'from_day': item.fromDay.epochDay,
-          'to_day': item.toDay.epochDay,
-          'score': item.score,
-          'source_index': item.sourceIndex,
-          'ordered_index': item.orderedIndex,
-          'schedule_revision': item.scheduleRevision,
-          'scheduler_revision': item.schedulerRevision,
-          'canonical_before': item.canonicalBefore,
+          ..._refMap(move.ref),
+          'from_day': move.fromDay.epochDay,
+          'to_day': move.toDay.epochDay,
+          'score': move.score,
+          'source_index': move.sourceIndex,
+          'ordered_index': move.orderedIndex,
+          'schedule_revision': move.scheduleRevision,
+          'scheduler_revision': move.schedulerRevision,
+          'canonical_before': move.canonicalBefore,
         },
     ],
   });
@@ -234,8 +234,8 @@ final class MercyPreview {
 
 /// Canonical before/after token for one applied assignment.
 @immutable
-final class MercyAppliedItemSnapshot {
-  const MercyAppliedItemSnapshot({
+final class MercyAppliedMove {
+  const MercyAppliedMove({
     required this.ref,
     required this.beforeState,
     required this.afterState,
@@ -260,14 +260,14 @@ final class MercyAppliedBatchSnapshot {
     required this.appliedEventId,
     required this.policyVersion,
     required this.studyDay,
-    required this.items,
+    required this.moves,
   });
 
   final String batchId;
   final String appliedEventId;
   final String policyVersion;
   final StudyDay studyDay;
-  final List<MercyAppliedItemSnapshot> items;
+  final List<MercyAppliedMove> moves;
 }
 
 /// A stale preview/undo is refused before any canonical state is written.
@@ -341,14 +341,14 @@ String encodeMercyAppliedBatch(MercyAppliedBatchSnapshot snapshot) =>
       'study_day': snapshot.studyDay.epochDay,
       'zone_id': snapshot.studyDay.zoneId,
       'items': <Map<String, Object?>>[
-        for (final MercyAppliedItemSnapshot item in snapshot.items)
+        for (final MercyAppliedMove move in snapshot.moves)
           <String, Object?>{
-            ..._refMap(item.ref),
-            'before_state': item.beforeState,
-            'after_state': item.afterState,
-            'from_day': item.fromDay.epochDay,
-            'to_day': item.toDay.epochDay,
-            'applied_event_id': item.appliedEventId,
+            ..._refMap(move.ref),
+            'before_state': move.beforeState,
+            'after_state': move.afterState,
+            'from_day': move.fromDay.epochDay,
+            'to_day': move.toDay.epochDay,
+            'applied_event_id': move.appliedEventId,
           },
       ],
     });
@@ -361,12 +361,12 @@ MercyAppliedBatchSnapshot decodeMercyAppliedBatch(String source) {
     appliedEventId: map['applied_event_id']! as String,
     policyVersion: map['policy_version']! as String,
     studyDay: _day(map['study_day']! as int, zoneId),
-    items:
-        List<MercyAppliedItemSnapshot>.unmodifiable(<MercyAppliedItemSnapshot>[
+    moves:
+        List<MercyAppliedMove>.unmodifiable(<MercyAppliedMove>[
           for (final Object? raw in map['items']! as List<Object?>)
             (() {
               final Map<String, Object?> value = _object(raw, 'Mercy item');
-              return MercyAppliedItemSnapshot(
+              return MercyAppliedMove(
                 ref: _ref(value),
                 beforeState: value['before_state']! as String,
                 afterState: value['after_state']! as String,

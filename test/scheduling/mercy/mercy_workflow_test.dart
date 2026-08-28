@@ -90,8 +90,8 @@ void main() {
       expect(decoded.gatherMode, Sm20MercyGatherMode.collection);
       expect(decoded.prngSeedBefore, 0x01020304);
       expect(decoded.prngSeedAfter, 0x10203040);
-      expect(decoded.items.first.scheduleRevision, 7);
-      expect(decoded.items.first.canonicalBefore, '{"kind":"topic"}');
+      expect(decoded.moves.first.scheduleRevision, 7);
+      expect(decoded.moves.first.canonicalBefore, '{"kind":"topic"}');
       expect(
         decoded.afterLoad
             .map(
@@ -234,8 +234,8 @@ void main() {
       appliedEventId: 'event-batch',
       policyVersion: kSm20MercyPolicyVersion,
       studyDay: _day(10),
-      items: <MercyAppliedItemSnapshot>[
-        MercyAppliedItemSnapshot(
+      moves: <MercyAppliedMove>[
+        MercyAppliedMove(
           ref: const ElementRef(id: 'topic-1', type: ElementType.source),
           beforeState: '{"due":10}',
           afterState: '{"due":12}',
@@ -252,8 +252,8 @@ void main() {
     expect(encodeMercyAppliedBatch(decoded), encoded);
     expect(decoded.batchId, 'batch-1');
     expect(decoded.policyVersion, kSm20MercyPolicyVersion);
-    expect(decoded.items.single.beforeState, '{"due":10}');
-    expect(decoded.items.single.afterState, '{"due":12}');
+    expect(decoded.moves.single.beforeState, '{"due":10}');
+    expect(decoded.moves.single.afterState, '{"due":12}');
   });
 }
 

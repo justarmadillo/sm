@@ -63,7 +63,7 @@ class _PriorityDialog extends ConsumerWidget {
             height: 160,
             child: Center(child: Text('No priority for this element.\n$error')),
           ),
-          data: (PrioritySliderState data) => _Body(state: data, model: model),
+          data: (PrioritySliderState slider) => _SliderBody(state: slider, model: model),
         ),
       ),
       actions: <Widget>[
@@ -97,8 +97,8 @@ class _PriorityDialog extends ConsumerWidget {
   }
 }
 
-class _Body extends StatelessWidget {
-  const _Body({required this.state, required this.model});
+class _SliderBody extends StatelessWidget {
+  const _SliderBody({required this.state, required this.model});
 
   final PrioritySliderState state;
   final PrioritySliderViewModel model;
@@ -172,9 +172,9 @@ class _Body extends StatelessWidget {
         // judgement the user can actually make.
         // These follow the slider: they name where the element would land at
         // the drafted percent, not where it sits now.
-        _Neighbour(label: 'Before', entry: state.draftAbove),
+        _NeighbourLine(label: 'Before', entry: state.draftAbove),
         const SizedBox(height: 6),
-        _Neighbour(label: 'After', entry: state.draftBelow),
+        _NeighbourLine(label: 'After', entry: state.draftBelow),
         const SizedBox(height: 14),
         const Text(
           'If you hesitate between a lower priority and a higher one, the '
@@ -187,8 +187,8 @@ class _Body extends StatelessWidget {
   }
 }
 
-class _Neighbour extends StatelessWidget {
-  const _Neighbour({required this.label, required this.entry});
+class _NeighbourLine extends StatelessWidget {
+  const _NeighbourLine({required this.label, required this.entry});
 
   final String label;
   final PriorityEntry? entry;

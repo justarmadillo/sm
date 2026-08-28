@@ -377,11 +377,11 @@ final class ExtractionCommandRunner {
   /// An extract's own text is parsed on demand rather than stored as blocks:
   /// extracts are short, and deriving them keeps one coordinate system for
   /// every level of the chain.
-  Future<_Parent?> _resolveParent(String parentId, bool hasSourceAsParent) async {
+  Future<_ResolvedParent?> _resolveParent(String parentId, bool hasSourceAsParent) async {
     if (hasSourceAsParent) {
       final document = await _content.findDocument(parentId);
       if (document == null) return null;
-      return _Parent(
+      return _ResolvedParent(
         ref: ElementRef(id: parentId, type: ElementType.source),
         document: document,
         rootSourceId: parentId,
@@ -389,7 +389,7 @@ final class ExtractionCommandRunner {
     }
     final extract = await _content.findExtract(parentId);
     if (extract == null) return null;
-    return _Parent(
+    return _ResolvedParent(
       ref: ElementRef(id: parentId, type: ElementType.extract),
       document: Document.parse(sourceId: parentId, markdown: extract.markdown),
       rootSourceId: extract.provenance.sourceId,
@@ -463,8 +463,8 @@ final class ExtractionCommandRunner {
 }
 
 /// The parent of an extract, resolved to a document plus identity.
-final class _Parent {
-  const _Parent({
+final class _ResolvedParent {
+  const _ResolvedParent({
     required this.ref,
     required this.document,
     required this.rootSourceId,

@@ -73,14 +73,14 @@ class PriorityBrowserScreen extends ConsumerWidget {
         // The empty state is rendered inside the body, never instead of it:
         // replacing the whole body would take the filter bar with it, and a
         // filter that returns nothing would then have no way back.
-        data: (PriorityBrowserState data) => _Body(state: data, model: model),
+        data: (PriorityBrowserState browser) => _BrowserBody(state: browser, model: model),
       ),
     );
   }
 }
 
-class _Body extends ConsumerWidget {
-  const _Body({required this.state, required this.model});
+class _BrowserBody extends ConsumerWidget {
+  const _BrowserBody({required this.state, required this.model});
 
   final PriorityBrowserState state;
   final PriorityBrowserViewModel model;
@@ -108,7 +108,7 @@ class _Body extends ConsumerWidget {
                   ? ListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
                       itemCount: state.entries.length,
-                      itemBuilder: (BuildContext context, int index) => _Row(
+                      itemBuilder: (BuildContext context, int index) => _ElementRow(
                         key: ValueKey<String>('${state.entries[index].ref}'),
                         entry: state.entries[index],
                         index: index,
@@ -137,7 +137,7 @@ class _Body extends ConsumerWidget {
                       // onReorderItem already accounts for the dragged row having
                       // been removed, so the index needs no adjustment here.
                       onReorderItem: model.reorder,
-                      itemBuilder: (BuildContext context, int index) => _Row(
+                      itemBuilder: (BuildContext context, int index) => _ElementRow(
                         key: ValueKey<String>('${state.entries[index].ref}'),
                         entry: state.entries[index],
                         index: index,
@@ -385,8 +385,8 @@ class _FilterBar extends StatelessWidget {
       a.length == b.length && a.containsAll(b);
 }
 
-class _Row extends ConsumerWidget {
-  const _Row({
+class _ElementRow extends ConsumerWidget {
+  const _ElementRow({
     required this.entry,
     required this.index,
     required this.onBatchPriority,
@@ -1072,7 +1072,7 @@ class _HeaderRow extends StatelessWidget {
         // headings sit over the columns they name by construction rather than
         // by two layouts happening to agree.
         const SizedBox(width: _kHandleWidth),
-        _Header(
+        _ColumnHeader(
           state: state,
           model: model,
           sort: PriorityBrowserSort.priority,
@@ -1081,38 +1081,38 @@ class _HeaderRow extends StatelessWidget {
         ),
         const SizedBox(width: _kBadgeWidth + 8),
         Expanded(
-          child: _Header(
+          child: _ColumnHeader(
             state: state,
             model: model,
             sort: PriorityBrowserSort.title,
             align: TextAlign.left,
           ),
         ),
-        _Header(
+        _ColumnHeader(
           state: state,
           model: model,
           sort: PriorityBrowserSort.interval,
           width: _kIntervalWidth,
         ),
-        _Header(
+        _ColumnHeader(
           state: state,
           model: model,
           sort: PriorityBrowserSort.repetitions,
           width: _kCountWidth,
         ),
-        _Header(
+        _ColumnHeader(
           state: state,
           model: model,
           sort: PriorityBrowserSort.lapses,
           width: _kCountWidth,
         ),
-        _Header(
+        _ColumnHeader(
           state: state,
           model: model,
           sort: PriorityBrowserSort.lastRepetition,
           width: _kDateWidth,
         ),
-        _Header(
+        _ColumnHeader(
           state: state,
           model: model,
           sort: PriorityBrowserSort.nextRepetition,
@@ -1124,8 +1124,8 @@ class _HeaderRow extends StatelessWidget {
   );
 }
 
-class _Header extends StatelessWidget {
-  const _Header({
+class _ColumnHeader extends StatelessWidget {
+  const _ColumnHeader({
     required this.state,
     required this.model,
     required this.sort,

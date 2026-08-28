@@ -72,14 +72,14 @@ class SettingsScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
             Center(child: Text('Could not load settings.\n$error')),
-        data: (SettingsUiState data) => _Body(state: data, model: model),
+        data: (SettingsUiState settings) => _SettingsBody(state: settings, model: model),
       ),
     );
   }
 }
 
-class _Body extends StatelessWidget {
-  const _Body({required this.state, required this.model});
+class _SettingsBody extends StatelessWidget {
+  const _SettingsBody({required this.state, required this.model});
 
   final SettingsUiState state;
   final SettingsViewModel model;

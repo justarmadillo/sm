@@ -126,8 +126,8 @@ TextStyle _styleForSegment(
 }
 
 /// One piece of a segment, optionally carrying the highlight covering it.
-final class _Piece {
-  const _Piece(this.text, this.mark);
+final class _TextRun {
+  const _TextRun(this.text, this.mark);
 
   final String text;
   final BlockHighlight? mark;
@@ -149,12 +149,12 @@ TextStyle _applyHighlight(TextStyle style, BlockHighlight? mark) {
 }
 
 /// Splits [segment] at every highlight boundary that falls inside it.
-List<_Piece> _splitByHighlights(
+List<_TextRun> _splitByHighlights(
   InlineSegment segment,
   List<BlockHighlight> highlights,
 ) {
   if (highlights.isEmpty) {
-    return <_Piece>[_Piece(segment.text, null)];
+    return <_TextRun>[_TextRun(segment.text, null)];
   }
 
   final cuts = <int>{segment.renderedStart, segment.renderedEnd};
@@ -171,13 +171,13 @@ List<_Piece> _splitByHighlights(
   }
   final boundaries = cuts.toList()..sort();
 
-  final pieces = <_Piece>[];
+  final pieces = <_TextRun>[];
   for (var i = 0; i < boundaries.length - 1; i++) {
     final start = boundaries[i];
     final end = boundaries[i + 1];
     if (end <= start) continue;
     pieces.add(
-      _Piece(
+      _TextRun(
         segment.text.substring(
           start - segment.renderedStart,
           end - segment.renderedStart,

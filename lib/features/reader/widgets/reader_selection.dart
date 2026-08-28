@@ -400,8 +400,8 @@ final class ReaderSelectionController extends ChangeNotifier {
   /// When the pointer is in the space between blocks, the vertically nearest
   /// mounted paragraph wins, so a drag through a paragraph gap keeps
   /// extending instead of stalling.
-  _Hit? _hitTest(Offset globalPosition, {String? blockId}) {
-    _Hit? best;
+  _BlockPosition? _hitTest(Offset globalPosition, {String? blockId}) {
+    _BlockPosition? best;
     var bestDistance = double.infinity;
 
     for (final entry in _paragraphs.entries) {
@@ -425,7 +425,7 @@ final class ReaderSelectionController extends ChangeNotifier {
       );
       final position = renderObject.getPositionForOffset(clamped);
       bestDistance = distance;
-      best = _Hit(entry.key, position.offset);
+      best = _BlockPosition(entry.key, position.offset);
       if (distance == 0) break;
     }
     return best;
@@ -435,8 +435,8 @@ final class ReaderSelectionController extends ChangeNotifier {
       unit == 0x20 || unit == 0x09 || unit == 0x0A || unit == 0x0D;
 }
 
-final class _Hit {
-  const _Hit(this.blockId, this.renderedIndex);
+final class _BlockPosition {
+  const _BlockPosition(this.blockId, this.renderedIndex);
 
   final String blockId;
   final int renderedIndex;
