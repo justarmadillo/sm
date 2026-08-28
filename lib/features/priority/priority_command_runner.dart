@@ -38,8 +38,8 @@ const String kPrioritySetKind = 'element.priority_set';
 const String kPrioritySpreadKind = 'element.priority_spread';
 
 /// Handlers for the priority slider, the browser, and bulk spread.
-final class PriorityHandlers {
-  PriorityHandlers({
+final class PriorityCommandRunner {
+  PriorityCommandRunner({
     required LearningRepository learning,
     required TransferRepository transfer,
     required TransactionRunner transactions,

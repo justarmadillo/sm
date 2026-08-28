@@ -91,7 +91,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
     state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: true));
 
     final Result<StoredMercyBatch> result = await ref
-        .read(mercyHandlersProvider)
+        .read(mercyCommandRunnerProvider)
         .preview(
           PreviewMercy(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -146,7 +146,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
 
     final SmartPostponeSettings base = profile ?? await smartPostponeSettings();
     final Result<AppliedSmartPostpone> result = await ref
-        .read(queueHandlersProvider)
+        .read(queueCommandRunnerProvider)
         .runSmartPostpone(
           RunSmartPostpone(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -197,7 +197,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
   /// Enters Final Drill or Pending on demand, as the Learn menu does.
   Future<void> enterStage(Sm20StageRequest stage) => _queueCommand(
     (OperationId operation, StudyDay day, DateTime now) => ref
-        .read(queueHandlersProvider)
+        .read(queueCommandRunnerProvider)
         .enterLearningStage(
           EnterLearningStage(
             operation,
@@ -237,7 +237,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
   /// Cut drills: empties the Final Drill queue.
   Future<void> cutDrills() => _queueCommand(
     (OperationId operation, StudyDay day, DateTime now) => ref
-        .read(queueHandlersProvider)
+        .read(queueCommandRunnerProvider)
         .cutDrills(CutDrills(operation, day: day, timestampUtc: now)),
     success: (Sm20QueueCommandOutcome outcome) => outcome.affected == 0
         ? 'The final drill was already empty'
@@ -248,7 +248,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
   /// Reorders one stored queue with the fixed-size swap.
   Future<void> randomizeQueue(Sm20RandomizableQueue queue) => _queueCommand(
     (OperationId operation, StudyDay day, DateTime now) => ref
-        .read(queueHandlersProvider)
+        .read(queueCommandRunnerProvider)
         .randomizeQueue(
           RandomizeQueue(operation, day: day, queue: queue, timestampUtc: now),
         ),
@@ -309,7 +309,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
     state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: true));
 
     final Result<int> result = await ref
-        .read(mercyHandlersProvider)
+        .read(mercyCommandRunnerProvider)
         .apply(
           ApplyMercy(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -341,8 +341,8 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
   Future<void> undoMercy() async {
     final QueueUiState? current = state.valueOrNull;
     if (current == null || current.isBusy) return;
-    final MercyHandlers handlers = ref.read(mercyHandlersProvider);
-    final StoredMercyBatch? batch = await handlers.lastAppliedBatch();
+    final MercyCommandRunner commandRunner = ref.read(mercyCommandRunnerProvider);
+    final StoredMercyBatch? batch = await commandRunner.lastAppliedBatch();
     if (batch == null) {
       state = AsyncValue<QueueUiState>.data(
         current.copyWith(message: const UiMessage('No Mercy batch to undo')),
@@ -351,7 +351,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
     }
     state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: true));
 
-    final Result<int> result = await handlers.undo(
+    final Result<int> result = await commandRunner.undo(
       UndoMercy(
         OperationId(ref.read(idGeneratorProvider).newId()),
         day: current.projection.today,
@@ -388,7 +388,7 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
     state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: true));
 
     final Result<CardState> result = await ref
-        .read(reviewHandlersProvider)
+        .read(reviewCommandRunnerProvider)
         .undoLastReview(
           UndoLastReview(
             OperationId(ref.read(idGeneratorProvider).newId()),

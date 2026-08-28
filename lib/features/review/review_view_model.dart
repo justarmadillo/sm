@@ -139,7 +139,7 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
     state = AsyncValue<ReviewUiState>.data(current.copyWith(isBusy: true));
     final DateTime now = ref.read(clockProvider).nowUtc();
     final Result<ReviewOutcome> result = await ref
-        .read(reviewHandlersProvider)
+        .read(reviewCommandRunnerProvider)
         .review(
           ReviewCard(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -175,7 +175,7 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
     state = AsyncValue<ReviewUiState>.data(current.copyWith(isBusy: true));
 
     final Result<CardState> result = await ref
-        .read(reviewHandlersProvider)
+        .read(reviewCommandRunnerProvider)
         .undoLastReview(
           UndoLastReview(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -220,7 +220,7 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
     state = AsyncValue<ReviewUiState>.data(current.copyWith(isBusy: true));
 
     final Result<Card> result = await ref
-        .read(reviewHandlersProvider)
+        .read(reviewCommandRunnerProvider)
         .editCard(
           EditCard(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -255,7 +255,7 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
 
     final DateTime now = ref.read(clockProvider).nowUtc();
     final Result<CardState> result = await ref
-        .read(reviewHandlersProvider)
+        .read(reviewCommandRunnerProvider)
         .postpone(
           PostponeCard(
             OperationId(ref.read(idGeneratorProvider).newId()),

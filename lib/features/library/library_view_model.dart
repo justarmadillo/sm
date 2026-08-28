@@ -57,7 +57,7 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
   }) async {
     final result = await _command<Source>(
       (OperationId operation) => ref
-          .read(readerHandlersProvider)
+          .read(readerCommandRunnerProvider)
           .importSource(
             ImportSource(operation, title: title, markdown: markdown),
           ),
@@ -69,7 +69,7 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
   /// Renames a source.
   Future<void> rename(String sourceId, String title) => _command<Source>(
     (OperationId operation) => ref
-        .read(readerHandlersProvider)
+        .read(readerCommandRunnerProvider)
         .renameSource(
           RenameSource(operation, sourceId: sourceId, title: title),
         ),
@@ -82,7 +82,7 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
   /// message deliberately does not promise a due date.
   Future<void> undismiss(ElementRef ref_) => _command<Object>(
     (OperationId operation) => ref
-        .read(readerHandlersProvider)
+        .read(readerCommandRunnerProvider)
         .undismiss(UndismissSource(operation, ref: ref_)),
     success: (_) => 'Undismissed, back in the pending store',
   );
@@ -90,7 +90,7 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
   /// Stops scheduling a source without deleting it.
   Future<void> dismiss(ElementRef ref_) => _command<Object>(
     (OperationId operation) => ref
-        .read(readerHandlersProvider)
+        .read(readerCommandRunnerProvider)
         .dismiss(DismissElement(operation, ref: ref_)),
     success: (_) => 'Dismissed. The content is still here.',
   );
@@ -98,7 +98,7 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
   /// Soft-deletes a source while retaining it and every descendant.
   Future<void> deleteSource(String sourceId) => _command<Object>(
     (OperationId operation) => ref
-        .read(readerHandlersProvider)
+        .read(readerCommandRunnerProvider)
         .deleteSource(DeleteSource(operation, sourceId: sourceId)),
     success: (_) => 'Deleted. You can restore it from the Library.',
   );

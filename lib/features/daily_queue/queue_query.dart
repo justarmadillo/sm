@@ -94,18 +94,18 @@ final class QueueQuery {
   const QueueQuery({
     required ContentRepository content,
     required LearningRepository learning,
-    required QueueHandlers handlers,
+    required QueueCommandRunner commandRunner,
     required SchedulingContext context,
     required Clock clock,
   }) : _content = content,
        _learning = learning,
-       _handlers = handlers,
+       _commandRunner = commandRunner,
        _context = context,
        _clock = clock;
 
   final ContentRepository _content;
   final LearningRepository _learning;
-  final QueueHandlers _handlers;
+  final QueueCommandRunner _commandRunner;
   final SchedulingContext _context;
   final Clock _clock;
 
@@ -113,7 +113,7 @@ final class QueueQuery {
   ///
   Future<QueueProjection> load() async {
     final StudyDay today = await _context.today();
-    final Result<AdmissionOutcome> outcome = await _handlers.runDailyAdmission(
+    final Result<AdmissionOutcome> outcome = await _commandRunner.runDailyAdmission(
       RunDailyAdmission(
         // Derived, not random: this is what makes the day's valve idempotent
         // across refreshes, restarts, and crashes.
@@ -169,7 +169,7 @@ final class QueueQuery {
     final runtime = await _context.runtimeState();
     return policy
         .build(
-          candidates: await _handlers.loadCandidates(today),
+          candidates: await _commandRunner.loadCandidates(today),
           nowUtc: _clock.nowUtc(),
           today: today,
           prng: Sm20Prng(seed: runtime.prngSeed),

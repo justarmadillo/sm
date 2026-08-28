@@ -130,7 +130,7 @@ final class PrioritySliderViewModel
     );
 
     final Result<ElementSchedule> result = await ref
-        .read(priorityHandlersProvider)
+        .read(priorityCommandRunnerProvider)
         .setPercent(
           SetPriorityPercent(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -170,7 +170,7 @@ final class PrioritySliderViewModel
     );
 
     await ref
-        .read(priorityHandlersProvider)
+        .read(priorityCommandRunnerProvider)
         .step(
           StepPriority(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -402,7 +402,7 @@ final class PriorityBrowserViewModel
     );
 
     final Result<ElementSchedule> result = await ref
-        .read(priorityHandlersProvider)
+        .read(priorityCommandRunnerProvider)
         .reorder(
           ReorderPriority(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -444,7 +444,7 @@ final class PriorityBrowserViewModel
         .read(priorityQueryProvider)
         .branchOf(sourceId);
     final Result<int> result = await ref
-        .read(priorityHandlersProvider)
+        .read(priorityCommandRunnerProvider)
         .batch(
           BatchPriority(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -505,7 +505,7 @@ final class PriorityBrowserViewModel
         );
 
     final Result<AppliedSmartPostpone> result = await ref
-        .read(queueHandlersProvider)
+        .read(queueCommandRunnerProvider)
         .runSmartPostpone(
           RunSmartPostpone(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -606,8 +606,8 @@ final class PriorityBrowserViewModel
           Sm20ReviewMode.reviewAll => 'Reviewing all',
           Sm20ReviewMode.reviewTopics => 'Reviewing topics',
         },
-        (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
-            handlers.startReview(
+        (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
+            commandRunner.startReview(
               StartBrowserReview(
                 operation,
                 refs: refs,
@@ -620,8 +620,8 @@ final class PriorityBrowserViewModel
 
   Future<void> remember(List<ElementRef> refs) => _browserCommand(
     'Remembered',
-    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
-        handlers.remember(
+    (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
+        commandRunner.remember(
           RememberElements(
             operation,
             refs: refs,
@@ -634,8 +634,8 @@ final class PriorityBrowserViewModel
   /// Forget: return memorized records to the pending store.
   Future<void> forget(List<ElementRef> refs) => _browserCommand(
     'Forgotten',
-    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
-        handlers.forget(
+    (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
+        commandRunner.forget(
           ForgetElements(
             operation,
             refs: refs,
@@ -648,8 +648,8 @@ final class PriorityBrowserViewModel
   /// Dismiss: stop scheduling and send priority to the bottom.
   Future<void> dismiss(List<ElementRef> refs) => _browserCommand(
     'Dismissed',
-    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
-        handlers.dismiss(
+    (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
+        commandRunner.dismiss(
           DismissElements(
             operation,
             refs: refs,
@@ -662,8 +662,8 @@ final class PriorityBrowserViewModel
   /// Undismiss: restore the status only.
   Future<void> undismiss(List<ElementRef> refs) => _browserCommand(
     'Undismissed',
-    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
-        handlers.undismiss(
+    (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
+        commandRunner.undismiss(
           UndismissElements(
             operation,
             refs: refs,
@@ -676,8 +676,8 @@ final class PriorityBrowserViewModel
   /// Done: remove from scheduling entirely.
   Future<void> done(List<ElementRef> refs) => _browserCommand(
     'Done',
-    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
-        handlers.done(
+    (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
+        commandRunner.done(
           DoneElements(
             operation,
             refs: refs,
@@ -690,8 +690,8 @@ final class PriorityBrowserViewModel
   /// Add to drill: Final Drill membership only.
   Future<void> addToFinalDrill(List<ElementRef> refs) => _browserCommand(
     'Added to Final Drill',
-    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
-        handlers.addToFinalDrill(
+    (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
+        commandRunner.addToFinalDrill(
           AddToFinalDrill(
             operation,
             refs: refs,
@@ -708,8 +708,8 @@ final class PriorityBrowserViewModel
     bool rescheduleSameDay = false,
   }) => _browserCommand(
     'Added to Outstanding',
-    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
-        handlers.addToOutstanding(
+    (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
+        commandRunner.addToOutstanding(
           AddToOutstanding(
             operation,
             refs: refs,
@@ -724,8 +724,8 @@ final class PriorityBrowserViewModel
   /// Reset history: drop the external history block and nothing else.
   Future<void> resetHistory(List<ElementRef> refs) => _browserCommand(
     'History reset',
-    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
-        handlers.resetHistory(
+    (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
+        commandRunner.resetHistory(
           ResetElementHistory(
             operation,
             refs: refs,
@@ -739,8 +739,8 @@ final class PriorityBrowserViewModel
   Future<void> setAFactor(List<ElementRef> refs, double value) =>
       _browserCommand(
         'A-factor set',
-        (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
-            handlers.setAFactor(
+        (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
+            commandRunner.setAFactor(
               SetTopicAFactor(
                 operation,
                 refs: refs,
@@ -755,8 +755,8 @@ final class PriorityBrowserViewModel
   Future<void> modifyAFactor(List<ElementRef> refs, double multiplier) =>
       _browserCommand(
         'A-factor modified',
-        (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
-            handlers.modifyAFactor(
+        (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
+            commandRunner.modifyAFactor(
               ModifyTopicAFactor(
                 operation,
                 refs: refs,
@@ -774,8 +774,8 @@ final class PriorityBrowserViewModel
     required int horizonDays,
   }) => _browserCommand(
     'Advanced',
-    (BrowserHandlers handlers, OperationId operation, StudyDay day) =>
-        handlers.advance(
+    (BrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
+        commandRunner.advance(
           AdvanceElements(
             operation,
             refs: refs,
@@ -795,7 +795,7 @@ final class PriorityBrowserViewModel
   Future<void> _browserCommand(
     String verb,
     Future<Result<BrowserCommandOutcome>> Function(
-      BrowserHandlers handlers,
+      BrowserCommandRunner commandRunner,
       OperationId operation,
       StudyDay day,
     )
@@ -808,7 +808,7 @@ final class PriorityBrowserViewModel
     );
 
     final Result<BrowserCommandOutcome> result = await run(
-      ref.read(browserHandlersProvider),
+      ref.read(browserCommandRunnerProvider),
       OperationId(ref.read(idGeneratorProvider).newId()),
       await ref.read(schedulingContextProvider).today(),
     );

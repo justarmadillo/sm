@@ -81,10 +81,10 @@ final class AppHarness {
   late final Sm20RuntimeStore runtimeStore;
   late final SchedulingContext context;
 
-  /// Collects every diagnostic event the handlers emit.
+  /// Collects every diagnostic event the commandRunner emit.
   final RecordingDiagnosticSink diagnostics = RecordingDiagnosticSink();
 
-  late final ReaderHandlers reader = ReaderHandlers(
+  late final ReaderCommandRunner reader = ReaderCommandRunner(
     content: content,
     learning: learning,
     search: search,
@@ -96,7 +96,7 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
-  late final ExtractionHandlers extraction = ExtractionHandlers(
+  late final ExtractionCommandRunner extraction = ExtractionCommandRunner(
     content: content,
     learning: learning,
     search: search,
@@ -108,7 +108,7 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
-  late final FormulationHandlers formulation = FormulationHandlers(
+  late final FormulationCommandRunner formulation = FormulationCommandRunner(
     content: content,
     learning: learning,
     search: search,
@@ -120,7 +120,7 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
-  late final ReviewHandlers review = ReviewHandlers(
+  late final ReviewCommandRunner review = ReviewCommandRunner(
     content: content,
     learning: learning,
     transfer: transfer,
@@ -131,7 +131,7 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
-  late final PriorityHandlers priority = PriorityHandlers(
+  late final PriorityCommandRunner priority = PriorityCommandRunner(
     learning: learning,
     transfer: transfer,
     transactions: transactions,
@@ -141,7 +141,7 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
-  late final QueueHandlers queue = QueueHandlers(
+  late final QueueCommandRunner queue = QueueCommandRunner(
     content: content,
     learning: learning,
     transfer: transfer,
@@ -152,7 +152,7 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
-  late final BrowserHandlers browser = BrowserHandlers(
+  late final BrowserCommandRunner browser = BrowserCommandRunner(
     learning: learning,
     transfer: transfer,
     transactions: transactions,
@@ -162,7 +162,7 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
-  late final MercyHandlers mercy = MercyHandlers(
+  late final MercyCommandRunner mercy = MercyCommandRunner(
     learning: learning,
     transfer: transfer,
     transactions: transactions,
@@ -180,7 +180,7 @@ final class AppHarness {
   late final QueueQuery queueQuery = QueueQuery(
     content: content,
     learning: learning,
-    handlers: queue,
+    commandRunner: queue,
     context: context,
     clock: clock,
   );

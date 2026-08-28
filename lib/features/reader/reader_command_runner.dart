@@ -95,8 +95,8 @@ final class SourceEdited {
 }
 
 /// Handlers for reading, marking, and pacing sources.
-final class ReaderHandlers {
-  ReaderHandlers({
+final class ReaderCommandRunner {
+  ReaderCommandRunner({
     required ContentRepository content,
     required LearningRepository learning,
     required SearchRepository search,

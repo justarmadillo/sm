@@ -30,13 +30,13 @@ const String kMercyAppliedKind = 'mercy.applied';
 const String kMercyUndoneKind = 'mercy.undone';
 
 /// Handles the app's durable confirmation wrapper around SM20 Mercy.
-final class MercyHandlers {
-  MercyHandlers({
+final class MercyCommandRunner {
+  MercyCommandRunner({
     required LearningRepository learning,
     required TransferRepository transfer,
     required TransactionRunner transactions,
     required SchedulingContext context,
-    required QueueHandlers queue,
+    required QueueCommandRunner queue,
     required IdGenerator ids,
   }) : _learning = learning,
        _transfer = transfer,
@@ -50,7 +50,7 @@ final class MercyHandlers {
   final TransferRepository _transfer;
   final TransactionRunner _transactions;
   final SchedulingContext _context;
-  final QueueHandlers _queue;
+  final QueueCommandRunner _queue;
   final IdGenerator _ids;
   final SchedulingJournal _journal;
 

@@ -68,8 +68,8 @@ final class ReviewOutcome {
 }
 
 /// Handlers for grading, undoing, editing, and deferring cards.
-final class ReviewHandlers {
-  ReviewHandlers({
+final class ReviewCommandRunner {
+  ReviewCommandRunner({
     required ContentRepository content,
     required LearningRepository learning,
     required TransferRepository transfer,

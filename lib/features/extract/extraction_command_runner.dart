@@ -38,8 +38,8 @@ const String kExtractCreatedKind = 'extract.created';
 const String kExtractUndoneKind = 'extract.undone';
 
 /// Handlers for creating, undoing, and editing extracts.
-final class ExtractionHandlers {
-  ExtractionHandlers({
+final class ExtractionCommandRunner {
+  ExtractionCommandRunner({
     required ContentRepository content,
     required LearningRepository learning,
     required SearchRepository search,

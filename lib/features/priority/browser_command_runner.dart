@@ -48,8 +48,8 @@ const String kBrowserModifyAKind = 'sm20.browser.modify_a';
 const String kBrowserAdvanceKind = 'sm20.browser.advance';
 
 /// The browser's bulk Learning commands.
-final class BrowserHandlers {
-  BrowserHandlers({
+final class BrowserCommandRunner {
+  BrowserCommandRunner({
     required LearningRepository learning,
     required TransferRepository transfer,
     required TransactionRunner transactions,

@@ -20,8 +20,8 @@ import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 
 const String kCardsFormulatedKind = 'formulation.cards_created';
 
-final class FormulationHandlers {
-  FormulationHandlers({
+final class FormulationCommandRunner {
+  FormulationCommandRunner({
     required ContentRepository content,
     required LearningRepository learning,
     required SearchRepository search,

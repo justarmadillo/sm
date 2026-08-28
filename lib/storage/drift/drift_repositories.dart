@@ -2,7 +2,7 @@
 ///
 /// These hold SQL and mapping, nothing else. No repository decides an
 /// interval, a lifecycle transition, or whether an operation is allowed —
-/// those are the handlers' and the domain's jobs. A repository that starts
+/// those are the commandRunner' and the domain's jobs. A repository that starts
 /// making policy is how scheduling logic ends up spread across three layers.
 library;
 

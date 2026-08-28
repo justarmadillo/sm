@@ -185,7 +185,7 @@ final class ExtractViewModel
     if (current == null || !current.canMutate) return;
     await _command<Extract>(
       (OperationId operation) => ref
-          .read(extractionHandlersProvider)
+          .read(extractionCommandRunnerProvider)
           .editExtract(
             EditExtract(
               operation,
@@ -214,7 +214,7 @@ final class ExtractViewModel
     }
     state = AsyncValue<ExtractUiState>.data(current.copyWith(isBusy: true));
     final result = await ref
-        .read(extractionHandlersProvider)
+        .read(extractionCommandRunnerProvider)
         .createExtract(
           CreateExtract(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -254,7 +254,7 @@ final class ExtractViewModel
     }
     state = AsyncValue<ExtractUiState>.data(current.copyWith(isBusy: true));
     final result = await ref
-        .read(extractionHandlersProvider)
+        .read(extractionCommandRunnerProvider)
         .undoExtract(
           UndoExtract(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -280,7 +280,7 @@ final class ExtractViewModel
     if (current == null || !current.canMutate) return;
     await _command<TopicState>(
       (OperationId operation) => ref
-          .read(readerHandlersProvider)
+          .read(readerCommandRunnerProvider)
           .completeEncounter(
             CompleteTopicEncounter(
               operation,
@@ -303,10 +303,10 @@ final class ExtractViewModel
     if (current == null || !current.canMutate) return;
     final StudyDay? until = days == null
         ? null
-        : (await ref.read(readerHandlersProvider).today()).addDays(days);
+        : (await ref.read(readerCommandRunnerProvider).today()).addDays(days);
     await _command<TopicState>(
       (OperationId operation) => ref
-          .read(readerHandlersProvider)
+          .read(readerCommandRunnerProvider)
           .postpone(
             PostponeElement(operation, ref: current.topic.ref, until: until),
           ),
@@ -320,7 +320,7 @@ final class ExtractViewModel
     if (current == null || !current.canMutate) return;
     await _command<TopicState>(
       (OperationId operation) => ref
-          .read(readerHandlersProvider)
+          .read(readerCommandRunnerProvider)
           .dismiss(DismissElement(operation, ref: current.topic.ref)),
       apply: (ExtractUiState latest, TopicState topic) =>
           latest.copyWith(topic: topic, isDone: true),
@@ -345,7 +345,7 @@ final class ExtractViewModel
     if (current == null || !current.canMutate || current.isBusy) return false;
     state = AsyncValue<ExtractUiState>.data(current.copyWith(isBusy: true));
     final result = await ref
-        .read(formulationHandlersProvider)
+        .read(formulationCommandRunnerProvider)
         .formulate(
           FormulateCards(
             OperationId(ref.read(idGeneratorProvider).newId()),

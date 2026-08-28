@@ -53,8 +53,8 @@ final class AdmissionOutcome {
   final bool alreadyApplied;
 }
 
-final class QueueHandlers {
-  QueueHandlers({
+final class QueueCommandRunner {
+  QueueCommandRunner({
     required ContentRepository content,
     required LearningRepository learning,
     required TransferRepository transfer,

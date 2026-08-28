@@ -32,14 +32,14 @@ final class SchedulerMetricsQuery {
   const SchedulerMetricsQuery({
     required LearningRepository learning,
     required SchedulingContext context,
-    required QueueHandlers queue,
+    required QueueCommandRunner queue,
   }) : _learning = learning,
        _context = context,
        _queue = queue;
 
   final LearningRepository _learning;
   final SchedulingContext _context;
-  final QueueHandlers _queue;
+  final QueueCommandRunner _queue;
 
   Future<SchedulerMetricsSnapshot> collect() async {
     final StudyDayCalendar calendar = await _context.calendar();

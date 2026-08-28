@@ -322,7 +322,7 @@ final class ReaderViewModel
     if (current == null || !current.canCommitProgress) return;
     await _command<Source>(
       (OperationId operation) => ref
-          .read(readerHandlersProvider)
+          .read(readerCommandRunnerProvider)
           .moveResumeMarker(
             MoveResumeMarker(
               operation,
@@ -347,7 +347,7 @@ final class ReaderViewModel
     if (current == null || !current.canCommitProgress) return;
     await _command<Source>(
       (OperationId operation) => ref
-          .read(readerHandlersProvider)
+          .read(readerCommandRunnerProvider)
           .moveResumeMarker(
             MoveResumeMarker(
               operation,
@@ -396,7 +396,7 @@ final class ReaderViewModel
     );
     _positionWrites = _positionWrites.then((_) async {
       final result = await ref
-          .read(readerHandlersProvider)
+          .read(readerCommandRunnerProvider)
           .saveSoftPosition(
             SaveSoftPosition(
               OperationId(ref.read(idGeneratorProvider).newId()),
@@ -419,7 +419,7 @@ final class ReaderViewModel
     if (current == null || !current.canCommitProgress) return;
     await _command<Source>(
       (OperationId operation) => ref
-          .read(readerHandlersProvider)
+          .read(readerCommandRunnerProvider)
           .confirmSoftPosition(
             ConfirmSoftPosition(operation, sourceId: current.source.id),
           ),
@@ -447,7 +447,7 @@ final class ReaderViewModel
     if (current == null || !current.canCommitProgress) return;
     await _command<TopicState>(
       (OperationId operation) => ref
-          .read(readerHandlersProvider)
+          .read(readerCommandRunnerProvider)
           .completeEncounter(
             CompleteTopicEncounter(
               operation,
@@ -477,10 +477,10 @@ final class ReaderViewModel
     if (current == null || !current.canCommitProgress) return;
     final StudyDay? until = days == null
         ? null
-        : (await ref.read(readerHandlersProvider).today()).addDays(days);
+        : (await ref.read(readerCommandRunnerProvider).today()).addDays(days);
     await _command<TopicState>(
       (OperationId operation) => ref
-          .read(readerHandlersProvider)
+          .read(readerCommandRunnerProvider)
           .postpone(
             PostponeElement(operation, ref: current.topic.ref, until: until),
           ),
@@ -488,7 +488,7 @@ final class ReaderViewModel
           s.copyWith(topic: topic, isDone: true, wasRepetition: false),
       successAsync: (TopicState topic) async {
         final StudyDay due = await _refreshEffectiveDue(topic);
-        final StudyDay today = await ref.read(readerHandlersProvider).today();
+        final StudyDay today = await ref.read(readerCommandRunnerProvider).today();
         // Later Today on an element that is already Outstanding is a
         // queue-only shift: section 8.4 leaves the due date alone. Reporting
         // the canonical due here would name a day that has already passed for
@@ -525,7 +525,7 @@ final class ReaderViewModel
     if (current == null || !current.canCommitProgress) return;
     await _command<TopicState>(
       (OperationId operation) => ref
-          .read(readerHandlersProvider)
+          .read(readerCommandRunnerProvider)
           .dismiss(
             DismissElement(
               operation,
@@ -554,7 +554,7 @@ final class ReaderViewModel
     state = AsyncValue<ReaderUiState>.data(current.copyWith(isBusy: true));
 
     final result = await ref
-        .read(extractionHandlersProvider)
+        .read(extractionCommandRunnerProvider)
         .createExtract(
           CreateExtract(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -600,7 +600,7 @@ final class ReaderViewModel
     state = AsyncValue<ReaderUiState>.data(current.copyWith(isBusy: true));
 
     final result = await ref
-        .read(extractionHandlersProvider)
+        .read(extractionCommandRunnerProvider)
         .undoExtract(
           UndoExtract(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -635,7 +635,7 @@ final class ReaderViewModel
     state = AsyncValue<ReaderUiState>.data(current.copyWith(isBusy: true));
 
     final result = await ref
-        .read(formulationHandlersProvider)
+        .read(formulationCommandRunnerProvider)
         .formulate(
           FormulateCards(
             OperationId(ref.read(idGeneratorProvider).newId()),
@@ -730,7 +730,7 @@ final class ReaderViewModel
   /// Commits [markdown] as the new text of [block].
   Future<void> commitEdit(Block block, String markdown) => _runEdit(
     (OperationId operation, ReaderUiState current) => ref
-        .read(readerHandlersProvider)
+        .read(readerCommandRunnerProvider)
         .editSourceBlock(
           EditSourceBlock(
             operation,
@@ -745,7 +745,7 @@ final class ReaderViewModel
   /// Removes [block] and the separator that went with it.
   Future<void> deleteBlock(Block block) => _runEdit(
     (OperationId operation, ReaderUiState current) => ref
-        .read(readerHandlersProvider)
+        .read(readerCommandRunnerProvider)
         .deleteSourceBlock(
           DeleteSourceBlock(
             operation,
@@ -759,7 +759,7 @@ final class ReaderViewModel
   /// Reverses the most recent edit to this source's text.
   Future<void> undoEdit() => _runEdit(
     (OperationId operation, ReaderUiState current) => ref
-        .read(readerHandlersProvider)
+        .read(readerCommandRunnerProvider)
         .undoSourceEdit(
           UndoSourceEdit(operation, sourceId: current.source.id),
         ),

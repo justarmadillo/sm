@@ -211,9 +211,9 @@ final Provider<BackupService> backupServiceProvider = Provider<BackupService>(
 );
 
 /// Handlers for every Reader and Library mutation.
-final Provider<ReaderHandlers> readerHandlersProvider =
-    Provider<ReaderHandlers>(
-      (Ref ref) => ReaderHandlers(
+final Provider<ReaderCommandRunner> readerCommandRunnerProvider =
+    Provider<ReaderCommandRunner>(
+      (Ref ref) => ReaderCommandRunner(
         content: ref.watch(contentRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
         search: ref.watch(searchRepositoryProvider),
@@ -227,9 +227,9 @@ final Provider<ReaderHandlers> readerHandlersProvider =
     );
 
 /// Handlers for creating, undoing, and editing extracts.
-final Provider<ExtractionHandlers> extractionHandlersProvider =
-    Provider<ExtractionHandlers>(
-      (Ref ref) => ExtractionHandlers(
+final Provider<ExtractionCommandRunner> extractionCommandRunnerProvider =
+    Provider<ExtractionCommandRunner>(
+      (Ref ref) => ExtractionCommandRunner(
         content: ref.watch(contentRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
         search: ref.watch(searchRepositoryProvider),
@@ -243,9 +243,9 @@ final Provider<ExtractionHandlers> extractionHandlersProvider =
     );
 
 /// Batch card formulation without mutating the parent extract.
-final Provider<FormulationHandlers> formulationHandlersProvider =
-    Provider<FormulationHandlers>(
-      (Ref ref) => FormulationHandlers(
+final Provider<FormulationCommandRunner> formulationCommandRunnerProvider =
+    Provider<FormulationCommandRunner>(
+      (Ref ref) => FormulationCommandRunner(
         content: ref.watch(contentRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
         search: ref.watch(searchRepositoryProvider),
@@ -259,9 +259,9 @@ final Provider<FormulationHandlers> formulationHandlersProvider =
     );
 
 /// Exactly-once FSRS review handler, plus undo, edit, and burying.
-final Provider<ReviewHandlers> reviewHandlersProvider =
-    Provider<ReviewHandlers>(
-      (Ref ref) => ReviewHandlers(
+final Provider<ReviewCommandRunner> reviewCommandRunnerProvider =
+    Provider<ReviewCommandRunner>(
+      (Ref ref) => ReviewCommandRunner(
         content: ref.watch(contentRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
         transfer: ref.watch(transferRepositoryProvider),
@@ -274,9 +274,9 @@ final Provider<ReviewHandlers> reviewHandlersProvider =
     );
 
 /// Relative priority: slider, browser, and bulk spread.
-final Provider<PriorityHandlers> priorityHandlersProvider =
-    Provider<PriorityHandlers>(
-      (Ref ref) => PriorityHandlers(
+final Provider<PriorityCommandRunner> priorityCommandRunnerProvider =
+    Provider<PriorityCommandRunner>(
+      (Ref ref) => PriorityCommandRunner(
         learning: ref.watch(learningRepositoryProvider),
         transfer: ref.watch(transferRepositoryProvider),
         transactions: ref.watch(transactionRunnerProvider),
@@ -288,9 +288,9 @@ final Provider<PriorityHandlers> priorityHandlersProvider =
     );
 
 /// SM20's browser Learning command group.
-final Provider<BrowserHandlers> browserHandlersProvider =
-    Provider<BrowserHandlers>(
-      (Ref ref) => BrowserHandlers(
+final Provider<BrowserCommandRunner> browserCommandRunnerProvider =
+    Provider<BrowserCommandRunner>(
+      (Ref ref) => BrowserCommandRunner(
         learning: ref.watch(learningRepositoryProvider),
         transfer: ref.watch(transferRepositoryProvider),
         transactions: ref.watch(transactionRunnerProvider),
@@ -302,8 +302,8 @@ final Provider<BrowserHandlers> browserHandlersProvider =
     );
 
 /// The daily queue transaction, the manual stage commands, and Mercy.
-final Provider<QueueHandlers> queueHandlersProvider = Provider<QueueHandlers>(
-  (Ref ref) => QueueHandlers(
+final Provider<QueueCommandRunner> queueCommandRunnerProvider = Provider<QueueCommandRunner>(
+  (Ref ref) => QueueCommandRunner(
     content: ref.watch(contentRepositoryProvider),
     learning: ref.watch(learningRepositoryProvider),
     transfer: ref.watch(transferRepositoryProvider),
@@ -330,18 +330,18 @@ final Provider<SchedulerMetricsQuery> schedulerMetricsQueryProvider =
       (Ref ref) => SchedulerMetricsQuery(
         learning: ref.watch(learningRepositoryProvider),
         context: ref.watch(schedulingContextProvider),
-        queue: ref.watch(queueHandlersProvider),
+        queue: ref.watch(queueCommandRunnerProvider),
       ),
     );
 
 /// Mercy: preview, apply, and exact batch undo.
-final Provider<MercyHandlers> mercyHandlersProvider = Provider<MercyHandlers>(
-  (Ref ref) => MercyHandlers(
+final Provider<MercyCommandRunner> mercyCommandRunnerProvider = Provider<MercyCommandRunner>(
+  (Ref ref) => MercyCommandRunner(
     learning: ref.watch(learningRepositoryProvider),
     transfer: ref.watch(transferRepositoryProvider),
     transactions: ref.watch(transactionRunnerProvider),
     context: ref.watch(schedulingContextProvider),
-    queue: ref.watch(queueHandlersProvider),
+    queue: ref.watch(queueCommandRunnerProvider),
     ids: ref.watch(idGeneratorProvider),
   ),
 );
@@ -351,7 +351,7 @@ final Provider<QueueQuery> queueQueryProvider = Provider<QueueQuery>(
   (Ref ref) => QueueQuery(
     content: ref.watch(contentRepositoryProvider),
     learning: ref.watch(learningRepositoryProvider),
-    handlers: ref.watch(queueHandlersProvider),
+    commandRunner: ref.watch(queueCommandRunnerProvider),
     context: ref.watch(schedulingContextProvider),
     clock: ref.watch(clockProvider),
   ),
