@@ -349,7 +349,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                             controller: controller,
                             typography: typography,
                             marker: state.marker,
-                            softPosition: state.softPosition,
                             onGutterTap: state.canCommitProgress
                                 ? model.placeMarkerAt
                                 : null,
@@ -371,9 +370,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                             onEditDelete: (Block block) =>
                                 unawaited(model.deleteBlock(block)),
                           ),
-                          _SelectionToolbarLayer(
+                          SelectionToolbarLayer(
                             controller: controller,
-                            canCommitProgress: state.canCommitProgress,
+                            canExtract: state.canCommitProgress,
+                            canSetMarker: state.canCommitProgress,
+                            extractHint: !state.canCommitProgress
+                                ? 'Choose Continue reading to extract from '
+                                      'this source'
+                                : 'Extraction spanning several blocks is not '
+                                      'supported yet',
                             toSurfaceSpace: _toSurfaceSpace,
                             surfaceSize: () => _surfaceSize,
                             onExtract: () => _extractSelection(model),
@@ -397,20 +402,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                               );
                               showToast(context, 'Copied');
                             },
-                            onEditBlock: !state.canCommitProgress
-                                ? null
-                                : () {
-                                    final anchor = controller
-                                        .resolveSelection()
-                                        ?.range
-                                        .startAnchor;
-                                    if (anchor == null) return;
-                                    final block = state.document
-                                        .blockForAnchor(anchor);
-                                    if (block == null) return;
-                                    controller.clear();
-                                    model.beginEditing(block);
-                                  },
+                            // Available while browsing too: correcting the
+                            // text is not recording a repetition.
+                            onEditBlock: () {
+                              final anchor = controller
+                                  .resolveSelection()
+                                  ?.range
+                                  .startAnchor;
+                              if (anchor == null) return;
+                              final block = state.document.blockForAnchor(
+                                anchor,
+                              );
+                              if (block == null) return;
+                              controller.clear();
+                              model.beginEditing(block);
+                            },
                           ),
                         ],
                       ),
@@ -503,58 +509,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     await _readerKey.currentState?.animateToAnchor(action.anchor);
   }
-}
-
-/// Shows the selection toolbar while a selection exists on screen.
-///
-/// Rebuilt from the controller rather than from screen state so that dragging
-/// a selection moves the toolbar with it without the whole Reader rebuilding.
-class _SelectionToolbarLayer extends StatelessWidget {
-  const _SelectionToolbarLayer({
-    required this.controller,
-    required this.canCommitProgress,
-    required this.toSurfaceSpace,
-    required this.surfaceSize,
-    required this.onExtract,
-    required this.onSetMarker,
-    required this.onCopy,
-    required this.onEditBlock,
-  });
-
-  final ReaderSelectionController controller;
-  final bool canCommitProgress;
-  final Rect? Function(Rect global) toSurfaceSpace;
-  final Size? Function() surfaceSize;
-  final VoidCallback onExtract;
-  final VoidCallback onSetMarker;
-  final VoidCallback onCopy;
-  final VoidCallback? onEditBlock;
-
-  @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: controller,
-    builder: (BuildContext context, Widget? child) {
-      final global = controller.selectionBoundsGlobal();
-      final size = surfaceSize();
-      if (global == null || size == null) return const SizedBox.shrink();
-      final local = toSurfaceSpace(global);
-      if (local == null) return const SizedBox.shrink();
-
-      return SelectionToolbar(
-        anchorRect: local,
-        viewportSize: size,
-        canExtract: canCommitProgress && controller.canExtract,
-        canSetMarker: canCommitProgress,
-        extractHint: !canCommitProgress
-            ? 'Choose Continue reading to extract from this source'
-            : 'Extraction spanning several blocks is not supported yet',
-        onExtract: onExtract,
-        onSetMarker: onSetMarker,
-        onCopy: onCopy,
-        onEditBlock: onEditBlock,
-      );
-    },
-  );
 }
 
 class _TypographyDialog extends ConsumerWidget {
@@ -826,20 +780,21 @@ class _ActionBar extends StatelessWidget {
               child: const Text('Extract'),
             ),
             const SizedBox(width: 6),
+            // Undoing an edit is a text operation, not a scheduling one, so it
+            // sits with the content actions, never touches the due date, and
+            // stays available in browse mode alongside the edit itself. It
+            // appends the reverse splice rather than rewinding.
+            if (state.canUndoEdit) ...<Widget>[
+              TextButton.icon(
+                onPressed: state.isBusy
+                    ? null
+                    : () => unawaited(model.undoEdit()),
+                icon: const Icon(Icons.undo, size: 15),
+                label: const Text('Undo edit'),
+              ),
+              const SizedBox(width: 6),
+            ],
             if (state.canCommitProgress) ...<Widget>[
-              // Undoing an edit is a text operation, not a scheduling one, so
-              // it sits with the content actions and never touches the due
-              // date. It appends the reverse splice rather than rewinding.
-              if (state.canUndoEdit) ...<Widget>[
-                TextButton.icon(
-                  onPressed: state.isBusy
-                      ? null
-                      : () => unawaited(model.undoEdit()),
-                  icon: const Icon(Icons.undo, size: 15),
-                  label: const Text('Undo edit'),
-                ),
-                const SizedBox(width: 6),
-              ],
               OutlinedButton(
                 onPressed: state.isBusy ? null : onFormulate,
                 child: const Text('Formulate'),
@@ -882,7 +837,8 @@ class _ActionBar extends StatelessWidget {
 
   String _hintFor(ReaderSelectionController selection) {
     if (!state.canCommitProgress) {
-      return 'Browsing is read-only. Choose Continue reading to extract.';
+      return 'Browsing: you can still correct the text. '
+          'Choose Continue reading to extract.';
     }
     if (selection.hasSelection && !selection.canExtract) {
       return 'Multi-block extraction arrives in M5. Select within one block.';

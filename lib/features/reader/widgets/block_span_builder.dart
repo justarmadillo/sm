@@ -72,6 +72,16 @@ TextSpan buildBlockSpan(
   return TextSpan(style: base, children: children);
 }
 
+/// Height of [block]'s first rendered line under [typography].
+///
+/// The gutter uses it to sit its mark beside the *text*: a block's box starts
+/// half a line above the glyphs, so a mark aligned to the box reads as
+/// floating above the line it is supposed to point at.
+double blockFirstLineHeight(Block block, ReaderTypography typography) {
+  final style = _baseStyleFor(block, typography);
+  return (style.fontSize ?? typography.fontSize) * (style.height ?? 1.0);
+}
+
 /// Base style for a whole block.
 TextStyle _baseStyleFor(Block block, ReaderTypography typography) =>
     switch (block.type) {

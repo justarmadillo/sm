@@ -38,7 +38,6 @@ class ReaderView extends StatefulWidget {
     required this.controller,
     this.typography = ReaderTypography.standard,
     this.marker,
-    this.softPosition,
     this.onGutterTap,
     this.onExtractMarksTap,
     this.extractMarks = const <String, int>{},
@@ -69,9 +68,6 @@ class ReaderView extends StatefulWidget {
 
   /// The authoritative resume marker, drawn as a filled dot.
   final ReaderAnchor? marker;
-
-  /// The soft position, drawn as an outlined dot.
-  final ReaderAnchor? softPosition;
 
   /// Called when the user clicks empty gutter beside a block.
   final void Function(ReaderAnchor anchor)? onGutterTap;
@@ -106,6 +102,10 @@ class ReaderViewState extends State<ReaderView> {
   final ScrollOffsetController _offsetController = ScrollOffsetController();
   final ItemPositionsListener _positions = ItemPositionsListener.create();
   final FocusNode _keyboardFocus = FocusNode(debugLabel: 'reader');
+
+  /// The reading column itself, which is narrower than this widget and is
+  /// where the scrollbar actually sits.
+  final GlobalKey _columnKey = GlobalKey();
 
   ReaderAnchor? _lastReportedAnchor;
   Offset? _pressOrigin;
@@ -311,13 +311,9 @@ class ReaderViewState extends State<ReaderView> {
     // Which block carries the dot is a rendering question, answered from the
     // stored offset every build. Nothing persists a block id.
     final marker = widget.marker;
-    final soft = widget.softPosition;
     final markerBlockId = marker == null
         ? null
         : widget.document.blockForAnchor(marker)?.id;
-    final softBlockId = soft == null
-        ? null
-        : widget.document.blockForAnchor(soft)?.id;
 
     // Raw pointer events rather than a drag recognizer: a selection drag must
     // not enter the gesture arena against the scrollable, and on desktop a
@@ -340,6 +336,11 @@ class ReaderViewState extends State<ReaderView> {
         onPointerMove: editing ? null : _onPointerMove,
         onPointerUp: editing ? null : _onPointerUp,
         onPointerCancel: editing ? null : _onPointerCancel,
+        // A wheel tick means the user is travelling, not selecting. Without
+        // this a press that never became a drag stayed armed, and the first
+        // pixel of pointer movement after the page had scrolled underneath it
+        // swept a selection from wherever that stale origin now pointed.
+        onPointerSignal: editing ? null : (PointerSignalEvent _) => _endDrag(),
         child: GestureDetector(
           behavior: HitTestBehavior.translucent,
           onTap: editing
@@ -356,6 +357,7 @@ class ReaderViewState extends State<ReaderView> {
                     widget.controller.selectWordAt(details.globalPosition),
           child: Center(
             child: ConstrainedBox(
+              key: _columnKey,
               constraints: BoxConstraints(
                 maxWidth: widget.typography.columnWidth,
               ),
@@ -392,9 +394,6 @@ class ReaderViewState extends State<ReaderView> {
                           typography: widget.typography,
                           highlights: _highlightsFor(block),
                           isMarkerPainted: block.id == markerBlockId,
-                          isSoftMarkerPainted:
-                              block.id == softBlockId &&
-                              block.id != markerBlockId,
                           extractMarks: widget.extractMarks[block.id] ?? 0,
                           onGutterTap: widget.onGutterTap == null
                               ? null
@@ -451,16 +450,27 @@ class ReaderViewState extends State<ReaderView> {
   /// The scrollbar strip is excluded by geometry rather than by hit-testing
   /// it: a wide code block can lay out past the viewport, so the text column
   /// alone is not enough to keep a thumb-drag from selecting.
+  ///
+  /// Measured against the reading column, not against this widget. The column
+  /// is centred and capped at the configured width, so on a wide window the
+  /// scrollbar sits well inside this widget's right edge — and a strip taken
+  /// off that edge protected nothing but empty margin.
   bool _canStartSelectionAt(Offset global) {
-    final renderObject = context.findRenderObject();
-    if (renderObject is RenderBox && renderObject.hasSize) {
-      final local = renderObject.globalToLocal(global);
-      if (local.dx > renderObject.size.width - _kScrollbarStrip) return false;
+    final column = _columnKey.currentContext?.findRenderObject();
+    if (column is RenderBox && column.hasSize) {
+      final double right = column
+          .localToGlobal(Offset(column.size.width, 0))
+          .dx;
+      if (global.dx > right - _kScrollbarStrip) return false;
     }
     return widget.controller.isInsideTextColumn(global);
   }
 
   void _onPointerDown(PointerDownEvent event) {
+    // Whatever the press turns out to be, it supersedes any earlier one: a
+    // press left armed by an event the reader chose to ignore must not be
+    // able to start a selection later.
+    _endDrag();
     if (event.kind != PointerDeviceKind.mouse) return;
     if (event.buttons & kPrimaryMouseButton == 0) return;
     // Only presses that land in the reading column can begin a selection.

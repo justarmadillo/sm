@@ -15,6 +15,9 @@ import 'package:incremental_reader/shared/ui/app_theme.dart';
 /// Width of the margin strip that carries the marker and extract marks.
 const double kReaderGutterWidth = 30;
 
+/// Diameter of the resume-marker dot.
+const double _kMarkerDotSize = 10;
+
 /// One rendered block, with a stable key on its paragraph for hit-testing.
 class BlockView extends StatefulWidget {
   const BlockView({
@@ -24,7 +27,6 @@ class BlockView extends StatefulWidget {
     required this.onParagraphUnmounted,
     this.highlights = const <BlockHighlight>[],
     this.isMarkerPainted = false,
-    this.isSoftMarkerPainted = false,
     this.extractMarks = 0,
     this.onGutterTap,
     this.onExtractMarksTap,
@@ -48,9 +50,6 @@ class BlockView extends StatefulWidget {
 
   /// Whether the authoritative resume marker sits at this block.
   final bool isMarkerPainted;
-
-  /// Whether the soft "you were here" position sits at this block.
-  final bool isSoftMarkerPainted;
 
   /// How many extracts begin in this block.
   final int extractMarks;
@@ -140,7 +139,7 @@ class _BlockViewState extends State<BlockView> {
             width: kReaderGutterWidth,
             child: _Gutter(
               isMarkerPainted: widget.isMarkerPainted,
-              isSoftMarkerPainted: widget.isSoftMarkerPainted,
+              markerTop: _markerTop(block, typography),
               extractMarks: widget.extractMarks,
               onTapDown: widget.onGutterTap == null
                   ? null
@@ -154,6 +153,20 @@ class _BlockViewState extends State<BlockView> {
         ],
       ),
     );
+  }
+
+  /// Where the marker dot sits inside the gutter, so it lines up with the
+  /// middle of the block's first line of text rather than the top of its box.
+  double _markerTop(Block block, ReaderTypography typography) {
+    final double inset = switch (block.type) {
+      // Framed blocks start their text below their own padding.
+      BlockType.codeBlock || BlockType.mathBlock => 12,
+      // A rule and its padding come before the (empty) paragraph.
+      BlockType.thematicBreak => 17,
+      _ => 0,
+    };
+    final double line = blockFirstLineHeight(block, typography);
+    return inset + (line - _kMarkerDotSize) / 2;
   }
 
   Widget _buildBody(Block block, ReaderTypography typography) {
@@ -275,17 +288,24 @@ class _BlockViewState extends State<BlockView> {
 /// the marker dot sits in its own column beside it. Stacking them meant a
 /// block with both showed two competing badges within ten pixels of each
 /// other, which is what made a well-worked page look like noise.
+///
+/// Only the placed marker is ever drawn here. The last-scrolled-to position is
+/// deliberately not: it moves with every scroll tick, so painting it put a dot
+/// beside whatever line happened to be at the top of the viewport — a mark
+/// that followed the eye instead of recording a decision.
 class _Gutter extends StatelessWidget {
   const _Gutter({
     required this.isMarkerPainted,
-    required this.isSoftMarkerPainted,
+    required this.markerTop,
     required this.extractMarks,
     this.onTapDown,
     this.onExtractsTap,
   });
 
   final bool isMarkerPainted;
-  final bool isSoftMarkerPainted;
+
+  /// Offset from the top of the block to the middle of its first text line.
+  final double markerTop;
   final int extractMarks;
   final GestureTapDownCallback? onTapDown;
   final VoidCallback? onExtractsTap;
@@ -305,15 +325,12 @@ class _Gutter extends StatelessWidget {
               bottom: 1,
               child: _ExtractBar(count: extractMarks, onTap: onExtractsTap),
             ),
-          Positioned(
-            top: 5,
-            left: 2,
-            child: isMarkerPainted
-                ? const _MarkerDot(color: AppColors.accent, filled: true)
-                : isSoftMarkerPainted
-                ? const _MarkerDot(color: AppColors.softMarker, filled: false)
-                : const SizedBox(width: 10, height: 10),
-          ),
+          if (isMarkerPainted)
+            Positioned(
+              top: markerTop,
+              left: 2,
+              child: const _MarkerDot(color: AppColors.accent),
+            ),
         ],
       ),
     );
@@ -367,20 +384,19 @@ class _ExtractBar extends StatelessWidget {
 }
 
 class _MarkerDot extends StatelessWidget {
-  const _MarkerDot({required this.color, required this.filled});
+  const _MarkerDot({required this.color});
 
   final Color color;
-  final bool filled;
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: filled ? 'Resume marker' : 'Last position',
+    label: 'Resume marker',
     child: Container(
-      width: 10,
-      height: 10,
+      width: _kMarkerDotSize,
+      height: _kMarkerDotSize,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: filled ? color : Colors.transparent,
+        color: color,
         border: Border.all(color: color, width: 2),
       ),
     ),

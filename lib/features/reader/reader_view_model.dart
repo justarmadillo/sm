@@ -83,6 +83,7 @@ final class ReaderUiState {
     this.reminderTarget = 500,
     this.isReminderDismissed = false,
     this.isSoftBannerDismissed = false,
+    this.hadSoftPositionOnOpen = false,
     this.message,
     this.isBusy = false,
     this.isDone = false,
@@ -138,6 +139,14 @@ final class ReaderUiState {
   /// Whether the user closed the forgotten-marker banner this session.
   final bool isSoftBannerDismissed;
 
+  /// Whether a soft position was already stored when this session opened.
+  ///
+  /// The recovery offer is about a *previous* visit, and a soft position is
+  /// rewritten on every scroll tick of the current one. Without this snapshot
+  /// the banner appeared seconds after opening a source for the very first
+  /// time, claiming the reader had been there before.
+  final bool hadSoftPositionOnOpen;
+
   /// Ephemeral: shown once, then cleared.
   final UiMessage? message;
 
@@ -171,6 +180,7 @@ final class ReaderUiState {
   bool get showSoftPositionBanner =>
       canCommitProgress &&
       !isSoftBannerDismissed &&
+      hadSoftPositionOnOpen &&
       marker == null &&
       source.resume.softPosition != null;
 
@@ -258,6 +268,7 @@ final class ReaderUiState {
     reminderTarget: reminderTarget,
     isReminderDismissed: isReminderDismissed ?? this.isReminderDismissed,
     isSoftBannerDismissed: isSoftBannerDismissed ?? this.isSoftBannerDismissed,
+    hadSoftPositionOnOpen: hadSoftPositionOnOpen,
     message: shouldClearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
     isDone: isDone ?? this.isDone,
@@ -312,6 +323,7 @@ final class ReaderViewModel
       extracts: await content.listExtractsOfParent(source.id),
       cardsFromSource: (await content.listCardsOfSource(source.id)).length,
       canUndoEdit: (await content.findLatestSourceEdit(source.id)) != null,
+      hadSoftPositionOnOpen: source.resume.softPosition != null,
     );
   }
 
@@ -714,7 +726,7 @@ final class ReaderViewModel
   /// quietly-wrong coordinate this design removes.
   void beginEditing(Block block) {
     final current = state.valueOrNull;
-    if (current == null || !current.canCommitProgress) return;
+    if (current == null) return;
     state = AsyncValue<ReaderUiState>.data(
       current.copyWith(editingBlockId: block.id, shouldClearMessage: true),
     );
@@ -781,7 +793,11 @@ final class ReaderViewModel
     run,
   ) async {
     final current = state.valueOrNull;
-    if (current == null || current.isBusy || !current.canCommitProgress) return;
+    // Deliberately not gated on [canCommitProgress]. Browse mode exists so
+    // that looking something up is never mistaken for having read it, and
+    // fixing a typo is neither progress nor a schedule change — refusing it
+    // only made every element opened from the Contents tree a dead end.
+    if (current == null || current.isBusy) return;
     state = AsyncValue<ReaderUiState>.data(current.copyWith(isBusy: true));
 
     final result = await run(

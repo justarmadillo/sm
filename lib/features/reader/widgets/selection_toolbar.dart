@@ -9,6 +9,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 
 /// Height reserved for the toolbar when deciding whether it fits above.
@@ -20,11 +21,11 @@ class SelectionToolbar extends StatelessWidget {
     required this.anchorRect,
     required this.viewportSize,
     required this.onExtract,
-    required this.onSetMarker,
     required this.onCopy,
     required this.onEditBlock,
-    required this.canSetMarker,
     required this.canExtract,
+    this.onSetMarker,
+    this.canSetMarker = false,
     this.extractHint,
     super.key,
   });
@@ -37,7 +38,13 @@ class SelectionToolbar extends StatelessWidget {
   final Size viewportSize;
 
   final VoidCallback onExtract;
-  final VoidCallback onSetMarker;
+
+  /// Places the resume marker at the start of the selection.
+  ///
+  /// Null where there is no marker to place — an extract is processed whole,
+  /// so it has no resume position of its own — and the button then disappears
+  /// instead of sitting there disabled forever.
+  final VoidCallback? onSetMarker;
   final VoidCallback onCopy;
 
   /// Opens the block the selection started in for editing.
@@ -64,7 +71,7 @@ class SelectionToolbar extends StatelessWidget {
         ? anchorRect.top - _kToolbarHeight - 8
         : anchorRect.bottom + 8;
 
-    const width = 380.0;
+    final double width = onSetMarker == null ? 290.0 : 380.0;
     final maxLeft = (viewportSize.width - width - 12).clamp(
       12.0,
       viewportSize.width,
@@ -105,14 +112,16 @@ class SelectionToolbar extends StatelessWidget {
                 disabledHint: extractHint,
                 emphasized: true,
               ),
-              const _ToolbarDivider(),
-              _ToolbarButton(
-                icon: Icons.place_outlined,
-                label: 'Marker',
-                shortcut: 'Ctrl+M',
-                onPressed: canSetMarker ? onSetMarker : null,
-                disabledHint: 'Browsing cannot move the marker',
-              ),
+              if (onSetMarker != null) ...<Widget>[
+                const _ToolbarDivider(),
+                _ToolbarButton(
+                  icon: Icons.place_outlined,
+                  label: 'Marker',
+                  shortcut: 'Ctrl+M',
+                  onPressed: canSetMarker ? onSetMarker : null,
+                  disabledHint: 'Browsing cannot move the marker',
+                ),
+              ],
               const _ToolbarDivider(),
               _ToolbarButton(
                 icon: Icons.copy_all_outlined,
@@ -124,7 +133,7 @@ class SelectionToolbar extends StatelessWidget {
                 icon: Icons.edit_outlined,
                 label: 'Edit',
                 onPressed: onEditBlock,
-                disabledHint: 'Browsing cannot edit this source',
+                disabledHint: 'Wait for the current change to finish',
               ),
             ],
           ),
@@ -194,4 +203,71 @@ class _ToolbarDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Container(width: 1, height: 18, color: AppColors.border);
+}
+
+
+/// Shows the selection toolbar while a selection exists on screen.
+///
+/// Rebuilt from the controller rather than from screen state so that dragging
+/// a selection moves the toolbar with it without the whole reading surface
+/// rebuilding.
+///
+/// Shared by every screen that renders a document, because "select a passage
+/// and act on it" is the same gesture whether the passage is in an article or
+/// in an extract cut from one.
+class SelectionToolbarLayer extends StatelessWidget {
+  const SelectionToolbarLayer({
+    required this.controller,
+    required this.canExtract,
+    required this.toSurfaceSpace,
+    required this.surfaceSize,
+    required this.onExtract,
+    required this.onCopy,
+    required this.onEditBlock,
+    this.onSetMarker,
+    this.canSetMarker = false,
+    this.extractHint,
+    super.key,
+  });
+
+  final ReaderSelectionController controller;
+
+  /// Whether this surface allows extraction at all, before asking whether the
+  /// current selection happens to qualify.
+  final bool canExtract;
+
+  /// Converts a global rectangle into the host stack's own coordinates.
+  final Rect? Function(Rect global) toSurfaceSpace;
+
+  final Size? Function() surfaceSize;
+  final VoidCallback onExtract;
+  final VoidCallback onCopy;
+  final VoidCallback? onEditBlock;
+  final VoidCallback? onSetMarker;
+  final bool canSetMarker;
+  final String? extractHint;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (BuildContext context, Widget? child) {
+      final Rect? global = controller.selectionBoundsGlobal();
+      final Size? size = surfaceSize();
+      if (global == null || size == null) return const SizedBox.shrink();
+      final Rect? local = toSurfaceSpace(global);
+      if (local == null) return const SizedBox.shrink();
+
+      return SelectionToolbar(
+        anchorRect: local,
+        viewportSize: size,
+        canExtract: canExtract && controller.canExtract,
+        canSetMarker: canSetMarker,
+        extractHint: extractHint,
+        onExtract: onExtract,
+        onSetMarker: onSetMarker,
+        onCopy: onCopy,
+        onEditBlock: onEditBlock,
+      );
+    },
+  );
 }

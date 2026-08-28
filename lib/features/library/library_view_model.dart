@@ -8,9 +8,15 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
+import 'package:incremental_reader/documents/card.dart';
+import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/features/extract/extract_commands.dart';
+import 'package:incremental_reader/features/extract/extract_providers.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/reader_providers.dart';
+import 'package:incremental_reader/features/review/review_commands.dart';
+import 'package:incremental_reader/features/review/review_providers.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
@@ -75,6 +81,36 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
           RenameSource(operation, sourceId: sourceId, title: title),
         ),
   );
+
+  /// Rewrites an extract's text from the Contents tree.
+  ///
+  /// The same command the Extract screen uses, so the guard that refuses an
+  /// edit under nested extracts applies here too: their coordinates point into
+  /// this text.
+  Future<void> editExtract(String extractId, String markdown) =>
+      _command<Extract>(
+        (OperationId operation) => ref
+            .read(extractCommandRunnerProvider)
+            .editExtract(
+              EditExtract(
+                operation,
+                extractId: extractId,
+                markdown: markdown,
+              ),
+            ),
+        success: (_) => 'Extract updated',
+      );
+
+  /// Rewrites a card's wording from the Contents tree. Never reschedules it.
+  Future<void> editCard(String cardId, {String? front, String? back}) =>
+      _command<Card>(
+        (OperationId operation) => ref
+            .read(reviewCommandRunnerProvider)
+            .editCard(
+              EditCard(operation, cardId: cardId, front: front, back: back),
+            ),
+        success: (_) => 'Card updated',
+      );
 
   /// Changes how quickly a source comes back.
   /// Undismiss: returns a dismissed source to the pending store.

@@ -20,6 +20,7 @@ import 'package:incremental_reader/features/reader/typography_controller.dart';
 import 'package:incremental_reader/features/reader/widgets/extract_highlights.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
+import 'package:incremental_reader/features/reader/widgets/selection_toolbar.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
@@ -54,9 +55,26 @@ class ExtractScreen extends ConsumerStatefulWidget {
 
 class _ExtractScreenState extends ConsumerState<ExtractScreen> {
   final GlobalKey<ReaderViewState> _readerKey = GlobalKey<ReaderViewState>();
+  final GlobalKey _surfaceKey = GlobalKey();
   ReaderSelectionController? _selection;
   String? _documentIdentity;
   bool _hasOpenedAtAnchor = false;
+
+  /// Converts a global rectangle into the reading surface's own coordinates.
+  ///
+  /// The selection controller works in screen space because that is what
+  /// render objects report; the toolbar lives inside a stack that starts below
+  /// the status bar, so the two have to be reconciled somewhere.
+  Rect? _toSurfaceSpace(Rect global) {
+    final RenderObject? box = _surfaceKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return null;
+    return global.shift(-box.localToGlobal(Offset.zero));
+  }
+
+  Size? get _surfaceSize {
+    final RenderObject? box = _surfaceKey.currentContext?.findRenderObject();
+    return box is RenderBox && box.hasSize ? box.size : null;
+  }
 
   @override
   void dispose() {
@@ -137,9 +155,11 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
             tooltip: 'Open parent',
           ),
           IconButton(
-            onPressed: state.canMutate && !state.isBusy
-                ? () => _edit(context, state, model)
-                : null,
+            // Editing the words is allowed while browsing; processing the
+            // element is not.
+            onPressed: state.isBusy
+                ? null
+                : () => _edit(context, state, model),
             icon: const Icon(Icons.edit_outlined),
             tooltip: state.canEdit
                 ? 'Edit extract'
@@ -166,21 +186,54 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
             children: <Widget>[
               _ExtractStatusBar(state: state),
               Expanded(
-                child: ReaderView(
-                  key: _readerKey,
-                  document: state.document,
-                  controller: selection,
-                  typography: typography,
-                  extractMarks: extractMarksByCoveredBlock(
-                    state.document,
-                    state.children,
-                  ),
-                  extractHighlights: buildExtractHighlights(
-                    state.document,
-                    state.children,
-                  ),
-                  onExtractMarksTap: (Block block) =>
-                      _openChildContext(context, state, block),
+                child: Stack(
+                  key: _surfaceKey,
+                  children: <Widget>[
+                    ReaderView(
+                      key: _readerKey,
+                      document: state.document,
+                      controller: selection,
+                      typography: typography,
+                      extractMarks: extractMarksByCoveredBlock(
+                        state.document,
+                        state.children,
+                      ),
+                      extractHighlights: buildExtractHighlights(
+                        state.document,
+                        state.children,
+                      ),
+                      onExtractMarksTap: (Block block) =>
+                          _openChildContext(context, state, block),
+                    ),
+                    // Selecting inside an extract is how a further extract is
+                    // cut, so the same toolbar belongs here. There is no
+                    // marker: an extract is processed whole rather than
+                    // resumed part-way through.
+                    SelectionToolbarLayer(
+                      controller: selection,
+                      canExtract: state.canMutate,
+                      extractHint: !state.canMutate
+                          ? 'Choose Process now to extract from this extract'
+                          : 'Extraction spanning several blocks is not '
+                                'supported yet',
+                      toSurfaceSpace: _toSurfaceSpace,
+                      surfaceSize: () => _surfaceSize,
+                      onExtract: () => _extractSelection(model),
+                      onCopy: () {
+                        final resolved = selection.resolveSelection();
+                        if (resolved == null) return;
+                        unawaited(
+                          Clipboard.setData(
+                            ClipboardData(text: resolved.markdown),
+                          ),
+                        );
+                        showToast(context, 'Copied');
+                      },
+                      onEditBlock: state.isBusy
+                          ? null
+                          : () => unawaited(_edit(context, state, model)),
+                    ),
+                  ],
                 ),
               ),
               _ExtractActionBar(
@@ -442,7 +495,7 @@ class _ExtractActionBar extends StatelessWidget {
           Expanded(
             child: Text(
               !state.canMutate
-                  ? 'Browsing is read-only.'
+                  ? 'Browsing: you can still correct the text.'
                   : selection.hasSelection && !selection.canExtract
                   ? 'Select within one block.'
                   : selection.canExtract

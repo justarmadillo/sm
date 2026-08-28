@@ -7,8 +7,13 @@
 /// tree is the collection rather than a view of part of it.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/features/extract/extract_screen.dart';
+import 'package:incremental_reader/features/extract/extract_view_model.dart';
+import 'package:incremental_reader/features/library/element_content_query.dart';
 import 'package:incremental_reader/features/library/import_sheet.dart';
 import 'package:incremental_reader/features/library/library_providers.dart';
 import 'package:incremental_reader/features/library/library_tree_query.dart';
@@ -21,6 +26,7 @@ import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/element_type_badge.dart';
+import 'package:incremental_reader/shared/ui/toast_message.dart';
 
 /// Opens the knowledge tree.
 Future<void> openContents(BuildContext context, WidgetRef ref) async {
@@ -38,6 +44,27 @@ final FutureProvider<List<LibraryTreeNode>> contentTreeProvider =
       (Ref ref) => ref.watch(libraryTreeQueryProvider).load(),
     );
 
+/// The body of one element, for the detail pane.
+final AutoDisposeFutureProviderFamily<ElementContent?, ElementRef>
+elementContentProvider =
+    FutureProvider.autoDispose.family<ElementContent?, ElementRef>(
+      (Ref ref, ElementRef elementRef) =>
+          ref.watch(elementContentQueryProvider).load(elementRef),
+    );
+
+/// Width of the detail pane, wide enough for a paragraph of prose.
+const double _kDetailPaneWidth = 420;
+
+/// Horizontal step per level of nesting.
+///
+/// Wide enough that a level's guide can sit directly under its parent's
+/// expander and still leave a gap before the child's card starts.
+const double _kIndentStep = 26;
+
+/// Where a level's guide sits inside its column: under the centre of the
+/// expander of the row that owns that level.
+const double _kGuideOffset = 19;
+
 class ContentsScreen extends ConsumerStatefulWidget {
   const ContentsScreen({super.key});
 
@@ -46,16 +73,47 @@ class ContentsScreen extends ConsumerStatefulWidget {
 }
 
 class _ContentsScreenState extends ConsumerState<ContentsScreen> {
-  /// Refs whose children are showing. Collapsed is the default, because a
-  /// collection large enough to need a tree is too large to open at once.
+  /// Refs whose children are showing.
+  ///
+  /// Opened all the way down the first time a tree arrives. What came out of
+  /// what is the one thing this screen shows that a flat list could not, and a
+  /// wall of closed rows hides exactly that.
   final Set<ElementRef> _expanded = <ElementRef>{};
+  bool _hasSeededExpansion = false;
+
+  /// The row the detail pane is showing, or null when the pane is closed.
+  ElementRef? _selected;
 
   /// Types the tree is restricted to; empty means everything.
   Set<ElementType> _types = const <ElementType>{};
 
+  /// Opens every node, once, the first time the tree loads.
+  ///
+  /// Mutating the set during build is safe because the build that follows is
+  /// the one that reads it; there is no state to notify anybody about.
+  void _seedExpansion(List<LibraryTreeNode>? roots) {
+    if (_hasSeededExpansion || roots == null) return;
+    _hasSeededExpansion = true;
+    _expanded.addAll(_allRefs(roots));
+  }
+
   @override
   Widget build(BuildContext context) {
     final AsyncValue<List<LibraryTreeNode>> tree = ref.watch(contentTreeProvider);
+    _seedExpansion(tree.valueOrNull);
+
+    // Element commands report through the shared ViewModel, so this is where
+    // a rename, an edit, or a failed dismiss becomes visible.
+    ref.listen<AsyncValue<LibraryUiState>>(libraryViewModelProvider, (
+      AsyncValue<LibraryUiState>? previous,
+      AsyncValue<LibraryUiState> next,
+    ) {
+      final UiMessage? message = next.valueOrNull?.message;
+      if (message == null) return;
+      showToast(context, message.text, isError: message.isError);
+      ref.read(libraryViewModelProvider.notifier).shouldClearMessage();
+    });
+
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         kSearchShortcut: () => openSearch(context, ref),
@@ -112,7 +170,21 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
               onChanged: (Set<ElementType> types) =>
                   setState(() => _types = types),
             ),
-            Expanded(child: _buildBody(roots)),
+            Expanded(
+              child: Row(
+                children: <Widget>[
+                  Expanded(child: _buildBody(roots)),
+                  if (_selected != null)
+                    _ElementDetailPane(
+                      elementRef: _selected!,
+                      onClose: () => setState(() => _selected = null),
+                      onOpen: _selected!.type == ElementType.card
+                          ? null
+                          : () => unawaited(_openElement(_selected!)),
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -137,16 +209,46 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
     ref.invalidate(contentTreeProvider);
   }
 
+  /// Opens the screen that owns an element, for the work the pane cannot do.
+  Future<void> _openElement(ElementRef elementRef) async {
+    switch (elementRef.type) {
+      case ElementType.source:
+        await openReader(
+          context,
+          ref,
+          sourceId: elementRef.id,
+          mode: ReaderMode.browse,
+        );
+      case ElementType.extract:
+        await openExtract(
+          context,
+          ref,
+          extractId: elementRef.id,
+          mode: ExtractMode.browse,
+        );
+      case ElementType.card:
+        return;
+    }
+    if (!mounted) return;
+    ref.invalidate(contentTreeProvider);
+    ref.invalidate(elementContentProvider(elementRef));
+  }
+
   Future<void> _runAction(String action, LibraryTreeNode node) async {
     final LibraryViewModel model = ref.read(libraryViewModelProvider.notifier);
     switch (action) {
       case 'open':
+        // Browse, not a scheduled sitting. Opening something to look at it
+        // from a browser is not the same as being handed it by the queue, and
+        // offering Done and Postpone here invites recording a repetition that
+        // never happened. The Reader's own "Continue reading" promotes the
+        // session when that is what the user meant.
         if (node.ref.type == ElementType.source) {
           await openReader(
             context,
             ref,
             sourceId: node.ref.id,
-            mode: ReaderMode.scheduled,
+            mode: ReaderMode.browse,
           );
         }
       case 'rename':
@@ -183,6 +285,9 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
       itemBuilder: (BuildContext context, int index) => _NodeRow(
         row: rows[index],
         isExpanded: _expanded.contains(rows[index].node.ref),
+        isSelected: _selected == rows[index].node.ref,
+        onSelect: () =>
+            setState(() => _selected = rows[index].node.ref),
         onToggle: () => setState(() {
           final ElementRef ref_ = rows[index].node.ref;
           if (!_expanded.remove(ref_)) _expanded.add(ref_);
@@ -269,6 +374,8 @@ class _NodeRow extends StatelessWidget {
   const _NodeRow({
     required this.row,
     required this.isExpanded,
+    required this.isSelected,
+    required this.onSelect,
     required this.onToggle,
     required this.onPriority,
     required this.onAction,
@@ -276,6 +383,13 @@ class _NodeRow extends StatelessWidget {
 
   final _TreeRow row;
   final bool isExpanded;
+  final bool isSelected;
+
+  /// Shows this element's content in the detail pane.
+  final VoidCallback onSelect;
+
+  /// Opens or closes this element's children. Bound to the chevron alone, so
+  /// that clicking a row means "show me this" rather than "fold this away".
   final VoidCallback onToggle;
   final VoidCallback onPriority;
   final ValueChanged<String> onAction;
@@ -287,14 +401,35 @@ class _NodeRow extends StatelessWidget {
     final bool isDismissed =
         node.status == Sm20ElementStatus.dismissed ||
         node.lifecycle == ElementLifecycle.dismissed;
-    return Padding(
-      padding: EdgeInsets.only(left: row.depth * 20.0, bottom: 2),
-      child: Material(
-        color: AppColors.surface,
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          // One rule per level of ancestry, so a deep extract can be traced
+          // back to the article it came from without counting pixels. The
+          // gap between rows belongs to the card, not to the guides, or the
+          // rules would break into dashes down the page.
+          for (int level = 0; level < row.depth; level++) const _IndentGuide(),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: _card(node, hasChildren, isDismissed),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card(LibraryTreeNode node, bool hasChildren, bool isDismissed) {
+    return Material(
+      color: isSelected
+          ? AppColors.accent.withValues(alpha: 0.10)
+          : AppColors.surface,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
         borderRadius: BorderRadius.circular(6),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(6),
-          onTap: hasChildren ? onToggle : null,
+        onTap: onSelect,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
             child: Row(
@@ -302,10 +437,16 @@ class _NodeRow extends StatelessWidget {
                 SizedBox(
                   width: 22,
                   child: hasChildren
-                      ? Icon(
-                          isExpanded ? Icons.expand_more : Icons.chevron_right,
-                          size: 18,
-                          color: AppColors.muted,
+                      ? InkResponse(
+                          onTap: onToggle,
+                          radius: 14,
+                          child: Icon(
+                            isExpanded
+                                ? Icons.expand_more
+                                : Icons.chevron_right,
+                            size: 18,
+                            color: AppColors.muted,
+                          ),
                         )
                       : null,
                 ),
@@ -400,8 +541,234 @@ class _NodeRow extends StatelessWidget {
               ],
             ),
           ),
-        ),
       ),
+    );
+  }
+}
+
+/// One vertical rule marking a level of nesting.
+class _IndentGuide extends StatelessWidget {
+  const _IndentGuide();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+    width: _kIndentStep,
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        SizedBox(width: _kGuideOffset),
+        SizedBox(width: 1, child: ColoredBox(color: AppColors.border)),
+      ],
+    ),
+  );
+}
+
+/// The content of the selected element, beside the tree.
+///
+/// A tree of titles answers "what came out of what" and nothing else. Reading
+/// or fixing the text behind a row meant opening the screen that owns that
+/// kind of element and coming back — which is a poor way to work through a
+/// collection. The pane keeps the list in view while the text is on screen.
+class _ElementDetailPane extends ConsumerStatefulWidget {
+  const _ElementDetailPane({
+    required this.elementRef,
+    required this.onClose,
+    required this.onOpen,
+  });
+
+  final ElementRef elementRef;
+  final VoidCallback onClose;
+
+  /// Opens the element's own screen, for what the pane deliberately cannot do.
+  final VoidCallback? onOpen;
+
+  @override
+  ConsumerState<_ElementDetailPane> createState() => _ElementDetailPaneState();
+}
+
+class _ElementDetailPaneState extends ConsumerState<_ElementDetailPane> {
+  final TextEditingController _body = TextEditingController();
+  final TextEditingController _back = TextEditingController();
+
+  /// What the fields were last filled from, so that a rebuild while the user
+  /// is typing does not put the stored text back under their cursor.
+  ElementRef? _filledFrom;
+  String? _filledBody;
+  String? _filledBack;
+
+  @override
+  void dispose() {
+    _body.dispose();
+    _back.dispose();
+    super.dispose();
+  }
+
+  void _fill(ElementContent content) {
+    if (_filledFrom == content.ref &&
+        _filledBody == content.body &&
+        _filledBack == content.back) {
+      return;
+    }
+    _filledFrom = content.ref;
+    _filledBody = content.body;
+    _filledBack = content.back;
+    _body.text = content.body;
+    _back.text = content.back ?? '';
+  }
+
+  Future<void> _save(ElementContent content) async {
+    final LibraryViewModel model = ref.read(libraryViewModelProvider.notifier);
+    switch (content.ref.type) {
+      case ElementType.extract:
+        await model.editExtract(content.ref.id, _body.text);
+      case ElementType.card:
+        await model.editCard(
+          content.ref.id,
+          front: _body.text,
+          back: content.back == null ? null : _back.text,
+        );
+      case ElementType.source:
+        return;
+    }
+    if (!mounted) return;
+    ref.invalidate(elementContentProvider(content.ref));
+    ref.invalidate(contentTreeProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AsyncValue<ElementContent?> content = ref.watch(
+      elementContentProvider(widget.elementRef),
+    );
+    return Container(
+      width: _kDetailPaneWidth,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(left: BorderSide(color: AppColors.border)),
+      ),
+      child: content.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (Object error, StackTrace stack) =>
+            Center(child: Text('Could not load this element.\n$error')),
+        data: (ElementContent? loaded) => loaded == null
+            ? const Center(
+                child: Text(
+                  'This element is no longer here.',
+                  style: TextStyle(color: AppColors.muted),
+                ),
+              )
+            : _content(loaded),
+      ),
+    );
+  }
+
+  Widget _content(ElementContent content) {
+    _fill(content);
+    final bool isCard = content.ref.type == ElementType.card;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
+          child: Row(
+            children: <Widget>[
+              ElementTypeBadge(type: content.ref.type),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  content.title.isEmpty ? '(untitled)' : content.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (widget.onOpen != null)
+                IconButton(
+                  tooltip: 'Open',
+                  onPressed: widget.onOpen,
+                  icon: const Icon(Icons.open_in_new, size: 17),
+                ),
+              IconButton(
+                tooltip: 'Close',
+                onPressed: widget.onClose,
+                icon: const Icon(Icons.close, size: 17),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: AppColors.border),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                if (isCard)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      'Question',
+                      style: TextStyle(fontSize: 11, color: AppColors.muted),
+                    ),
+                  ),
+                TextField(
+                  controller: _body,
+                  readOnly: !content.isEditable,
+                  minLines: 6,
+                  maxLines: null,
+                  style: const TextStyle(fontSize: 13, height: 1.45),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                if (isCard && content.back != null) ...<Widget>[
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(0, 12, 0, 4),
+                    child: Text(
+                      'Answer',
+                      style: TextStyle(fontSize: 11, color: AppColors.muted),
+                    ),
+                  ),
+                  TextField(
+                    controller: _back,
+                    readOnly: !content.isEditable,
+                    minLines: 3,
+                    maxLines: null,
+                    style: const TextStyle(fontSize: 13, height: 1.45),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const Divider(height: 1, color: AppColors.border),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  content.notEditableReason ?? 'Edits never reschedule.',
+                  style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                ),
+              ),
+              if (content.isEditable)
+                FilledButton(
+                  onPressed: () => unawaited(_save(content)),
+                  child: const Text('Save'),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

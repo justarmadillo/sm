@@ -182,9 +182,15 @@ final class ExtractViewModel
     );
   }
 
+  /// Refines this extract's text.
+  ///
+  /// Allowed while browsing, unlike everything else here: correcting the words
+  /// is not processing the element, and it is the whole point of opening an
+  /// extract from the Contents tree. [ExtractUiState.canEdit] still applies —
+  /// nested extracts hold coordinates into this text.
   Future<void> edit(String markdown) async {
     final current = state.valueOrNull;
-    if (current == null || !current.canMutate) return;
+    if (current == null) return;
     await _command<Extract>(
       (OperationId operation) => ref
           .read(extractCommandRunnerProvider)
