@@ -109,7 +109,7 @@ class ReaderViewState extends State<ReaderView> {
 
   ReaderAnchor? _lastReportedAnchor;
   Offset? _pressOrigin;
-  bool _dragging = false;
+  bool _isDragging = false;
 
   @override
   void initState() {
@@ -391,8 +391,8 @@ class ReaderViewState extends State<ReaderView> {
                           block: block,
                           typography: widget.typography,
                           highlights: _highlightsFor(block),
-                          markerPainted: block.id == markerBlockId,
-                          softMarkerPainted:
+                          isMarkerPainted: block.id == markerBlockId,
+                          isSoftMarkerPainted:
                               block.id == softBlockId &&
                               block.id != markerBlockId,
                           extractMarks: widget.extractMarks[block.id] ?? 0,
@@ -471,15 +471,15 @@ class ReaderViewState extends State<ReaderView> {
     // Remember where the press landed, but do not select yet: a plain click
     // should clear the selection, not create an empty one.
     _pressOrigin = event.position;
-    _dragging = false;
+    _isDragging = false;
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
     final origin = _pressOrigin;
     if (origin == null) return;
-    if (!_dragging) {
+    if (!_isDragging) {
       if ((event.position - origin).distance < _kDragSlop) return;
-      _dragging = true;
+      _isDragging = true;
       widget.controller.beginAt(origin);
     }
     widget.controller.extendTo(event.position);
@@ -491,6 +491,6 @@ class ReaderViewState extends State<ReaderView> {
 
   void _endDrag() {
     _pressOrigin = null;
-    _dragging = false;
+    _isDragging = false;
   }
 }

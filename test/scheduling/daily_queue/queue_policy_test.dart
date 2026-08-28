@@ -202,7 +202,7 @@ void main() {
         },
         // Without a sort there is no stochastic extraction, so the whole
         // build must be free of draws.
-        sort: false,
+        shouldSort: false,
       );
       expect(prng.state.seed, before);
     });
@@ -278,7 +278,7 @@ void main() {
             if (!c.isPending) c.ref,
         ],
         outstandingItemMembership: <ElementRef>{all.last.ref},
-        sort: false,
+        shouldSort: false,
       );
       expect(
         plan.entries.map((QueueCandidate c) => c.ref),

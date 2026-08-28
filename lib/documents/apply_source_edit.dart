@@ -35,7 +35,7 @@ final class ProvenanceUpdate {
   const ProvenanceUpdate({
     required this.extractId,
     required this.provenance,
-    required this.changed,
+    required this.hasChanged,
   });
 
   final String extractId;
@@ -45,7 +45,7 @@ final class ProvenanceUpdate {
 
   /// Whether anything about it actually moved, so untouched rows are not
   /// rewritten and their `updated` bookkeeping stays honest.
-  final bool changed;
+  final bool hasChanged;
 }
 
 /// Everything one edit produces.
@@ -90,7 +90,7 @@ final class SourceEditOutcome {
 
   /// Children whose provenance actually moved or changed state.
   Iterable<ProvenanceUpdate> get changedProvenance =>
-      provenanceUpdates.where((ProvenanceUpdate u) => u.changed);
+      provenanceUpdates.where((ProvenanceUpdate u) => u.hasChanged);
 }
 
 /// Applies [splice] to [markdown] and migrates everything that points into it.
@@ -169,7 +169,7 @@ ProvenanceUpdate _migrateChild(
     migrated = MigratedRange(
       startUtf8: splice.startUtf8,
       endUtf8: splice.startUtf8 + splice.insertedLength,
-      touchedByEdit: true,
+      wasTouchedByEdit: true,
     );
   }
 
@@ -195,7 +195,7 @@ ProvenanceUpdate _migrateChild(
       contentRevision: nextRevision,
       state: state,
     ),
-    changed: moved,
+    hasChanged: moved,
   );
 }
 
@@ -214,7 +214,7 @@ ProvenanceState _stateAfter({
 }) {
   if (migrated.isEmpty && !wasEmpty) return ProvenanceState.orphaned;
   if (previous != ProvenanceState.verbatim) return previous;
-  if (!migrated.touchedByEdit) return previous;
+  if (!migrated.wasTouchedByEdit) return previous;
   final slice = _sliceUtf8(
     nextMarkdown,
     migrated.startUtf8,

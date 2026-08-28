@@ -39,12 +39,12 @@ final class NamedTimeZone implements TimeZoneRules {
   ).timeZoneOffset.inMinutes;
 }
 
-bool _timeZonesInitialized = false;
+bool _areTimeZonesInitialized = false;
 
 void _ensureTimeZonesInitialized() {
-  if (_timeZonesInitialized) return;
+  if (_areTimeZonesInitialized) return;
   tz_data.initializeTimeZones();
-  _timeZonesInitialized = true;
+  _areTimeZonesInitialized = true;
 }
 
 /// Converts either an IANA name or a mapped Windows name to the canonical IANA

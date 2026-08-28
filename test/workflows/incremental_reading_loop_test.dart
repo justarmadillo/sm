@@ -131,7 +131,7 @@ extension _Fixtures on AppHarness {
           targetDueAtUtc: clock.nowUtc(),
           actualIntervalDays: 1,
           adjustedLastReviewAtUtc: state.memory.lastReviewAtUtc,
-          intervalGrew: false,
+          didIntervalGrow: false,
         ),
       ),
     );

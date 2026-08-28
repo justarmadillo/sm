@@ -208,9 +208,9 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
   void _flatten(ContentNode node, int depth, List<_Row> rows) {
     final bool matches = _types.isEmpty || _types.contains(node.ref.type);
     if (matches) rows.add(_Row(node: node, depth: depth));
-    final bool showChildren =
+    final bool shouldShowChildren =
         _expanded.contains(node.ref) || (!matches && _types.isNotEmpty);
-    if (!showChildren) return;
+    if (!shouldShowChildren) return;
     for (final ContentNode child in node.children) {
       _flatten(child, matches ? depth + 1 : depth, rows);
     }

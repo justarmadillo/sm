@@ -140,7 +140,7 @@ void main() {
         isFalse,
       );
       expect(
-        priority.copyWith(ascending: false).isReorderable,
+        priority.copyWith(isAscending: false).isReorderable,
         isFalse,
         reason: 'reversed priority is still not the collection order',
       );

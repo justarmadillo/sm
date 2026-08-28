@@ -23,8 +23,8 @@ class BlockView extends StatefulWidget {
     required this.onParagraphMounted,
     required this.onParagraphUnmounted,
     this.highlights = const <BlockHighlight>[],
-    this.markerPainted = false,
-    this.softMarkerPainted = false,
+    this.isMarkerPainted = false,
+    this.isSoftMarkerPainted = false,
     this.extractMarks = 0,
     this.onGutterTap,
     this.onExtractMarksTap,
@@ -47,10 +47,10 @@ class BlockView extends StatefulWidget {
   final void Function(String blockId) onParagraphUnmounted;
 
   /// Whether the authoritative resume marker sits at this block.
-  final bool markerPainted;
+  final bool isMarkerPainted;
 
   /// Whether the soft "you were here" position sits at this block.
-  final bool softMarkerPainted;
+  final bool isSoftMarkerPainted;
 
   /// How many extracts begin in this block.
   final int extractMarks;
@@ -139,8 +139,8 @@ class _BlockViewState extends State<BlockView> {
             bottom: 0,
             width: kReaderGutterWidth,
             child: _Gutter(
-              markerPainted: widget.markerPainted,
-              softMarkerPainted: widget.softMarkerPainted,
+              isMarkerPainted: widget.isMarkerPainted,
+              isSoftMarkerPainted: widget.isSoftMarkerPainted,
               extractMarks: widget.extractMarks,
               onTapDown: widget.onGutterTap == null
                   ? null
@@ -277,15 +277,15 @@ class _BlockViewState extends State<BlockView> {
 /// other, which is what made a well-worked page look like noise.
 class _Gutter extends StatelessWidget {
   const _Gutter({
-    required this.markerPainted,
-    required this.softMarkerPainted,
+    required this.isMarkerPainted,
+    required this.isSoftMarkerPainted,
     required this.extractMarks,
     this.onTapDown,
     this.onExtractsTap,
   });
 
-  final bool markerPainted;
-  final bool softMarkerPainted;
+  final bool isMarkerPainted;
+  final bool isSoftMarkerPainted;
   final int extractMarks;
   final GestureTapDownCallback? onTapDown;
   final VoidCallback? onExtractsTap;
@@ -308,9 +308,9 @@ class _Gutter extends StatelessWidget {
           Positioned(
             top: 5,
             left: 2,
-            child: markerPainted
+            child: isMarkerPainted
                 ? const _MarkerDot(color: AppColors.accent, filled: true)
-                : softMarkerPainted
+                : isSoftMarkerPainted
                 ? const _MarkerDot(color: AppColors.softMarker, filled: false)
                 : const SizedBox(width: 10, height: 10),
           ),

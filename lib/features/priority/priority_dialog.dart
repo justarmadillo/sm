@@ -132,14 +132,14 @@ class _Body extends StatelessWidget {
             const Spacer(),
             IconButton(
               tooltip: 'More important (Shift+Ctrl+Up)',
-              onPressed: state.isBusy ? null : () => model.step(increase: true),
+              onPressed: state.isBusy ? null : () => model.step(shouldIncrease: true),
               icon: const Icon(Icons.keyboard_arrow_up),
             ),
             IconButton(
               tooltip: 'Less important (Shift+Ctrl+Down)',
               onPressed: state.isBusy
                   ? null
-                  : () => model.step(increase: false),
+                  : () => model.step(shouldIncrease: false),
               icon: const Icon(Icons.keyboard_arrow_down),
             ),
           ],

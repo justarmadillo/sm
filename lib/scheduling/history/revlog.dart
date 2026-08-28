@@ -268,10 +268,10 @@ final class RevlogEntry {
     if (!atUtc.isUtc) {
       throw ArgumentError.value(atUtc, 'atUtc', 'must be UTC');
     }
-    final bool graded =
+    final bool wasGraded =
         eventType == RevlogEventType.review ||
         eventType == RevlogEventType.practice;
-    if (grade != null && !graded) {
+    if (grade != null && !wasGraded) {
       throw ArgumentError('only review and practice events carry a grade');
     }
     if (grade != null && (grade < 1 || grade > 4)) {

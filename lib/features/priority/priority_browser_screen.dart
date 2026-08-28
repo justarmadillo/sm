@@ -51,7 +51,7 @@ class PriorityBrowserScreen extends ConsumerWidget {
       final message = next.valueOrNull?.message;
       if (message == null) return;
       showToast(context, message.text, isError: message.isError);
-      model.clearMessage();
+      model.shouldClearMessage();
     });
 
     return Scaffold(
@@ -112,7 +112,7 @@ class _Body extends ConsumerWidget {
                         key: ValueKey<String>('${state.entries[index].ref}'),
                         entry: state.entries[index],
                         index: index,
-                        draggable: false,
+                        isDraggable: false,
                         onBatchPriority: () => _promptBatchPriority(
                           context,
                           ref,
@@ -176,7 +176,7 @@ class _Body extends ConsumerWidget {
   ) async {
     final List<ElementRef> refs = <ElementRef>[entry.ref];
     if (command.isDestructive) {
-      final bool confirmed =
+      final bool wasConfirmed =
           await showDialog<bool>(
             context: context,
             builder: (BuildContext context) => AlertDialog(
@@ -195,7 +195,7 @@ class _Body extends ConsumerWidget {
             ),
           ) ??
           false;
-      if (!confirmed || !context.mounted) return;
+      if (!wasConfirmed || !context.mounted) return;
     }
 
     switch (command) {
@@ -349,7 +349,7 @@ class _FilterBar extends StatelessWidget {
             padding: const EdgeInsets.only(left: 6),
             child: FilterChip(
               label: Text(label),
-              selected: _sameSet(state.types, types),
+              selected: _areSetsEqual(state.types, types),
               onSelected: (_) => model.filterTo(types),
             ),
           ),
@@ -381,7 +381,7 @@ class _FilterBar extends StatelessWidget {
     await model.smartPostpone(isSimulationOnly: false);
   }
 
-  bool _sameSet(Set<ElementType> a, Set<ElementType> b) =>
+  bool _areSetsEqual(Set<ElementType> a, Set<ElementType> b) =>
       a.length == b.length && a.containsAll(b);
 }
 
@@ -392,7 +392,7 @@ class _Row extends ConsumerWidget {
     required this.onBatchPriority,
     required this.onSmartPostpone,
     required this.onLearningCommand,
-    this.draggable = true,
+    this.isDraggable = true,
     super.key,
   });
 
@@ -401,7 +401,7 @@ class _Row extends ConsumerWidget {
 
   /// Whether this row offers a drag handle. Only the priority order can be
   /// dragged, because only there does "the row above" mean "the rank above".
-  final bool draggable;
+  final bool isDraggable;
   final VoidCallback onBatchPriority;
   final VoidCallback onSmartPostpone;
   final ValueChanged<_LearningCommand> onLearningCommand;
@@ -419,7 +419,7 @@ class _Row extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
         child: Row(
           children: <Widget>[
-            if (!draggable)
+            if (!isDraggable)
               const SizedBox(width: _kHandleWidth)
             else
               ReorderableDragStartListener(
@@ -494,12 +494,12 @@ class _Row extends ConsumerWidget {
                   IconButton(
                     tooltip: 'Set priority (Alt+P)',
                     onPressed: () async {
-                      final bool changed = await showPriorityDialog(
+                      final bool hasChanged = await showPriorityDialog(
                         context,
                         ref,
                         elementRef: entry.ref,
                       );
-                      if (changed) {
+                      if (hasChanged) {
                         await ref
                             .read(priorityBrowserProvider.notifier)
                             .refresh();
@@ -629,7 +629,7 @@ class _PriorityBatchDialogState extends State<_PriorityBatchDialog> {
               setState(() {
                 _mode = value;
                 _change.text = switch (value) {
-                  Sm20BatchPriorityMode.increase => '50',
+                  Sm20BatchPriorityMode.shouldIncrease => '50',
                   Sm20BatchPriorityMode.decrease => '150',
                   Sm20BatchPriorityMode.spread ||
                   Sm20BatchPriorityMode.adjust => '0',
@@ -665,7 +665,7 @@ class _PriorityBatchDialogState extends State<_PriorityBatchDialog> {
               ),
             ],
           ),
-          if (_mode == Sm20BatchPriorityMode.increase ||
+          if (_mode == Sm20BatchPriorityMode.shouldIncrease ||
               _mode == Sm20BatchPriorityMode.decrease) ...<Widget>[
             const SizedBox(height: 12),
             TextField(
@@ -895,7 +895,7 @@ Future<double?> _promptForDouble(
       builder: (BuildContext context) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setState) {
           final double? value = double.tryParse(controller.text.trim());
-          final bool valid = value != null && value >= min && value <= max;
+          final bool isValid = value != null && value >= min && value <= max;
           return AlertDialog(
             title: Text(title),
             content: SizedBox(
@@ -933,7 +933,7 @@ Future<double?> _promptForDouble(
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: valid
+                onPressed: isValid
                     ? () => Navigator.of(context).pop(value)
                     : null,
                 child: const Text('Apply'),
@@ -962,7 +962,7 @@ Future<int?> _promptForSpacing(BuildContext context) async {
       builder: (BuildContext context) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setState) {
           final int? value = int.tryParse(controller.text.trim());
-          final bool valid = value != null && value >= 1 && value <= 100;
+          final bool isValid = value != null && value >= 1 && value <= 100;
           return AlertDialog(
             title: const Text('Every which element?'),
             content: SizedBox(
@@ -999,7 +999,7 @@ Future<int?> _promptForSpacing(BuildContext context) async {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: valid
+                onPressed: isValid
                     ? () => Navigator.of(context).pop(value)
                     : null,
                 child: const Text('OK'),
@@ -1141,7 +1141,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool active = state.sort == sort;
+    final bool isActive = state.sort == sort;
     final Widget label = InkWell(
       onTap: () => model.sortBy(sort),
       child: Padding(
@@ -1155,13 +1155,13 @@ class _Header extends StatelessWidget {
               sort.label,
               style: TextStyle(
                 fontSize: 11,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                color: active ? AppColors.accent : AppColors.muted,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                color: isActive ? AppColors.accent : AppColors.muted,
               ),
             ),
-            if (active)
+            if (isActive)
               Icon(
-                state.ascending ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                state.isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down,
                 size: 15,
                 color: AppColors.accent,
               ),

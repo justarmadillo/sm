@@ -462,12 +462,12 @@ final class ReaderCommandRunner {
         final TopicScheduler scheduler = await _context.topicScheduler();
         final PriorityScale scale = await _context.priorityScale();
         final runtime = await _context.runtimeState();
-        final bool alreadyOutstanding = runtime.outstanding.contains(topic.ref);
+        final bool isAlreadyOutstanding = runtime.outstanding.contains(topic.ref);
         final TopicTransition transition = command.until == null
             ? scheduler.laterToday(
                 topic,
                 today: day,
-                alreadyOutstanding: alreadyOutstanding,
+                isAlreadyOutstanding: isAlreadyOutstanding,
                 priorityScale: scale,
               )
             : scheduler.rescheduleElement(
@@ -499,12 +499,12 @@ final class ReaderCommandRunner {
         // branch, so it has to leave Pending as it joins Outstanding —
         // otherwise it sits in both, and the stale entry resurfaces the next
         // time the Pending stage is built.
-        final bool stillPending =
+        final bool isStillPending =
             transition.state.status == Sm20ElementStatus.pending;
         final pending = <ElementRef>[
           for (final ElementRef ref in runtime.pending)
             if (ref != topic.ref) ref,
-          if (stillPending) topic.ref,
+          if (isStillPending) topic.ref,
         ];
         await _context.saveRuntimeState(
           runtime.copyWith(
@@ -528,7 +528,7 @@ final class ReaderCommandRunner {
           postponeCount: topic.postponeCount,
           metadata: <String, Object?>{
             'target': (command.until ?? day).toString(),
-            'queue_only': alreadyOutstanding,
+            'queue_only': isAlreadyOutstanding,
           },
         );
         await _log(
@@ -537,7 +537,7 @@ final class ReaderCommandRunner {
           ref: command.ref,
           metadata: <String, Object?>{
             'target': (command.until ?? day).toString(),
-            'queue_only': alreadyOutstanding,
+            'queue_only': isAlreadyOutstanding,
           },
         );
         return Ok<TopicState>(after);
@@ -565,7 +565,7 @@ final class ReaderCommandRunner {
           topic,
           today: day,
           remainingInterval: command.intervalDays,
-          modifyPriority: true,
+          shouldModifyPriority: true,
           priorityScale: await _context.priorityScale(),
         );
         if (!await _learning.compareAndSwapTopic(
@@ -692,12 +692,12 @@ final class ReaderCommandRunner {
     final ReaderAnchor start = document.startAnchor;
     final ReaderAnchor end = document.endAnchor;
     double? readFraction;
-    var reachedEnd = false;
+    var hasReachedEnd = false;
     if (marker != null) {
       final int total = document.wordsBetween(start, end);
       final int read = document.wordsBetween(start, marker);
       readFraction = total <= 0 ? 1 : (read / total).clamp(0, 1);
-      reachedEnd = !document.isBefore(marker, end);
+      hasReachedEnd = !document.isBefore(marker, end);
     }
 
     // "Nothing left to mine" is the strict reading: every word of the article
@@ -718,8 +718,8 @@ final class ReaderCommandRunner {
       readFraction: readFraction,
       wordsRead: command.wordsRead,
       extractsCreated: command.extractsCreated,
-      reachedEnd: reachedEnd,
-      unprocessedTextRemains: uncovered > 0,
+      hasReachedEnd: hasReachedEnd,
+      hasUnprocessedText: uncovered > 0,
     );
   }
 
@@ -1185,7 +1185,7 @@ final class ReaderCommandRunner {
       :final newAFactor,
       :final priorityBefore,
       :final priorityAfter,
-      :final bulk,
+      :final isBulkOperation,
       :final randomDraws,
     ) =>
       <String, Object?>{
@@ -1197,7 +1197,7 @@ final class ReaderCommandRunner {
         'a_after': newAFactor,
         'priority_before': priorityBefore,
         'priority_after': priorityAfter,
-        'bulk': bulk,
+        'bulk': isBulkOperation,
         'random_draws': randomDraws,
       },
     TopicRescheduled(

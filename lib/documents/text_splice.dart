@@ -112,7 +112,7 @@ final class TextSplice {
     final index = Utf8OffsetIndex(text);
     if (endUtf8 > index.byteLength) return SpliceRejection.outOfRange;
     if (insertedLength > kMaxSpliceBytes) return SpliceRejection.tooLarge;
-    if (!_onBoundary(index, startUtf8) || !_onBoundary(index, endUtf8)) {
+    if (!_isOnBoundary(index, startUtf8) || !_isOnBoundary(index, endUtf8)) {
       return SpliceRejection.notOnCharacterBoundary;
     }
     if (changesNothingIn(text)) return SpliceRejection.empty;
@@ -144,7 +144,7 @@ final class TextSplice {
     inserted: removedText,
   );
 
-  static bool _onBoundary(Utf8OffsetIndex index, int offset) =>
+  static bool _isOnBoundary(Utf8OffsetIndex index, int offset) =>
       index.toUtf8(index.toUtf16(offset)) == offset;
 
   @override

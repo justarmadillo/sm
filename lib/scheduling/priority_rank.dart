@@ -231,13 +231,13 @@ final class PriorityScale {
   /// still contains the element would land it back where it started.
   PriorityRank stepped(
     PriorityRank rank, {
-    required bool increase,
+    required bool shouldIncrease,
     int places = 1,
   }) {
     final PriorityPosition? position = positionOf(rank);
     if (position == null || _keys.length < 2) return rank;
     final int steps = places < 1 ? 1 : places;
-    final int target = increase
+    final int target = shouldIncrease
         ? position.index - steps
         : position.index + steps;
 
@@ -245,7 +245,7 @@ final class PriorityScale {
     if (target >= _keys.length - 1) {
       return PriorityRank.between(_keys.last, null);
     }
-    return increase
+    return shouldIncrease
         ? PriorityRank.between(at(target - 1), at(target))
         : PriorityRank.between(at(target), at(target + 1));
   }
@@ -306,7 +306,7 @@ final class PriorityScale {
     PriorityRank current, {
     required int oldInterval,
     required int newInterval,
-    required bool bulk,
+    required bool isBulkOperation,
   }) {
     if (_keys.isEmpty) return current;
     final int old = oldInterval < 1 ? 1 : oldInterval;
@@ -314,7 +314,7 @@ final class PriorityScale {
     if (old == next) return current;
 
     var correction = 80 * (1 - mathMin(old, next) / mathMax(old, next));
-    if (bulk) correction /= 3;
+    if (isBulkOperation) correction /= 3;
     final double scale = (100 - correction) / 100;
     final double currentPercent = percentageOf(current);
     double target = next < old

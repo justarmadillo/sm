@@ -144,8 +144,8 @@ final class SmartPostponeResult {
     required this.decisions,
     required this.postponed,
     required this.unpostponed,
-    required this.forcedPassRan,
-    required this.stoppedAtProtectedCount,
+    required this.didForcedPassRun,
+    required this.wasStoppedAtProtectedCount,
     required this.randomDraws,
     required this.prngState,
   });
@@ -155,8 +155,8 @@ final class SmartPostponeResult {
   final List<SmartPostponeDecision> decisions;
   final List<ElementRef> postponed;
   final List<ElementRef> unpostponed;
-  final bool forcedPassRan;
-  final bool stoppedAtProtectedCount;
+  final bool didForcedPassRun;
+  final bool wasStoppedAtProtectedCount;
   final int randomDraws;
   final Sm20PrngState prngState;
 
@@ -202,16 +202,16 @@ final class SmartPostponeEngine {
     final Set<ElementRef> postponed = <ElementRef>{};
     var stopped = false;
 
-    bool protectedRemainderReached() =>
+    bool wasProtectedRemainderReached() =>
         effective.method == SmartPostponeMethod.topCount &&
         ordered.length - postponed.length <= effective.protectedCount;
 
     for (final Sm20PostponeCandidate candidate in ordered) {
-      if (protectedRemainderReached()) {
+      if (wasProtectedRemainderReached()) {
         stopped = true;
         break;
       }
-      if (_outerExcluded(candidate, effective, postponed)) continue;
+      if (_isOuterExcluded(candidate, effective, postponed)) continue;
       final SmartPostponeDecision? decision = _ordinaryDecision(
         candidate: candidate,
         profile: effective,
@@ -224,16 +224,16 @@ final class SmartPostponeEngine {
       postponed.add(candidate.ref);
     }
 
-    var forcedPassRan = false;
+    var didForcedPassRun = false;
     if (effective.method == SmartPostponeMethod.topCount &&
         ordered.length - postponed.length > effective.protectedCount) {
-      forcedPassRan = true;
+      didForcedPassRun = true;
       for (final Sm20PostponeCandidate candidate in ordered) {
-        if (protectedRemainderReached()) {
+        if (wasProtectedRemainderReached()) {
           stopped = true;
           break;
         }
-        if (_outerExcluded(candidate, effective, postponed)) continue;
+        if (_isOuterExcluded(candidate, effective, postponed)) continue;
         final SmartPostponeDecision decision = _forcedDecision(
           candidate: candidate,
           profile: effective,
@@ -261,14 +261,14 @@ final class SmartPostponeEngine {
       decisions: List<SmartPostponeDecision>.unmodifiable(decisions),
       postponed: List<ElementRef>.unmodifiable(postponedOrder),
       unpostponed: List<ElementRef>.unmodifiable(unpostponed),
-      forcedPassRan: forcedPassRan,
-      stoppedAtProtectedCount: stopped,
+      didForcedPassRun: didForcedPassRun,
+      wasStoppedAtProtectedCount: stopped,
       randomDraws: prng.drawCount - drawsBefore,
       prngState: prng.state,
     );
   }
 
-  bool _outerExcluded(
+  bool _isOuterExcluded(
     Sm20PostponeCandidate candidate,
     SmartPostponeSettings profile,
     Set<ElementRef> postponed,
@@ -290,7 +290,7 @@ final class SmartPostponeEngine {
     // Types outside the item/topic families bypass the parameter gates and
     // configured clamps, but still run the common priority scaling and Spread
     // path with the evaluator's default 1.01 factor.
-    final bool generic = !candidate.isItem && !candidate.isTopicFamily;
+    final bool isGenericCandidate = !candidate.isItem && !candidate.isTopicFamily;
 
     if (candidate.isItem) {
       if (profile.shouldSkipItems ||
@@ -300,7 +300,7 @@ final class SmartPostponeEngine {
           priority < profile.itemPriorityThreshold) {
         return null;
       }
-    } else if (!generic) {
+    } else if (!isGenericCandidate) {
       if (profile.shouldSkipTopics ||
           age >= profile.topicAgeCutoffDays ||
           candidate.aFactor <= profile.topicAFactorCutoff ||
@@ -310,7 +310,7 @@ final class SmartPostponeEngine {
       }
     }
 
-    final int delayPercent = generic
+    final int delayPercent = isGenericCandidate
         ? 1
         : candidate.isItem
         ? profile.itemDelayPercent
@@ -319,7 +319,7 @@ final class SmartPostponeEngine {
     final int rawDelay = sm20RoundEven(age * baseFactor) - age;
     var delay = sm20RoundEven(2 * rawDelay * math.sqrt(priority / 100));
     delay = math.max(delay, 1);
-    if (!generic) {
+    if (!isGenericCandidate) {
       final int minimum = candidate.isItem
           ? profile.itemMinimumDelayDays
           : profile.topicMinimumDelayDays;
@@ -537,9 +537,9 @@ final class AutoPostponeRequest {
     required this.nowUtc,
     required this.isAutomaticPostponeEnabled,
     required this.lastAutoRunDay,
-    required this.collectionNonempty,
+    required this.isCollectionNonEmpty,
     required this.lastCollectionUseUtc,
-    required this.force,
+    required this.isForced,
     required this.combinedOutstandingCount,
     required this.collectionLearningStartDay,
     required this.scheduledElements,
@@ -574,9 +574,9 @@ final class AutoPostponeRequest {
   final DateTime nowUtc;
   final bool isAutomaticPostponeEnabled;
   final StudyDay? lastAutoRunDay;
-  final bool collectionNonempty;
+  final bool isCollectionNonEmpty;
   final DateTime? lastCollectionUseUtc;
-  final bool force;
+  final bool isForced;
   final int combinedOutstandingCount;
   final StudyDay collectionLearningStartDay;
   final List<Sm20PostponeCandidate> scheduledElements;
@@ -589,14 +589,14 @@ final class AutoPostponeResult {
   const AutoPostponeResult({
     required this.outcome,
     required this.lastAutoRunDay,
-    required this.disableAutoPostpone,
+    required this.shouldDisableAutoPostpone,
     required this.overdueCount,
     required this.smartPostpone,
   });
 
   final AutoPostponeOutcome outcome;
   final StudyDay? lastAutoRunDay;
-  final bool disableAutoPostpone;
+  final bool shouldDisableAutoPostpone;
   final int overdueCount;
   final SmartPostponeResult? smartPostpone;
 }
@@ -612,7 +612,7 @@ final class AutoPostponeEngine {
       return AutoPostponeResult(
         outcome: AutoPostponeOutcome.disabled,
         lastAutoRunDay: request.lastAutoRunDay,
-        disableAutoPostpone: false,
+        shouldDisableAutoPostpone: false,
         overdueCount: 0,
         smartPostpone: null,
       );
@@ -621,21 +621,21 @@ final class AutoPostponeEngine {
       return AutoPostponeResult(
         outcome: AutoPostponeOutcome.alreadyRanToday,
         lastAutoRunDay: request.lastAutoRunDay,
-        disableAutoPostpone: false,
+        shouldDisableAutoPostpone: false,
         overdueCount: 0,
         smartPostpone: null,
       );
     }
 
     final DateTime? lastUse = request.lastCollectionUseUtc;
-    if (!request.force &&
-        request.collectionNonempty &&
+    if (!request.isForced &&
+        request.isCollectionNonEmpty &&
         lastUse != null &&
         request.nowUtc.difference(lastUse) > const Duration(days: 10)) {
       return AutoPostponeResult(
         outcome: AutoPostponeOutcome.staleCollectionDisabled,
         lastAutoRunDay: request.lastAutoRunDay,
-        disableAutoPostpone: true,
+        shouldDisableAutoPostpone: true,
         overdueCount: 0,
         smartPostpone: null,
       );
@@ -647,7 +647,7 @@ final class AutoPostponeEngine {
       return AutoPostponeResult(
         outcome: AutoPostponeOutcome.outstandingGate,
         lastAutoRunDay: recordedRunDay,
-        disableAutoPostpone: false,
+        shouldDisableAutoPostpone: false,
         overdueCount: 0,
         smartPostpone: null,
       );
@@ -665,7 +665,7 @@ final class AutoPostponeEngine {
       return AutoPostponeResult(
         outcome: AutoPostponeOutcome.overdueGate,
         lastAutoRunDay: recordedRunDay,
-        disableAutoPostpone: false,
+        shouldDisableAutoPostpone: false,
         overdueCount: overdue.length,
         smartPostpone: null,
       );
@@ -686,7 +686,7 @@ final class AutoPostponeEngine {
     return AutoPostponeResult(
       outcome: AutoPostponeOutcome.ran,
       lastAutoRunDay: recordedRunDay,
-      disableAutoPostpone: false,
+      shouldDisableAutoPostpone: false,
       overdueCount: overdue.length,
       smartPostpone: result,
     );

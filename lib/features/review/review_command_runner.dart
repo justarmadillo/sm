@@ -531,17 +531,17 @@ final class ReviewCommandRunner {
         final StudyDayCalendar calendar = await _context.calendar();
         final StudyDay today = calendar.dayOf(command.timestampUtc);
         final runtime = await _context.runtimeState();
-        final bool alreadyOutstanding = runtime.outstanding.contains(state.ref);
+        final bool isAlreadyOutstanding = runtime.outstanding.contains(state.ref);
         final StudyDay until = command.until ?? today;
-        final bool sameDayGuard =
+        final bool isBlockedBySameDayGuard =
             command.until == null &&
-            !alreadyOutstanding &&
+            !isAlreadyOutstanding &&
             state.memory.lastReviewAtUtc != null &&
             calendar.dayOf(state.memory.lastReviewAtUtc!) == today;
         final CardScheduler scheduler = await _context.cardScheduler();
-        final CardState after = command.until == null && alreadyOutstanding
+        final CardState after = command.until == null && isAlreadyOutstanding
             ? state
-            : sameDayGuard
+            : isBlockedBySameDayGuard
             ? state
             : scheduler.rescheduleElement(
                 state,
@@ -559,7 +559,7 @@ final class ReviewCommandRunner {
         }
         await _placeInOutstanding(
           state.ref,
-          include: !state.memory.isNew && until <= today,
+          shouldInclude: !state.memory.isNew && until <= today,
         );
         await _journal.append(
           operationId: command.operationId.value,
@@ -574,8 +574,8 @@ final class ReviewCommandRunner {
           postponeCount: state.memory.postponeCount,
           metadata: <String, Object?>{
             'until': until.toString(),
-            'queue_only': command.until == null && alreadyOutstanding,
-            if (sameDayGuard) 'same_day_guard': true,
+            'queue_only': command.until == null && isAlreadyOutstanding,
+            if (isBlockedBySameDayGuard) 'same_day_guard': true,
           },
         );
         await _learning.appendActivity(
@@ -706,7 +706,7 @@ final class ReviewCommandRunner {
       )) {
         continue;
       }
-      await _placeInOutstanding(state.ref, include: false);
+      await _placeInOutstanding(state.ref, shouldInclude: false);
       entries.add(
         _journal.build(
           operationId: command.operationId.value,
@@ -773,8 +773,8 @@ final class ReviewCommandRunner {
 
   Future<void> _placeInOutstanding(
     ElementRef ref, {
-    required bool include,
-    bool atFront = false,
+    required bool shouldInclude,
+    bool shouldInsertAtFront = false,
   }) async {
     final runtime = await _context.runtimeState();
     final List<ElementRef> outstanding = runtime.outstanding
@@ -783,8 +783,8 @@ final class ReviewCommandRunner {
     final List<ElementRef> items = runtime.outstandingItems
         .where((ElementRef value) => value != ref)
         .toList();
-    if (include) {
-      if (atFront) {
+    if (shouldInclude) {
+      if (shouldInsertAtFront) {
         outstanding.insert(0, ref);
         items.insert(0, ref);
       } else {
@@ -799,7 +799,7 @@ final class ReviewCommandRunner {
 
   Future<void> _restoreToOutstanding(CardState state) async {
     if (!state.memory.isNew) {
-      await _placeInOutstanding(state.ref, include: true, atFront: true);
+      await _placeInOutstanding(state.ref, shouldInclude: true, shouldInsertAtFront: true);
       return;
     }
     final runtime = await _context.runtimeState();

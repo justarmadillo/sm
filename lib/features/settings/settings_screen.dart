@@ -41,7 +41,7 @@ class SettingsScreen extends ConsumerWidget {
       final message = next.valueOrNull?.message;
       if (message == null) return;
       showToast(context, message.text, isError: message.isError);
-      model.clearMessage();
+      model.shouldClearMessage();
     });
 
     final SettingsUiState? data = state.valueOrNull;

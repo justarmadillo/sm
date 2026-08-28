@@ -48,7 +48,7 @@ void main() {
     final TopicTransition moved = scheduler().laterToday(
       overdue,
       today: today,
-      alreadyOutstanding: true,
+      isAlreadyOutstanding: true,
       priorityScale: scale,
     );
 
@@ -68,7 +68,7 @@ void main() {
     final TopicTransition moved = scheduler().laterToday(
       repeated,
       today: today,
-      alreadyOutstanding: false,
+      isAlreadyOutstanding: false,
       priorityScale: scale,
     );
     expect(moved.isChange, isFalse);
@@ -82,7 +82,7 @@ void main() {
     final TopicTransition moved = scheduler().laterToday(
       waiting,
       today: today,
-      alreadyOutstanding: false,
+      isAlreadyOutstanding: false,
       priorityScale: scale,
     );
 

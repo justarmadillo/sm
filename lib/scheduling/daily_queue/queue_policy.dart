@@ -203,7 +203,7 @@ final class QueuePolicy {
     required Sm20Prng prng,
     Iterable<ElementRef>? combinedOrder,
     Set<ElementRef>? outstandingItemMembership,
-    bool sort = true,
+    bool shouldSort = true,
   }) {
     final Map<ElementRef, QueueCandidate> byRef = <ElementRef, QueueCandidate>{
       for (final QueueCandidate candidate in candidates)
@@ -255,13 +255,13 @@ final class QueuePolicy {
                   ? QueueLane.outstandingItem
                   : QueueLane.outstandingTopic),
       );
-      final bool item = membership == null
+      final bool isItem = membership == null
           ? candidate.isCard
           : membership.contains(candidate.ref);
-      (item ? items : topics).add(scored);
+      (isItem ? items : topics).add(scored);
     }
 
-    if (outstanding.length < 2 || !sort) {
+    if (outstanding.length < 2 || !shouldSort) {
       return QueuePlan(
         entries: List<QueueCandidate>.unmodifiable(outstanding),
         prioritySortedItems: List<QueueCandidate>.unmodifiable(
@@ -362,21 +362,21 @@ final class QueuePolicy {
     var nt = 0;
     final int total = items.length + topics.length;
     for (var slot = 0; slot < total; slot++) {
-      bool chooseItem = (1 - topicFraction) > ni / (ni + nt + 1);
-      if (chooseItem) {
+      bool shouldChooseItem = (1 - topicFraction) > ni / (ni + nt + 1);
+      if (shouldChooseItem) {
         ni++;
         if (itemIndex >= items.length) {
-          chooseItem = false;
+          shouldChooseItem = false;
           nt++;
         }
       } else {
         nt++;
         if (topicIndex >= topics.length) {
-          chooseItem = true;
+          shouldChooseItem = true;
           ni++;
         }
       }
-      output.add(chooseItem ? items[itemIndex++] : topics[topicIndex++]);
+      output.add(shouldChooseItem ? items[itemIndex++] : topics[topicIndex++]);
     }
     return output;
   }

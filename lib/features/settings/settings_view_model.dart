@@ -41,12 +41,12 @@ final class SettingsUiState {
     AppSettings? draft,
     bool? isBusy,
     UiMessage? message,
-    bool clearMessage = false,
+    bool shouldClearMessage = false,
   }) => SettingsUiState(
     saved: saved ?? this.saved,
     draft: draft ?? this.draft,
     isBusy: isBusy ?? this.isBusy,
-    message: clearMessage ? null : (message ?? this.message),
+    message: shouldClearMessage ? null : (message ?? this.message),
   );
 }
 
@@ -124,11 +124,11 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
   }
 
   /// Clears the one-shot message after the view has shown it.
-  void clearMessage() {
+  void shouldClearMessage() {
     final SettingsUiState? current = state.valueOrNull;
     if (current?.message == null) return;
     state = AsyncValue<SettingsUiState>.data(
-      current!.copyWith(clearMessage: true),
+      current!.copyWith(shouldClearMessage: true),
     );
   }
 }

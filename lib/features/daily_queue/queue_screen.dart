@@ -44,7 +44,7 @@ class QueueScreen extends ConsumerStatefulWidget {
 }
 
 class _QueueScreenState extends ConsumerState<QueueScreen> {
-  bool _openingRoutes = false;
+  bool _isOpeningRoutes = false;
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +58,7 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
       final message = next.valueOrNull?.message;
       if (message == null) return;
       showToast(context, message.text, isError: message.isError);
-      model.clearMessage();
+      model.shouldClearMessage();
     });
 
     return CallbackShortcuts(
@@ -85,7 +85,7 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
           // This screen is now the home, so the collection-wide destinations
           // live here rather than on the screen that used to hold them.
           TextButton.icon(
-            onPressed: _openingRoutes
+            onPressed: _isOpeningRoutes
                 ? null
                 : () async {
                     await openContents(context, ref);
@@ -99,17 +99,17 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
             // Undo lives here rather than on the review screen: that screen
             // closes the moment a grade commits, and the session is what the
             // user is actually in the middle of.
-            onPressed: _openingRoutes ? null : model.undoLastGrade,
+            onPressed: _isOpeningRoutes ? null : model.undoLastGrade,
             icon: const Icon(Icons.undo),
             tooltip: 'Undo last grade (Ctrl+Z)',
           ),
           IconButton(
-            onPressed: _openingRoutes ? null : model.refresh,
+            onPressed: _isOpeningRoutes ? null : model.refresh,
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh queue',
           ),
           IconButton(
-            onPressed: _openingRoutes
+            onPressed: _isOpeningRoutes
                 ? null
                 : () async {
                     await openPriorityBrowser(context, ref);
@@ -119,14 +119,14 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
             tooltip: 'Priority queue',
           ),
           IconButton(
-            onPressed: _openingRoutes
+            onPressed: _isOpeningRoutes
                 ? null
                 : () => openDiagnostics(context, ref),
             icon: const Icon(Icons.insights_outlined),
             tooltip: 'Diagnostics',
           ),
           IconButton(
-            onPressed: _openingRoutes
+            onPressed: _isOpeningRoutes
                 ? null
                 : () async {
                     await openSettings(context, ref);
@@ -147,7 +147,7 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
             : _QueueBody(
                 state: data,
                 model: model,
-                isRunning: _openingRoutes,
+                isRunning: _isOpeningRoutes,
                 onStart: _runQueue,
               ),
       ),
@@ -155,8 +155,8 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
   }
 
   Future<void> _runQueue() async {
-    if (_openingRoutes) return;
-    setState(() => _openingRoutes = true);
+    if (_isOpeningRoutes) return;
+    setState(() => _isOpeningRoutes = true);
     try {
       // The session advances only while each pass consumes an element. A
       // command can legitimately report "committed" while leaving the queue
@@ -186,7 +186,7 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
         if (refreshed.hasError || refreshed.valueOrNull?.next == null) break;
       }
     } finally {
-      if (mounted) setState(() => _openingRoutes = false);
+      if (mounted) setState(() => _isOpeningRoutes = false);
     }
   }
 
@@ -388,7 +388,7 @@ class _LoadPanel extends StatelessWidget {
       return;
     }
 
-    final bool apply =
+    final bool shouldApply =
         await showDialog<bool>(
           context: context,
           builder: (BuildContext context) => AlertDialog(
@@ -442,7 +442,7 @@ class _LoadPanel extends StatelessWidget {
           ),
         ) ??
         false;
-    if (apply) await model.applyMercy(batch);
+    if (shouldApply) await model.applyMercy(batch);
   }
 
   String _planSummary(MercyPreview preview) {
@@ -601,12 +601,12 @@ class _QueueTile extends ConsumerWidget {
                           PriorityBadge(
                             percent: percent,
                             onTap: () async {
-                              final bool changed = await showPriorityDialog(
+                              final bool hasChanged = await showPriorityDialog(
                                 context,
                                 ref,
                                 elementRef: entry.ref,
                               );
-                              if (changed) {
+                              if (hasChanged) {
                                 await ref
                                     .read(queueViewModelProvider.notifier)
                                     .refresh();

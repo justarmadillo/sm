@@ -56,7 +56,7 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
   final GlobalKey<ReaderViewState> _readerKey = GlobalKey<ReaderViewState>();
   ReaderSelectionController? _selection;
   String? _documentIdentity;
-  bool _openedAtAnchor = false;
+  bool _hasOpenedAtAnchor = false;
 
   @override
   void dispose() {
@@ -88,7 +88,7 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
               ? null
               : () => unawaited(model.undoExtract(undoId)),
         );
-        model.clearMessage();
+        model.shouldClearMessage();
       }
       if (state.isDone && Navigator.of(context).canPop()) {
         Navigator.of(context).pop(StudyRouteResult.committed);
@@ -114,10 +114,10 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
     final selection = _selectionFor(state.document);
     final typography = ref.watch(readerTypographyProvider);
     final initialAnchor = widget.request.initialAnchor;
-    if (!_openedAtAnchor &&
+    if (!_hasOpenedAtAnchor &&
         initialAnchor != null &&
         state.document.containsAnchor(initialAnchor)) {
-      _openedAtAnchor = true;
+      _hasOpenedAtAnchor = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _readerKey.currentState?.jumpToAnchor(initialAnchor);
       });

@@ -261,7 +261,7 @@ final class DriftContentRepository implements ContentRepository {
 
     for (final ProvenanceUpdate update in outcome.provenanceUpdates) {
       final ProvenanceSnapshot? recorded = restored[update.extractId];
-      if (recorded == null && !update.changed) continue;
+      if (recorded == null && !update.hasChanged) continue;
       await _database.customStatement(
         'UPDATE extracts SET start_utf8 = ?, end_utf8 = ?, '
         'anchor_revision = ?, provenance_state = ? WHERE id = ?',

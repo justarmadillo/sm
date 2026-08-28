@@ -176,7 +176,7 @@ final class QueueQuery {
           prng: Sm20Prng(seed: runtime.prngSeed),
           combinedOrder: runtime.outstanding,
           outstandingItemMembership: runtime.outstandingItems.toSet(),
-          sort: false,
+          shouldSort: false,
         )
         .counters;
   }

@@ -172,18 +172,18 @@ void main() {
       expect(graduated.state.memory.state, CardLearningState.review);
       expect(graduated.state.memory.step, isNull);
 
-      final CardReviewTransition lapsed = scheduler.review(
+      final CardReviewTransition hasLapsed = scheduler.review(
         graduated.state,
         rating: CardRating.again,
         reviewedAtUtc: graduated.state.memory.dueAtUtc,
         operationId: 'lapse',
       );
-      expect(lapsed.state.memory.state, CardLearningState.relearning);
-      expect(lapsed.state.memory.step, 0);
-      expect(lapsed.state.memory.lapses, 1);
-      expect(lapsed.state.memory.reps, 3);
+      expect(hasLapsed.state.memory.state, CardLearningState.relearning);
+      expect(hasLapsed.state.memory.step, 0);
+      expect(hasLapsed.state.memory.lapses, 1);
+      expect(hasLapsed.state.memory.reps, 3);
       expect(
-        lapsed.state.memory.dueAtUtc,
+        hasLapsed.state.memory.dueAtUtc,
         graduated.state.memory.dueAtUtc.add(const Duration(minutes: 10)),
       );
     });

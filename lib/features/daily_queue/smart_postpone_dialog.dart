@@ -71,8 +71,8 @@ class _SmartPostponeDialog extends StatelessWidget {
             Text(
               'Profile ${result.profile.profileName}, scope '
               '${result.profile.scope.name}. '
-              '${result.stoppedAtProtectedCount ? 'The protected count stopped the pass. ' : ''}'
-              '${result.forcedPassRan ? 'A forced pass ran to reach the requested count. ' : ''}'
+              '${result.wasStoppedAtProtectedCount ? 'The protected count stopped the pass. ' : ''}'
+              '${result.didForcedPassRun ? 'A forced pass ran to reach the requested count. ' : ''}'
               'This performs no repetitions: A-factors, priority, repetition '
               'counts, and lapses are left untouched.',
               style: const TextStyle(fontSize: 12, color: AppColors.muted),

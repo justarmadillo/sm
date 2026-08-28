@@ -182,7 +182,7 @@ void main() {
         StepPriority(
           harness.operation(),
           ref: ref,
-          increase: true,
+          shouldIncrease: true,
           timestampUtc: clock.nowUtc(),
         ),
       );

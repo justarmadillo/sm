@@ -102,7 +102,7 @@ void main() {
       final migrated = migrateRange(10, 20, splice);
       expect(migrated.startUtf8, 13, reason: 'start has right gravity');
       expect(migrated.endUtf8, 23);
-      expect(migrated.touchedByEdit, isFalse);
+      expect(migrated.wasTouchedByEdit, isFalse);
     });
 
     test('a range does not grow when text is typed at its end', () {
@@ -114,7 +114,7 @@ void main() {
       final migrated = migrateRange(10, 20, splice);
       expect(migrated.startUtf8, 10);
       expect(migrated.endUtf8, 20, reason: 'end has left gravity');
-      expect(migrated.touchedByEdit, isFalse);
+      expect(migrated.wasTouchedByEdit, isFalse);
     });
 
     test('an insertion strictly inside a range does touch it', () {
@@ -124,7 +124,7 @@ void main() {
         inserted: 'xyz',
       );
       final migrated = migrateRange(10, 20, splice);
-      expect(migrated.touchedByEdit, isTrue);
+      expect(migrated.wasTouchedByEdit, isTrue);
       expect(migrated.endUtf8, 23);
     });
 
@@ -132,7 +132,7 @@ void main() {
       final migrated = migrateRange(10, 20, TextSplice.delete(5, 25));
       expect(migrated.isEmpty, isTrue);
       expect(migrated.startUtf8, 5);
-      expect(migrated.touchedByEdit, isTrue);
+      expect(migrated.wasTouchedByEdit, isTrue);
     });
 
     test('a range entirely before the edit is untouched', () {
@@ -140,7 +140,7 @@ void main() {
       expect(migrated, const MigratedRange(
         startUtf8: 0,
         endUtf8: 5,
-        touchedByEdit: false,
+        wasTouchedByEdit: false,
       ));
     });
 
@@ -148,7 +148,7 @@ void main() {
       final migrated = migrateRange(30, 40, TextSplice.delete(10, 20));
       expect(migrated.startUtf8, 20);
       expect(migrated.endUtf8, 30);
-      expect(migrated.touchedByEdit, isFalse);
+      expect(migrated.wasTouchedByEdit, isFalse);
     });
 
     test('a migrated range is never inverted', () {

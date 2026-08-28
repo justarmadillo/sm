@@ -214,7 +214,7 @@ final class SourceEditJournal {
 
   /// Brings the byte range `[startUtf8, endUtf8)` forward to [currentRevision].
   ///
-  /// [MigratedRange.touchedByEdit] is true when *any* replayed splice touched
+  /// [MigratedRange.wasTouchedByEdit] is true when *any* replayed splice touched
   /// the range, so a caller re-verifies provenance exactly when it must.
   MigratedRange? migrateRangeForward(
     int startUtf8,
@@ -226,7 +226,7 @@ final class SourceEditJournal {
       return MigratedRange(
         startUtf8: startUtf8,
         endUtf8: endUtf8,
-        touchedByEdit: false,
+        wasTouchedByEdit: false,
       );
     }
     final pending = after(fromRevision).toList();
@@ -238,12 +238,12 @@ final class SourceEditJournal {
       final migrated = migrateRange(start, end, edit.splice);
       start = migrated.startUtf8;
       end = migrated.endUtf8;
-      touched = touched || migrated.touchedByEdit;
+      touched = touched || migrated.wasTouchedByEdit;
     }
     return MigratedRange(
       startUtf8: start,
       endUtf8: end,
-      touchedByEdit: touched,
+      wasTouchedByEdit: touched,
     );
   }
 

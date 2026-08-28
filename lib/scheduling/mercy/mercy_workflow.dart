@@ -272,10 +272,10 @@ final class MercyAppliedBatchSnapshot {
 
 /// A stale preview/undo is refused before any canonical state is written.
 final class StaleMercyPreview implements Exception {
-  const StaleMercyPreview(this.message, {this.changed = const <ElementRef>[]});
+  const StaleMercyPreview(this.message, {this.changedRefs = const <ElementRef>[]});
 
   final String message;
-  final Iterable<ElementRef> changed;
+  final Iterable<ElementRef> changedRefs;
 
   @override
   String toString() => message;

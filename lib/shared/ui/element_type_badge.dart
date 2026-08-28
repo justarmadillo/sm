@@ -35,7 +35,7 @@ import 'package:incremental_reader/shared/ui/app_theme.dart';
 class ElementTypeBadge extends StatelessWidget {
   const ElementTypeBadge({
     required this.type,
-    this.showLabel = true,
+    this.shouldShowLabel = true,
     super.key,
   });
 
@@ -45,14 +45,14 @@ class ElementTypeBadge extends StatelessWidget {
   ///
   /// The icon alone is only enough where the surrounding list is already all
   /// one type; anywhere the types are mixed, the word carries the meaning.
-  final bool showLabel;
+  final bool shouldShowLabel;
 
   @override
   Widget build(BuildContext context) {
     final ({IconData icon, Color color, String label}) style = elementTypeStyle(
       type,
     );
-    if (!showLabel) {
+    if (!shouldShowLabel) {
       return Icon(style.icon, size: 16, color: style.color);
     }
     return Container(

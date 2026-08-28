@@ -499,16 +499,16 @@ final class Sm20MercyEngine {
     required StudyDay learningStart,
     required StudyDay end,
   }) {
-    bool admitted(Sm20MercyCandidate value) =>
+    bool isAdmitted(Sm20MercyCandidate value) =>
         value.isScheduled &&
         !value.isDeleted &&
         value.scheduledDay >= learningStart &&
         value.scheduledDay <= end;
     return <Sm20MercyCandidate>[
       for (final Sm20MercyCandidate value in source)
-        if (admitted(value) && value.isItem) value,
+        if (isAdmitted(value) && value.isItem) value,
       for (final Sm20MercyCandidate value in source)
-        if (admitted(value) && !value.isItem) value,
+        if (isAdmitted(value) && !value.isItem) value,
     ];
   }
 

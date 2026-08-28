@@ -305,7 +305,7 @@ void main() {
             ),
           )
           .requireValue;
-      expect(current.reminderDismissed, isTrue);
+      expect(current.isReminderDismissed, isTrue);
       expect(current.showReminder, isFalse);
     });
 

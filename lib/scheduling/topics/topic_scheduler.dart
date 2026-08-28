@@ -204,8 +204,8 @@ final class TopicEncounter {
     this.hasChildItems = false,
     this.wordsRead = 0,
     this.extractsCreated = 0,
-    this.reachedEnd = false,
-    this.unprocessedTextRemains = true,
+    this.hasReachedEnd = false,
+    this.hasUnprocessedText = true,
   });
 
   static const TopicEncounter none = TopicEncounter();
@@ -213,10 +213,10 @@ final class TopicEncounter {
   final bool hasChildItems;
   final int wordsRead;
   final int extractsCreated;
-  final bool reachedEnd;
-  final bool unprocessedTextRemains;
+  final bool hasReachedEnd;
+  final bool hasUnprocessedText;
   double get density => wordsRead <= 0 ? 0 : extractsCreated / wordsRead * 1000;
-  bool get isExhausted => reachedEnd && !unprocessedTextRemains;
+  bool get isExhausted => hasReachedEnd && !hasUnprocessedText;
 }
 
 /// Observable consequences of one topic transaction.
@@ -238,7 +238,7 @@ final class TopicRepetitionCommitted extends TopicEvent {
     required this.priorityBefore,
     required this.priorityAfter,
     required this.nextDueDay,
-    required this.bulk,
+    required this.isBulkOperation,
     required this.randomDraws,
   });
 
@@ -250,7 +250,7 @@ final class TopicRepetitionCommitted extends TopicEvent {
   final double priorityBefore;
   final double priorityAfter;
   final StudyDay nextDueDay;
-  final bool bulk;
+  final bool isBulkOperation;
   final int randomDraws;
 
   @override
@@ -417,14 +417,14 @@ final class TopicScheduler {
     DelphiReal48 rawA,
     int oldInterval,
     int newInterval, {
-    required bool bulk,
+    required bool isBulkOperation,
   }) {
     final int old = math.max(oldInterval, 1);
     final int next = math.max(newInterval, 1);
     if (old == next) return rawA;
     final double a = rawA.value;
     final double r = math.max(next / old, old / next);
-    final int k = bulk ? 80 : 15;
+    final int k = isBulkOperation ? 80 : 15;
     final double d = math.max((a - kSm20MinimumAFactor) * r / (r + k), 0.001);
     final double result = (next > old ? a + d : a - d).clamp(
       kSm20MinimumAFactor,
@@ -484,7 +484,7 @@ final class TopicScheduler {
       state,
       today,
       selectedInterval: selected,
-      bulk: false,
+      isBulkOperation: false,
       priorityScale: priorityScale,
       randomDraws: prng.drawCount - beforeDraws,
     );
@@ -518,7 +518,7 @@ final class TopicScheduler {
       state.copyWith(status: Sm20ElementStatus.pending),
       today,
       selectedInterval: selected.clamp(1, kSm20Uint16Maximum),
-      bulk: false,
+      isBulkOperation: false,
       priorityScale: priorityScale,
       randomDraws: prng.drawCount - beforeDraws,
     );
@@ -529,7 +529,7 @@ final class TopicScheduler {
     TopicState state,
     StudyDay today, {
     required int interval,
-    required bool bulk,
+    required bool isBulkOperation,
     required PriorityScale priorityScale,
   }) {
     final StudyDay? last = state.lastReviewDay;
@@ -543,7 +543,7 @@ final class TopicScheduler {
       state,
       today,
       selectedInterval: interval,
-      bulk: bulk,
+      isBulkOperation: isBulkOperation,
       priorityScale: priorityScale,
       randomDraws: 0,
     );
@@ -553,7 +553,7 @@ final class TopicScheduler {
     TopicState state,
     StudyDay today, {
     required int selectedInterval,
-    required bool bulk,
+    required bool isBulkOperation,
     required PriorityScale priorityScale,
     required int randomDraws,
   }) {
@@ -566,13 +566,13 @@ final class TopicScheduler {
       state.aFactorRaw,
       oldInterval,
       selectedInterval,
-      bulk: bulk,
+      isBulkOperation: isBulkOperation,
     );
     final PriorityRank nextRank = priorityScale.adjustedForInterval(
       state.schedule.priority,
       oldInterval: oldInterval,
       newInterval: selectedInterval,
-      bulk: bulk,
+      isBulkOperation: isBulkOperation,
     );
     final double ratio = math.max(
       state.repetitionCount == 0 || oldInterval == 0
@@ -614,7 +614,7 @@ final class TopicScheduler {
         priorityBefore: priorityBefore,
         priorityAfter: afterScale.percentageOf(nextRank),
         nextDueDay: due,
-        bulk: bulk,
+        isBulkOperation: isBulkOperation,
         randomDraws: randomDraws,
       ),
     ], prngState: prng.state);
@@ -633,7 +633,7 @@ final class TopicScheduler {
       // [remember] or [jumpInterval].
       final int selected = interval;
       final StudyDay due = targetDay;
-      final TopicState admitted = state.copyWith(
+      final TopicState admittedState = state.copyWith(
         status: Sm20ElementStatus.memorized,
         repetitionCount: state.repetitionCount + 1,
         storedInterval: selected,
@@ -649,7 +649,7 @@ final class TopicScheduler {
           revision: state.schedule.revision + 1,
         ),
       );
-      return TopicTransition(admitted, <TopicEvent>[
+      return TopicTransition(admittedState, <TopicEvent>[
         TopicRescheduled(
           state.ref,
           oldInterval: state.storedInterval,
@@ -725,7 +725,7 @@ final class TopicScheduler {
     TopicState state, {
     required StudyDay today,
     required int remainingInterval,
-    required bool modifyPriority,
+    required bool shouldModifyPriority,
     required PriorityScale priorityScale,
   }) {
     final int oldInterval = state.storedInterval;
@@ -738,14 +738,14 @@ final class TopicScheduler {
       state.aFactorRaw,
       oldInterval,
       remainingInterval,
-      bulk: false,
+      isBulkOperation: false,
     );
-    final PriorityRank rank = modifyPriority
+    final PriorityRank rank = shouldModifyPriority
         ? priorityScale.adjustedForInterval(
             state.schedule.priority,
             oldInterval: oldInterval,
             newInterval: remainingInterval,
-            bulk: false,
+            isBulkOperation: false,
           )
         : state.schedule.priority;
     final TopicState next = moved.state.copyWith(
@@ -760,17 +760,17 @@ final class TopicScheduler {
   TopicTransition laterToday(
     TopicState state, {
     required StudyDay today,
-    required bool alreadyOutstanding,
+    required bool isAlreadyOutstanding,
     required PriorityScale priorityScale,
   }) {
-    if (alreadyOutstanding || state.lastReviewDay == today) {
+    if (isAlreadyOutstanding || state.lastReviewDay == today) {
       return TopicTransition.unchanged(state, prng.state);
     }
     return jumpInterval(
       state,
       today: today,
       remainingInterval: 0,
-      modifyPriority: false,
+      shouldModifyPriority: false,
       priorityScale: priorityScale,
     );
   }

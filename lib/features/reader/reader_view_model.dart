@@ -81,8 +81,8 @@ final class ReaderUiState {
     this.lastExtractId,
     this.wordsThisSession = 0,
     this.reminderTarget = 500,
-    this.reminderDismissed = false,
-    this.softBannerDismissed = false,
+    this.isReminderDismissed = false,
+    this.isSoftBannerDismissed = false,
     this.message,
     this.isBusy = false,
     this.isDone = false,
@@ -133,10 +133,10 @@ final class ReaderUiState {
   /// when the session opens, not compiled in.
   final int reminderTarget;
 
-  final bool reminderDismissed;
+  final bool isReminderDismissed;
 
   /// Whether the user closed the forgotten-marker banner this session.
-  final bool softBannerDismissed;
+  final bool isSoftBannerDismissed;
 
   /// Ephemeral: shown once, then cleared.
   final UiMessage? message;
@@ -170,14 +170,14 @@ final class ReaderUiState {
   /// already answered should not keep asking.
   bool get showSoftPositionBanner =>
       canCommitProgress &&
-      !softBannerDismissed &&
+      !isSoftBannerDismissed &&
       marker == null &&
       source.resume.softPosition != null;
 
   /// Whether the nonblocking reminder line should be visible.
   bool get showReminder =>
       canCommitProgress &&
-      !reminderDismissed &&
+      !isReminderDismissed &&
       wordsThisSession >= reminderTarget;
 
   /// How many extracts start in each block, keyed by block id.
@@ -228,18 +228,18 @@ final class ReaderUiState {
     List<Extract>? extracts,
     int? cardsFromSource,
     String? lastExtractId,
-    bool clearLastExtract = false,
+    bool shouldClearLastExtract = false,
     int? wordsThisSession,
-    bool? reminderDismissed,
-    bool? softBannerDismissed,
+    bool? isReminderDismissed,
+    bool? isSoftBannerDismissed,
     StudyDay? effectiveDueDay,
     UiMessage? message,
-    bool clearMessage = false,
+    bool shouldClearMessage = false,
     bool? isBusy,
     bool? isDone,
     bool? wasRepetition,
     String? editingBlockId,
-    bool clearEditing = false,
+    bool shouldClearEditing = false,
     bool? canUndoEdit,
     Document? document,
   }) => ReaderUiState(
@@ -251,18 +251,18 @@ final class ReaderUiState {
     effectiveDueDay: effectiveDueDay ?? this.effectiveDueDay,
     extracts: extracts ?? this.extracts,
     cardsFromSource: cardsFromSource ?? this.cardsFromSource,
-    lastExtractId: clearLastExtract
+    lastExtractId: shouldClearLastExtract
         ? null
         : (lastExtractId ?? this.lastExtractId),
     wordsThisSession: wordsThisSession ?? this.wordsThisSession,
     reminderTarget: reminderTarget,
-    reminderDismissed: reminderDismissed ?? this.reminderDismissed,
-    softBannerDismissed: softBannerDismissed ?? this.softBannerDismissed,
-    message: clearMessage ? null : (message ?? this.message),
+    isReminderDismissed: isReminderDismissed ?? this.isReminderDismissed,
+    isSoftBannerDismissed: isSoftBannerDismissed ?? this.isSoftBannerDismissed,
+    message: shouldClearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
     isDone: isDone ?? this.isDone,
     wasRepetition: wasRepetition ?? this.wasRepetition,
-    editingBlockId: clearEditing ? null : (editingBlockId ?? this.editingBlockId),
+    editingBlockId: shouldClearEditing ? null : (editingBlockId ?? this.editingBlockId),
     canUndoEdit: canUndoEdit ?? this.canUndoEdit,
   );
 }
@@ -358,7 +358,7 @@ final class ReaderViewModel
             ),
           ),
       apply: (ReaderUiState s, Source source) =>
-          s.copyWith(source: source, softBannerDismissed: true),
+          s.copyWith(source: source, isSoftBannerDismissed: true),
       success: (_) => 'Marker set',
     );
   }
@@ -366,9 +366,9 @@ final class ReaderViewModel
   /// Closes the forgotten-marker banner for this session.
   void dismissSoftBanner() {
     final current = state.valueOrNull;
-    if (current == null || current.softBannerDismissed) return;
+    if (current == null || current.isSoftBannerDismissed) return;
     state = AsyncValue<ReaderUiState>.data(
-      current.copyWith(softBannerDismissed: true),
+      current.copyWith(isSoftBannerDismissed: true),
     );
   }
 
@@ -426,7 +426,7 @@ final class ReaderViewModel
             ConfirmSoftPosition(operation, sourceId: current.source.id),
           ),
       apply: (ReaderUiState s, Source source) =>
-          s.copyWith(source: source, softBannerDismissed: true),
+          s.copyWith(source: source, isSoftBannerDismissed: true),
       success: (_) => 'Marker moved to where you left off',
     );
   }
@@ -614,7 +614,7 @@ final class ReaderViewModel
     state = AsyncValue<ReaderUiState>.data(
       latest.copyWith(
         extracts: await _reloadExtracts(latest.source.id),
-        clearLastExtract: true,
+        shouldClearLastExtract: true,
         isBusy: false,
         message: result.fold(
           (_) => const UiMessage('Extract removed'),
@@ -678,7 +678,7 @@ final class ReaderViewModel
     final current = state.valueOrNull;
     if (current == null) return;
     state = AsyncValue<ReaderUiState>.data(
-      current.copyWith(reminderDismissed: true),
+      current.copyWith(isReminderDismissed: true),
     );
   }
 
@@ -698,11 +698,11 @@ final class ReaderViewModel
   }
 
   /// Clears the one-shot message after the view has shown it.
-  void clearMessage() {
+  void shouldClearMessage() {
     final current = state.valueOrNull;
     if (current?.message == null) return;
     state = AsyncValue<ReaderUiState>.data(
-      current!.copyWith(clearMessage: true),
+      current!.copyWith(shouldClearMessage: true),
     );
   }
 
@@ -716,7 +716,7 @@ final class ReaderViewModel
     final current = state.valueOrNull;
     if (current == null || !current.canCommitProgress) return;
     state = AsyncValue<ReaderUiState>.data(
-      current.copyWith(editingBlockId: block.id, clearMessage: true),
+      current.copyWith(editingBlockId: block.id, shouldClearMessage: true),
     );
   }
 
@@ -725,7 +725,7 @@ final class ReaderViewModel
     final current = state.valueOrNull;
     if (current == null || !current.isEditing) return;
     state = AsyncValue<ReaderUiState>.data(
-      current.copyWith(clearEditing: true),
+      current.copyWith(shouldClearEditing: true),
     );
   }
 
@@ -808,7 +808,7 @@ final class ReaderViewModel
         document: edited.document,
         extracts: await content.listExtractsOfParent(edited.source.id),
         isBusy: false,
-        clearEditing: true,
+        shouldClearEditing: true,
         canUndoEdit:
             (await content.latestSourceEdit(edited.source.id)) != null,
         openedAt: edited.source.resume.openAt,

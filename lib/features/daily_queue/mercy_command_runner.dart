@@ -298,7 +298,7 @@ final class MercyCommandRunner {
               for (final MercyPreviewItem item in preview.items)
                 if (item.ref.type == ElementType.card) item.ref.id,
             ]);
-        final List<ElementRef> changed = <ElementRef>[];
+        final List<ElementRef> changedRefs = <ElementRef>[];
         for (final MercyPreviewItem item in preview.items) {
           String? current;
           if (item.ref.type == ElementType.card) {
@@ -308,12 +308,12 @@ final class MercyCommandRunner {
             final TopicState? value = topics[item.ref];
             if (value != null) current = encodeMercyTopicState(value);
           }
-          if (current != item.canonicalBefore) changed.add(item.ref);
+          if (current != item.canonicalBefore) changedRefs.add(item.ref);
         }
-        if (changed.isNotEmpty) {
+        if (changedRefs.isNotEmpty) {
           throw StaleMercyPreview(
             'elements changed after the Mercy preview',
-            changed: changed,
+            changedRefs: changedRefs,
           );
         }
 
@@ -585,7 +585,7 @@ final class MercyCommandRunner {
               for (final MercyAppliedItemSnapshot item in applied.items)
                 if (item.ref.type == ElementType.card) item.ref.id,
             ]);
-        final List<ElementRef> changed = <ElementRef>[];
+        final List<ElementRef> changedRefs = <ElementRef>[];
         for (final MercyAppliedItemSnapshot item in applied.items) {
           String? current;
           if (item.ref.type == ElementType.card) {
@@ -595,12 +595,12 @@ final class MercyCommandRunner {
             final TopicState? value = topics[item.ref];
             if (value != null) current = encodeMercyTopicState(value);
           }
-          if (current != item.afterState) changed.add(item.ref);
+          if (current != item.afterState) changedRefs.add(item.ref);
         }
-        if (changed.isNotEmpty) {
+        if (changedRefs.isNotEmpty) {
           throw StaleMercyPreview(
             'elements changed after Mercy was applied',
-            changed: changed,
+            changedRefs: changedRefs,
           );
         }
 

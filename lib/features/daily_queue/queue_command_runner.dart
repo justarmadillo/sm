@@ -44,7 +44,7 @@ final class AdmissionOutcome {
   const AdmissionOutcome({
     required this.plan,
     required this.automaticallyPostponed,
-    required this.alreadyApplied,
+    required this.wasAlreadyApplied,
   });
 
   final QueuePlan plan;
@@ -53,7 +53,7 @@ final class AdmissionOutcome {
   final int automaticallyPostponed;
 
   /// True once today's one-shot automatic sort has already been recorded.
-  final bool alreadyApplied;
+  final bool wasAlreadyApplied;
 }
 
 final class QueueCommandRunner {
@@ -121,7 +121,7 @@ final class QueueCommandRunner {
           outstanding: outstandingBeforePostpone,
           prng: prng,
         );
-        if (automatic.disableAutoPostpone) {
+        if (automatic.shouldDisableAutoPostpone) {
           settings = settings.copyWith(
             postpone: settings.postpone.copyWith(isAutomaticPostponeEnabled: false),
           );
@@ -185,9 +185,9 @@ final class QueueCommandRunner {
           for (final ElementRef ref in outstanding)
             if (byRef[ref]?.isCard ?? false) ref,
         };
-        final bool alreadySorted = runtime.lastAutomaticSortDay == command.day;
+        final bool wasAlreadySorted = runtime.lastAutomaticSortDay == command.day;
         final bool shouldSort =
-            settings.queue.shouldSortAutomatically && !alreadySorted && outstanding.isNotEmpty;
+            settings.queue.shouldSortAutomatically && !wasAlreadySorted && outstanding.isNotEmpty;
         final QueuePolicy policy = await _context.queuePolicy();
         final QueuePlan outstandingPlan = policy.build(
           candidates: candidates,
@@ -196,7 +196,7 @@ final class QueueCommandRunner {
           prng: prng,
           combinedOrder: outstanding,
           outstandingItemMembership: itemMembership,
-          sort: shouldSort,
+          shouldSort: shouldSort,
         );
 
         StudyDay? lastSort = runtime.lastAutomaticSortDay;
@@ -247,11 +247,11 @@ final class QueueCommandRunner {
         // A stage the user entered by hand outranks the automatic chain and
         // survives reloads. It lapses on its own once its queue is empty,
         // which is what returns the user to Outstanding without a command.
-        final bool heldDrill =
+        final bool hasHeldDrill =
             runtime.learningMode == 1 && finalDrill.isNotEmpty;
-        final bool heldPending =
+        final bool hasHeldPending =
             runtime.learningMode == 2 && pending.isNotEmpty;
-        if (heldDrill || (visible.isEmpty && finalDrill.isNotEmpty)) {
+        if (hasHeldDrill || (visible.isEmpty && finalDrill.isNotEmpty)) {
           learningMode = 1;
           final List<QueueCandidate> drill = <QueueCandidate>[
             for (final ElementRef ref in finalDrill)
@@ -268,7 +268,7 @@ final class QueueCommandRunner {
             lane: QueueLane.finalDrill,
             prngState: prng.state,
           );
-        } else if (heldPending || (visible.isEmpty && pending.isNotEmpty)) {
+        } else if (hasHeldPending || (visible.isEmpty && pending.isNotEmpty)) {
           learningMode = 2;
           visible = QueuePlan.stage(
             candidates: <QueueCandidate>[
@@ -339,7 +339,7 @@ final class QueueCommandRunner {
           AdmissionOutcome(
             plan: visible,
             automaticallyPostponed: automaticallyPostponed.length,
-            alreadyApplied: alreadySorted,
+            wasAlreadyApplied: wasAlreadySorted,
           ),
         );
       });
@@ -612,7 +612,7 @@ final class QueueCommandRunner {
               'source_count': result.sourceOrder.length,
               'postponed': result.postponed.length,
               'unpostponed': result.unpostponed.length,
-              'forced_pass': result.forcedPassRan,
+              'forced_pass': result.didForcedPassRun,
               'random_draws': result.randomDraws,
               'warning_count': result.warningCount,
             },
@@ -653,9 +653,9 @@ final class QueueCommandRunner {
         nowUtc: command.timestampUtc,
         isAutomaticPostponeEnabled: settings.postpone.isAutomaticPostponeEnabled,
         lastAutoRunDay: runtime.lastAutomaticPostponeDay,
-        collectionNonempty: candidates.isNotEmpty,
+        isCollectionNonEmpty: candidates.isNotEmpty,
         lastCollectionUseUtc: runtime.lastCollectionUseUtc,
-        force: false,
+        isForced: false,
         combinedOutstandingCount: outstanding.length,
         collectionLearningStartDay: runtime.learningStartDay ?? command.day,
         scheduledElements: scheduled,
@@ -665,7 +665,7 @@ final class QueueCommandRunner {
       prng,
     );
 
-    if (automatic.disableAutoPostpone) {
+    if (automatic.shouldDisableAutoPostpone) {
       final Result<AppSettings> saved = await _context.saveSettings(
         settings.copyWith(
           postpone: settings.postpone.copyWith(isAutomaticPostponeEnabled: false),
@@ -785,7 +785,7 @@ final class QueueCommandRunner {
         final CardMemory memory = card.memory;
         // Reps, not the FSRS learning state, decide memorization: FSRS calls a
         // never-reviewed card Learning, and SM20 treats that record as Pending.
-        final bool memorized = memory.reps > 0;
+        final bool isMemorized = memory.reps > 0;
         source.add(
           Sm20PostponeCandidate(
             ref: ref,
@@ -798,12 +798,12 @@ final class QueueCommandRunner {
                 : calendar.dayOf(memory.lastReviewAtUtc!),
             totalPostponements: memory.postponeCount,
             isOutstanding: outstanding.contains(ref),
-            isMemorized: memorized,
+            isMemorized: isMemorized,
             scheduledDay: calendar.dayOf(memory.dueAtUtc),
             // A never-reviewed card has no measurable retrievability, and the
             // executable evaluates such a record against the fixed default
             // forgetting index rather than skipping it.
-            forgettingIndex: memorized
+            forgettingIndex: isMemorized
                 ? 100 * (1 - cardScheduler.retrievability(memory, atUtc: atUtc))
                 : 10,
             isDeleted: card.schedule.lifecycle == ElementLifecycle.deleted,

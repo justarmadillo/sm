@@ -75,7 +75,7 @@ final class StepPriority extends AppCommand {
   StepPriority(
     super.operationId, {
     required this.ref,
-    required this.increase,
+    required this.shouldIncrease,
     this.places = 1,
     super.timestampUtc,
   });
@@ -83,14 +83,14 @@ final class StepPriority extends AppCommand {
   final ElementRef ref;
 
   /// Whether the element becomes more important.
-  final bool increase;
+  final bool shouldIncrease;
 
   /// How many neighbours to jump over.
   final int places;
 }
 
 /// The four executable browser/subset priority operations.
-enum Sm20BatchPriorityMode { increase, decrease, spread, adjust }
+enum Sm20BatchPriorityMode { shouldIncrease, decrease, spread, adjust }
 
 /// Applies one SM20 browser operation in the supplied subset queue order.
 final class BatchPriority extends AppCommand {

@@ -29,7 +29,7 @@ const double kMaxFontSize = 30;
 
 /// Holds the current reading typography and persists changes.
 final class ReaderTypographyNotifier extends Notifier<ReaderTypography> {
-  bool _changedLocally = false;
+  bool _wasChangedLocally = false;
   Future<void> _writes = Future<void>.value();
 
   @override
@@ -48,7 +48,7 @@ final class ReaderTypographyNotifier extends Notifier<ReaderTypography> {
     } on Object {
       return;
     }
-    if (_changedLocally) return;
+    if (_wasChangedLocally) return;
     final fontSize = double.tryParse(stored[kFontSizeKey] ?? '');
     final columnWidth = double.tryParse(stored[kColumnWidthKey] ?? '');
     final lineHeight = double.tryParse(stored[kLineHeightKey] ?? '');
@@ -86,7 +86,7 @@ final class ReaderTypographyNotifier extends Notifier<ReaderTypography> {
   void reset() => _apply(ReaderTypography.standard);
 
   void _apply(ReaderTypography next) {
-    _changedLocally = true;
+    _wasChangedLocally = true;
     state = next;
     _writes = _writes.then((_) async {
       final settings = ref.read(settingsRepositoryProvider);

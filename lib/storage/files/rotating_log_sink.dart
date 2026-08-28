@@ -42,7 +42,7 @@ final class RotatingLogSink implements DiagnosticSink {
 
   /// Serializes writes so interleaved commands cannot split a line.
   Future<void> _pending = Future<void>.value();
-  bool _disabled = false;
+  bool _isDisabled = false;
 
   /// The active log file.
   File get file => File(
@@ -52,7 +52,7 @@ final class RotatingLogSink implements DiagnosticSink {
 
   @override
   void record(DiagnosticEvent event) {
-    if (_disabled || event.level.index < _minimumLevel.index) return;
+    if (_isDisabled || event.level.index < _minimumLevel.index) return;
     final String line = jsonEncode(<String, Object?>{
       'at': event.timestampUtc.toIso8601String(),
       'level': event.level.name,
@@ -79,7 +79,7 @@ final class RotatingLogSink implements DiagnosticSink {
   Future<void> _append(String line) {
     _pending = _pending
         .then((_) async {
-          if (_disabled) return;
+          if (_isDisabled) return;
           if (!_directory.existsSync()) {
             _directory.createSync(recursive: true);
           }
@@ -97,7 +97,7 @@ final class RotatingLogSink implements DiagnosticSink {
           // One failure is enough: if the log directory is unwritable it will
           // stay unwritable, and retrying on every event would turn a
           // diagnostic into a performance problem.
-          _disabled = true;
+          _isDisabled = true;
         });
     return _pending;
   }

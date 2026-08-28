@@ -180,17 +180,17 @@ final class AdvanceElements extends BrowserSelectionCommand {
 /// and the changed refs are returned in the order they were written.
 final class BrowserCommandOutcome {
   const BrowserCommandOutcome({
-    required this.changed,
+    required this.changedRefs,
     required this.skipped,
     this.randomDraws = 0,
   });
 
   const BrowserCommandOutcome.empty()
-    : changed = const <ElementRef>[],
+    : changedRefs = const <ElementRef>[],
       skipped = 0,
       randomDraws = 0;
 
-  final List<ElementRef> changed;
+  final List<ElementRef> changedRefs;
 
   /// Selected records the command's own eligibility rules refused.
   final int skipped;
@@ -198,5 +198,5 @@ final class BrowserCommandOutcome {
   /// PRNG values this run consumed from the one global stream.
   final int randomDraws;
 
-  int get changedCount => changed.length;
+  int get changedRefCount => changedRefs.length;
 }

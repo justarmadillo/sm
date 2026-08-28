@@ -42,11 +42,11 @@ final class SettingsStore {
       final AppSettings canonical = AppSettings.fromMap(settings.toMap());
       final Map<String, String> next = canonical.toMap();
       final Map<String, String> stored = await _repository.readAll();
-      final changed = <String, String>{
+      final changedValues = <String, String>{
         for (final MapEntry<String, String> entry in next.entries)
           if (stored[entry.key] != entry.value) entry.key: entry.value,
       };
-      if (changed.isNotEmpty) await _repository.writeAll(changed);
+      if (changedValues.isNotEmpty) await _repository.writeAll(changedValues);
       for (final String key in stored.keys) {
         if (!next.containsKey(key) && _isReplacedSchedulerKey(key)) {
           await _repository.remove(key);

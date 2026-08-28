@@ -336,7 +336,7 @@ final class CardMemory {
     required DateTime targetDueAtUtc,
     required double actualIntervalDays,
     required DateTime? adjustedLastReviewAtUtc,
-    required bool intervalGrew,
+    required bool didIntervalGrow,
   }) {
     _requireUtc(targetDueAtUtc, 'targetDueAtUtc');
     if (adjustedLastReviewAtUtc != null) {
@@ -362,7 +362,7 @@ final class CardMemory {
       originalDueAtUtc: targetDueAtUtc,
       schedulerVersion: schedulerVersion,
       parametersVersion: parametersVersion,
-      postponeCount: postponeCount + (intervalGrew ? 1 : 0),
+      postponeCount: postponeCount + (didIntervalGrow ? 1 : 0),
       scheduledDays: actualIntervalDays,
       schedulerName: schedulerName,
       revision: revision + 1,
@@ -648,7 +648,7 @@ final class CardScheduler implements FsrsAdapter {
           reviewDuration: elapsedMs,
         );
 
-    final bool lapsed =
+    final bool hasLapsed =
         state.memory.state == CardLearningState.review &&
         rating == CardRating.again;
     final CardMemory memory = CardMemory(
@@ -658,7 +658,7 @@ final class CardScheduler implements FsrsAdapter {
       stability: result.card.stability,
       difficulty: result.card.difficulty,
       reps: state.memory.reps + 1,
-      lapses: state.memory.lapses + (lapsed ? 1 : 0),
+      lapses: state.memory.lapses + (hasLapsed ? 1 : 0),
       lastReviewAtUtc: result.card.lastReview,
       dueAtUtc: result.card.due,
       originalDueAtUtc: result.card.due,
@@ -710,7 +710,7 @@ final class CardScheduler implements FsrsAdapter {
           targetDueAtUtc: targetUtc,
           actualIntervalDays: remaining.toDouble(),
           adjustedLastReviewAtUtc: null,
-          intervalGrew: false,
+          didIntervalGrow: false,
         ),
       );
     }
@@ -741,7 +741,7 @@ final class CardScheduler implements FsrsAdapter {
         targetDueAtUtc: targetUtc,
         actualIntervalDays: actualInterval.toDouble(),
         adjustedLastReviewAtUtc: adjustedLast,
-        intervalGrew: actualInterval > oldInterval,
+        didIntervalGrow: actualInterval > oldInterval,
       ),
     );
   }

@@ -23,7 +23,7 @@ final class ReviewUiState {
   const ReviewUiState({
     required this.card,
     required this.cardState,
-    this.answerRevealed = false,
+    this.isAnswerRevealed = false,
     this.message,
     this.isBusy = false,
     this.isDone = false,
@@ -35,7 +35,7 @@ final class ReviewUiState {
 
   final Card card;
   final CardState cardState;
-  final bool answerRevealed;
+  final bool isAnswerRevealed;
   final UiMessage? message;
   final bool isBusy;
   final bool isDone;
@@ -73,9 +73,9 @@ final class ReviewUiState {
   ReviewUiState copyWith({
     Card? card,
     CardState? cardState,
-    bool? answerRevealed,
+    bool? isAnswerRevealed,
     UiMessage? message,
-    bool clearMessage = false,
+    bool shouldClearMessage = false,
     bool? isBusy,
     bool? isDone,
     bool? isLeech,
@@ -85,8 +85,8 @@ final class ReviewUiState {
   }) => ReviewUiState(
     card: card ?? this.card,
     cardState: cardState ?? this.cardState,
-    answerRevealed: answerRevealed ?? this.answerRevealed,
-    message: clearMessage ? null : (message ?? this.message),
+    isAnswerRevealed: isAnswerRevealed ?? this.isAnswerRevealed,
+    message: shouldClearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
     isDone: isDone ?? this.isDone,
     isLeech: isLeech ?? this.isLeech,
@@ -122,16 +122,16 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
 
   void revealAnswer() {
     final ReviewUiState? current = state.valueOrNull;
-    if (current == null || current.answerRevealed || current.isBusy) return;
+    if (current == null || current.isAnswerRevealed || current.isBusy) return;
     state = AsyncValue<ReviewUiState>.data(
-      current.copyWith(answerRevealed: true),
+      current.copyWith(isAnswerRevealed: true),
     );
   }
 
   Future<void> grade(CardRating rating) async {
     final ReviewUiState? current = state.valueOrNull;
     if (current == null ||
-        !current.answerRevealed ||
+        !current.isAnswerRevealed ||
         current.isBusy ||
         current.isDone ||
         current.isEditing) {
@@ -194,7 +194,7 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
           // misclick and should be able to grade again immediately.
           isDone: false,
           canUndo: false,
-          answerRevealed: true,
+          isAnswerRevealed: true,
           message: const UiMessage('Grade taken back'),
         ),
         (AppFailure failure) => latest.copyWith(
@@ -282,11 +282,11 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
     );
   }
 
-  void clearMessage() {
+  void shouldClearMessage() {
     final ReviewUiState? current = state.valueOrNull;
     if (current?.message == null) return;
     state = AsyncValue<ReviewUiState>.data(
-      current!.copyWith(clearMessage: true),
+      current!.copyWith(shouldClearMessage: true),
     );
   }
 

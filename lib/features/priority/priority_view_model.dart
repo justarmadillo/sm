@@ -62,17 +62,17 @@ final class PrioritySliderState {
     double? draftPercent,
     bool? isBusy,
     UiMessage? message,
-    bool clearMessage = false,
+    bool shouldClearMessage = false,
     PriorityEntry? draftAbove,
     PriorityEntry? draftBelow,
-    bool clearDraftNeighbours = false,
+    bool shouldClearDraftNeighbours = false,
   }) => PrioritySliderState(
     context: context ?? this.context,
     draftPercent: draftPercent ?? this.draftPercent,
     isBusy: isBusy ?? this.isBusy,
-    message: clearMessage ? null : (message ?? this.message),
-    draftAbove: clearDraftNeighbours ? null : (draftAbove ?? this.draftAbove),
-    draftBelow: clearDraftNeighbours ? null : (draftBelow ?? this.draftBelow),
+    message: shouldClearMessage ? null : (message ?? this.message),
+    draftAbove: shouldClearDraftNeighbours ? null : (draftAbove ?? this.draftAbove),
+    draftBelow: shouldClearDraftNeighbours ? null : (draftBelow ?? this.draftBelow),
   );
 }
 
@@ -118,7 +118,7 @@ final class PrioritySliderViewModel
     if (latest == null || latest.draftPercent != percent) return;
     state = AsyncValue<PrioritySliderState>.data(
       latest.copyWith(
-        clearDraftNeighbours: true,
+        shouldClearDraftNeighbours: true,
         draftAbove: neighbours.above,
         draftBelow: neighbours.below,
       ),
@@ -166,7 +166,7 @@ final class PrioritySliderViewModel
   }
 
   /// Nudges the element one place up or down the queue.
-  Future<void> step({required bool increase}) async {
+  Future<void> step({required bool shouldIncrease}) async {
     final PrioritySliderState? current = state.valueOrNull;
     if (current == null || current.isBusy) return;
     state = AsyncValue<PrioritySliderState>.data(
@@ -179,7 +179,7 @@ final class PrioritySliderViewModel
           StepPriority(
             OperationId(ref.read(idGeneratorProvider).newId()),
             ref: arg,
-            increase: increase,
+            shouldIncrease: shouldIncrease,
             timestampUtc: ref.read(clockProvider).nowUtc(),
           ),
         );
@@ -216,7 +216,7 @@ final class PriorityBrowserState {
     this.message,
     this.isBusy = false,
     this.sort = PriorityBrowserSort.priority,
-    this.ascending = true,
+    this.isAscending = true,
   });
 
   /// Every element in the order the browser is currently showing.
@@ -229,7 +229,7 @@ final class PriorityBrowserState {
   final bool isBusy;
 
   final PriorityBrowserSort sort;
-  final bool ascending;
+  final bool isAscending;
 
   /// Whether the rows are in collection priority order.
   ///
@@ -237,23 +237,23 @@ final class PriorityBrowserState {
   /// meaningful while the list *is* that order. Under any other sort the row
   /// above is not the rank above, and a drag would move the element somewhere
   /// the user did not point at.
-  bool get isReorderable => sort == PriorityBrowserSort.priority && ascending;
+  bool get isReorderable => sort == PriorityBrowserSort.priority && isAscending;
 
   PriorityBrowserState copyWith({
     List<PriorityEntry>? entries,
     Set<ElementType>? types,
     UiMessage? message,
-    bool clearMessage = false,
+    bool shouldClearMessage = false,
     bool? isBusy,
     PriorityBrowserSort? sort,
-    bool? ascending,
+    bool? isAscending,
   }) => PriorityBrowserState(
     entries: entries ?? this.entries,
     types: types ?? this.types,
-    message: clearMessage ? null : (message ?? this.message),
+    message: shouldClearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
     sort: sort ?? this.sort,
-    ascending: ascending ?? this.ascending,
+    isAscending: isAscending ?? this.isAscending,
   );
 }
 
@@ -280,7 +280,7 @@ enum PriorityBrowserSort {
 List<PriorityEntry> sortPriorityEntries(
   List<PriorityEntry> entries,
   PriorityBrowserSort sort,
-  bool ascending,
+  bool isAscending,
 ) {
   int byPriority(PriorityEntry a, PriorityEntry b) =>
       a.schedule.priority.compareTo(b.schedule.priority);
@@ -311,7 +311,7 @@ List<PriorityEntry> sortPriorityEntries(
         b.nextRepetition,
       ),
     };
-    if (primary != 0) return ascending ? primary : -primary;
+    if (primary != 0) return isAscending ? primary : -primary;
     return byPriority(a, b);
   }
 
@@ -332,12 +332,12 @@ final class PriorityBrowserViewModel
   Future<void> sortBy(PriorityBrowserSort sort) async {
     final PriorityBrowserState? current = state.valueOrNull;
     if (current == null || current.isBusy) return;
-    final bool ascending = current.sort == sort ? !current.ascending : true;
+    final bool isAscending = current.sort == sort ? !current.isAscending : true;
     state = AsyncValue<PriorityBrowserState>.data(
       current.copyWith(
         sort: sort,
-        ascending: ascending,
-        entries: sortPriorityEntries(current.entries, sort, ascending),
+        isAscending: isAscending,
+        entries: sortPriorityEntries(current.entries, sort, isAscending),
       ),
     );
   }
@@ -347,7 +347,7 @@ final class PriorityBrowserViewModel
     state = const AsyncLoading<PriorityBrowserState>();
     final PriorityBrowserSort sort =
         state.valueOrNull?.sort ?? PriorityBrowserSort.priority;
-    final bool ascending = state.valueOrNull?.ascending ?? true;
+    final bool isAscending = state.valueOrNull?.isAscending ?? true;
     state = await AsyncValue.guard(
       () async => PriorityBrowserState(
         entries: sortPriorityEntries(
@@ -355,11 +355,11 @@ final class PriorityBrowserViewModel
               .read(priorityQueryProvider)
               .browse(types: types.isEmpty ? null : types),
           sort,
-          ascending,
+          isAscending,
         ),
         types: types,
         sort: sort,
-        ascending: ascending,
+        isAscending: isAscending,
       ),
     );
   }
@@ -370,7 +370,7 @@ final class PriorityBrowserViewModel
     final Set<ElementType> types = current?.types ?? const <ElementType>{};
     final PriorityBrowserSort sort =
         current?.sort ?? PriorityBrowserSort.priority;
-    final bool ascending = current?.ascending ?? true;
+    final bool isAscending = current?.isAscending ?? true;
     state = AsyncValue<PriorityBrowserState>.data(
       PriorityBrowserState(
         entries: sortPriorityEntries(
@@ -378,11 +378,11 @@ final class PriorityBrowserViewModel
               .read(priorityQueryProvider)
               .browse(types: types.isEmpty ? null : types),
           sort,
-          ascending,
+          isAscending,
         ),
         types: types,
         sort: sort,
-        ascending: ascending,
+        isAscending: isAscending,
       ),
     );
   }
@@ -822,10 +822,10 @@ final class PriorityBrowserViewModel
       latest.copyWith(
         message: result.fold(
           (BrowserCommandOutcome outcome) => UiMessage(
-            outcome.changedCount == 0
+            outcome.changedRefCount == 0
                 ? 'Nothing was eligible'
-                : '$verb ${outcome.changedCount} element'
-                      '${outcome.changedCount == 1 ? '' : 's'}'
+                : '$verb ${outcome.changedRefCount} element'
+                      '${outcome.changedRefCount == 1 ? '' : 's'}'
                       '${outcome.skipped == 0 ? '' : ', ${outcome.skipped} skipped'}',
           ),
           (AppFailure failure) => UiMessage(failure.message, isError: true),
@@ -835,11 +835,11 @@ final class PriorityBrowserViewModel
   }
 
   /// Clears the one-shot message after the view has shown it.
-  void clearMessage() {
+  void shouldClearMessage() {
     final PriorityBrowserState? current = state.valueOrNull;
     if (current?.message == null) return;
     state = AsyncValue<PriorityBrowserState>.data(
-      current!.copyWith(clearMessage: true),
+      current!.copyWith(shouldClearMessage: true),
     );
   }
 }

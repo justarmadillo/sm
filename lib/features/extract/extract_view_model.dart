@@ -111,9 +111,9 @@ final class ExtractUiState {
     List<Card>? cards,
     StudyDay? effectiveDueDay,
     String? lastExtractId,
-    bool clearLastExtract = false,
+    bool shouldClearLastExtract = false,
     UiMessage? message,
-    bool clearMessage = false,
+    bool shouldClearMessage = false,
     bool? isBusy,
     bool? isDone,
   }) => ExtractUiState(
@@ -124,10 +124,10 @@ final class ExtractUiState {
     children: children ?? this.children,
     cards: cards ?? this.cards,
     effectiveDueDay: effectiveDueDay ?? this.effectiveDueDay,
-    lastExtractId: clearLastExtract
+    lastExtractId: shouldClearLastExtract
         ? null
         : (lastExtractId ?? this.lastExtractId),
-    message: clearMessage ? null : (message ?? this.message),
+    message: shouldClearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
     isDone: isDone ?? this.isDone,
   );
@@ -267,7 +267,7 @@ final class ExtractViewModel
     state = AsyncValue<ExtractUiState>.data(
       latest.copyWith(
         children: await _reloadChildren(latest.extract.id),
-        clearLastExtract: true,
+        shouldClearLastExtract: true,
         isBusy: false,
         message: result.fold(
           (_) => const UiMessage('Extract removed'),
@@ -371,7 +371,7 @@ final class ExtractViewModel
         cards: await ref
             .read(contentRepositoryProvider)
             .listCardsOfExtract(latest.extract.id),
-        clearLastExtract: true,
+        shouldClearLastExtract: true,
         isBusy: false,
         message: UiMessage(
           '${cards.length} card${cards.length == 1 ? '' : 's'} created',
@@ -381,11 +381,11 @@ final class ExtractViewModel
     return true;
   }
 
-  void clearMessage() {
+  void shouldClearMessage() {
     final current = state.valueOrNull;
     if (current?.message == null) return;
     state = AsyncValue<ExtractUiState>.data(
-      current!.copyWith(clearMessage: true),
+      current!.copyWith(shouldClearMessage: true),
     );
   }
 

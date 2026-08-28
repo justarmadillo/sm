@@ -38,7 +38,7 @@ class _ImportDialog extends StatefulWidget {
 class _ImportDialogState extends State<_ImportDialog> {
   final TextEditingController _title = TextEditingController();
   final TextEditingController _markdown = TextEditingController();
-  bool _titleEditedByHand = false;
+  bool _wasTitleEditedByHand = false;
 
   @override
   void initState() {
@@ -56,7 +56,7 @@ class _ImportDialogState extends State<_ImportDialog> {
 
   /// Fills the title from the first heading until the user types their own.
   void _suggestTitle() {
-    if (_titleEditedByHand) return;
+    if (_wasTitleEditedByHand) return;
     final suggestion = firstHeadingOf(_markdown.text);
     if (suggestion != null && suggestion != _title.text) {
       _title.text = suggestion;
@@ -74,7 +74,7 @@ class _ImportDialogState extends State<_ImportDialog> {
     final text = await File(file.path).readAsString();
     setState(() {
       _markdown.text = text;
-      if (!_titleEditedByHand) {
+      if (!_wasTitleEditedByHand) {
         _title.text = firstHeadingOf(text) ?? _fileTitle(file.name);
       }
     });
@@ -100,7 +100,7 @@ class _ImportDialogState extends State<_ImportDialog> {
                     controller: _title,
                     decoration: const InputDecoration(labelText: 'Title'),
                     onChanged: (_) {
-                      _titleEditedByHand = true;
+                      _wasTitleEditedByHand = true;
                       setState(() {});
                     },
                   ),

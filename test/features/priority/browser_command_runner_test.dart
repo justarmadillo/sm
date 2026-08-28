@@ -116,7 +116,7 @@ void main() {
             ),
           );
       expect(first.isOk, isTrue, reason: '${first.failureOrNull}');
-      expect(first.unwrap().changedCount, 1);
+      expect(first.unwrap().changedRefCount, 1);
 
       final TopicState memorized = await harness.topicOf(source);
       expect(memorized.status, Sm20ElementStatus.memorized);
@@ -132,7 +132,7 @@ void main() {
               timestampUtc: clock.nowUtc(),
             ),
           );
-      expect(second.unwrap().changedCount, 0);
+      expect(second.unwrap().changedRefCount, 0);
       expect(second.unwrap().skipped, 1);
     });
   });
@@ -242,7 +242,7 @@ void main() {
             ),
           );
 
-      expect(result.unwrap().changedCount, 0);
+      expect(result.unwrap().changedRefCount, 0);
       expect(result.unwrap().skipped, 1);
       final TopicState after = await harness.topicOf(source);
       expect(after.repetitionCount, before.repetitionCount);
@@ -348,7 +348,7 @@ void main() {
 
       final Sm20CollectionState runtime = await harness.context.runtimeState();
       expect(runtime.finalDrill, <ElementRef>[harness.refOf(source)]);
-      expect(again.unwrap().changedCount, 0);
+      expect(again.unwrap().changedRefCount, 0);
       final TopicState after = await harness.topicOf(source);
       expect(after.storedInterval, before.storedInterval);
       expect(after.schedule.priority, before.schedule.priority);
@@ -388,7 +388,7 @@ void main() {
       expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
       final Sm20CollectionState runtime = await harness.context.runtimeState();
       expect(runtime.outstanding, isNotEmpty);
-      for (final ElementRef ref in result.unwrap().changed) {
+      for (final ElementRef ref in result.unwrap().changedRefs) {
         expect(runtime.outstanding, contains(ref));
         final double after = (await harness.context.priorityScale())
             .percentageOf((await harness.learning.findSchedule(ref))!.priority);
@@ -415,7 +415,7 @@ void main() {
               timestampUtc: clock.nowUtc(),
             ),
           );
-      expect(ordinary.unwrap().changedCount, 0);
+      expect(ordinary.unwrap().changedRefCount, 0);
       expect(ordinary.unwrap().skipped, 1);
 
       final Result<BrowserCommandOutcome> addAll = await harness.browser
@@ -428,7 +428,7 @@ void main() {
               timestampUtc: clock.nowUtc(),
             ),
           );
-      expect(addAll.unwrap().changedCount, 1);
+      expect(addAll.unwrap().changedRefCount, 1);
 
       final TopicState after = await harness.topicOf(source);
       expect(after.schedule.algorithmicDueDay, today);
@@ -514,7 +514,7 @@ void main() {
             targetDueAtUtc: clock.nowUtc().add(const Duration(days: 200)),
             actualIntervalDays: 200,
             adjustedLastReviewAtUtc: card.memory.lastReviewAtUtc,
-            intervalGrew: true,
+            didIntervalGrow: true,
           ),
         ),
       );
@@ -592,8 +592,8 @@ void main() {
             ),
           );
 
-      expect(first.unwrap().changedCount, 1);
-      expect(resent.unwrap().changedCount, 0);
+      expect(first.unwrap().changedRefCount, 1);
+      expect(resent.unwrap().changedRefCount, 0);
       final Sm20CollectionState runtime = await harness.context.runtimeState();
       expect(runtime.finalDrill, <ElementRef>[ref]);
     });

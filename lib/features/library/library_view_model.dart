@@ -37,9 +37,9 @@ final class LibraryUiState {
   LibraryUiState copyWith({
     UiMessage? message,
     bool? isBusy,
-    bool clearMessage = false,
+    bool shouldClearMessage = false,
   }) => LibraryUiState(
-    message: clearMessage ? null : (message ?? this.message),
+    message: shouldClearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
   );
 }
@@ -110,11 +110,11 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
   }
 
   /// Clears the one-shot message after the view has shown it.
-  void clearMessage() {
+  void shouldClearMessage() {
     final current = state.valueOrNull;
     if (current?.message == null) return;
     state = AsyncValue<LibraryUiState>.data(
-      current!.copyWith(clearMessage: true),
+      current!.copyWith(shouldClearMessage: true),
     );
   }
 

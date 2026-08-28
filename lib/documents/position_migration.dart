@@ -109,7 +109,7 @@ final class MigratedRange {
   const MigratedRange({
     required this.startUtf8,
     required this.endUtf8,
-    required this.touchedByEdit,
+    required this.wasTouchedByEdit,
   });
 
   final int startUtf8;
@@ -120,7 +120,7 @@ final class MigratedRange {
   /// A range that did not overlap covers byte-identical text, whether or not
   /// it shifted, so its provenance needs no re-verification. Only a range that
   /// did overlap has to be re-hashed.
-  final bool touchedByEdit;
+  final bool wasTouchedByEdit;
 
   /// Whether the range no longer covers anything.
   bool get isEmpty => endUtf8 <= startUtf8;
@@ -130,14 +130,14 @@ final class MigratedRange {
       other is MigratedRange &&
       other.startUtf8 == startUtf8 &&
       other.endUtf8 == endUtf8 &&
-      other.touchedByEdit == touchedByEdit;
+      other.wasTouchedByEdit == wasTouchedByEdit;
 
   @override
-  int get hashCode => Object.hash(startUtf8, endUtf8, touchedByEdit);
+  int get hashCode => Object.hash(startUtf8, endUtf8, wasTouchedByEdit);
 
   @override
   String toString() =>
-      'MigratedRange($startUtf8..$endUtf8${touchedByEdit ? ' touched' : ''})';
+      'MigratedRange($startUtf8..$endUtf8${wasTouchedByEdit ? ' touched' : ''})';
 }
 
 /// Moves the range `[startUtf8, endUtf8)` across [splice].
@@ -163,7 +163,7 @@ MigratedRange migrateRange(
   return MigratedRange(
     startUtf8: migratedStart,
     endUtf8: migratedEnd,
-    touchedByEdit: _overlapsEdit(startUtf8, endUtf8, splice),
+    wasTouchedByEdit: _overlapsEdit(startUtf8, endUtf8, splice),
   );
 }
 

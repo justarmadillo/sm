@@ -355,7 +355,7 @@ void main() {
           'b',
           'a',
         ]);
-        expect(result.forcedPassRan, isTrue);
+        expect(result.didForcedPassRun, isTrue);
         expect(result.randomDraws, 0);
         expect(
           result.decisions.map((SmartPostponeDecision value) => value.pass),
@@ -399,7 +399,7 @@ void main() {
         prng: Sm20Prng(seed: 8),
       );
 
-      expect(result.forcedPassRan, isTrue);
+      expect(result.didForcedPassRun, isTrue);
       expect(
         result.decisions.map((SmartPostponeDecision value) => value.ref.id),
         <String>['d', 'c'],
@@ -471,11 +471,11 @@ void main() {
         memorized: false,
         aFactor: 2,
       );
-      SmartPostponeResult run(bool include) => const SmartPostponeEngine().run(
+      SmartPostponeResult run(bool shouldInclude) => const SmartPostponeEngine().run(
         source: <Sm20PostponeCandidate>[candidate],
         profile: SmartPostponeSettings(
           method: SmartPostponeMethod.parameters,
-          shouldIncludeNonOutstanding: include,
+          shouldIncludeNonOutstanding: shouldInclude,
           isSimulationOnly: true,
           topicPriorityThreshold: 0.0001,
         ),
@@ -596,9 +596,9 @@ void main() {
         nowUtc: now,
         isAutomaticPostponeEnabled: true,
         lastAutoRunDay: null,
-        collectionNonempty: true,
+        isCollectionNonEmpty: true,
         lastCollectionUseUtc: now.subtract(idle),
-        force: false,
+        isForced: false,
         combinedOutstandingCount: outstanding,
         collectionLearningStartDay: _day(0),
         scheduledElements: const <Sm20PostponeCandidate>[],
@@ -612,7 +612,7 @@ void main() {
       );
       expect(exactTen.outcome, AutoPostponeOutcome.outstandingGate);
       expect(exactTen.lastAutoRunDay, _day(100));
-      expect(exactTen.disableAutoPostpone, isFalse);
+      expect(exactTen.shouldDisableAutoPostpone, isFalse);
 
       final AutoPostponeResult stale = const AutoPostponeEngine().run(
         request(idle: const Duration(days: 10, microseconds: 1)),
@@ -620,7 +620,7 @@ void main() {
       );
       expect(stale.outcome, AutoPostponeOutcome.staleCollectionDisabled);
       expect(stale.lastAutoRunDay, isNull);
-      expect(stale.disableAutoPostpone, isTrue);
+      expect(stale.shouldDisableAutoPostpone, isTrue);
     });
 
     test('requires more than ten overdue rows then runs Default profile', () {
@@ -639,9 +639,9 @@ void main() {
           nowUtc: DateTime.utc(2024, 1, 20),
           isAutomaticPostponeEnabled: true,
           lastAutoRunDay: null,
-          collectionNonempty: true,
+          isCollectionNonEmpty: true,
           lastCollectionUseUtc: DateTime.utc(2024, 1, 19),
-          force: false,
+          isForced: false,
           combinedOutstandingCount: 11,
           collectionLearningStartDay: _day(0),
           scheduledElements: candidates,

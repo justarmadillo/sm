@@ -89,12 +89,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   final GlobalKey<ReaderViewState> _readerKey = GlobalKey<ReaderViewState>();
   final GlobalKey _surfaceKey = GlobalKey();
   ReaderSelectionController? _selection;
-  bool _openedAtMarker = false;
+  bool _hasOpenedAtMarker = false;
 
   /// Open by default: the outline is how a 50k-word chapter stays navigable,
   /// and the extract list is the record of what has already been processed.
   /// Both are context for reading, not a tool the user should have to fetch.
-  bool _panelOpen = true;
+  bool _isPanelOpen = true;
   ReaderPanelTab _panelTab = ReaderPanelTab.outline;
 
   /// Topmost visible block, so the outline can follow the reader.
@@ -216,7 +216,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               ? null
               : () => unawaited(model.undoExtract(undoId)),
         );
-        model.clearMessage();
+        model.shouldClearMessage();
       }
       if (data.isDone && Navigator.of(context).canPop()) {
         // Consume the signal before leaving. It is retained state on a keyed
@@ -253,8 +253,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     // Opening at the marker happens once per screen, not on every rebuild:
     // otherwise scrolling away would keep snapping the reader back.
-    if (!_openedAtMarker && state.openedAt != null) {
-      _openedAtMarker = true;
+    if (!_hasOpenedAtMarker && state.openedAt != null) {
+      _hasOpenedAtMarker = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _readerKey.currentState?.jumpToAnchor(state.openedAt!);
       });
@@ -278,12 +278,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             tooltip: 'Reading appearance',
           ),
           IconButton(
-            onPressed: () => setState(() => _panelOpen = !_panelOpen),
+            onPressed: () => setState(() => _isPanelOpen = !_isPanelOpen),
             icon: Icon(
-              _panelOpen ? Icons.view_sidebar : Icons.view_sidebar_outlined,
+              _isPanelOpen ? Icons.view_sidebar : Icons.view_sidebar_outlined,
             ),
-            color: _panelOpen ? AppColors.accent : null,
-            tooltip: _panelOpen
+            color: _isPanelOpen ? AppColors.accent : null,
+            tooltip: _isPanelOpen
                 ? 'Hide outline and extracts'
                 : 'Show outline and extracts',
           ),
@@ -415,7 +415,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         ],
                       ),
                     ),
-                    if (_panelOpen)
+                    if (_isPanelOpen)
                       ReaderSidePanel(
                         document: state.document,
                         extracts: state.extracts,
@@ -428,7 +428,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                           _animateToBlock(state.document, blockId),
                         ),
                         onGoToExtract: _goToExtract,
-                        onClose: () => setState(() => _panelOpen = false),
+                        onClose: () => setState(() => _isPanelOpen = false),
                       ),
                   ],
                 ),

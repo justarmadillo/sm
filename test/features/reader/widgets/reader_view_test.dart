@@ -90,7 +90,7 @@ void main() {
 
       final marked = tester
           .widgetList<BlockView>(find.byType(BlockView))
-          .where((BlockView v) => v.markerPainted)
+          .where((BlockView v) => v.isMarkerPainted)
           .toList();
       expect(marked, hasLength(1));
       expect(marked.single.block.id, document.blocks[1].id);

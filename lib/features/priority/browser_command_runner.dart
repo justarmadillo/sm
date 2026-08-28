@@ -105,7 +105,7 @@ final class BrowserCommandRunner {
       ),
     );
     return BrowserCommandOutcome(
-      changed: source,
+      changedRefs: source,
       skipped: command.refs.length - source.length,
     );
   });
@@ -119,7 +119,7 @@ final class BrowserCommandRunner {
         final AppSettings settings = await _context.settings();
         final TopicScheduler scheduler = await _context.topicScheduler();
         final PriorityScale scale = await _context.priorityScale();
-        final List<ElementRef> changed = <ElementRef>[];
+        final List<ElementRef> changedRefs = <ElementRef>[];
         var skipped = 0;
 
         for (final ElementRef ref in command.refs) {
@@ -145,11 +145,11 @@ final class BrowserCommandRunner {
             after: transition.state,
             eventType: RevlogEventType.topicRead,
           );
-          changed.add(ref);
+          changedRefs.add(ref);
         }
         await _context.savePrngState(scheduler.prng.state);
         return BrowserCommandOutcome(
-          changed: changed,
+          changedRefs: changedRefs,
           skipped: skipped,
           randomDraws: scheduler.prng.drawCount,
         );
@@ -164,7 +164,7 @@ final class BrowserCommandRunner {
   Future<Result<BrowserCommandOutcome>> forget(ForgetElements command) =>
       _run(command, kBrowserForgetKind, (StudyDay day) async {
         final TopicScheduler scheduler = await _context.topicScheduler();
-        final List<ElementRef> changed = <ElementRef>[];
+        final List<ElementRef> changedRefs = <ElementRef>[];
         var skipped = 0;
 
         for (final ElementRef ref in command.refs) {
@@ -193,7 +193,7 @@ final class BrowserCommandRunner {
               after: after,
               eventType: RevlogEventType.resume,
             );
-            changed.add(ref);
+            changedRefs.add(ref);
             continue;
           }
           final TopicState? topic = await _topic(ref);
@@ -212,10 +212,10 @@ final class BrowserCommandRunner {
             after: transition.state,
             eventType: RevlogEventType.resume,
           );
-          changed.add(ref);
+          changedRefs.add(ref);
         }
-        await _removeFromQueues(changed, shouldIncludeFinalDrill: true);
-        return BrowserCommandOutcome(changed: changed, skipped: skipped);
+        await _removeFromQueues(changedRefs, shouldIncludeFinalDrill: true);
+        return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
       });
 
   /// Dismiss: stop scheduling and send the record to priority 100.
@@ -223,7 +223,7 @@ final class BrowserCommandRunner {
       _run(command, kBrowserDismissKind, (StudyDay day) async {
         final TopicScheduler scheduler = await _context.topicScheduler();
         var scale = await _context.priorityScale();
-        final List<ElementRef> changed = <ElementRef>[];
+        final List<ElementRef> changedRefs = <ElementRef>[];
         var skipped = 0;
 
         for (final ElementRef ref in command.refs) {
@@ -254,7 +254,7 @@ final class BrowserCommandRunner {
               eventType: RevlogEventType.dismiss,
             );
             scale = scale.replacing(card.schedule.priority, bottom);
-            changed.add(ref);
+            changedRefs.add(ref);
             continue;
           }
           final TopicState? topic = await _topic(ref);
@@ -283,17 +283,17 @@ final class BrowserCommandRunner {
             topic.schedule.priority,
             transition.state.schedule.priority,
           );
-          changed.add(ref);
+          changedRefs.add(ref);
         }
-        await _removeFromQueues(changed, shouldIncludeFinalDrill: true);
-        return BrowserCommandOutcome(changed: changed, skipped: skipped);
+        await _removeFromQueues(changedRefs, shouldIncludeFinalDrill: true);
+        return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
       });
 
   /// Undismiss: the status byte only. Dismiss's cleared fields stay cleared.
   Future<Result<BrowserCommandOutcome>> undismiss(UndismissElements command) =>
       _run(command, kBrowserUndismissKind, (StudyDay day) async {
         final TopicScheduler scheduler = await _context.topicScheduler();
-        final List<ElementRef> changed = <ElementRef>[];
+        final List<ElementRef> changedRefs = <ElementRef>[];
         var skipped = 0;
 
         for (final ElementRef ref in command.refs) {
@@ -318,7 +318,7 @@ final class BrowserCommandRunner {
               after: after,
               eventType: RevlogEventType.resume,
             );
-            changed.add(ref);
+            changedRefs.add(ref);
             continue;
           }
           final TopicState? topic = await _topic(ref);
@@ -337,9 +337,9 @@ final class BrowserCommandRunner {
             after: transition.state,
             eventType: RevlogEventType.resume,
           );
-          changed.add(ref);
+          changedRefs.add(ref);
         }
-        return BrowserCommandOutcome(changed: changed, skipped: skipped);
+        return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
       });
 
   /// Done: the scheduler-visible half of deletion.
@@ -350,7 +350,7 @@ final class BrowserCommandRunner {
   Future<Result<BrowserCommandOutcome>> done(DoneElements command) =>
       _run(command, kBrowserDoneKind, (StudyDay day) async {
         final TopicScheduler scheduler = await _context.topicScheduler();
-        final List<ElementRef> changed = <ElementRef>[];
+        final List<ElementRef> changedRefs = <ElementRef>[];
         var skipped = 0;
 
         for (final ElementRef ref in command.refs) {
@@ -375,7 +375,7 @@ final class BrowserCommandRunner {
               after: after,
               eventType: RevlogEventType.dismiss,
             );
-            changed.add(ref);
+            changedRefs.add(ref);
             continue;
           }
           final TopicState? topic = await _topic(ref);
@@ -394,10 +394,10 @@ final class BrowserCommandRunner {
             after: transition.state,
             eventType: RevlogEventType.dismiss,
           );
-          changed.add(ref);
+          changedRefs.add(ref);
         }
-        await _removeFromQueues(changed, shouldIncludeFinalDrill: true);
-        return BrowserCommandOutcome(changed: changed, skipped: skipped);
+        await _removeFromQueues(changedRefs, shouldIncludeFinalDrill: true);
+        return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
       });
 
   /// Add to drill: queue membership only, appended once, in selection order.
@@ -407,7 +407,7 @@ final class BrowserCommandRunner {
     final Sm20CollectionState runtime = await _context.runtimeState();
     final List<ElementRef> drill = <ElementRef>[...runtime.finalDrill];
     final Set<ElementRef> present = drill.toSet();
-    final List<ElementRef> changed = <ElementRef>[];
+    final List<ElementRef> changedRefs = <ElementRef>[];
     var skipped = 0;
 
     for (final ElementRef ref in command.refs) {
@@ -419,12 +419,12 @@ final class BrowserCommandRunner {
         continue;
       }
       drill.add(ref);
-      changed.add(ref);
+      changedRefs.add(ref);
     }
-    if (changed.isNotEmpty) {
+    if (changedRefs.isNotEmpty) {
       await _context.saveRuntimeState(runtime.copyWith(finalDrill: drill));
     }
-    return BrowserCommandOutcome(changed: changed, skipped: skipped);
+    return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
   });
 
   /// Add to outstanding, or Add all.
@@ -442,7 +442,7 @@ final class BrowserCommandRunner {
     final TopicScheduler scheduler = await _context.topicScheduler();
     var scale = await _context.priorityScale();
     final List<ElementRef> outstanding = <ElementRef>[...runtime.outstanding];
-    final List<ElementRef> changed = <ElementRef>[];
+    final List<ElementRef> changedRefs = <ElementRef>[];
     var skipped = 0;
     var target = command.everyWhich < 3 ? command.everyWhich : 3;
 
@@ -479,11 +479,11 @@ final class BrowserCommandRunner {
       );
       await _setPriority(command, ref, raised);
       scale = scale.replacing(record.priority, raised);
-      changed.add(ref);
+      changedRefs.add(ref);
       target += command.everyWhich;
     }
 
-    if (changed.isNotEmpty) {
+    if (changedRefs.isNotEmpty) {
       final Set<ElementRef> members = outstanding.toSet();
       await _context.saveRuntimeState(
         runtime.copyWith(
@@ -492,7 +492,7 @@ final class BrowserCommandRunner {
           outstandingItems: <ElementRef>[
             for (final ElementRef ref in runtime.outstandingItems)
               if (members.contains(ref)) ref,
-            for (final ElementRef ref in changed)
+            for (final ElementRef ref in changedRefs)
               if (ref.type == ElementType.card &&
                   !runtime.outstandingItems.contains(ref))
                 ref,
@@ -500,7 +500,7 @@ final class BrowserCommandRunner {
           outstandingTopics: <ElementRef>[
             for (final ElementRef ref in runtime.outstandingTopics)
               if (members.contains(ref)) ref,
-            for (final ElementRef ref in changed)
+            for (final ElementRef ref in changedRefs)
               if (ref.type != ElementType.card &&
                   !runtime.outstandingTopics.contains(ref))
                 ref,
@@ -508,7 +508,7 @@ final class BrowserCommandRunner {
         ),
       );
     }
-    return BrowserCommandOutcome(changed: changed, skipped: skipped);
+    return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
   });
 
   /// Reset history: drop the external history block and nothing else.
@@ -520,7 +520,7 @@ final class BrowserCommandRunner {
     ResetElementHistory command,
   ) => _run(command, kBrowserResetHistoryKind, (StudyDay _) async {
     final TopicScheduler scheduler = await _context.topicScheduler();
-    final List<ElementRef> changed = <ElementRef>[];
+    final List<ElementRef> changedRefs = <ElementRef>[];
     var skipped = 0;
 
     for (final ElementRef ref in command.refs) {
@@ -530,9 +530,9 @@ final class BrowserCommandRunner {
         continue;
       }
       await _learning.saveTopic(scheduler.resetHistory(topic));
-      changed.add(ref);
+      changedRefs.add(ref);
     }
-    return BrowserCommandOutcome(changed: changed, skipped: skipped);
+    return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
   });
 
   /// Set A: store an A-factor directly on normal topics.
@@ -592,7 +592,7 @@ final class BrowserCommandRunner {
 
         final TopicScheduler scheduler = TopicScheduler(prng: prng);
         final PriorityScale scale = await _context.priorityScale();
-        final List<ElementRef> changed = <ElementRef>[];
+        final List<ElementRef> changedRefs = <ElementRef>[];
         for (final Sm20AdvanceDecision decision in result.decisions) {
           final _BrowserRecord record = records[decision.ref]!;
           if (decision.isItem) {
@@ -602,14 +602,14 @@ final class BrowserCommandRunner {
               targetDay: decision.targetDay,
               today: day,
             );
-            changed.add(decision.ref);
+            changedRefs.add(decision.ref);
             continue;
           }
           final TopicTransition transition = scheduler.forceRepetition(
             record.topic!,
             day,
             interval: decision.newInterval,
-            bulk: true,
+            isBulkOperation: true,
             priorityScale: scale,
           );
           if (!transition.isChange) continue;
@@ -619,15 +619,15 @@ final class BrowserCommandRunner {
             after: transition.state,
             eventType: RevlogEventType.topicRead,
           );
-          changed.add(decision.ref);
+          changedRefs.add(decision.ref);
         }
 
         // The draws are consumed whether or not a decision survived, so the
         // seed is written back even for a run that changed nothing.
         await _context.savePrngState(prng.state);
         return BrowserCommandOutcome(
-          changed: changed,
-          skipped: command.refs.length - changed.length,
+          changedRefs: changedRefs,
+          skipped: command.refs.length - changedRefs.length,
           randomDraws: result.randomDraws,
         );
       });
@@ -636,7 +636,7 @@ final class BrowserCommandRunner {
     BrowserSelectionCommand command,
     TopicState Function(TopicState topic) edit,
   ) async {
-    final List<ElementRef> changed = <ElementRef>[];
+    final List<ElementRef> changedRefs = <ElementRef>[];
     var skipped = 0;
     for (final ElementRef ref in command.refs) {
       final TopicState? topic = await _topic(ref);
@@ -653,9 +653,9 @@ final class BrowserCommandRunner {
         continue;
       }
       await _learning.saveTopic(edited);
-      changed.add(ref);
+      changedRefs.add(ref);
     }
-    return BrowserCommandOutcome(changed: changed, skipped: skipped);
+    return BrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
   }
 
   Future<TopicState?> _topic(ElementRef ref) async =>
@@ -840,13 +840,13 @@ final class BrowserCommandRunner {
             metadata: <String, Object?>{
               'day': command.day.toString(),
               'selected': command.refs.length,
-              'changed': outcome.changedCount,
+              'changed': outcome.changedRefCount,
               'skipped': outcome.skipped,
               'random_draws': outcome.randomDraws,
             },
           ),
         );
-        if (outcome.changedCount > 0) await _transfer.advanceGeneration();
+        if (outcome.changedRefCount > 0) await _transfer.advanceGeneration();
         _diagnostics.record(
           DiagnosticEvent(
             level: DiagnosticLevel.info,
@@ -855,7 +855,7 @@ final class BrowserCommandRunner {
             operationId: command.operationId,
             fields: <String, Object?>{
               'selected': command.refs.length,
-              'changed': outcome.changedCount,
+              'changed': outcome.changedRefCount,
               'skipped': outcome.skipped,
             },
           ),

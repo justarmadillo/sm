@@ -54,12 +54,12 @@ final class QueueUiState {
     QueueProjection? projection,
     int? completedThisSession,
     UiMessage? message,
-    bool clearMessage = false,
+    bool shouldClearMessage = false,
     bool? isBusy,
   }) => QueueUiState(
     projection: projection ?? this.projection,
     completedThisSession: completedThisSession ?? this.completedThisSession,
-    message: clearMessage ? null : (message ?? this.message),
+    message: shouldClearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
   );
 }
@@ -70,11 +70,11 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
       QueueUiState(projection: await ref.read(queueQueryProvider).load());
 
   /// Rebuilds from canonical schedules after a terminal route commits.
-  Future<void> refreshAfterCommit() => _reload(countEncounter: true);
+  Future<void> refreshAfterCommit() => _reload(shouldCountEncounter: true);
 
   /// Refreshes without counting an encounter, for example after returning
   /// from a canceled child route or when the user presses Refresh.
-  Future<void> refresh() => _reload(countEncounter: false);
+  Future<void> refresh() => _reload(shouldCountEncounter: false);
 
   /// Computes a Mercy proposal without writing anything.
   ///
@@ -418,18 +418,18 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
   }
 
   /// Clears the one-shot message after the view has shown it.
-  void clearMessage() {
+  void shouldClearMessage() {
     final QueueUiState? current = state.valueOrNull;
     if (current?.message == null) return;
     state = AsyncValue<QueueUiState>.data(
-      current!.copyWith(clearMessage: true),
+      current!.copyWith(shouldClearMessage: true),
     );
   }
 
-  Future<void> _reload({required bool countEncounter}) async {
+  Future<void> _reload({required bool shouldCountEncounter}) async {
     final QueueUiState? current = state.valueOrNull;
     final int completed =
-        (current?.completedThisSession ?? 0) + (countEncounter ? 1 : 0);
+        (current?.completedThisSession ?? 0) + (shouldCountEncounter ? 1 : 0);
     state = const AsyncLoading<QueueUiState>();
     state = await AsyncValue.guard(
       () async => QueueUiState(

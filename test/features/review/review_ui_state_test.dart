@@ -35,8 +35,8 @@ void main() {
 
     expect(ui.question, 'What is FSRS?');
     expect(ui.answer, 'A memory scheduler.');
-    expect(ui.answerRevealed, isFalse);
-    expect(ui.copyWith(answerRevealed: true).answerRevealed, isTrue);
+    expect(ui.isAnswerRevealed, isFalse);
+    expect(ui.copyWith(isAnswerRevealed: true).isAnswerRevealed, isTrue);
   });
 
   test('cloze hides only its own ordinal and reveals every answer', () {

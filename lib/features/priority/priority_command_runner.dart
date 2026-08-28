@@ -136,7 +136,7 @@ final class PriorityCommandRunner {
         final double current = scale.percentageOf(schedule.priority);
         final double target =
             current +
-            (command.increase ? -0.1 : 0.1) *
+            (command.shouldIncrease ? -0.1 : 0.1) *
                 (command.places < 1 ? 1 : command.places);
         final PriorityRank rank = scale.rankForSetPriority(
           schedule.priority,
@@ -163,14 +163,14 @@ final class PriorityCommandRunner {
     var low = command.lowPercent;
     var high = command.highPercent;
     var change = command.changePercent;
-    final bool remapsRange =
+    final bool doesRemapRange =
         command.mode == Sm20BatchPriorityMode.spread ||
         command.mode == Sm20BatchPriorityMode.adjust;
-    if (!remapsRange && !command.shouldLimitChanges) {
+    if (!doesRemapRange && !command.shouldLimitChanges) {
       low = 0;
       high = 100;
     }
-    if (remapsRange) {
+    if (doesRemapRange) {
       change = 0;
       if (low == high) {
         low -= 0.1;
@@ -259,7 +259,7 @@ final class PriorityCommandRunner {
       }
       final double current = scale.percentageOf(schedule.priority);
       final double calculated = switch (command.mode) {
-        Sm20BatchPriorityMode.increase => _increaseTarget(
+        Sm20BatchPriorityMode.shouldIncrease => _increaseTarget(
           current,
           change,
           low,

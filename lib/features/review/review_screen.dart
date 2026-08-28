@@ -50,7 +50,7 @@ class ReviewScreen extends ConsumerWidget {
       if (data == null) return;
       if (data.message case final message?) {
         showToast(context, message.text, isError: message.isError);
-        model.clearMessage();
+        model.shouldClearMessage();
       }
       if (data.isDone && Navigator.of(context).canPop()) {
         Navigator.of(context).pop(StudyRouteResult.committed);
@@ -186,7 +186,7 @@ class _ReviewBody extends ConsumerWidget {
                               label: 'QUESTION',
                               markdown: state.question,
                             ),
-                            if (state.answerRevealed) ...<Widget>[
+                            if (state.isAnswerRevealed) ...<Widget>[
                               const SizedBox(height: 18),
                               _CardPanel(
                                 label: 'ANSWER',
@@ -327,7 +327,7 @@ class _ReviewActions extends StatelessWidget {
       border: Border(top: BorderSide(color: AppColors.border)),
     ),
     child: Center(
-      child: state.answerRevealed
+      child: state.isAnswerRevealed
           ? Wrap(
               spacing: 8,
               runSpacing: 8,

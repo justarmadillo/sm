@@ -104,17 +104,17 @@ void main() {
     test('reproduces the three Real48 byte vectors', () {
       final DelphiReal48 two = DelphiReal48.fromDouble(2);
       expect(
-        TopicScheduler.adjustAFactorRaw(two, 10, 20, bulk: false).bytes,
+        TopicScheduler.adjustAFactorRaw(two, 10, 20, isBulkOperation: false).bytes,
         _hex('82db0d417407'),
         reason: 'a grown interval raises A',
       );
       expect(
-        TopicScheduler.adjustAFactorRaw(two, 20, 10, bulk: false).bytes,
+        TopicScheduler.adjustAFactorRaw(two, 20, 10, isBulkOperation: false).bytes,
         _hex('814be47d1771'),
         reason: 'a shrunk interval lowers A',
       );
       expect(
-        TopicScheduler.adjustAFactorRaw(two, 10, 20, bulk: true).bytes,
+        TopicScheduler.adjustAFactorRaw(two, 10, 20, isBulkOperation: true).bytes,
         _hex('82ba189d8b01'),
         reason: 'a bulk repetition moves A far less',
       );
@@ -123,7 +123,7 @@ void main() {
     test('an unchanged interval leaves the stored bytes alone', () {
       final DelphiReal48 a = DelphiReal48.fromDouble(2);
       expect(
-        TopicScheduler.adjustAFactorRaw(a, 10, 10, bulk: false).bytes,
+        TopicScheduler.adjustAFactorRaw(a, 10, 10, isBulkOperation: false).bytes,
         a.bytes,
       );
     });
