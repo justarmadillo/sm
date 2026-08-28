@@ -11,6 +11,7 @@
 library;
 
 import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/scheduling/effective_due_query.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
@@ -21,10 +22,19 @@ import 'package:incremental_reader/settings/settings_store.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
-import 'package:incremental_reader/storage/contracts/repositories.dart';
+import 'package:incremental_reader/storage/contracts/content_repository.dart';
+import 'package:incremental_reader/storage/contracts/learning_repository.dart';
+import 'package:incremental_reader/storage/contracts/search_repository.dart';
+import 'package:incremental_reader/storage/contracts/settings_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
+import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
-import 'package:incremental_reader/storage/drift/drift_repositories.dart';
+import 'package:incremental_reader/storage/drift/drift_content_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_learning_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_search_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_settings_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_transaction_runner.dart';
+import 'package:incremental_reader/storage/drift/drift_transfer_repository.dart';
 import 'package:incremental_reader/storage/files/backup_service.dart';
 import 'package:incremental_reader/storage/files/rotating_log_sink.dart';
 import 'package:incremental_reader/storage/platform/app_paths.dart';

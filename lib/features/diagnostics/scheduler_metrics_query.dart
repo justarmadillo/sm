@@ -22,7 +22,7 @@ import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
-import 'package:incremental_reader/storage/contracts/repositories.dart';
+import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 
 /// How far back the activity window reaches, in study days.
 const int kMetricsActivityWindowDays = 30;

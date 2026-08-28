@@ -14,7 +14,7 @@ import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/shared/utf8_offsets.dart';
-import 'package:incremental_reader/storage/contracts/repositories.dart';
+import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
 import 'package:test/test.dart';
 

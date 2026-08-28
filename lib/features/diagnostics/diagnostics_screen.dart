@@ -19,7 +19,7 @@ import 'package:incremental_reader/scheduling/history/revlog.dart';
 import 'package:incremental_reader/scheduling/metrics/scheduler_metrics.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
-import 'package:incremental_reader/storage/contracts/repositories.dart';
+import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 
 /// Opens the panel, optionally focused on one element.
 Future<void> openDiagnostics(

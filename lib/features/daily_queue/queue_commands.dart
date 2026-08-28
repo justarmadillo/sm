@@ -10,7 +10,8 @@ library;
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/postpone/sm20_postpone.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
-import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/mercy_settings.dart';
+import 'package:incremental_reader/settings/smart_postpone_settings.dart';
 import 'package:incremental_reader/shared/command_base.dart';
 
 /// Open or resume the day's SM20 queues and run the one-shot automatic sort.

@@ -31,7 +31,12 @@ import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
-import 'package:incremental_reader/storage/drift/drift_repositories.dart';
+import 'package:incremental_reader/storage/drift/drift_content_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_learning_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_search_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_settings_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_transaction_runner.dart';
+import 'package:incremental_reader/storage/drift/drift_transfer_repository.dart';
 
 /// A fully wired application stack over an in-memory database.
 final class AppHarness {
@@ -81,7 +86,7 @@ final class AppHarness {
   late final Sm20RuntimeStore runtimeStore;
   late final SchedulingContext context;
 
-  /// Collects every diagnostic event the commandRunner emit.
+  /// Collects every diagnostic event the command runners emit.
   final RecordingDiagnosticSink diagnostics = RecordingDiagnosticSink();
 
   late final ReaderCommandRunner reader = ReaderCommandRunner(

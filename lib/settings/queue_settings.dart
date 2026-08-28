@@ -1,0 +1,73 @@
+/// How today's queue is filled: daily caps and the topic/card mix.///
+/// Mirrors the controls described by `SM20_AIO_SCHEDULER.md`.
+library;
+
+import 'package:meta/meta.dart';
+
+/// SM20's daily Outstanding ordering and stage controls.
+@immutable
+final class QueueSettings {
+  const QueueSettings({
+    this.topicPercent = 20,
+    this.itemRandomization = 0,
+    this.topicRandomization = 0,
+    this.autoSort = true,
+    this.randomizeFinalDrill = false,
+    this.confirmStageTransitions = true,
+  });
+
+  /// Percentage of topic-family elements in the merged Outstanding queue.
+  final int topicPercent;
+
+  /// Item randomization slider value, from 0 through 100.
+  final int itemRandomization;
+
+  /// Topic randomization slider value, from 0 through 100.
+  final int topicRandomization;
+
+  /// Whether Outstanding is sorted automatically once per study day.
+  final bool autoSort;
+
+  /// Whether Final Drill is randomized before it is served.
+  final bool randomizeFinalDrill;
+
+  /// Whether transitions into Final Drill and Pending require confirmation.
+  final bool confirmStageTransitions;
+
+  QueueSettings copyWith({
+    int? topicPercent,
+    int? itemRandomization,
+    int? topicRandomization,
+    bool? autoSort,
+    bool? randomizeFinalDrill,
+    bool? confirmStageTransitions,
+  }) => QueueSettings(
+    topicPercent: topicPercent ?? this.topicPercent,
+    itemRandomization: itemRandomization ?? this.itemRandomization,
+    topicRandomization: topicRandomization ?? this.topicRandomization,
+    autoSort: autoSort ?? this.autoSort,
+    randomizeFinalDrill: randomizeFinalDrill ?? this.randomizeFinalDrill,
+    confirmStageTransitions:
+        confirmStageTransitions ?? this.confirmStageTransitions,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is QueueSettings &&
+      other.topicPercent == topicPercent &&
+      other.itemRandomization == itemRandomization &&
+      other.topicRandomization == topicRandomization &&
+      other.autoSort == autoSort &&
+      other.randomizeFinalDrill == randomizeFinalDrill &&
+      other.confirmStageTransitions == confirmStageTransitions;
+
+  @override
+  int get hashCode => Object.hash(
+    topicPercent,
+    itemRandomization,
+    topicRandomization,
+    autoSort,
+    randomizeFinalDrill,
+    confirmStageTransitions,
+  );
+}

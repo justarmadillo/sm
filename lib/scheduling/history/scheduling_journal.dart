@@ -20,7 +20,7 @@ import 'package:incremental_reader/scheduling/history/scheduler_event.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
-import 'package:incremental_reader/storage/contracts/repositories.dart';
+import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 
 /// Builds and appends [RevlogEntry] rows.
 final class SchedulingJournal {

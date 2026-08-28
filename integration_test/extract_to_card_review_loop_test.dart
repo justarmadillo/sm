@@ -6,7 +6,7 @@ import 'package:incremental_reader/app/incremental_reader_app.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
-import 'package:incremental_reader/storage/drift/drift_repositories.dart';
+import 'package:incremental_reader/storage/drift/drift_settings_repository.dart';
 import 'package:integration_test/integration_test.dart';
 
 /// Opens the Contents tab when it is showing.

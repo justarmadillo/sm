@@ -20,10 +20,12 @@ import 'package:incremental_reader/scheduling/sm20_numeric.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/mercy_settings.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/result.dart';
-import 'package:incremental_reader/storage/contracts/repositories.dart';
+import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
+import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 
 const String kMercyPreviewedKind = 'mercy.previewed';
 const String kMercyAppliedKind = 'mercy.applied';

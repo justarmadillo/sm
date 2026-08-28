@@ -1,22 +1,9 @@
-/// Repository contracts, organized by aggregate rather than by table.
+/// What the app promises about saving and loading when things come back.
 ///
-/// Four aggregates, four repositories: what the user reads, when they see it,
-/// how the app is configured, and what has been exported. A handler that needs
-/// content and schedules composes two repositories inside one
-/// transaction-runner scope rather than reaching into a shared god-object.
-///
-/// Implementations live in `data/repositories`. Nothing here mentions Drift,
-/// SQL, or Flutter.
+/// Schedules, priority order, the repetition log, and the day's activity.
+/// Nothing here mentions Drift, SQL, or Flutter.
 library;
 
-import 'package:incremental_reader/documents/apply_source_edit.dart';
-import 'package:incremental_reader/documents/card.dart';
-import 'package:incremental_reader/documents/document.dart';
-import 'package:incremental_reader/documents/extract.dart';
-import 'package:incremental_reader/documents/reader_anchor.dart';
-import 'package:incremental_reader/documents/source.dart';
-import 'package:incremental_reader/documents/source_edit.dart';
-import 'package:incremental_reader/documents/text_splice.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/history/revlog.dart';
@@ -25,7 +12,6 @@ import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
-import 'package:incremental_reader/storage/dataset_lineage.dart';
 import 'package:meta/meta.dart';
 
 /// One appended entry in the activity log.
@@ -61,101 +47,6 @@ final class ActivityRecord {
   final int? durationMs;
 
   final Map<String, Object?>? metadata;
-}
-
-/// Sources, their parsed documents, extracts, and cards.
-abstract interface class ContentRepository {
-  /// Stores a newly imported source together with its derived blocks.
-  Future<void> insertSource(Source source, Document document);
-
-  /// The source with [id], or null.
-  Future<Source?> findSource(String id);
-
-  /// The parsed document for [sourceId], or null.
-  Future<Document?> findDocument(String sourceId);
-
-  /// Every source, newest import first.
-  Future<List<Source>> listSources();
-
-  /// Replaces mutable source fields: title, pace, resume position, folder.
-  Future<void> updateSource(Source source);
-
-  /// Updates only the authoritative marker and returns the stored source.
-  Future<Source?> setResumeMarker(String sourceId, ReaderAnchor anchor);
-
-  /// Updates only the scratch scroll position and returns the stored source.
-  Future<Source?> setSoftPosition(String sourceId, ReaderAnchor anchor);
-
-  /// Atomically promotes the stored soft position to the marker.
-  Future<Source?> confirmSoftPosition(String sourceId);
-
-  /// Applies one splice to a source's text, in a single transaction.
-  ///
-  /// Everything that points into the text moves with it: both reading
-  /// positions, and every direct child's recorded range. Nothing
-  /// scheduling-related is read or written — editing text is not a repetition
-  /// and must never disturb a due date.
-  ///
-  /// [baseContentRevision] is the revision the caller believed it was editing.
-  /// A mismatch yields [SourceEditConflict] and writes nothing, so two windows
-  /// editing the same source cannot silently overwrite one another.
-  Future<SourceEditResult> applySourceEdit({
-    required String sourceId,
-    required TextSplice splice,
-    required int baseContentRevision,
-    required String operationId,
-    required DateTime nowUtc,
-    bool isUndo = false,
-    SourceEditRestore? restore,
-  });
-
-  /// The edit journal for [sourceId], oldest first.
-  Future<List<SourceEdit>> listSourceEdits(String sourceId);
-
-  /// The most recent edit applied to [sourceId], or null.
-  Future<SourceEdit?> latestSourceEdit(String sourceId);
-
-  /// Stores a new extract.
-  Future<void> insertExtract(Extract extract);
-
-  /// The extract with [id], or null.
-  Future<Extract?> findExtract(String id);
-
-  /// Extracts whose provenance names [parentId], in creation order.
-  Future<List<Extract>> listExtractsOfParent(String parentId);
-
-  /// Every extract taken from [sourceId], including nested ones.
-  Future<List<Extract>> listExtractsOfSource(String sourceId);
-
-  /// How many extracts each of [sourceIds] has produced.
-  Future<Map<String, int>> countExtractsBySource(List<String> sourceIds);
-
-  /// Replaces an extract's editable text.
-  Future<void> updateExtract(Extract extract);
-
-  /// Removes an extract outright. Used by Undo, which must leave no trace.
-  Future<void> deleteExtract(String id);
-
-  /// Stores newly formulated cards.
-  Future<void> insertCards(List<Card> cards);
-
-  /// The card with [id], or null.
-  Future<Card?> findCard(String id);
-
-  /// Cards formulated from [extractId].
-  Future<List<Card>> listCardsOfExtract(String extractId);
-
-  /// Cards formulated directly from [sourceId], without an extract between.
-  Future<List<Card>> listCardsOfSource(String sourceId);
-
-  /// Replaces a card's text, including edits made during review.
-  Future<void> updateCard(Card card);
-
-  /// Cards formulated from the same parent as [cardId], excluding it.
-  ///
-  /// Sibling burying needs exactly this: three clozes cut from one sentence
-  /// give each other away, so answering one pushes the rest off today.
-  Future<List<Card>> listSiblingCards(String cardId);
 }
 
 /// Schedules, priority, topic pacing, and the activity log.
@@ -329,106 +220,4 @@ abstract interface class LearningRepository {
 
   /// How many elements sit in each lifecycle, by type. For diagnostics.
   Future<Map<ElementType, Map<ElementLifecycle, int>>> countByLifecycle();
-}
-
-/// One row of the materialized search table.
-@immutable
-final class SearchDocument {
-  const SearchDocument({
-    required this.ref,
-    required this.title,
-    required this.body,
-    required this.updatedAtUtc,
-    this.sourceId,
-  });
-
-  final ElementRef ref;
-  final String title;
-
-  /// Indexed text. For a source this is the whole markdown, so a passage can
-  /// be found before it has ever been extracted.
-  final String body;
-
-  final DateTime updatedAtUtc;
-
-  /// Root source, so results group by article without a join.
-  final String? sourceId;
-}
-
-/// One search hit, with the snippet that matched.
-@immutable
-final class SearchHit {
-  const SearchHit({
-    required this.ref,
-    required this.title,
-    required this.snippet,
-    required this.rank,
-    this.sourceId,
-  });
-
-  final ElementRef ref;
-  final String title;
-
-  /// Highlighted excerpt around the match, produced by FTS5.
-  final String snippet;
-
-  /// FTS5 relevance; lower is better.
-  final double rank;
-
-  final String? sourceId;
-}
-
-/// Full-text search over sources, extracts, and cards.
-abstract interface class SearchRepository {
-  /// Inserts or replaces one document, inside the caller's transaction.
-  Future<void> upsertDocument(SearchDocument document);
-
-  /// Removes one document and its index entry.
-  Future<void> deleteDocument(ElementRef ref);
-
-  /// Matches against the FTS5 index, best first.
-  Future<List<SearchHit>> search(
-    String query, {
-    int limit = 50,
-    Set<ElementType>? types,
-  });
-
-  /// Rebuilds the index from the materialized rows.
-  Future<void> rebuildIndex();
-
-  /// Whether the index reports itself consistent with its content table.
-  Future<bool> indexIsValid();
-
-  /// How many documents are materialized.
-  Future<int> documentCount();
-}
-
-/// User settings and the values the schedulers read.
-abstract interface class SettingsRepository {
-  /// Reads the setting [key], or null when unset.
-  Future<String?> read(String key);
-
-  /// Writes the setting [key].
-  Future<void> write(String key, String value);
-
-  /// Every stored setting.
-  Future<Map<String, String>> readAll();
-
-  /// Writes many settings in one batch, replacing what was there.
-  Future<void> writeAll(Map<String, String> values);
-
-  /// Removes the setting [key], returning it to its shipped default.
-  Future<void> remove(String key);
-}
-
-/// Dataset lineage, backups, and export snapshots.
-abstract interface class TransferRepository {
-  /// Current dataset identity, creating it on first use.
-  Future<DatasetIdentity> currentIdentity();
-
-  /// Records an advanced generation after a domain transaction.
-  Future<void> saveIdentity(DatasetIdentity identity);
-
-  /// Increments the generation counter and returns the new identity.
-  Future<DatasetIdentity> advanceGeneration();
 }

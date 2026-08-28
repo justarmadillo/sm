@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
-import 'package:incremental_reader/storage/contracts/repositories.dart';
+import 'package:incremental_reader/storage/contracts/settings_repository.dart';
 /// Setting key holding the day of the last successful backup.
 const String kLastBackupDayKey = 'backup.last_day';
 

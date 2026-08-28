@@ -31,8 +31,10 @@ import 'package:incremental_reader/shared/command_base.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/result.dart';
-import 'package:incremental_reader/storage/contracts/repositories.dart';
+import 'package:incremental_reader/storage/contracts/content_repository.dart';
+import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
+import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 
 /// Activity kind recorded when a card is graded.
 const String kCardReviewedKind = 'card.reviewed';

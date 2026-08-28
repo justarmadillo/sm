@@ -3,7 +3,7 @@ import 'package:incremental_reader/scheduling/postpone/sm20_postpone.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/sm20_numeric.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
-import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/smart_postpone_settings.dart';
 import 'package:test/test.dart';
 
 void main() {

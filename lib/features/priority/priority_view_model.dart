@@ -24,6 +24,8 @@ import 'package:incremental_reader/scheduling/postpone/sm20_advance.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/postpone_settings.dart';
+import 'package:incremental_reader/settings/smart_postpone_settings.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/result.dart';
 

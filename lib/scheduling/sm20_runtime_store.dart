@@ -9,7 +9,7 @@ import 'dart:convert';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/sm20_collection_state.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
-import 'package:incremental_reader/storage/contracts/repositories.dart';
+import 'package:incremental_reader/storage/contracts/settings_repository.dart';
 
 const String kSm20RuntimeSettingKey = 'sm20.runtime.v1';
 

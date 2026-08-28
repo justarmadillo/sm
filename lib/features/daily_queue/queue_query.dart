@@ -22,7 +22,8 @@ import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/result.dart';
-import 'package:incremental_reader/storage/contracts/repositories.dart';
+import 'package:incremental_reader/storage/contracts/content_repository.dart';
+import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:meta/meta.dart';
 
 /// Presentation-neutral queue row. Answers are deliberately never projected.

@@ -9,7 +9,7 @@ library;
 
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/shared/result.dart';
-import 'package:incremental_reader/storage/contracts/repositories.dart';
+import 'package:incremental_reader/storage/contracts/settings_repository.dart';
 
 /// Loads, caches, and persists [AppSettings].
 final class SettingsStore {

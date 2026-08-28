@@ -11,7 +11,7 @@ import 'dart:math' as math;
 import 'package:fsrs/fsrs.dart' as fsrs;
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
-import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/card_settings.dart';
 import 'package:meta/meta.dart';
 
 /// The exact scheduler implementation used to produce a review.

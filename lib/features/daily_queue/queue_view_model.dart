@@ -20,7 +20,8 @@ import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
-import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/mercy_settings.dart';
+import 'package:incremental_reader/settings/smart_postpone_settings.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/result.dart';
 

@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/features/settings/settings_controls.dart';
 import 'package:incremental_reader/features/settings/settings_view_model.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/mercy_settings.dart';
+import 'package:incremental_reader/settings/postpone_settings.dart';
+import 'package:incremental_reader/settings/smart_postpone_settings.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 import 'package:incremental_reader/storage/platform/time_zones.dart';
 

@@ -10,7 +10,7 @@ import 'package:incremental_reader/scheduling/history/revlog.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
 import 'package:incremental_reader/storage/database/row_converters.dart';
-import 'package:incremental_reader/storage/drift/drift_repositories.dart';
+import 'package:incremental_reader/storage/drift/drift_learning_repository.dart';
 import 'package:test/test.dart';
 
 void main() {

@@ -9,7 +9,7 @@
 /// Two properties it must have and one it must not:
 ///
 /// * **Never throws.** A [DiagnosticSink] is called from inside command
-///   commandRunner; a full disk or a locked file must not roll back a review.
+///   command runner; a full disk or a locked file must not roll back a review.
 /// * **Bounded.** It rotates at a size limit and keeps a fixed number of
 ///   files, so a long-running collection cannot fill the disk with logs.
 /// * **No element content.** Fields carry ids, counts, and versions. A log the

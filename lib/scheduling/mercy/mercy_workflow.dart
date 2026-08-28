@@ -15,7 +15,7 @@ import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/sm20_numeric.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
-import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/mercy_settings.dart';
 import 'package:meta/meta.dart';
 
 const String kSm20MercyPolicyVersion = 'sm20-mercy/1';

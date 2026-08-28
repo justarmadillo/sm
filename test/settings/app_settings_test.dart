@@ -1,4 +1,13 @@
 import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/card_settings.dart';
+import 'package:incremental_reader/settings/diagnostics_settings.dart';
+import 'package:incremental_reader/settings/mercy_settings.dart';
+import 'package:incremental_reader/settings/postpone_settings.dart';
+import 'package:incremental_reader/settings/queue_settings.dart';
+import 'package:incremental_reader/settings/reader_settings.dart';
+import 'package:incremental_reader/settings/remember_settings.dart';
+import 'package:incremental_reader/settings/smart_postpone_settings.dart';
+import 'package:incremental_reader/settings/study_day_settings.dart';
 import 'package:test/test.dart';
 
 void main() {
