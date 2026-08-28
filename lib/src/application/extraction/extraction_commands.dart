@@ -6,8 +6,8 @@
 /// user gets afterwards is Undo.
 library;
 
-import '../../domain/content/reader_anchor.dart';
-import '../app_command.dart';
+import 'package:incremental_reader/src/application/app_command.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
 
 /// Promote a selected passage into an independent learning object.
 final class CreateExtract extends AppCommand {

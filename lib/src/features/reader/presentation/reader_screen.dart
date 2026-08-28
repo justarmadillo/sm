@@ -12,25 +12,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme.dart';
-import '../../../app/toast.dart';
-import '../../../domain/content/block.dart';
-import '../../../domain/content/document.dart';
-import '../../../domain/content/extract.dart';
-import '../../../domain/content/reader_anchor.dart';
-import '../../extract/presentation/extract_context_overlay.dart';
-import '../../extract/presentation/formulation_dialog.dart';
-import '../../library/presentation/library_view_model.dart';
-import '../../priority/presentation/priority_dialog.dart';
-import '../../queue/presentation/study_route_result.dart';
-import 'block_span_builder.dart';
-import 'extract_highlights.dart';
-import 'reader_selection.dart';
-import 'reader_side_panel.dart';
-import 'reader_view.dart';
-import 'reader_view_model.dart';
-import 'selection_toolbar.dart';
-import 'typography_controller.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/app/toast.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/domain/content/document.dart';
+import 'package:incremental_reader/src/domain/content/extract.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/src/features/extract/presentation/extract_context_overlay.dart';
+import 'package:incremental_reader/src/features/extract/presentation/formulation_dialog.dart';
+import 'package:incremental_reader/src/features/library/presentation/library_view_model.dart';
+import 'package:incremental_reader/src/features/priority/presentation/priority_dialog.dart';
+import 'package:incremental_reader/src/features/queue/presentation/study_route_result.dart';
+import 'package:incremental_reader/src/features/reader/presentation/block_span_builder.dart';
+import 'package:incremental_reader/src/features/reader/presentation/extract_highlights.dart';
+import 'package:incremental_reader/src/features/reader/presentation/reader_selection.dart';
+import 'package:incremental_reader/src/features/reader/presentation/reader_side_panel.dart';
+import 'package:incremental_reader/src/features/reader/presentation/reader_view.dart';
+import 'package:incremental_reader/src/features/reader/presentation/reader_view_model.dart';
+import 'package:incremental_reader/src/features/reader/presentation/selection_toolbar.dart';
+import 'package:incremental_reader/src/features/reader/presentation/typography_controller.dart';
 
 /// Pushes the Reader for [sourceId] and refreshes the Library on return.
 Future<void> openReader(

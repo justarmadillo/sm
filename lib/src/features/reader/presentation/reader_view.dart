@@ -12,15 +12,14 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/domain/content/document.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/src/features/reader/presentation/block_span_builder.dart';
+import 'package:incremental_reader/src/features/reader/presentation/block_view.dart';
+import 'package:incremental_reader/src/features/reader/presentation/reader_selection.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-
-import '../../../app/theme.dart';
-import '../../../domain/content/block.dart';
-import '../../../domain/content/document.dart';
-import '../../../domain/content/reader_anchor.dart';
-import 'block_span_builder.dart';
-import 'block_view.dart';
-import 'reader_selection.dart';
 
 /// Distance a mouse must travel before a press becomes a drag at all.
 ///

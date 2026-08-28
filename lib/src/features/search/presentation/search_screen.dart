@@ -10,14 +10,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/providers.dart';
-import '../../../app/theme.dart';
-import '../../../application/search/search_query.dart';
-import '../../../domain/scheduling/element.dart';
-import '../../extract/presentation/extract_screen.dart';
-import '../../extract/presentation/extract_view_model.dart';
-import '../../reader/presentation/reader_screen.dart';
-import '../../reader/presentation/reader_view_model.dart';
+import 'package:incremental_reader/src/app/providers.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/application/search/search_query.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/features/extract/presentation/extract_screen.dart';
+import 'package:incremental_reader/src/features/extract/presentation/extract_view_model.dart';
+import 'package:incremental_reader/src/features/reader/presentation/reader_screen.dart';
+import 'package:incremental_reader/src/features/reader/presentation/reader_view_model.dart';
 
 /// The Windows shortcut that opens search.
 const SingleActivator kSearchShortcut = SingleActivator(

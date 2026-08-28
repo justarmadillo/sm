@@ -8,16 +8,15 @@ library;
 
 import 'dart:convert';
 
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/mercy.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:meta/meta.dart';
-
-import '../../domain/scheduling/card_scheduler.dart';
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/mercy.dart';
-import '../../domain/scheduling/priority_rank.dart';
-import '../../domain/scheduling/sm20_numeric.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../../domain/scheduling/topic_scheduler.dart';
-import '../../domain/settings/app_settings.dart';
 
 const String kSm20MercyPolicyVersion = 'sm20-mercy/1';
 

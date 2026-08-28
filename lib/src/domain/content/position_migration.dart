@@ -8,10 +8,9 @@
 /// See `plans/reader/EDITABLE_READER.md` §6.
 library;
 
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/src/domain/content/text_splice.dart';
 import 'package:meta/meta.dart';
-
-import 'reader_anchor.dart';
-import 'text_splice.dart';
 
 /// The result of moving one position across one splice.
 @immutable

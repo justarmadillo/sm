@@ -10,18 +10,17 @@
 /// should not spill a collection into a screenshot or a support paste.
 library;
 
+import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/application/scheduling/scheduling_context.dart';
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/queue_policy.dart';
+import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:meta/meta.dart';
-
-import '../../domain/scheduling/card_scheduler.dart';
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/priority_rank.dart';
-import '../../domain/scheduling/queue_policy.dart';
-import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../../domain/scheduling/topic_scheduler.dart';
-import '../../domain/settings/app_settings.dart';
-import '../ports/repositories.dart';
-import '../scheduling/scheduling_context.dart';
 
 /// Everything known about one element's scheduling.
 @immutable

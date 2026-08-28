@@ -8,23 +8,22 @@
 /// nothing.
 library;
 
+import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/application/queue/queue_commands.dart';
+import 'package:incremental_reader/src/application/queue/queue_handlers.dart';
+import 'package:incremental_reader/src/application/scheduling/scheduling_context.dart';
+import 'package:incremental_reader/src/core/clock.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/core/tracing.dart';
+import 'package:incremental_reader/src/domain/content/card.dart';
+import 'package:incremental_reader/src/domain/content/extract.dart';
+import 'package:incremental_reader/src/domain/content/source.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/queue_policy.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:meta/meta.dart';
-
-import '../../core/clock.dart';
-import '../../core/result.dart';
-import '../../core/tracing.dart';
-import '../../domain/content/card.dart';
-import '../../domain/content/extract.dart';
-import '../../domain/content/source.dart';
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/priority_rank.dart';
-import '../../domain/scheduling/queue_policy.dart';
-import '../../domain/scheduling/sm20_numeric.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../ports/repositories.dart';
-import '../scheduling/scheduling_context.dart';
-import 'queue_commands.dart';
-import 'queue_handlers.dart';
 
 /// Presentation-neutral queue row. Answers are deliberately never projected.
 @immutable

@@ -8,10 +8,10 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../../app/theme.dart';
-import '../../../domain/content/block.dart';
-import '../../../domain/content/document.dart';
-import '../../../domain/content/extract.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/domain/content/document.dart';
+import 'package:incremental_reader/src/domain/content/extract.dart';
 
 /// Which list the panel is showing.
 enum ReaderPanelTab {

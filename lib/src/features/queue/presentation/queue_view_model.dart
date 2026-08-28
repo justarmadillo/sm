@@ -8,20 +8,20 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/providers.dart';
-import '../../../application/queue/queue_commands.dart';
-import '../../../application/queue/queue_query.dart';
-import '../../../application/review/review_commands.dart';
-import '../../../application/scheduling/mercy_handlers.dart';
-import '../../../application/scheduling/mercy_workflow.dart';
-import '../../../core/result.dart';
-import '../../../core/tracing.dart';
-import '../../../domain/scheduling/card_scheduler.dart';
-import '../../../domain/scheduling/element.dart';
-import '../../../domain/scheduling/queue_policy.dart';
-import '../../../domain/scheduling/study_day.dart';
-import '../../../domain/settings/app_settings.dart';
-import '../../library/presentation/library_view_model.dart';
+import 'package:incremental_reader/src/app/providers.dart';
+import 'package:incremental_reader/src/application/queue/queue_commands.dart';
+import 'package:incremental_reader/src/application/queue/queue_query.dart';
+import 'package:incremental_reader/src/application/review/review_commands.dart';
+import 'package:incremental_reader/src/application/scheduling/mercy_handlers.dart';
+import 'package:incremental_reader/src/application/scheduling/mercy_workflow.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/core/tracing.dart';
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/queue_policy.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
+import 'package:incremental_reader/src/features/library/presentation/library_view_model.dart';
 
 @immutable
 final class QueueUiState {

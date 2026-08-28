@@ -12,14 +12,14 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/providers.dart';
-import '../../../app/theme.dart';
-import '../../../application/diagnostics/diagnostics_query.dart';
-import '../../../application/ports/repositories.dart';
-import '../../../domain/scheduling/element.dart';
-import '../../../domain/scheduling/revlog.dart';
-import '../../../domain/scheduling/scheduler_metrics.dart';
-import '../../../domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/src/app/providers.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/application/diagnostics/diagnostics_query.dart';
+import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
+import 'package:incremental_reader/src/domain/scheduling/scheduler_metrics.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 
 /// Opens the panel, optionally focused on one element.
 Future<void> openDiagnostics(

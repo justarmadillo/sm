@@ -11,7 +11,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'theme.dart';
+import 'package:incremental_reader/src/app/theme.dart';
 
 /// How long a toast stays before fading out.
 const Duration kToastDuration = Duration(milliseconds: 2800);

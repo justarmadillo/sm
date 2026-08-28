@@ -10,7 +10,7 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 
-import 'app_database.dart';
+import 'package:incremental_reader/src/data/database/app_database.dart';
 
 /// File name of the live database inside the application support directory.
 const String kDatabaseFileName = 'incremental_reader.sqlite';

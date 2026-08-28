@@ -8,12 +8,11 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:meta/meta.dart';
-
-import 'element.dart';
-import 'priority_rank.dart';
-import 'sm20_numeric.dart';
-import 'study_day.dart';
 
 const String kSm20SchedulerName = 'sm20-aio';
 const String kSm20SchedulerVersion = 'sm20-aio/1';

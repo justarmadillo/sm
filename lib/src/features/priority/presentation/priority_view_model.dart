@@ -11,20 +11,20 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/providers.dart';
-import '../../../application/browser/browser_commands.dart';
-import '../../../application/browser/browser_handlers.dart';
-import '../../../application/priority/priority_commands.dart';
-import '../../../application/priority/priority_query.dart';
-import '../../../application/queue/queue_commands.dart';
-import '../../../core/result.dart';
-import '../../../core/tracing.dart';
-import '../../../domain/scheduling/element.dart';
-import '../../../domain/scheduling/sm20_advance.dart';
-import '../../../domain/scheduling/study_day.dart';
-import '../../../domain/scheduling/topic_scheduler.dart';
-import '../../../domain/settings/app_settings.dart';
-import '../../library/presentation/library_view_model.dart';
+import 'package:incremental_reader/src/app/providers.dart';
+import 'package:incremental_reader/src/application/browser/browser_commands.dart';
+import 'package:incremental_reader/src/application/browser/browser_handlers.dart';
+import 'package:incremental_reader/src/application/priority/priority_commands.dart';
+import 'package:incremental_reader/src/application/priority/priority_query.dart';
+import 'package:incremental_reader/src/application/queue/queue_commands.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/core/tracing.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_advance.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
+import 'package:incremental_reader/src/features/library/presentation/library_view_model.dart';
 
 /// State of the Alt+P dialog for one element.
 @immutable

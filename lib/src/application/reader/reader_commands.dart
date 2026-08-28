@@ -7,10 +7,10 @@
 /// by hoping the UI never fires twice.
 library;
 
-import '../../domain/content/reader_anchor.dart';
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../app_command.dart';
+import 'package:incremental_reader/src/application/app_command.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 
 /// Import markdown as a new source.
 final class ImportSource extends AppCommand {

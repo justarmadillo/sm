@@ -1,8 +1,8 @@
 /// Commands and immutable drafts for turning an element into recall cards.
 library;
 
-import '../../domain/content/card.dart';
-import '../app_command.dart';
+import 'package:incremental_reader/src/application/app_command.dart';
+import 'package:incremental_reader/src/domain/content/card.dart';
 
 /// One card-making intention inside a batch formulation operation.
 sealed class CardDraft {

@@ -11,10 +11,9 @@ library;
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:incremental_reader/src/domain/content/markdown_block_parser.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
 import 'package:meta/meta.dart';
-
-import 'markdown_block_parser.dart';
-import 'reader_anchor.dart';
 
 /// The place a reader continues from.
 ///

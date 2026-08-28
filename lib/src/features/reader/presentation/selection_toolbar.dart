@@ -9,7 +9,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../../app/theme.dart';
+import 'package:incremental_reader/src/app/theme.dart';
 
 /// Height reserved for the toolbar when deciding whether it fits above.
 const double _kToolbarHeight = 40;

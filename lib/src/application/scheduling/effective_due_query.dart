@@ -4,12 +4,12 @@
 /// and manual rescheduling all replace the stored due state directly.
 library;
 
-import '../../domain/scheduling/card_scheduler.dart';
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../../domain/scheduling/topic_scheduler.dart';
-import '../ports/repositories.dart';
-import 'scheduling_context.dart';
+import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/application/scheduling/scheduling_context.dart';
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 
 final class EffectiveDueQuery {
   const EffectiveDueQuery({

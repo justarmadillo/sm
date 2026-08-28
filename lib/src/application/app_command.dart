@@ -1,9 +1,8 @@
 /// The base of every application command.
 library;
 
+import 'package:incremental_reader/src/core/tracing.dart';
 import 'package:meta/meta.dart';
-
-import '../core/tracing.dart';
 
 /// A named, immutable request to change something.
 ///

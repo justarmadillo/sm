@@ -3,15 +3,14 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:meta/meta.dart';
-
-import '../settings/app_settings.dart';
-import 'card_scheduler.dart';
-import 'element.dart';
-import 'priority_rank.dart';
-import 'sm20_numeric.dart';
-import 'study_day.dart';
-import 'topic_scheduler.dart';
 
 enum QueueLane { outstandingItem, outstandingTopic, finalDrill, pending }
 

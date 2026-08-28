@@ -9,19 +9,18 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../../app/theme.dart';
-import '../../../app/toast.dart';
-import '../../../application/priority/priority_commands.dart';
-import '../../../application/priority/priority_query.dart';
-import '../../../application/queue/queue_commands.dart';
-import '../../../domain/scheduling/element.dart';
-import '../../../domain/scheduling/sm20_advance.dart';
-import '../../../domain/scheduling/topic_scheduler.dart';
-import '../../queue/presentation/smart_postpone_dialog.dart';
-import '../../shared/element_type_badge.dart';
-import 'priority_dialog.dart';
-import 'priority_view_model.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/app/toast.dart';
+import 'package:incremental_reader/src/application/priority/priority_commands.dart';
+import 'package:incremental_reader/src/application/priority/priority_query.dart';
+import 'package:incremental_reader/src/application/queue/queue_commands.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_advance.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/src/features/priority/presentation/priority_dialog.dart';
+import 'package:incremental_reader/src/features/priority/presentation/priority_view_model.dart';
+import 'package:incremental_reader/src/features/queue/presentation/smart_postpone_dialog.dart';
+import 'package:incremental_reader/src/features/shared/element_type_badge.dart';
 
 /// Opens the browser.
 Future<void> openPriorityBrowser(BuildContext context, WidgetRef ref) async {

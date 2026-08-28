@@ -9,14 +9,14 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/providers.dart';
-import '../../../application/review/review_commands.dart';
-import '../../../application/review/review_handlers.dart';
-import '../../../core/result.dart';
-import '../../../core/tracing.dart';
-import '../../../domain/content/card.dart';
-import '../../../domain/scheduling/card_scheduler.dart';
-import '../../library/presentation/library_view_model.dart';
+import 'package:incremental_reader/src/app/providers.dart';
+import 'package:incremental_reader/src/application/review/review_commands.dart';
+import 'package:incremental_reader/src/application/review/review_handlers.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/core/tracing.dart';
+import 'package:incremental_reader/src/domain/content/card.dart';
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/features/library/presentation/library_view_model.dart';
 
 @immutable
 final class ReviewUiState {

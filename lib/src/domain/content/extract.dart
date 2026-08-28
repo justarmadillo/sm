@@ -13,9 +13,8 @@
 /// reports success while doing it.
 library;
 
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
 import 'package:meta/meta.dart';
-
-import 'reader_anchor.dart';
 
 /// How much of the link back to the parent still holds.
 enum ProvenanceState {

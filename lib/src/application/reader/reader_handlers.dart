@@ -20,33 +20,32 @@ library;
 
 import 'dart:convert';
 
+import 'package:incremental_reader/src/application/app_command.dart';
+import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/application/ports/transaction_runner.dart';
+import 'package:incremental_reader/src/application/reader/reader_commands.dart';
+import 'package:incremental_reader/src/application/scheduling/scheduling_context.dart';
+import 'package:incremental_reader/src/application/scheduling/scheduling_journal.dart';
+import 'package:incremental_reader/src/core/clock.dart';
+import 'package:incremental_reader/src/core/ids.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/core/tracing.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/domain/content/block_edit.dart';
+import 'package:incremental_reader/src/domain/content/document.dart';
+import 'package:incremental_reader/src/domain/content/extract.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/src/domain/content/source.dart';
+import 'package:incremental_reader/src/domain/content/source_edit.dart';
+import 'package:incremental_reader/src/domain/content/source_editing.dart';
+import 'package:incremental_reader/src/domain/content/text_splice.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
+import 'package:incremental_reader/src/domain/scheduling/scheduler_event.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 import 'package:meta/meta.dart';
-
-import '../../core/clock.dart';
-import '../../core/ids.dart';
-import '../../core/result.dart';
-import '../../core/tracing.dart';
-import '../../domain/content/block.dart';
-import '../../domain/content/block_edit.dart';
-import '../../domain/content/document.dart';
-import '../../domain/content/extract.dart';
-import '../../domain/content/reader_anchor.dart';
-import '../../domain/content/source.dart';
-import '../../domain/content/source_edit.dart';
-import '../../domain/content/source_editing.dart';
-import '../../domain/content/text_splice.dart';
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/priority_rank.dart';
-import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/scheduler_event.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../../domain/scheduling/topic_scheduler.dart';
-import '../app_command.dart';
-import '../ports/repositories.dart';
-import '../ports/transaction_runner.dart';
-import '../scheduling/scheduling_context.dart';
-import '../scheduling/scheduling_journal.dart';
-import 'reader_commands.dart';
 
 /// Activity kind recorded when a source is imported.
 const String kSourceImportedKind = 'source.imported';

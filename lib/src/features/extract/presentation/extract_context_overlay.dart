@@ -8,12 +8,12 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../../app/theme.dart';
-import '../../../domain/content/block.dart';
-import '../../../domain/content/document.dart';
-import '../../../domain/content/extract.dart';
-import '../../../domain/content/reader_anchor.dart';
-import '../../reader/presentation/block_span_builder.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/domain/content/document.dart';
+import 'package:incremental_reader/src/domain/content/extract.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/src/features/reader/presentation/block_span_builder.dart';
 
 /// Shows the context of [extracts] taken from [block].
 Future<ExtractContextAction?> showExtractContext(

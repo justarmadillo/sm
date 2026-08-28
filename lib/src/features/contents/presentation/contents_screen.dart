@@ -10,18 +10,18 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/providers.dart';
-import '../../../app/theme.dart';
-import '../../../application/content/content_tree_query.dart';
-import '../../../domain/scheduling/element.dart';
-import '../../../domain/scheduling/topic_scheduler.dart';
-import '../../library/presentation/import_sheet.dart';
-import '../../library/presentation/library_view_model.dart';
-import '../../priority/presentation/priority_dialog.dart';
-import '../../reader/presentation/reader_screen.dart';
-import '../../reader/presentation/reader_view_model.dart';
-import '../../search/presentation/search_screen.dart';
-import '../../shared/element_type_badge.dart';
+import 'package:incremental_reader/src/app/providers.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/application/content/content_tree_query.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/src/features/library/presentation/import_sheet.dart';
+import 'package:incremental_reader/src/features/library/presentation/library_view_model.dart';
+import 'package:incremental_reader/src/features/priority/presentation/priority_dialog.dart';
+import 'package:incremental_reader/src/features/reader/presentation/reader_screen.dart';
+import 'package:incremental_reader/src/features/reader/presentation/reader_view_model.dart';
+import 'package:incremental_reader/src/features/search/presentation/search_screen.dart';
+import 'package:incremental_reader/src/features/shared/element_type_badge.dart';
 
 /// Opens the knowledge tree.
 Future<void> openContents(BuildContext context, WidgetRef ref) async {

@@ -10,8 +10,8 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
-import '../../../app/theme.dart';
-import '../../../domain/content/source.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/domain/content/source.dart';
 
 /// What the user asked to import.
 @immutable

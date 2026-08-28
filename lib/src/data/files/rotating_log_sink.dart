@@ -21,8 +21,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import '../../core/tracing.dart';
-import '../database/app_database.dart';
+import 'package:incremental_reader/src/core/tracing.dart';
+import 'package:incremental_reader/src/data/database/app_database.dart';
 
 /// Basename of the active log file.
 const String kDiagnosticLogName = 'diagnostics.log';

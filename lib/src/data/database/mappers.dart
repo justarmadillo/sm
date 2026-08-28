@@ -8,25 +8,24 @@ library;
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
-
-import '../../domain/content/block.dart';
-import '../../domain/content/block_content.dart';
-import '../../domain/content/card.dart';
-import '../../domain/content/document.dart';
-import '../../domain/content/extract.dart';
-import '../../domain/content/reader_anchor.dart';
-import '../../domain/content/source.dart';
-import '../../domain/content/source_edit.dart';
-import '../../domain/content/text_splice.dart';
-import '../../domain/scheduling/card_scheduler.dart';
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/priority_rank.dart';
-import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/scheduler_event.dart';
-import '../../domain/scheduling/sm20_numeric.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../../domain/scheduling/topic_scheduler.dart';
-import 'app_database.dart';
+import 'package:incremental_reader/src/data/database/app_database.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/domain/content/block_content.dart';
+import 'package:incremental_reader/src/domain/content/card.dart';
+import 'package:incremental_reader/src/domain/content/document.dart';
+import 'package:incremental_reader/src/domain/content/extract.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/src/domain/content/source.dart';
+import 'package:incremental_reader/src/domain/content/source_edit.dart';
+import 'package:incremental_reader/src/domain/content/text_splice.dart';
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
+import 'package:incremental_reader/src/domain/scheduling/scheduler_event.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 
 /// Milliseconds since the Unix epoch, the storage form for every instant.
 int toEpochMs(DateTime instant) => instant.toUtc().millisecondsSinceEpoch;

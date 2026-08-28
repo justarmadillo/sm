@@ -6,10 +6,10 @@
 /// record is expressed in.
 library;
 
-import '../../core/utf8_offsets.dart';
-import 'block_content.dart';
-import 'inline_markup.dart';
-import 'markdown_inline_parser.dart';
+import 'package:incremental_reader/src/core/utf8_offsets.dart';
+import 'package:incremental_reader/src/domain/content/block_content.dart';
+import 'package:incremental_reader/src/domain/content/inline_markup.dart';
+import 'package:incremental_reader/src/domain/content/markdown_inline_parser.dart';
 
 /// Structural kind of a block.
 enum BlockType {

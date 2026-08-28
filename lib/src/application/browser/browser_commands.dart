@@ -8,11 +8,11 @@
 /// insertions, and Advance draws once per draw-eligible record in order.
 library;
 
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/sm20_advance.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../../domain/scheduling/topic_scheduler.dart';
-import '../app_command.dart';
+import 'package:incremental_reader/src/application/app_command.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_advance.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 
 /// Base for every command that acts on an ordered browser selection.
 abstract base class BrowserSelectionCommand extends AppCommand {

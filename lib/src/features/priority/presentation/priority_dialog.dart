@@ -12,11 +12,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme.dart';
-import '../../../app/toast.dart';
-import '../../../application/priority/priority_query.dart';
-import '../../../domain/scheduling/element.dart';
-import 'priority_view_model.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/app/toast.dart';
+import 'package:incremental_reader/src/application/priority/priority_query.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/features/priority/presentation/priority_view_model.dart';
 
 /// The Windows shortcut that opens the slider, matching SuperMemo.
 const SingleActivator kPriorityShortcut = SingleActivator(

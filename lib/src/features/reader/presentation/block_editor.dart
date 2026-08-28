@@ -14,8 +14,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../app/theme.dart';
-import '../../../domain/content/block.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
 
 /// A text field holding one block's raw markdown.
 class BlockEditor extends StatefulWidget {

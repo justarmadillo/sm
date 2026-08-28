@@ -9,11 +9,10 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:fsrs/fsrs.dart' as fsrs;
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:meta/meta.dart';
-
-import '../settings/app_settings.dart';
-import 'element.dart';
-import 'study_day.dart';
 
 /// The exact scheduler implementation used to produce a review.
 const String kCardSchedulerVersion = 'dart-fsrs/2.0.1+FSRS-6';

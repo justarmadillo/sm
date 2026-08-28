@@ -9,29 +9,28 @@ library;
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
-
-import '../../application/ports/repositories.dart';
-import '../../application/ports/transaction_runner.dart';
-import '../../application/scheduling/mercy_workflow.dart';
-import '../../core/ids.dart';
-import '../../domain/content/card.dart';
-import '../../domain/content/document.dart';
-import '../../domain/content/extract.dart';
-import '../../domain/content/reader_anchor.dart';
-import '../../domain/content/source.dart';
-import '../../domain/content/source_edit.dart';
-import '../../domain/content/source_editing.dart';
-import '../../domain/content/text_splice.dart';
-import '../../domain/scheduling/card_scheduler.dart';
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/priority_rank.dart';
-import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/scheduler_event.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../../domain/scheduling/topic_scheduler.dart';
-import '../../domain/transfer/dataset_lineage.dart';
-import '../database/app_database.dart';
-import '../database/mappers.dart';
+import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/application/ports/transaction_runner.dart';
+import 'package:incremental_reader/src/application/scheduling/mercy_workflow.dart';
+import 'package:incremental_reader/src/core/ids.dart';
+import 'package:incremental_reader/src/data/database/app_database.dart';
+import 'package:incremental_reader/src/data/database/mappers.dart';
+import 'package:incremental_reader/src/domain/content/card.dart';
+import 'package:incremental_reader/src/domain/content/document.dart';
+import 'package:incremental_reader/src/domain/content/extract.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/src/domain/content/source.dart';
+import 'package:incremental_reader/src/domain/content/source_edit.dart';
+import 'package:incremental_reader/src/domain/content/source_editing.dart';
+import 'package:incremental_reader/src/domain/content/text_splice.dart';
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
+import 'package:incremental_reader/src/domain/scheduling/scheduler_event.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/src/domain/transfer/dataset_lineage.dart';
 
 /// Runs handler bodies inside one Drift transaction.
 final class DriftTransactionRunner implements TransactionRunner {

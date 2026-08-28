@@ -8,12 +8,12 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/providers.dart';
-import '../../../application/reader/reader_commands.dart';
-import '../../../core/result.dart';
-import '../../../core/tracing.dart';
-import '../../../domain/content/source.dart';
-import '../../../domain/scheduling/element.dart';
+import 'package:incremental_reader/src/app/providers.dart';
+import 'package:incremental_reader/src/application/reader/reader_commands.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/core/tracing.dart';
+import 'package:incremental_reader/src/domain/content/source.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
 
 /// A one-shot thing for the view to do, not durable state.
 @immutable

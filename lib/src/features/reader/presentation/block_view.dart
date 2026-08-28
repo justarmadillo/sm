@@ -8,10 +8,10 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../../app/theme.dart';
-import '../../../domain/content/block.dart';
-import 'block_editor.dart';
-import 'block_span_builder.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/features/reader/presentation/block_editor.dart';
+import 'package:incremental_reader/src/features/reader/presentation/block_span_builder.dart';
 
 /// Width of the margin strip that carries the marker and extract marks.
 const double kReaderGutterWidth = 30;

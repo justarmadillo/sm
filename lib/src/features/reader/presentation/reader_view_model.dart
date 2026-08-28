@@ -10,24 +10,24 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/providers.dart';
-import '../../../application/extraction/extraction_commands.dart';
-import '../../../application/formulation/formulation_commands.dart';
-import '../../../application/reader/reader_commands.dart';
-import '../../../application/reader/reader_handlers.dart';
-import '../../../core/result.dart';
-import '../../../core/tracing.dart';
-import '../../../domain/content/block.dart';
-import '../../../domain/content/card.dart';
-import '../../../domain/content/document.dart';
-import '../../../domain/content/extract.dart';
-import '../../../domain/content/reader_anchor.dart';
-import '../../../domain/content/source.dart';
-import '../../../domain/content/source_editing.dart';
-import '../../../domain/scheduling/element.dart';
-import '../../../domain/scheduling/study_day.dart';
-import '../../../domain/scheduling/topic_scheduler.dart';
-import '../../library/presentation/library_view_model.dart';
+import 'package:incremental_reader/src/app/providers.dart';
+import 'package:incremental_reader/src/application/extraction/extraction_commands.dart';
+import 'package:incremental_reader/src/application/formulation/formulation_commands.dart';
+import 'package:incremental_reader/src/application/reader/reader_commands.dart';
+import 'package:incremental_reader/src/application/reader/reader_handlers.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/core/tracing.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/domain/content/card.dart';
+import 'package:incremental_reader/src/domain/content/document.dart';
+import 'package:incremental_reader/src/domain/content/extract.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/src/domain/content/source.dart';
+import 'package:incremental_reader/src/domain/content/source_editing.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/src/features/library/presentation/library_view_model.dart';
 
 /// How the Reader was opened.
 enum ReaderMode {

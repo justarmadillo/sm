@@ -8,11 +8,10 @@
 /// real forced bulk repetition, an item Advance is a low-level reschedule.
 library;
 
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:meta/meta.dart';
-
-import 'element.dart';
-import 'sm20_numeric.dart';
-import 'study_day.dart';
 
 /// Which record types one Advance run selects.
 ///

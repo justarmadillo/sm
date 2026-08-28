@@ -9,12 +9,11 @@
 /// passage can be found before it has ever been extracted.
 library;
 
+import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/application/scheduling/effective_due_query.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:meta/meta.dart';
-
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../ports/repositories.dart';
-import '../scheduling/effective_due_query.dart';
 
 /// One result row, ready to render.
 @immutable

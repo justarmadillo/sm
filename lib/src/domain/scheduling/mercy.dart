@@ -8,13 +8,12 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 import 'package:meta/meta.dart';
-
-import '../settings/app_settings.dart';
-import 'element.dart';
-import 'priority_rank.dart';
-import 'sm20_numeric.dart';
-import 'study_day.dart';
 
 const int kSm20MercyMatrixSide = 20;
 const int kSm20MercyMatrixLength = 400;

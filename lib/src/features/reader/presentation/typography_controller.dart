@@ -10,8 +10,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/providers.dart';
-import '../../../app/theme.dart';
+import 'package:incremental_reader/src/app/providers.dart';
+import 'package:incremental_reader/src/app/theme.dart';
 
 /// Setting keys for the reading column.
 const String kFontSizeKey = 'reader.font_size';

@@ -15,12 +15,11 @@ library;
 
 import 'dart:convert';
 
+import 'package:incremental_reader/src/domain/content/extract.dart';
+import 'package:incremental_reader/src/domain/content/position_migration.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/src/domain/content/text_splice.dart';
 import 'package:meta/meta.dart';
-
-import 'extract.dart';
-import 'position_migration.dart';
-import 'reader_anchor.dart';
-import 'text_splice.dart';
 
 /// One child's link back, exactly as it stood before an edit.
 @immutable

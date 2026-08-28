@@ -5,9 +5,8 @@
 /// recording user content.
 library;
 
+import 'package:incremental_reader/src/core/result.dart';
 import 'package:meta/meta.dart';
-
-import 'result.dart';
 
 /// Correlates one user-initiated operation across every layer.
 @immutable

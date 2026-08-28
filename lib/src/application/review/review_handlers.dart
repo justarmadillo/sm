@@ -15,24 +15,24 @@
 ///   they change no state, no due date, and no admission.
 library;
 
-import '../../core/clock.dart';
-import '../../core/ids.dart';
-import '../../core/result.dart';
-import '../../core/tracing.dart';
-import '../../domain/content/card.dart';
-import '../../domain/scheduling/card_scheduler.dart';
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/priority_rank.dart';
-import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/scheduler_event.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../../domain/settings/app_settings.dart';
-import '../app_command.dart';
-import '../ports/repositories.dart';
-import '../ports/transaction_runner.dart';
-import '../scheduling/scheduling_context.dart';
-import '../scheduling/scheduling_journal.dart';
-import 'review_commands.dart';
+import 'package:incremental_reader/src/application/app_command.dart';
+import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/application/ports/transaction_runner.dart';
+import 'package:incremental_reader/src/application/review/review_commands.dart';
+import 'package:incremental_reader/src/application/scheduling/scheduling_context.dart';
+import 'package:incremental_reader/src/application/scheduling/scheduling_journal.dart';
+import 'package:incremental_reader/src/core/clock.dart';
+import 'package:incremental_reader/src/core/ids.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/core/tracing.dart';
+import 'package:incremental_reader/src/domain/content/card.dart';
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
+import 'package:incremental_reader/src/domain/scheduling/scheduler_event.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 
 /// Activity kind recorded when a card is graded.
 const String kCardReviewedKind = 'card.reviewed';

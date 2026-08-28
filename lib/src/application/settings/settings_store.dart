@@ -7,9 +7,9 @@
 /// `reload`, never by a timer.
 library;
 
-import '../../core/result.dart';
-import '../../domain/settings/app_settings.dart';
-import '../ports/repositories.dart';
+import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 
 /// Loads, caches, and persists [AppSettings].
 final class SettingsStore {

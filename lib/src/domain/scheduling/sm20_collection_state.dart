@@ -1,10 +1,9 @@
 /// Persisted collection-wide state required by the SM20 scheduler.
 library;
 
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:meta/meta.dart';
-
-import 'element.dart';
-import 'study_day.dart';
 
 @immutable
 final class Sm20CollectionState {

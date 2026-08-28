@@ -5,9 +5,9 @@
 /// every anchor and extract in the collection is expressed against them.
 library;
 
-import '../../core/utf8_offsets.dart';
-import 'block.dart';
-import 'block_content.dart';
+import 'package:incremental_reader/src/core/utf8_offsets.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/domain/content/block_content.dart';
 
 /// Normalizes line endings so stored offsets never depend on the platform the
 /// markdown was imported on.

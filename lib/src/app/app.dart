@@ -2,8 +2,8 @@
 library;
 
 import 'package:flutter/material.dart';
-import '../features/queue/presentation/queue_screen.dart';
-import 'theme.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/features/queue/presentation/queue_screen.dart';
 
 /// Root widget.
 ///

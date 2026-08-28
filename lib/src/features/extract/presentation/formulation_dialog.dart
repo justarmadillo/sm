@@ -3,8 +3,8 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../../application/formulation/formulation_commands.dart';
-import '../../../domain/content/card.dart';
+import 'package:incremental_reader/src/application/formulation/formulation_commands.dart';
+import 'package:incremental_reader/src/domain/content/card.dart';
 
 /// Opens batch formulation over [seedText].
 ///

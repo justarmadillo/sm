@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'src/app/app.dart';
-import 'src/app/providers.dart';
-import 'src/data/database/app_database.dart';
-import 'src/data/database/connection.dart';
-import 'src/data/files/backup_service.dart';
-import 'src/data/platform/app_paths.dart';
+import 'package:incremental_reader/src/app/app.dart';
+import 'package:incremental_reader/src/app/providers.dart';
+import 'package:incremental_reader/src/data/database/app_database.dart';
+import 'package:incremental_reader/src/data/database/connection.dart';
+import 'package:incremental_reader/src/data/files/backup_service.dart';
+import 'package:incremental_reader/src/data/platform/app_paths.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

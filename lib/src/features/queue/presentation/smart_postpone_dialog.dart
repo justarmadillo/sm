@@ -7,8 +7,8 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../../app/theme.dart';
-import '../../../domain/scheduling/sm20_postpone.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_postpone.dart';
 
 /// Shows [result] and answers whether the user wants it applied.
 ///

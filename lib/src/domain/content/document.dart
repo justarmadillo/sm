@@ -10,11 +10,11 @@
 /// the markdown, which survive re-parsing unchanged.
 library;
 
-import '../../core/utf8_offsets.dart';
-import 'block.dart';
-import 'markdown_block_parser.dart';
-import 'reader_anchor.dart';
-import 'source.dart';
+import 'package:incremental_reader/src/core/utf8_offsets.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/domain/content/markdown_block_parser.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/src/domain/content/source.dart';
 
 /// Blocks of one source plus the markdown they were derived from.
 final class Document {

@@ -5,21 +5,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme.dart';
-import '../../../app/toast.dart';
-import '../../../domain/content/card.dart';
-import '../../../domain/content/document.dart';
-import '../../../domain/scheduling/card_scheduler.dart';
-import '../../../domain/scheduling/element.dart';
-import '../../extract/presentation/extract_screen.dart';
-import '../../extract/presentation/extract_view_model.dart';
-import '../../priority/presentation/priority_dialog.dart';
-import '../../queue/presentation/study_route_result.dart';
-import '../../reader/presentation/block_span_builder.dart';
-import '../../reader/presentation/reader_screen.dart';
-import '../../reader/presentation/reader_view_model.dart';
-import '../../reader/presentation/typography_controller.dart';
-import 'review_view_model.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/app/toast.dart';
+import 'package:incremental_reader/src/domain/content/card.dart';
+import 'package:incremental_reader/src/domain/content/document.dart';
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/features/extract/presentation/extract_screen.dart';
+import 'package:incremental_reader/src/features/extract/presentation/extract_view_model.dart';
+import 'package:incremental_reader/src/features/priority/presentation/priority_dialog.dart';
+import 'package:incremental_reader/src/features/queue/presentation/study_route_result.dart';
+import 'package:incremental_reader/src/features/reader/presentation/block_span_builder.dart';
+import 'package:incremental_reader/src/features/reader/presentation/reader_screen.dart';
+import 'package:incremental_reader/src/features/reader/presentation/reader_view_model.dart';
+import 'package:incremental_reader/src/features/reader/presentation/typography_controller.dart';
+import 'package:incremental_reader/src/features/review/presentation/review_view_model.dart';
 
 Future<StudyRouteResult> openReview(
   BuildContext context,

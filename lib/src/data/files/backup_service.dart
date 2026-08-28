@@ -12,12 +12,11 @@ library;
 
 import 'dart:io';
 
+import 'package:incremental_reader/src/core/clock.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/core/tracing.dart';
+import 'package:incremental_reader/src/data/database/app_database.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
-
-import '../../core/clock.dart';
-import '../../core/result.dart';
-import '../../core/tracing.dart';
-import '../database/app_database.dart';
 
 /// How many copies of each cadence to keep.
 final class BackupRetention {

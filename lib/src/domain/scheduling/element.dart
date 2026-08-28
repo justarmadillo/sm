@@ -6,10 +6,9 @@
 /// precisely so that adding a new element type does not change the queue.
 library;
 
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:meta/meta.dart';
-
-import 'priority_rank.dart';
-import 'study_day.dart';
 
 /// What kind of learning element this is.
 ///

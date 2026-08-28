@@ -6,10 +6,10 @@ library;
 
 import 'dart:convert';
 
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/sm20_collection_state.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../ports/repositories.dart';
+import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_collection_state.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 
 const String kSm20RuntimeSettingKey = 'sm20.runtime.v1';
 

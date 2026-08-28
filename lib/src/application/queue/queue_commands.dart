@@ -7,11 +7,11 @@
 /// same element.
 library;
 
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/sm20_postpone.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../../domain/settings/app_settings.dart';
-import '../app_command.dart';
+import 'package:incremental_reader/src/application/app_command.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_postpone.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 
 /// Open or resume the day's SM20 queues and run the one-shot automatic sort.
 final class RunDailyAdmission extends AppCommand {

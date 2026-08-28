@@ -10,9 +10,9 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../../app/theme.dart';
-import '../../../domain/content/block.dart';
-import '../../../domain/content/inline_markup.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/domain/content/inline_markup.dart';
 
 /// A highlighted character range within one block's rendered text.
 @immutable

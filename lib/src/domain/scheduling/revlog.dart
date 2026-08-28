@@ -20,9 +20,8 @@
 ///   changed, so the observation is not a measurement of a scheduled recall.
 library;
 
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
 import 'package:meta/meta.dart';
-
-import 'element.dart';
 
 /// What happened to an element.
 enum RevlogEventType {

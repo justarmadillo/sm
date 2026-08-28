@@ -1,9 +1,9 @@
 /// Commands for recall reviews.
 library;
 
-import '../../domain/scheduling/card_scheduler.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../app_command.dart';
+import 'package:incremental_reader/src/application/app_command.dart';
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 
 /// Grade one scheduled recall.
 final class ReviewCard extends AppCommand {

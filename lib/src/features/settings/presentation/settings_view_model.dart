@@ -9,12 +9,12 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/providers.dart';
-import '../../../core/result.dart';
-import '../../../domain/settings/app_settings.dart';
-import '../../library/presentation/library_view_model.dart';
-import '../../priority/presentation/priority_view_model.dart';
-import '../../queue/presentation/queue_view_model.dart';
+import 'package:incremental_reader/src/app/providers.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
+import 'package:incremental_reader/src/features/library/presentation/library_view_model.dart';
+import 'package:incremental_reader/src/features/priority/presentation/priority_view_model.dart';
+import 'package:incremental_reader/src/features/queue/presentation/queue_view_model.dart';
 
 @immutable
 final class SettingsUiState {

@@ -6,11 +6,10 @@
 /// are mapped through Unicode CLDR's territory-independent (`001`) mapping.
 library;
 
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:meta/meta.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
-
-import '../../domain/scheduling/study_day.dart';
 
 /// Raised when persisted settings name no bundled IANA zone or known Windows
 /// alias.

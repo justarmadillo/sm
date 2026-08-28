@@ -14,10 +14,9 @@
 /// See `plans/reader/EDITABLE_READER.md` §5.
 library;
 
+import 'package:incremental_reader/src/core/utf8_offsets.dart';
+import 'package:incremental_reader/src/domain/content/markdown_block_parser.dart';
 import 'package:meta/meta.dart';
-
-import '../../core/utf8_offsets.dart';
-import 'markdown_block_parser.dart';
 
 /// Largest insertion a single splice may carry.
 ///

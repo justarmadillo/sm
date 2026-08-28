@@ -5,10 +5,9 @@
 /// before/after state, and algorithmic due values needed for exact undo.
 library;
 
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
 import 'package:meta/meta.dart';
-
-import 'element.dart';
-import 'study_day.dart';
 
 /// Stable wire names persisted in the scheduler event stream.
 enum SchedulerEventType {

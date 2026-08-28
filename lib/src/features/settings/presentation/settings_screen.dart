@@ -4,11 +4,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/toast.dart';
-import '../../../data/platform/time_zones.dart';
-import '../../../domain/settings/app_settings.dart';
-import 'settings_controls.dart';
-import 'settings_view_model.dart';
+import 'package:incremental_reader/src/app/toast.dart';
+import 'package:incremental_reader/src/data/platform/time_zones.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
+import 'package:incremental_reader/src/features/settings/presentation/settings_controls.dart';
+import 'package:incremental_reader/src/features/settings/presentation/settings_view_model.dart';
 
 /// Opens Settings.
 Future<void> openSettings(BuildContext context, WidgetRef ref) async {

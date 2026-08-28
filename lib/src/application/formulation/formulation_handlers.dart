@@ -1,22 +1,22 @@
 /// Application boundary for batch Q&A and cloze formulation.
 library;
 
-import '../../core/clock.dart';
-import '../../core/ids.dart';
-import '../../core/result.dart';
-import '../../core/tracing.dart';
-import '../../domain/content/card.dart';
-import '../../domain/scheduling/card_scheduler.dart';
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/priority_rank.dart';
-import '../../domain/scheduling/revlog.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../../domain/scheduling/topic_scheduler.dart';
-import '../ports/repositories.dart';
-import '../ports/transaction_runner.dart';
-import '../scheduling/scheduling_context.dart';
-import '../scheduling/scheduling_journal.dart';
-import 'formulation_commands.dart';
+import 'package:incremental_reader/src/application/formulation/formulation_commands.dart';
+import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/application/ports/transaction_runner.dart';
+import 'package:incremental_reader/src/application/scheduling/scheduling_context.dart';
+import 'package:incremental_reader/src/application/scheduling/scheduling_journal.dart';
+import 'package:incremental_reader/src/core/clock.dart';
+import 'package:incremental_reader/src/core/ids.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/core/tracing.dart';
+import 'package:incremental_reader/src/domain/content/card.dart';
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/revlog.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
 
 const String kCardsFormulatedKind = 'formulation.cards_created';
 

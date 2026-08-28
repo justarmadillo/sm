@@ -8,7 +8,7 @@
 /// and backslash escapes.
 library;
 
-import 'inline_markup.dart';
+import 'package:incremental_reader/src/domain/content/inline_markup.dart';
 
 /// Parses the inline markup of one block's content text.
 InlineLayout parseInlineMarkup(String content) {

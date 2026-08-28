@@ -12,9 +12,8 @@
 /// 0% is the most important element and 100% the least.
 library;
 
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
 import 'package:meta/meta.dart';
-
-import 'sm20_numeric.dart';
 
 /// Digits of the order-key alphabet, in ascending ASCII order.
 const String orderKeyDigits =

@@ -7,12 +7,11 @@
 library;
 
 import 'package:drift/drift.dart';
-
-import '../../core/utf8_offsets.dart';
-import '../../domain/content/document.dart';
-import '../../domain/content/reader_anchor.dart';
-import '../../domain/scheduling/sm20_numeric.dart';
-import 'tables.dart';
+import 'package:incremental_reader/src/core/utf8_offsets.dart';
+import 'package:incremental_reader/src/data/database/tables.dart';
+import 'package:incremental_reader/src/domain/content/document.dart';
+import 'package:incremental_reader/src/domain/content/reader_anchor.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
 
 part 'app_database.g.dart';
 

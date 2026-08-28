@@ -7,9 +7,9 @@
 /// and the queue would have no way to tell "important" from "late".
 library;
 
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/priority_rank.dart';
-import '../app_command.dart';
+import 'package:incremental_reader/src/application/app_command.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
 
 /// Place an element at an exact order key.
 ///

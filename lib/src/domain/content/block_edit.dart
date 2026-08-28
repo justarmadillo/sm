@@ -8,10 +8,10 @@
 /// See `plans/reader/EDITABLE_READER.md` §11.
 library;
 
-import 'block.dart';
-import 'document.dart';
-import 'markdown_block_parser.dart';
-import 'text_splice.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/domain/content/document.dart';
+import 'package:incremental_reader/src/domain/content/markdown_block_parser.dart';
+import 'package:incremental_reader/src/domain/content/text_splice.dart';
 
 /// The splice that replaces [block]'s markdown with [markdown].
 ///

@@ -13,20 +13,20 @@
 /// stale order would place elements where they no longer belong.
 library;
 
-import '../../core/clock.dart';
-import '../../core/result.dart';
-import '../../domain/scheduling/card_scheduler.dart';
-import '../../domain/scheduling/element.dart';
-import '../../domain/scheduling/priority_rank.dart';
-import '../../domain/scheduling/queue_policy.dart';
-import '../../domain/scheduling/sm20_collection_state.dart';
-import '../../domain/scheduling/sm20_numeric.dart';
-import '../../domain/scheduling/study_day.dart';
-import '../../domain/scheduling/topic_scheduler.dart';
-import '../../domain/settings/app_settings.dart';
-import '../ports/repositories.dart';
-import '../settings/settings_store.dart';
-import '../settings/sm20_runtime_store.dart';
+import 'package:incremental_reader/src/application/ports/repositories.dart';
+import 'package:incremental_reader/src/application/settings/settings_store.dart';
+import 'package:incremental_reader/src/application/settings/sm20_runtime_store.dart';
+import 'package:incremental_reader/src/core/clock.dart';
+import 'package:incremental_reader/src/core/result.dart';
+import 'package:incremental_reader/src/domain/scheduling/card_scheduler.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
+import 'package:incremental_reader/src/domain/scheduling/priority_rank.dart';
+import 'package:incremental_reader/src/domain/scheduling/queue_policy.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_collection_state.dart';
+import 'package:incremental_reader/src/domain/scheduling/sm20_numeric.dart';
+import 'package:incremental_reader/src/domain/scheduling/study_day.dart';
+import 'package:incremental_reader/src/domain/scheduling/topic_scheduler.dart';
+import 'package:incremental_reader/src/domain/settings/app_settings.dart';
 
 /// Resolves a stored zone identifier into offset rules.
 ///

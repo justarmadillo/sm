@@ -9,7 +9,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../app/theme.dart';
+import 'package:incremental_reader/src/app/theme.dart';
 
 /// A titled group of settings.
 class SettingsSection extends StatelessWidget {

@@ -8,8 +8,8 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../app/theme.dart';
-import '../../domain/scheduling/element.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/domain/scheduling/element.dart';
 
 /// Icon, colour and word for [type].
 ({IconData icon, Color color, String label}) elementTypeStyle(

@@ -11,12 +11,12 @@
 /// wrong sentence is a worse answer than no wash at all.
 library;
 
-import '../../../app/theme.dart';
-import '../../../domain/content/block.dart';
-import '../../../domain/content/document.dart';
-import '../../../domain/content/extract.dart';
-import '../../../domain/content/reader_coordinates.dart';
-import 'block_span_builder.dart';
+import 'package:incremental_reader/src/app/theme.dart';
+import 'package:incremental_reader/src/domain/content/block.dart';
+import 'package:incremental_reader/src/domain/content/document.dart';
+import 'package:incremental_reader/src/domain/content/extract.dart';
+import 'package:incremental_reader/src/domain/content/reader_coordinates.dart';
+import 'package:incremental_reader/src/features/reader/presentation/block_span_builder.dart';
 
 /// Persistent extract washes for every block of [document], keyed by block id.
 ///
