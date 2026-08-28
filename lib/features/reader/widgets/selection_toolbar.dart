@@ -7,6 +7,8 @@
 /// position the user pointed at.
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
@@ -64,7 +66,13 @@ class SelectionToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double width = onSetMarker == null ? 290.0 : 380.0;
+    // An estimate of how wide the row comes out, used only to place it. It is
+    // capped at the viewport so that on a phone the toolbar is pinned inside
+    // the screen rather than centred on a selection and hanging off it.
+    final double width = math.min(
+      onSetMarker == null ? 290.0 : 380.0,
+      math.max(0, viewportSize.width - 24),
+    );
     return Positioned(
       left: _leftEdge(width),
       top: _topEdge(),
@@ -73,6 +81,7 @@ class SelectionToolbar extends StatelessWidget {
         child: Container(
           height: _kToolbarHeight,
           padding: const EdgeInsets.symmetric(horizontal: 4),
+          constraints: BoxConstraints(maxWidth: width),
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(8),
@@ -85,7 +94,13 @@ class SelectionToolbar extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: _buttons()),
+          // Scrolls sideways rather than dropping a button: every action here
+          // is one the reader came for, and a hidden Extract is worse than a
+          // swipe to reach it.
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(mainAxisSize: MainAxisSize.min, children: _buttons()),
+          ),
         ),
       ),
     );

@@ -19,6 +19,7 @@ import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/metrics/scheduler_metrics.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 
 /// Opens the panel, optionally focused on one element.
@@ -373,7 +374,7 @@ class _CommandsPanel extends ConsumerWidget {
         data: (List<ActivityRecord> records) => Column(
           children: <Widget>[
             for (final ActivityRecord record in records.take(40))
-              _commandRow(record),
+              _commandRow(context, record),
           ],
         ),
       ),
@@ -382,51 +383,61 @@ class _CommandsPanel extends ConsumerWidget {
 
   /// Timestamp, command name, then whatever detail the command recorded.
   /// Tapping a row that names an element selects it in the element panel.
-  Widget _commandRow(ActivityRecord record) {
+  ///
+  /// The two identifying columns take 342 pixels before the detail is given
+  /// any width at all, which is more than a phone has: there the detail moves
+  /// onto a line of its own underneath them.
+  Widget _commandRow(BuildContext context, ActivityRecord record) {
+    final Widget timestamp = SizedBox(
+      width: 132,
+      child: Text(
+        record.atUtc.toIso8601String().substring(0, 19).replaceFirst('T', ' '),
+        style: const TextStyle(
+          fontFamily: 'Consolas',
+          fontSize: 11,
+          color: AppColors.muted,
+        ),
+      ),
+    );
+    final Widget kind = Text(
+      record.kind,
+      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+    );
+    final Widget detail = Text(
+      _detailLine(record),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        fontFamily: 'Consolas',
+        fontSize: 11,
+        color: AppColors.muted,
+      ),
+    );
+
     return InkWell(
       onTap: record.ref == null ? null : () => onSelect(record.ref!),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 5),
-        child: Row(
-          children: <Widget>[
-            SizedBox(
-              width: 132,
-              child: Text(
-                record.atUtc
-                    .toIso8601String()
-                    .substring(0, 19)
-                    .replaceFirst('T', ' '),
-                style: const TextStyle(
-                  fontFamily: 'Consolas',
-                  fontSize: 11,
-                  color: AppColors.muted,
-                ),
+        child: isCompactWidth(context)
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      timestamp,
+                      Expanded(child: kind),
+                    ],
+                  ),
+                  detail,
+                ],
+              )
+            : Row(
+                children: <Widget>[
+                  timestamp,
+                  SizedBox(width: 210, child: kind),
+                  Expanded(child: detail),
+                ],
               ),
-            ),
-            SizedBox(
-              width: 210,
-              child: Text(
-                record.kind,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            Expanded(
-              child: Text(
-                _detailLine(record),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Consolas',
-                  fontSize: 11,
-                  color: AppColors.muted,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -588,61 +599,74 @@ class _HistoryRow extends StatelessWidget {
   final ReviewLogEntry entry;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        SizedBox(
-          width: 112,
-          child: Text(
-            entry.atUtc
-                .toIso8601String()
-                .substring(0, 16)
-                .replaceFirst('T', ' '),
-            style: const TextStyle(
-              fontFamily: 'Consolas',
-              fontSize: 11,
-              color: AppColors.muted,
-            ),
-          ),
+  Widget build(BuildContext context) {
+    final Widget timestamp = SizedBox(
+      width: 112,
+      child: Text(
+        entry.atUtc.toIso8601String().substring(0, 16).replaceFirst('T', ' '),
+        style: const TextStyle(
+          fontFamily: 'Consolas',
+          fontSize: 11,
+          color: AppColors.muted,
         ),
-        SizedBox(
-          width: 130,
-          child: Text(
-            entry.eventType.storageName,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: entry.feedsOptimizer ? AppColors.accent : AppColors.muted,
+      ),
+    );
+    final Widget eventType = Text(
+      entry.eventType.storageName,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: entry.feedsOptimizer ? AppColors.accent : AppColors.muted,
+      ),
+    );
+    final Widget measurements = Text(
+      <String>[
+        if (entry.grade != null) 'grade ${entry.grade}',
+        if (entry.elapsedDays != null)
+          'elapsed ${entry.elapsedDays!.toStringAsFixed(1)}d',
+        if (entry.scheduledDays != null)
+          'scheduled ${entry.scheduledDays!.toStringAsFixed(1)}d',
+        if (entry.before.dueAtUtc != null && entry.after.dueAtUtc != null)
+          'due ${entry.before.dueAtUtc!.toIso8601String().substring(0, 10)}'
+              ' → '
+              '${entry.after.dueAtUtc!.toIso8601String().substring(0, 10)}',
+        if (entry.metadata != null) '${entry.metadata}',
+      ].join('  ·  '),
+      style: const TextStyle(
+        fontFamily: 'Consolas',
+        fontSize: 11,
+        color: AppColors.muted,
+        height: 1.45,
+      ),
+    );
+
+    // The same trade as the command log: on a phone the measurements take a
+    // line of their own rather than a column the two labels have spent.
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: isCompactWidth(context)
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    timestamp,
+                    Expanded(child: eventType),
+                  ],
+                ),
+                measurements,
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                timestamp,
+                SizedBox(width: 130, child: eventType),
+                Expanded(child: measurements),
+              ],
             ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            <String>[
-              if (entry.grade != null) 'grade ${entry.grade}',
-              if (entry.elapsedDays != null)
-                'elapsed ${entry.elapsedDays!.toStringAsFixed(1)}d',
-              if (entry.scheduledDays != null)
-                'scheduled ${entry.scheduledDays!.toStringAsFixed(1)}d',
-              if (entry.before.dueAtUtc != null && entry.after.dueAtUtc != null)
-                'due ${entry.before.dueAtUtc!.toIso8601String().substring(0, 10)}'
-                    ' → '
-                    '${entry.after.dueAtUtc!.toIso8601String().substring(0, 10)}',
-              if (entry.metadata != null) '${entry.metadata}',
-            ].join('  ·  '),
-            style: const TextStyle(
-              fontFamily: 'Consolas',
-              fontSize: 11,
-              color: AppColors.muted,
-              height: 1.45,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
+    );
+  }
 }
 
 class _DiagnosticsPanel extends StatelessWidget {

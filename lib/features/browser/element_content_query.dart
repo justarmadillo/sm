@@ -1,6 +1,6 @@
 /// Reads the body of any one element, whatever kind it is.
 ///
-/// The Contents tree lists sources, extracts, and cards side by side, so
+/// The Browser tree lists sources, extracts, and cards side by side, so
 /// inspecting a row cannot mean "open the screen that owns this type" — the
 /// point of a browser is to see the content without leaving the list. This
 /// query is the one place that knows where each kind keeps its text.

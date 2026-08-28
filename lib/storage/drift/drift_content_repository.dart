@@ -233,7 +233,9 @@ final class DriftContentRepository implements ContentRepository {
           outcome.markdown,
           contentRevision: outcome.contentRevision,
         )
-        .copyWith(resume: ResumePosition(marker: marker, softPosition: soft));
+        .copyWith(
+          resume: ResumePosition(marker: marker, softPosition: soft),
+        );
 
     await _database.customStatement(
       'UPDATE sources SET markdown = ?, content_hash = ?, word_count = ?, '
@@ -253,11 +255,12 @@ final class DriftContentRepository implements ContentRepository {
       ],
     );
 
-    final Map<String, ProvenanceSnapshot> restored = <String, ProvenanceSnapshot>{
-      if (restore != null)
-        for (final ProvenanceSnapshot snapshot in restore.provenance)
-          snapshot.extractId: snapshot,
-    };
+    final Map<String, ProvenanceSnapshot> restored =
+        <String, ProvenanceSnapshot>{
+          if (restore != null)
+            for (final ProvenanceSnapshot snapshot in restore.provenance)
+              snapshot.extractId: snapshot,
+        };
 
     for (final ProvenanceUpdate update in outcome.provenanceUpdates) {
       final ProvenanceSnapshot? recorded = restored[update.extractId];
@@ -342,7 +345,6 @@ final class DriftContentRepository implements ContentRepository {
             ..where(($SourceEditsTable t) => t.operationId.equals(operationId)))
           .getSingleOrNull();
 
-
   @override
   Future<void> insertExtract(Extract extract) =>
       _database.into(_database.extracts).insert(extractToCompanion(extract));
@@ -372,6 +374,17 @@ final class DriftContentRepository implements ContentRepository {
     final rows =
         await (_database.select(_database.extracts)
               ..where(($ExtractsTable t) => t.sourceId.equals(sourceId))
+              ..orderBy(<OrderClauseGenerator<$ExtractsTable>>[
+                ($ExtractsTable t) => OrderingTerm.asc(t.createdAtUtc),
+              ]))
+            .get();
+    return <Extract>[for (final row in rows) extractFromRow(row)];
+  }
+
+  @override
+  Future<List<Extract>> listExtracts() async {
+    final rows =
+        await (_database.select(_database.extracts)
               ..orderBy(<OrderClauseGenerator<$ExtractsTable>>[
                 ($ExtractsTable t) => OrderingTerm.asc(t.createdAtUtc),
               ]))
@@ -481,6 +494,17 @@ final class DriftContentRepository implements ContentRepository {
         ),
       ),
     );
+  }
+
+  @override
+  Future<List<Card>> listCards() async {
+    final rows =
+        await (_database.select(_database.cards)
+              ..orderBy(<OrderClauseGenerator<$CardsTable>>[
+                ($CardsTable t) => OrderingTerm.asc(t.createdAtUtc),
+              ]))
+            .get();
+    return <Card>[for (final row in rows) cardFromRow(row)];
   }
 
   @override

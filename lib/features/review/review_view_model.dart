@@ -10,7 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/card.dart';
-import 'package:incremental_reader/features/library/library_view_model.dart';
+import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/review/review_command_runner.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
 import 'package:incremental_reader/features/review/review_providers.dart';

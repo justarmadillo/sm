@@ -2,10 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/source.dart';
-import 'package:incremental_reader/features/library/import_sheet.dart';
-import 'package:incremental_reader/features/library/library_providers.dart';
-import 'package:incremental_reader/features/library/library_tree_query.dart';
-import 'package:incremental_reader/features/library/library_view_model.dart';
+import 'package:incremental_reader/features/browser/browser_providers.dart';
+import 'package:incremental_reader/features/browser/browser_tree_query.dart';
+import 'package:incremental_reader/features/browser/browser_view_model.dart';
+import 'package:incremental_reader/features/browser/import_sheet.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
@@ -51,8 +51,8 @@ void main() {
   });
 
   Future<String> importFixture() async {
-    final library = container.read(libraryViewModelProvider.notifier);
-    await container.read(libraryViewModelProvider.future);
+    final library = container.read(browserViewModelProvider.notifier);
+    await container.read(browserViewModelProvider.future);
     final id = await library.importMarkdown(
       title: 'A Chapter',
       markdown: _markdown,
@@ -77,8 +77,8 @@ void main() {
   group('element commands', () {
     test('an imported source enters the knowledge tree', () async {
       await importFixture();
-      final List<LibraryTreeNode> tree = await container
-          .read(libraryTreeQueryProvider)
+      final List<BrowserTreeNode> tree = await container
+          .read(browserTreeQueryProvider)
           .load();
 
       expect(tree, hasLength(1));
@@ -88,26 +88,26 @@ void main() {
     });
 
     test('a failed import surfaces the failure and imports nothing', () async {
-      final library = container.read(libraryViewModelProvider.notifier);
-      await container.read(libraryViewModelProvider.future);
+      final library = container.read(browserViewModelProvider.notifier);
+      await container.read(browserViewModelProvider.future);
 
       final id = await library.importMarkdown(title: 'x', markdown: '   ');
 
       expect(id, isNull);
-      final state = container.read(libraryViewModelProvider).requireValue;
+      final state = container.read(browserViewModelProvider).requireValue;
       expect(state.message!.isError, isTrue);
-      expect(await container.read(libraryTreeQueryProvider).load(), isEmpty);
+      expect(await container.read(browserTreeQueryProvider).load(), isEmpty);
     });
 
     test('dismissing keeps the element in the tree', () async {
       final sourceId = await importFixture();
-      final library = container.read(libraryViewModelProvider.notifier);
+      final library = container.read(browserViewModelProvider.notifier);
       await library.dismiss(ElementRef(id: sourceId, type: ElementType.source));
 
       // Dismissing stops scheduling; it never removes content, so the tree
       // still shows the element and says it is dismissed.
-      final List<LibraryTreeNode> tree = await container
-          .read(libraryTreeQueryProvider)
+      final List<BrowserTreeNode> tree = await container
+          .read(browserTreeQueryProvider)
           .load();
       expect(tree.single.ref.id, sourceId);
       expect(tree.single.status, Sm20ElementStatus.dismissed);

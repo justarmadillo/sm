@@ -7,13 +7,13 @@ import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
 import 'package:integration_test/integration_test.dart';
 
-/// Opens the Contents tab when it is showing.
+/// Opens the Browser tab when it is showing.
 ///
 /// The home screen leads with the study queue, so the import affordance lives
 /// one tab across. Tolerating its absence keeps this usable from a screen that
 /// is already past the tab bar.
-Future<void> _openContents(WidgetTester tester) async {
-  final Finder tab = find.text('Contents');
+Future<void> _openBrowser(WidgetTester tester) async {
+  final Finder tab = find.text('Browser');
   if (tab.evaluate().isEmpty) return;
   await tester.tap(tab.first);
   await tester.pumpAndSettle();
@@ -40,7 +40,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await _openContents(tester);
+    await _openBrowser(tester);
     await tester.tap(find.text('Import markdown').first);
     await tester.pumpAndSettle();
     await tester.enterText(

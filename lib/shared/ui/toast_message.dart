@@ -8,6 +8,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -156,7 +157,15 @@ class _ToastCardState extends State<_ToastCard>
                 // Clicking anywhere on the toast dismisses it.
                 onTap: widget.onDismiss,
                 child: Container(
-                  constraints: const BoxConstraints(maxWidth: 380),
+                  // Capped at the window as well as at 380: pinned 20 from
+                  // the right, a 380-wide toast on a phone would start off
+                  // the left edge of the screen.
+                  constraints: BoxConstraints(
+                    maxWidth: math.min(
+                      380,
+                      math.max(0, MediaQuery.sizeOf(context).width - 40),
+                    ),
+                  ),
                   padding: EdgeInsets.fromLTRB(
                     14,
                     10,

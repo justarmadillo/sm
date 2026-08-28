@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 
 /// Opens batch formulation over [seedText].
 ///
@@ -71,7 +72,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
     return AlertDialog(
       title: const Text('Formulate cards'),
       content: SizedBox(
-        width: 720,
+        width: dialogContentWidth(context, preferred: 720),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -79,7 +80,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
             children: <Widget>[
               Text(_introLine()),
               const SizedBox(height: 16),
-              _cardKindSelector(),
+              _cardKindSelector(context),
               const SizedBox(height: 16),
               if (_kind == _DraftKind.qa)
                 ..._questionAndAnswerFields()
@@ -143,18 +144,23 @@ class _FormulationDialogState extends State<_FormulationDialog> {
             'New cards are added independently.';
 
   /// Question-and-answer, or cloze.
-  Widget _cardKindSelector() {
+  ///
+  /// The two icons are dropped on a narrow window: they decorate a choice the
+  /// words already make, and they are what pushes the pair past a phone's
+  /// dialog width.
+  Widget _cardKindSelector(BuildContext context) {
+    final bool hasRoomForIcons = !isCompactWidth(context);
     return SegmentedButton<_DraftKind>(
-      segments: const <ButtonSegment<_DraftKind>>[
+      segments: <ButtonSegment<_DraftKind>>[
         ButtonSegment<_DraftKind>(
           value: _DraftKind.qa,
-          label: Text('Question & answer'),
-          icon: Icon(Icons.quiz_outlined),
+          label: const Text('Question & answer'),
+          icon: hasRoomForIcons ? const Icon(Icons.quiz_outlined) : null,
         ),
         ButtonSegment<_DraftKind>(
           value: _DraftKind.cloze,
-          label: Text('Cloze'),
-          icon: Icon(Icons.short_text),
+          label: const Text('Cloze'),
+          icon: hasRoomForIcons ? const Icon(Icons.short_text) : null,
         ),
       ],
       selected: <_DraftKind>{_kind},
@@ -253,7 +259,15 @@ class _FormulationDialogState extends State<_FormulationDialog> {
           label: const Text('Add another'),
         ),
         const Spacer(),
-        if (_queued.isNotEmpty) Text('$stagedCardCount cards staged'),
+        // Flexible, not fixed: the count is the half that gives way when the
+        // dialog is only as wide as a phone.
+        if (_queued.isNotEmpty)
+          Flexible(
+            child: Text(
+              '$stagedCardCount cards staged',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
       ],
     );
   }

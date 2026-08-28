@@ -13,6 +13,7 @@ import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/features/reader/widgets/block_span_builder.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 
 /// Shows the context of [extracts] taken from [block].
 Future<ExtractContextAction?> showExtractContext(
@@ -65,7 +66,7 @@ class _ExtractContextDialogState extends State<_ExtractContextDialog> {
     return AlertDialog(
       title: _title(),
       content: SizedBox(
-        width: 640,
+        width: dialogContentWidth(context, preferred: 640),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,

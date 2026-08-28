@@ -15,6 +15,7 @@ import 'package:incremental_reader/features/priority/priority_query.dart';
 import 'package:incremental_reader/features/priority/priority_view_model.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
 /// The Windows shortcut that opens the slider, matching SuperMemo.
@@ -53,7 +54,7 @@ class _PriorityDialog extends ConsumerWidget {
     return AlertDialog(
       title: const Text('Element priority'),
       content: SizedBox(
-        width: 460,
+        width: dialogContentWidth(context, preferred: 460),
         child: state.when(
           loading: () => const SizedBox(
             height: 160,
@@ -249,7 +250,7 @@ class _NeighbourLine extends StatelessWidget {
   );
 }
 
-/// A compact percent badge, for queue rows and library tiles.
+/// A compact percent badge, for queue rows and Browser rows.
 class PriorityBadge extends StatelessWidget {
   const PriorityBadge({required this.percent, super.key, this.onTap});
 

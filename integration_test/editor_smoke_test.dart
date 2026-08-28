@@ -52,7 +52,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // --- import -----------------------------------------------------------
-    await tester.tap(find.text('Contents'));
+    await tester.tap(find.text('Browser'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Import markdown').first);
     await tester.pumpAndSettle();

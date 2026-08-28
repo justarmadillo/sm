@@ -392,6 +392,23 @@ class ReaderViewState extends State<ReaderView> {
             ? null
             : (TapDownDetails details) =>
                   widget.controller.selectWordAt(details.globalPosition),
+        // The touch equivalent of press-and-sweep. A finger drag scrolls the
+        // page, so on a phone the only press that can mean "select" is the
+        // long one, exactly as it does everywhere else on Android: hold to
+        // take the word, keep holding and move to take more.
+        onLongPressStart: isEditing
+            ? null
+            : (LongPressStartDetails details) {
+                if (!_canStartSelectionAt(details.globalPosition)) return;
+                _keyboardFocus.requestFocus();
+                widget.controller.selectWordAt(details.globalPosition);
+              },
+        onLongPressMoveUpdate: isEditing
+            ? null
+            : (LongPressMoveUpdateDetails details) {
+                if (!widget.controller.hasSelection) return;
+                widget.controller.extendTo(details.globalPosition);
+              },
         child: child,
       ),
     );

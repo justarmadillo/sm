@@ -18,6 +18,7 @@ import 'package:incremental_reader/features/review/review_view_model.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
 Future<StudyRouteResult> openReview(
@@ -271,10 +272,16 @@ class _ReviewStatus extends StatelessWidget {
           ),
         ],
         const Spacer(),
-        const Text(
-          'Space: reveal · 1–4 grade · Ctrl+Z undo · E edit · Alt+P priority',
-          style: TextStyle(fontSize: 11, color: AppColors.muted),
-        ),
+        // A legend for keys a phone does not have, and the widest thing on
+        // the bar: it is dropped rather than wrapped when there is no room.
+        if (!isCompactWidth(context))
+          const Flexible(
+            child: Text(
+              'Space: reveal · 1–4 grade · Ctrl+Z undo · E edit · Alt+P priority',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: AppColors.muted),
+            ),
+          ),
       ],
     ),
   );
@@ -346,66 +353,71 @@ class _ReviewActions extends StatelessWidget {
       color: AppColors.surface,
       border: Border(top: BorderSide(color: AppColors.border)),
     ),
-    child: Center(
-      child: state.isAnswerRevealed
-          ? Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: <Widget>[
-                if (state.canUndo)
-                  TextButton.icon(
-                    onPressed: state.isBusy ? null : model.undoLastGrade,
-                    icon: const Icon(Icons.undo, size: 16),
-                    label: const Text('Undo'),
+    // The last row above the Android gesture strip: without this the grade
+    // buttons sit under the swipe area.
+    child: SafeArea(
+      top: false,
+      child: Center(
+        child: state.isAnswerRevealed
+            ? Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: <Widget>[
+                  if (state.canUndo)
+                    TextButton.icon(
+                      onPressed: state.isBusy ? null : model.undoLastGrade,
+                      icon: const Icon(Icons.undo, size: 16),
+                      label: const Text('Undo'),
+                    ),
+                  _RatingButton(
+                    number: 1,
+                    label: 'Again',
+                    color: Colors.red.shade700,
+                    onPressed: state.isBusy
+                        ? null
+                        : () => model.grade(CardRating.again),
                   ),
-                _RatingButton(
-                  number: 1,
-                  label: 'Again',
-                  color: Colors.red.shade700,
-                  onPressed: state.isBusy
-                      ? null
-                      : () => model.grade(CardRating.again),
-                ),
-                _RatingButton(
-                  number: 2,
-                  label: 'Hard',
-                  color: Colors.orange.shade800,
-                  onPressed: state.isBusy
-                      ? null
-                      : () => model.grade(CardRating.hard),
-                ),
-                _RatingButton(
-                  number: 3,
-                  label: 'Good',
-                  color: AppColors.accent,
-                  onPressed: state.isBusy
-                      ? null
-                      : () => model.grade(CardRating.good),
-                ),
-                _RatingButton(
-                  number: 4,
-                  label: 'Easy',
-                  color: Colors.teal,
-                  onPressed: state.isBusy
-                      ? null
-                      : () => model.grade(CardRating.easy),
-                ),
-                TextButton.icon(
-                  // Not a grade. "Wrong task right now" is a different fact
-                  // about the day from "I could not recall this", and the log
-                  // keeps them apart.
-                  onPressed: state.isBusy ? null : model.postpone,
-                  icon: const Icon(Icons.schedule, size: 16),
-                  label: const Text('Later'),
-                ),
-              ],
-            )
-          : FilledButton.icon(
-              onPressed: state.isBusy ? null : model.revealAnswer,
-              icon: const Icon(Icons.visibility_outlined),
-              label: const Text('Show answer  (Space)'),
-            ),
+                  _RatingButton(
+                    number: 2,
+                    label: 'Hard',
+                    color: Colors.orange.shade800,
+                    onPressed: state.isBusy
+                        ? null
+                        : () => model.grade(CardRating.hard),
+                  ),
+                  _RatingButton(
+                    number: 3,
+                    label: 'Good',
+                    color: AppColors.accent,
+                    onPressed: state.isBusy
+                        ? null
+                        : () => model.grade(CardRating.good),
+                  ),
+                  _RatingButton(
+                    number: 4,
+                    label: 'Easy',
+                    color: Colors.teal,
+                    onPressed: state.isBusy
+                        ? null
+                        : () => model.grade(CardRating.easy),
+                  ),
+                  TextButton.icon(
+                    // Not a grade. "Wrong task right now" is a different fact
+                    // about the day from "I could not recall this", and the log
+                    // keeps them apart.
+                    onPressed: state.isBusy ? null : model.postpone,
+                    icon: const Icon(Icons.schedule, size: 16),
+                    label: const Text('Later'),
+                  ),
+                ],
+              )
+            : FilledButton.icon(
+                onPressed: state.isBusy ? null : model.revealAnswer,
+                icon: const Icon(Icons.visibility_outlined),
+                label: const Text('Show answer  (Space)'),
+              ),
+      ),
     ),
   );
 }

@@ -298,10 +298,16 @@ class ElementSchedules extends Table {
   /// citation if its source is ever removed.
   TextColumn get rootId => text().nullable()();
 
-  /// Immediate learning-element parent; one coordinate for every kind.
+  /// Where the element is filed in the Browser: one parent coordinate for
+  /// every kind of element, null at the top of the tree.
+  ///
+  /// Set to the element's origin when it is created and to wherever the user
+  /// drags it afterwards. Provenance is not this column: an extract's real
+  /// parent and byte range live on `extracts`, and no move touches them.
   TextColumn get parentElementId => text().nullable()();
 
-  /// Pending/user-visible order metadata, independent of priority and due.
+  /// Order among the rows filed under the same parent, ascending. Null until
+  /// something is moved, and independent of priority and due.
   IntColumn get ordinal => integer().nullable()();
 
   IntColumn get createdAtUtc => integer().nullable()();

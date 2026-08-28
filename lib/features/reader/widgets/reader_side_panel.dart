@@ -21,7 +21,11 @@ enum ReaderPanelTab {
   extracts,
 }
 
-/// The docked panel beside the reading column.
+/// How wide the panel is when it sits beside the reading column.
+const double kReaderSidePanelWidth = 280;
+
+/// The panel of outline and extracts, docked beside the reading column on a
+/// wide window and slid over it in a drawer on a narrow one.
 class ReaderSidePanel extends StatelessWidget {
   const ReaderSidePanel({
     required this.document,
@@ -33,6 +37,7 @@ class ReaderSidePanel extends StatelessWidget {
     required this.onClose,
     this.currentBlockId,
     this.focusedExtractId,
+    this.width,
     super.key,
   });
 
@@ -56,6 +61,9 @@ class ReaderSidePanel extends StatelessWidget {
   /// The extract currently painted in the text, shown selected here too.
   final String? focusedExtractId;
 
+  /// How wide to draw. Null inside a drawer, which sets its own width.
+  final double? width;
+
   @override
   Widget build(BuildContext context) {
     final headings = <Block>[
@@ -64,7 +72,7 @@ class ReaderSidePanel extends StatelessWidget {
     ];
 
     return Container(
-      width: 280,
+      width: width,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(left: BorderSide(color: AppColors.border)),

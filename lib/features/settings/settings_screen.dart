@@ -10,6 +10,7 @@ import 'package:incremental_reader/settings/mercy_settings.dart';
 import 'package:incremental_reader/settings/postpone_settings.dart';
 import 'package:incremental_reader/settings/smart_postpone_settings.dart';
 import 'package:incremental_reader/shared/ui/desktop_scroll_view.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 import 'package:incremental_reader/storage/platform/time_zones.dart';
 
@@ -49,17 +50,48 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
+        // Save is the one that has to stay reachable; the two ways of throwing
+        // an edit away move into a menu when the bar runs out of room.
         actions: <Widget>[
-          TextButton(
-            onPressed: data == null || data.isBusy ? null : model.loadDefaults,
-            child: const Text('Restore defaults'),
-          ),
-          const SizedBox(width: 6),
-          TextButton(
-            onPressed: data == null || !data.isDirty ? null : model.revert,
-            child: const Text('Discard'),
-          ),
-          const SizedBox(width: 6),
+          if (isCompactWidth(context))
+            PopupMenuButton<String>(
+              tooltip: 'More',
+              icon: const Icon(Icons.more_vert),
+              onSelected: (String action) {
+                switch (action) {
+                  case 'defaults':
+                    model.loadDefaults();
+                  case 'discard':
+                    model.revert();
+                }
+              },
+              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(
+                  value: 'defaults',
+                  enabled: data != null && !data.isBusy,
+                  child: const Text('Restore defaults'),
+                ),
+                PopupMenuItem<String>(
+                  value: 'discard',
+                  enabled: data != null && data.isDirty,
+                  child: const Text('Discard'),
+                ),
+              ],
+            )
+          else ...<Widget>[
+            TextButton(
+              onPressed: data == null || data.isBusy
+                  ? null
+                  : model.loadDefaults,
+              child: const Text('Restore defaults'),
+            ),
+            const SizedBox(width: 6),
+            TextButton(
+              onPressed: data == null || !data.isDirty ? null : model.revert,
+              child: const Text('Discard'),
+            ),
+            const SizedBox(width: 6),
+          ],
           FilledButton(
             onPressed: data == null || !data.isDirty || data.isBusy
                 ? null

@@ -1,8 +1,12 @@
-/// Element commands shared by the Contents tree and the reader.
+/// Element commands shared by the Browser tree and the reader.
 ///
 /// Holds no scheduling logic and no projection: the tree renders from
-/// `ContentTreeQuery`, so all this owns is turning user intentions into named
+/// `BrowserTreeQuery`, so all this owns is turning user intentions into named
 /// commands and surfacing failures as ephemeral effects.
+///
+/// The moves at the bottom are filing, not scheduling. They change where a row
+/// is kept and in what order, and nothing else — an extract that moves still
+/// points at the passage it was cut from.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -11,8 +15,11 @@ import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/features/browser/browser_commands.dart';
+import 'package:incremental_reader/features/browser/browser_providers.dart';
 import 'package:incremental_reader/features/extract/extract_commands.dart';
 import 'package:incremental_reader/features/extract/extract_providers.dart';
+import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/reader_providers.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
@@ -32,30 +39,30 @@ final class UiMessage {
 
 /// What the shared command surface exposes to a view.
 @immutable
-final class LibraryUiState {
-  const LibraryUiState({this.message, this.isBusy = false});
+final class BrowserUiState {
+  const BrowserUiState({this.message, this.isBusy = false});
 
   /// Ephemeral: shown once, then cleared.
   final UiMessage? message;
 
   final bool isBusy;
 
-  LibraryUiState copyWith({
+  BrowserUiState copyWith({
     UiMessage? message,
     bool? isBusy,
     bool shouldClearMessage = false,
-  }) => LibraryUiState(
+  }) => BrowserUiState(
     message: shouldClearMessage ? null : (message ?? this.message),
     isBusy: isBusy ?? this.isBusy,
   );
 }
 
 /// The shared element-command ViewModel.
-final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
+final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
   @override
-  Future<LibraryUiState> build() async => _load();
+  Future<BrowserUiState> build() async => _load();
 
-  Future<LibraryUiState> _load() async => const LibraryUiState();
+  Future<BrowserUiState> _load() async => const BrowserUiState();
 
   /// Imports pasted or opened markdown as a new source.
   Future<String?> importMarkdown({
@@ -82,7 +89,7 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
         ),
   );
 
-  /// Rewrites an extract's text from the Contents tree.
+  /// Rewrites an extract's text from the Browser tree.
   ///
   /// The same command the Extract screen uses, so the guard that refuses an
   /// edit under nested extracts applies here too: their coordinates point into
@@ -92,16 +99,12 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
         (OperationId operation) => ref
             .read(extractCommandRunnerProvider)
             .editExtract(
-              EditExtract(
-                operation,
-                extractId: extractId,
-                markdown: markdown,
-              ),
+              EditExtract(operation, extractId: extractId, markdown: markdown),
             ),
         success: (_) => 'Extract updated',
       );
 
-  /// Rewrites a card's wording from the Contents tree. Never reschedules it.
+  /// Rewrites a card's wording from the Browser tree. Never reschedules it.
   Future<void> editCard(String cardId, {String? front, String? back}) =>
       _command<Card>(
         (OperationId operation) => ref
@@ -137,19 +140,104 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
     (OperationId operation) => ref
         .read(readerCommandRunnerProvider)
         .deleteSource(DeleteSource(operation, sourceId: sourceId)),
-    success: (_) => 'Deleted. You can restore it from the Library.',
+    success: (_) => 'Deleted. You can restore it from the Browser.',
   );
+
+  /// Writes cards from the Browser, under [parent] or standalone.
+  ///
+  /// The same command the Extract screen issues, so the cards are scheduled
+  /// the way formulated cards always are. A null parent is a card that belongs
+  /// to nothing yet, which is the only way to write one before there is
+  /// anything to hang it on.
+  Future<List<ElementRef>?> createCards({
+    required CardParent? parent,
+    required List<CardDraft> drafts,
+  }) async {
+    final List<Card>? created = await _command<List<Card>>(
+      (OperationId operation) => ref
+          .read(formulationCommandRunnerProvider)
+          .formulate(FormulateCards(operation, parent: parent, drafts: drafts)),
+      success: (List<Card> cards) =>
+          '${cards.length} card${cards.length == 1 ? '' : 's'} added',
+    );
+    if (created == null) return null;
+    return <ElementRef>[
+      for (final Card card in created)
+        ElementRef(id: card.id, type: ElementType.card),
+    ];
+  }
+
+  /// Moves an element above the sibling before it.
+  Future<void> moveUp(ElementRef ref_) => _filing(
+    (OperationId operation) => ref
+        .read(browserCommandRunnerProvider)
+        .moveUp(MoveElementUp(operation, ref: ref_)),
+  );
+
+  /// Moves an element below the sibling after it.
+  Future<void> moveDown(ElementRef ref_) => _filing(
+    (OperationId operation) => ref
+        .read(browserCommandRunnerProvider)
+        .moveDown(MoveElementDown(operation, ref: ref_)),
+  );
+
+  /// Files an element under the row above it.
+  Future<void> nestUnderPreviousSibling(ElementRef ref_) => _filing(
+    (OperationId operation) => ref
+        .read(browserCommandRunnerProvider)
+        .nestUnderPreviousSibling(
+          NestElementUnderPreviousSibling(operation, ref: ref_),
+        ),
+  );
+
+  /// Files an element beside the element it is currently under.
+  Future<void> liftOutOfParent(ElementRef ref_) => _filing(
+    (OperationId operation) => ref
+        .read(browserCommandRunnerProvider)
+        .liftOutOfParent(LiftElementOutOfParent(operation, ref: ref_)),
+  );
+
+  /// Files an element under [parentRef], in front of [beforeRef].
+  ///
+  /// This is what a drop reports. A null parent files it at the top of the
+  /// tree; a null [beforeRef] puts it last.
+  Future<void> fileUnder({
+    required ElementRef ref_,
+    required ElementRef? parentRef,
+    ElementRef? beforeRef,
+  }) => _filing(
+    (OperationId operation) => ref
+        .read(browserCommandRunnerProvider)
+        .fileUnder(
+          FileElementUnder(
+            operation,
+            ref: ref_,
+            parentRef: parentRef,
+            beforeRef: beforeRef,
+          ),
+        ),
+  );
+
+  /// Runs one move.
+  ///
+  /// A move that cannot happen — the top row asked to go up, an element asked
+  /// to move out of nothing — is reported as an ordinary refusal rather than
+  /// an error toast, because it is a normal thing to try at the edge of a
+  /// list.
+  Future<void> _filing(
+    Future<Result<BrowserFilingOutcome>> Function(OperationId operation) run,
+  ) => _command<BrowserFilingOutcome>(run, isRefusalQuiet: true);
 
   /// Reloads the projection, for example after returning from the Reader.
   Future<void> refresh() async {
-    state = AsyncValue<LibraryUiState>.data(await _load());
+    state = AsyncValue<BrowserUiState>.data(await _load());
   }
 
   /// Clears the one-shot message after the view has shown it.
   void shouldClearMessage() {
     final current = state.valueOrNull;
     if (current?.message == null) return;
-    state = AsyncValue<LibraryUiState>.data(
+    state = AsyncValue<BrowserUiState>.data(
       current!.copyWith(shouldClearMessage: true),
     );
   }
@@ -158,10 +246,11 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
   Future<T?> _command<T>(
     Future<Result<T>> Function(OperationId operation) run, {
     String Function(T value)? success,
+    bool isRefusalQuiet = false,
   }) async {
     final current = state.valueOrNull;
     if (current != null) {
-      state = AsyncValue<LibraryUiState>.data(current.copyWith(isBusy: true));
+      state = AsyncValue<BrowserUiState>.data(current.copyWith(isBusy: true));
     }
 
     // A fresh operation id per user action: that is what makes a retry after a
@@ -171,11 +260,13 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
     );
     final reloaded = await _load();
 
-    state = AsyncValue<LibraryUiState>.data(
+    state = AsyncValue<BrowserUiState>.data(
       reloaded.copyWith(
         message: result.fold(
           (T value) => success == null ? null : UiMessage(success(value)),
-          (AppFailure failure) => UiMessage(failure.message, isError: true),
+          (AppFailure failure) => isRefusalQuiet && failure is ValidationFailure
+              ? null
+              : UiMessage(failure.message, isError: true),
         ),
       ),
     );
@@ -183,9 +274,9 @@ final class LibraryViewModel extends AsyncNotifier<LibraryUiState> {
   }
 }
 
-/// The Library ViewModel provider.
-final AsyncNotifierProvider<LibraryViewModel, LibraryUiState>
-libraryViewModelProvider =
-    AsyncNotifierProvider<LibraryViewModel, LibraryUiState>(
-      LibraryViewModel.new,
+/// The Browser ViewModel provider.
+final AsyncNotifierProvider<BrowserViewModel, BrowserUiState>
+browserViewModelProvider =
+    AsyncNotifierProvider<BrowserViewModel, BrowserUiState>(
+      BrowserViewModel.new,
     );

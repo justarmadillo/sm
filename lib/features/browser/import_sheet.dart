@@ -1,8 +1,12 @@
-/// Import: paste markdown or open a `.md` file.
+/// Making a topic: paste or write markdown, or open a `.md` file.
 ///
 /// Markdown only in v1, and stored verbatim. The title defaults to the first
 /// heading, because typing a title again for a chapter that already names
 /// itself is friction with no payoff.
+///
+/// One dialog serves both ways in, worded for whichever the user chose. They
+/// differ in intent and in nothing else: a written topic and an imported one
+/// are the same row once saved.
 library;
 
 import 'dart:io';
@@ -11,6 +15,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 
 /// What the user asked to import.
 @immutable
@@ -25,11 +30,21 @@ final class ImportRequest {
 Future<ImportRequest?> showImportSheet(BuildContext context) =>
     showDialog<ImportRequest>(
       context: context,
-      builder: (BuildContext context) => const _ImportDialog(),
+      builder: (BuildContext context) => const _ImportDialog(isWritten: false),
+    );
+
+/// The same dialog, worded for a topic the user is writing themselves.
+Future<ImportRequest?> showNewTopicSheet(BuildContext context) =>
+    showDialog<ImportRequest>(
+      context: context,
+      builder: (BuildContext context) => const _ImportDialog(isWritten: true),
     );
 
 class _ImportDialog extends StatefulWidget {
-  const _ImportDialog();
+  const _ImportDialog({required this.isWritten});
+
+  /// Whether the user came in through "New topic" rather than "Import".
+  final bool isWritten;
 
   @override
   State<_ImportDialog> createState() => _ImportDialogState();
@@ -88,9 +103,9 @@ class _ImportDialogState extends State<_ImportDialog> {
         _markdown.text.trim().isNotEmpty && _title.text.trim().isNotEmpty;
 
     return AlertDialog(
-      title: const Text('Import markdown'),
+      title: Text(widget.isWritten ? 'New topic' : 'Import markdown'),
       content: SizedBox(
-        width: 620,
+        width: dialogContentWidth(context, preferred: 620),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,7 +125,7 @@ class _ImportDialogState extends State<_ImportDialog> {
         ),
         FilledButton(
           onPressed: canImport ? () => _submit(context) : null,
-          child: const Text('Import'),
+          child: Text(widget.isWritten ? 'Create' : 'Import'),
         ),
       ],
     );

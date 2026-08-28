@@ -64,7 +64,7 @@ final class SearchQuery {
   ///
   /// An empty or punctuation-only query returns nothing rather than
   /// everything: FTS5 would otherwise raise a syntax error on some inputs, and
-  /// "all elements" is what the Library and the priority browser are for.
+  /// "all elements" is what the Browser and the priority browser are for.
   Future<List<SearchResult>> run(
     String query, {
     int limit = 50,

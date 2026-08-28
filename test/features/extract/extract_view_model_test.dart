@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
-import 'package:incremental_reader/features/library/library_view_model.dart';
+import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/clock.dart';
@@ -39,9 +39,9 @@ void main() {
         idGeneratorProvider.overrideWithValue(FakeIdGenerator()),
       ],
     );
-    await container.read(libraryViewModelProvider.future);
+    await container.read(browserViewModelProvider.future);
     sourceId = (await container
-        .read(libraryViewModelProvider.notifier)
+        .read(browserViewModelProvider.notifier)
         .importMarkdown(title: 'Encoding', markdown: _markdown))!;
   });
 

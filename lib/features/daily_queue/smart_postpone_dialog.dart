@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:incremental_reader/scheduling/postpone/sm20_postpone.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 
 /// Shows [result] and answers whether the user wants it applied.
 ///
@@ -56,7 +57,7 @@ class _SmartPostponeDialog extends StatelessWidget {
     return AlertDialog(
       title: const Text('Apply Smart Postpone?'),
       content: SizedBox(
-        width: 460,
+        width: dialogContentWidth(context, preferred: 460),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

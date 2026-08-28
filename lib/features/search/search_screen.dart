@@ -130,19 +130,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
         children: <Widget>[
           for (final (String label, Set<ElementType> filter) in filters)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: FilterChip(
-                label: Text(label),
-                selected:
-                    selectedTypes.length == filter.length &&
-                    selectedTypes.containsAll(filter),
-                onSelected: (_) =>
-                    ref.read(searchTypesProvider.notifier).state = filter,
-              ),
+            FilterChip(
+              label: Text(label),
+              selected:
+                  selectedTypes.length == filter.length &&
+                  selectedTypes.containsAll(filter),
+              onSelected: (_) =>
+                  ref.read(searchTypesProvider.notifier).state = filter,
             ),
         ],
       ),

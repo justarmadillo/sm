@@ -78,6 +78,13 @@ abstract interface class ContentRepository {
   /// Every extract taken from [sourceId], including nested ones.
   Future<List<Extract>> listExtractsOfSource(String sourceId);
 
+  /// Every extract in the collection, oldest first.
+  ///
+  /// The Browser draws one tree over the whole collection, so it needs every
+  /// extract in one read. Walking source by source would miss an extract whose
+  /// Browser position was moved out from under its own source.
+  Future<List<Extract>> listExtracts();
+
   /// How many extracts each of [sourceIds] has produced.
   Future<Map<String, int>> countExtractsBySource(List<String> sourceIds);
 
@@ -98,6 +105,12 @@ abstract interface class ContentRepository {
 
   /// Cards formulated directly from [sourceId], without an extract between.
   Future<List<Card>> listCardsOfSource(String sourceId);
+
+  /// Every card in the collection, oldest first.
+  ///
+  /// Includes cards written with no parent at all, which the per-parent
+  /// listings above cannot reach.
+  Future<List<Card>> listCards();
 
   /// Replaces a card's text, including edits made during review.
   Future<void> updateCard(Card card);

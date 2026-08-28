@@ -115,12 +115,24 @@ final class ElementSchedule {
   /// source is ever removed.
   final String? rootId;
 
-  /// Immediate learning-element parent. This is the sole canonical parent
-  /// coordinate; [rootId] is denormalized provenance, not another parent.
+  /// Where this element is filed: the element it sits under in the Browser,
+  /// or null at the top of the tree.
+  ///
+  /// It is written twice by two different kinds of code, and the difference
+  /// matters. Creating an element sets it to what the element came from, so a
+  /// new extract lands under the text it was cut from. Moving an element in
+  /// the Browser sets it to wherever the user put it. Provenance itself lives
+  /// on the content rows — an extract's parent and byte range — and is never
+  /// rewritten by a move, which is why an extract filed under a different
+  /// article still opens in the passage it came from. [rootId] likewise stays
+  /// provenance, not another filing coordinate.
   final String? parentElementId;
 
-  /// User-visible pending-order metadata. It is never identity, priority, or
-  /// a due-date tie breaker.
+  /// Where this element sits among the ones filed beside it, ascending.
+  ///
+  /// Null on anything that has never been moved, which then falls back to the
+  /// order it was created in. It is never identity, priority, or a due-date
+  /// tie breaker.
   final int? ordinal;
 
   /// Audit instants. They may be absent only on rows migrated from schemas

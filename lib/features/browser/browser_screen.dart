@@ -1,23 +1,34 @@
-/// The knowledge tree, and the way into any element in the collection.
+/// The Browser: the whole collection as one tree, and the way into any
+/// element in it.
 ///
-/// This replaces the flat library list. A flat list could only ever show
-/// sources, which hid most of the collection: extracts and cards are elements
-/// in their own right, with their own schedules, and the relationship between
-/// them is the thing worth seeing. There is one collection, forever, so the
-/// tree is the collection rather than a view of part of it.
+/// A flat list could only ever show sources, which hid most of the collection:
+/// extracts and cards are elements in their own right, with their own
+/// schedules, and the relationship between them is the thing worth seeing.
+/// There is one collection, forever, so the tree is the collection rather than
+/// a view of part of it.
+///
+/// The tree starts out in the shape extraction gives it — an extract under the
+/// text it was cut from — and the user can then file anything anywhere: move a
+/// row up or down, nest it under the row above, lift it back out, or drag it
+/// onto another element entirely. Filing never touches provenance, so an
+/// extract dragged across the collection still opens in the passage it came
+/// from.
 library;
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/documents/card.dart';
+import 'package:incremental_reader/features/browser/browser_providers.dart';
+import 'package:incremental_reader/features/browser/browser_tree_query.dart';
+import 'package:incremental_reader/features/browser/browser_view_model.dart';
+import 'package:incremental_reader/features/browser/element_content_query.dart';
+import 'package:incremental_reader/features/browser/import_sheet.dart';
 import 'package:incremental_reader/features/extract/extract_screen.dart';
 import 'package:incremental_reader/features/extract/extract_view_model.dart';
-import 'package:incremental_reader/features/library/element_content_query.dart';
-import 'package:incremental_reader/features/library/import_sheet.dart';
-import 'package:incremental_reader/features/library/library_providers.dart';
-import 'package:incremental_reader/features/library/library_tree_query.dart';
-import 'package:incremental_reader/features/library/library_view_model.dart';
+import 'package:incremental_reader/features/extract/formulation_commands.dart';
+import 'package:incremental_reader/features/extract/formulation_dialog.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
@@ -26,22 +37,23 @@ import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/element_type_badge.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
 /// Opens the knowledge tree.
-Future<void> openContents(BuildContext context, WidgetRef ref) async {
-  ref.invalidate(contentTreeProvider);
+Future<void> openBrowser(BuildContext context, WidgetRef ref) async {
+  ref.invalidate(browserTreeProvider);
   await Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
-      builder: (BuildContext context) => const ContentsScreen(),
+      builder: (BuildContext context) => const BrowserScreen(),
     ),
   );
 }
 
 /// The whole tree, rebuilt on demand.
-final FutureProvider<List<LibraryTreeNode>> contentTreeProvider =
-    FutureProvider<List<LibraryTreeNode>>(
-      (Ref ref) => ref.watch(libraryTreeQueryProvider).load(),
+final FutureProvider<List<BrowserTreeNode>> browserTreeProvider =
+    FutureProvider<List<BrowserTreeNode>>(
+      (Ref ref) => ref.watch(browserTreeQueryProvider).load(),
     );
 
 /// The body of one element, for the detail pane.
@@ -65,14 +77,14 @@ const double _kIndentStep = 26;
 /// expander of the row that owns that level.
 const double _kGuideOffset = 19;
 
-class ContentsScreen extends ConsumerStatefulWidget {
-  const ContentsScreen({super.key});
+class BrowserScreen extends ConsumerStatefulWidget {
+  const BrowserScreen({super.key});
 
   @override
-  ConsumerState<ContentsScreen> createState() => _ContentsScreenState();
+  ConsumerState<BrowserScreen> createState() => _BrowserScreenState();
 }
 
-class _ContentsScreenState extends ConsumerState<ContentsScreen> {
+class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   /// Refs whose children are showing.
   ///
   /// Opened all the way down the first time a tree arrives. What came out of
@@ -91,7 +103,7 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
   ///
   /// Mutating the set during build is safe because the build that follows is
   /// the one that reads it; there is no state to notify anybody about.
-  void _seedExpansion(List<LibraryTreeNode>? roots) {
+  void _seedExpansion(List<BrowserTreeNode>? roots) {
     if (_hasSeededExpansion || roots == null) return;
     _hasSeededExpansion = true;
     _expanded.addAll(_allRefs(roots));
@@ -99,21 +111,21 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<List<LibraryTreeNode>> tree = ref.watch(
-      contentTreeProvider,
+    final AsyncValue<List<BrowserTreeNode>> tree = ref.watch(
+      browserTreeProvider,
     );
     _seedExpansion(tree.valueOrNull);
 
     // Element commands report through the shared ViewModel, so this is where
     // a rename, an edit, or a failed dismiss becomes visible.
-    ref.listen<AsyncValue<LibraryUiState>>(libraryViewModelProvider, (
-      AsyncValue<LibraryUiState>? previous,
-      AsyncValue<LibraryUiState> next,
+    ref.listen<AsyncValue<BrowserUiState>>(browserViewModelProvider, (
+      AsyncValue<BrowserUiState>? previous,
+      AsyncValue<BrowserUiState> next,
     ) {
       final UiMessage? message = next.valueOrNull?.message;
       if (message == null) return;
       showToast(context, message.text, isError: message.isError);
-      ref.read(libraryViewModelProvider.notifier).shouldClearMessage();
+      ref.read(browserViewModelProvider.notifier).shouldClearMessage();
     });
 
     return CallbackShortcuts(
@@ -126,7 +138,7 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
 
   Widget _scaffold(
     BuildContext context,
-    AsyncValue<List<LibraryTreeNode>> tree,
+    AsyncValue<List<BrowserTreeNode>> tree,
   ) {
     return Scaffold(
       appBar: _appBar(context, tree),
@@ -139,76 +151,136 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
     );
   }
 
-  /// Import, search, and the two whole-tree expand controls.
+  /// Making things, search, and the two whole-tree expand controls.
   PreferredSizeWidget _appBar(
     BuildContext context,
-    AsyncValue<List<LibraryTreeNode>> tree,
+    AsyncValue<List<BrowserTreeNode>> tree,
   ) {
+    final bool isNarrow = isCompactWidth(context);
     return AppBar(
-      title: const Text('Contents'),
+      title: const Text('Browser'),
       actions: <Widget>[
-        TextButton.icon(
-          onPressed: () => _import(context),
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Import markdown'),
+        _NewElementMenu(
+          isNarrow: isNarrow,
+          // At the top of the bar the new element has no element to belong to,
+          // so it lands at the top of the tree. The same menu on a row files
+          // it under that row instead.
+          onSelected: (_NewElement choice) => _create(context, choice, null),
         ),
         IconButton(
           tooltip: 'Search (Ctrl+F)',
           onPressed: () => openSearch(context, ref),
           icon: const Icon(Icons.search),
         ),
-        IconButton(
-          tooltip: 'Expand everything',
-          onPressed: () => _expandAll(tree),
-          icon: const Icon(Icons.unfold_more),
-        ),
-        IconButton(
-          tooltip: 'Collapse everything',
-          onPressed: () => setState(_expanded.clear),
-          icon: const Icon(Icons.unfold_less),
-        ),
-        IconButton(
-          tooltip: 'Refresh',
-          onPressed: () => ref.invalidate(contentTreeProvider),
-          icon: const Icon(Icons.refresh),
-        ),
-        const SizedBox(width: 8),
+        // The two whole-tree controls and Refresh are housekeeping, not the
+        // reason the screen is open, so they are the ones that move into a
+        // menu when the bar runs out of room.
+        if (isNarrow)
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            icon: const Icon(Icons.more_vert),
+            onSelected: (String action) {
+              switch (action) {
+                case 'expand':
+                  _expandAll(tree);
+                case 'collapse':
+                  setState(_expanded.clear);
+                case 'refresh':
+                  ref.invalidate(browserTreeProvider);
+              }
+            },
+            itemBuilder: (BuildContext context) =>
+                const <PopupMenuEntry<String>>[
+                  PopupMenuItem<String>(
+                    value: 'expand',
+                    child: ListTile(
+                      leading: Icon(Icons.unfold_more),
+                      title: Text('Expand everything'),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'collapse',
+                    child: ListTile(
+                      leading: Icon(Icons.unfold_less),
+                      title: Text('Collapse everything'),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'refresh',
+                    child: ListTile(
+                      leading: Icon(Icons.refresh),
+                      title: Text('Refresh'),
+                    ),
+                  ),
+                ],
+          )
+        else ...<Widget>[
+          IconButton(
+            tooltip: 'Expand everything',
+            onPressed: () => _expandAll(tree),
+            icon: const Icon(Icons.unfold_more),
+          ),
+          IconButton(
+            tooltip: 'Collapse everything',
+            onPressed: () => setState(_expanded.clear),
+            icon: const Icon(Icons.unfold_less),
+          ),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: () => ref.invalidate(browserTreeProvider),
+            icon: const Icon(Icons.refresh),
+          ),
+          const SizedBox(width: 8),
+        ],
       ],
     );
   }
 
-  void _expandAll(AsyncValue<List<LibraryTreeNode>> tree) {
+  void _expandAll(AsyncValue<List<BrowserTreeNode>> tree) {
     setState(() {
       _expanded
         ..clear()
-        ..addAll(_allRefs(tree.valueOrNull ?? const <LibraryTreeNode>[]));
+        ..addAll(_allRefs(tree.valueOrNull ?? const <BrowserTreeNode>[]));
     });
   }
 
   /// The tree, with the detail pane beside it once something is selected.
-  Widget _treeAndDetail(List<LibraryTreeNode> roots) {
+  ///
+  /// A 420-pixel pane and a tree cannot share a phone's width, so on a narrow
+  /// window the pane takes the screen instead and its close button is the way
+  /// back to the tree.
+  Widget _treeAndDetail(List<BrowserTreeNode> roots) {
+    final bool hasRoomForBoth = !isCompactWidth(context);
+    final bool isPaneOpen = _selected != null;
     return Column(
       children: <Widget>[
-        _TypeFilter(
-          selected: _types,
-          onChanged: (Set<ElementType> types) => setState(() => _types = types),
-        ),
-        Expanded(
-          child: Row(
-            children: <Widget>[
-              Expanded(child: _buildBody(roots)),
-              if (_selected != null) _detailPane(),
-            ],
+        if (hasRoomForBoth || !isPaneOpen)
+          _TypeFilter(
+            selected: _types,
+            onChanged: (Set<ElementType> types) =>
+                setState(() => _types = types),
           ),
+        Expanded(
+          child: hasRoomForBoth
+              ? Row(
+                  children: <Widget>[
+                    Expanded(child: _buildBody(roots)),
+                    if (isPaneOpen) _detailPane(width: _kDetailPaneWidth),
+                  ],
+                )
+              : isPaneOpen
+              ? _detailPane(width: null)
+              : _buildBody(roots),
         ),
       ],
     );
   }
 
   /// A card has no screen of its own to open; it is reviewed, not read.
-  Widget _detailPane() {
+  Widget _detailPane({required double? width}) {
     return _ElementDetailPane(
       elementRef: _selected!,
+      width: width,
       onClose: () => setState(() => _selected = null),
       onOpen: _selected!.type == ElementType.card
           ? null
@@ -216,22 +288,109 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
     );
   }
 
-  /// Imports markdown and opens it, as the library screen used to.
-  Future<void> _import(BuildContext context) async {
-    final ImportRequest? request = await showImportSheet(context);
+  /// Makes a new element and files it where the user asked for it.
+  ///
+  /// [under] is the row the menu was opened on, or null when it was the one in
+  /// the app bar. Everything created here is filed under that row afterwards:
+  /// what a new element *belongs to* and where the user *keeps* it are two
+  /// different questions, and only the second one a menu can answer.
+  Future<void> _create(
+    BuildContext context,
+    _NewElement choice,
+    BrowserTreeNode? under,
+  ) async {
+    switch (choice) {
+      case _NewElement.writtenTopic:
+        await _createTopic(context, under, isWritten: true);
+      case _NewElement.importedTopic:
+        await _createTopic(context, under, isWritten: false);
+      case _NewElement.card:
+        await _createCards(context, under);
+    }
+  }
+
+  /// Writes or imports a topic, then opens it when it was imported.
+  ///
+  /// An imported chapter is something to start reading; a topic just written
+  /// by hand is already on screen in the dialog the user typed it into, so
+  /// opening the Reader on top of it would only be in the way.
+  Future<void> _createTopic(
+    BuildContext context,
+    BrowserTreeNode? under, {
+    required bool isWritten,
+  }) async {
+    final ImportRequest? request = isWritten
+        ? await showNewTopicSheet(context)
+        : await showImportSheet(context);
     if (request == null || !context.mounted) return;
-    final String? sourceId = await ref
-        .read(libraryViewModelProvider.notifier)
-        .importMarkdown(title: request.title, markdown: request.markdown);
-    ref.invalidate(contentTreeProvider);
-    if (sourceId == null || !context.mounted) return;
+
+    final BrowserViewModel model = ref.read(browserViewModelProvider.notifier);
+    final String? sourceId = await model.importMarkdown(
+      title: request.title,
+      markdown: request.markdown,
+    );
+    if (sourceId != null && under != null) {
+      await model.fileUnder(
+        ref_: ElementRef(id: sourceId, type: ElementType.source),
+        parentRef: under.ref,
+      );
+      setState(() => _expanded.add(under.ref));
+    }
+    ref.invalidate(browserTreeProvider);
+    if (sourceId == null || isWritten || !context.mounted) return;
     await openReader(
       context,
       ref,
       sourceId: sourceId,
       mode: ReaderMode.scheduled,
     );
-    ref.invalidate(contentTreeProvider);
+    ref.invalidate(browserTreeProvider);
+  }
+
+  /// Formulates cards straight into the tree.
+  Future<void> _createCards(
+    BuildContext context,
+    BrowserTreeNode? under,
+  ) async {
+    final List<CardDraft>? drafts = await showFormulationDialog(
+      context,
+      seedText: '',
+      existingCardCount: under?.children.length ?? 0,
+      parentNoun: under == null ? 'collection' : 'element',
+    );
+    if (drafts == null || !context.mounted) return;
+
+    final BrowserViewModel model = ref.read(browserViewModelProvider.notifier);
+    final List<ElementRef>? created = await model.createCards(
+      parent: _cardParentFor(under),
+      drafts: drafts,
+    );
+    if (created != null && under != null) {
+      for (final ElementRef card in created) {
+        await model.fileUnder(ref_: card, parentRef: under.ref);
+      }
+      setState(() => _expanded.add(under.ref));
+    }
+    ref.invalidate(browserTreeProvider);
+  }
+
+  /// What a new card is written *from*, which is not the same as where it is
+  /// filed.
+  ///
+  /// A card can only cite a topic or an extract, so a card added under another
+  /// card cites that card's own parent when there is one, and nothing when
+  /// there is not. It is still filed exactly where the user asked.
+  CardParent? _cardParentFor(BrowserTreeNode? under) {
+    final ElementRef? cited = switch (under?.ref.type) {
+      ElementType.source || ElementType.extract => under!.ref,
+      ElementType.card => under!.parentRef,
+      null => null,
+    };
+    return switch (cited?.type) {
+      ElementType.source => CardParent.source(cited!.id),
+      ElementType.extract => CardParent.extract(cited!.id),
+      ElementType.card || null => null,
+    };
   }
 
   /// Opens the screen that owns an element, for the work the pane cannot do.
@@ -255,12 +414,12 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
         return;
     }
     if (!mounted) return;
-    ref.invalidate(contentTreeProvider);
+    ref.invalidate(browserTreeProvider);
     ref.invalidate(elementContentProvider(elementRef));
   }
 
-  Future<void> _runAction(String action, LibraryTreeNode node) async {
-    final LibraryViewModel model = ref.read(libraryViewModelProvider.notifier);
+  Future<void> _runAction(String action, BrowserTreeNode node) async {
+    final BrowserViewModel model = ref.read(browserViewModelProvider.notifier);
     switch (action) {
       case 'open':
         // Browse, not a scheduled sitting. Opening something to look at it
@@ -287,14 +446,53 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
         if (await _confirmDelete(context, node.title)) {
           await model.deleteSource(node.ref.id);
         }
+      // The four moves. Each is filing and nothing else, so none of them
+      // needs a confirmation: the reverse move is one click away.
+      case 'move_up':
+        await model.moveUp(node.ref);
+      case 'move_down':
+        await model.moveDown(node.ref);
+      case 'nest':
+        await model.nestUnderPreviousSibling(node.ref);
+      case 'lift':
+        await model.liftOutOfParent(node.ref);
     }
-    ref.invalidate(contentTreeProvider);
+    ref.invalidate(browserTreeProvider);
   }
 
-  Widget _buildBody(List<LibraryTreeNode> roots) {
+  /// Files [moved] under [target], which is what a drop on a row means.
+  Future<void> _dropOnto(ElementRef moved, BrowserTreeNode target) async {
+    await ref
+        .read(browserViewModelProvider.notifier)
+        .fileUnder(ref_: moved, parentRef: target.ref);
+    if (!mounted) return;
+    setState(() => _expanded.add(target.ref));
+    ref.invalidate(browserTreeProvider);
+  }
+
+  /// Files [moved] directly above [target], among that row's own siblings.
+  Future<void> _dropAbove(ElementRef moved, BrowserTreeNode target) async {
+    await ref
+        .read(browserViewModelProvider.notifier)
+        .fileUnder(
+          ref_: moved,
+          parentRef: target.parentRef,
+          beforeRef: target.ref,
+        );
+    if (!mounted) return;
+    ref.invalidate(browserTreeProvider);
+  }
+
+  Widget _buildBody(List<BrowserTreeNode> roots) {
     final List<_TreeRow> rows = <_TreeRow>[];
-    for (final LibraryTreeNode root in roots) {
-      _flatten(root, 0, rows);
+    for (var index = 0; index < roots.length; index++) {
+      _flatten(
+        roots[index],
+        0,
+        rows,
+        isFirstAmongSiblings: index == 0,
+        isLastAmongSiblings: index == roots.length - 1,
+      );
     }
     if (rows.isEmpty) {
       return const Center(
@@ -322,9 +520,15 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
             ref,
             elementRef: rows[index].node.ref,
           );
-          ref.invalidate(contentTreeProvider);
+          ref.invalidate(browserTreeProvider);
         },
         onAction: (String action) => _runAction(action, rows[index].node),
+        onCreate: (_NewElement choice) =>
+            _create(context, choice, rows[index].node),
+        onDropOnto: (ElementRef moved) =>
+            unawaited(_dropOnto(moved, rows[index].node)),
+        onDropAbove: (ElementRef moved) =>
+            unawaited(_dropAbove(moved, rows[index].node)),
       ),
     );
   }
@@ -334,31 +538,65 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
   /// A filtered-out node still yields its children: hiding a source would
   /// otherwise hide every card underneath it, which is the opposite of what
   /// filtering to cards means.
-  void _flatten(LibraryTreeNode node, int depth, List<_TreeRow> rows) {
+  void _flatten(
+    BrowserTreeNode node,
+    int depth,
+    List<_TreeRow> rows, {
+    required bool isFirstAmongSiblings,
+    required bool isLastAmongSiblings,
+  }) {
     final bool matches = _types.isEmpty || _types.contains(node.ref.type);
-    if (matches) rows.add(_TreeRow(node: node, depth: depth));
+    if (matches) {
+      rows.add(
+        _TreeRow(
+          node: node,
+          depth: depth,
+          isFirstAmongSiblings: isFirstAmongSiblings,
+          isLastAmongSiblings: isLastAmongSiblings,
+        ),
+      );
+    }
     final bool shouldShowChildren =
         _expanded.contains(node.ref) || (!matches && _types.isNotEmpty);
     if (!shouldShowChildren) return;
-    for (final LibraryTreeNode child in node.children) {
-      _flatten(child, matches ? depth + 1 : depth, rows);
+    for (var index = 0; index < node.children.length; index++) {
+      _flatten(
+        node.children[index],
+        matches ? depth + 1 : depth,
+        rows,
+        isFirstAmongSiblings: index == 0,
+        isLastAmongSiblings: index == node.children.length - 1,
+      );
     }
   }
 
-  Iterable<ElementRef> _allRefs(List<LibraryTreeNode> nodes) sync* {
-    for (final LibraryTreeNode node in nodes) {
+  Iterable<ElementRef> _allRefs(List<BrowserTreeNode> nodes) sync* {
+    for (final BrowserTreeNode node in nodes) {
       yield node.ref;
       yield* _allRefs(node.children);
     }
   }
 }
 
-/// One visible line: a node and how deep it sits.
+/// One visible line: a node, how deep it sits, and which moves it has room
+/// for.
 @immutable
 final class _TreeRow {
-  const _TreeRow({required this.node, required this.depth});
-  final LibraryTreeNode node;
+  const _TreeRow({
+    required this.node,
+    required this.depth,
+    required this.isFirstAmongSiblings,
+    required this.isLastAmongSiblings,
+  });
+
+  final BrowserTreeNode node;
   final int depth;
+
+  /// Nothing above it in its own level, so it can neither rise nor nest.
+  final bool isFirstAmongSiblings;
+
+  /// Nothing below it in its own level, so it cannot sink further.
+  final bool isLastAmongSiblings;
 }
 
 class _TypeFilter extends StatelessWidget {
@@ -370,7 +608,9 @@ class _TypeFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-    child: Row(
+    child: Wrap(
+      spacing: 6,
+      runSpacing: 6,
       children: <Widget>[
         for (final (String label, Set<ElementType> types)
             in <(String, Set<ElementType>)>[
@@ -379,15 +619,11 @@ class _TypeFilter extends StatelessWidget {
               ('Extracts', <ElementType>{ElementType.extract}),
               ('Cards', <ElementType>{ElementType.card}),
             ])
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: FilterChip(
-              label: Text(label),
-              selected:
-                  selected.length == types.length &&
-                  selected.containsAll(types),
-              onSelected: (_) => onChanged(types),
-            ),
+          FilterChip(
+            label: Text(label),
+            selected:
+                selected.length == types.length && selected.containsAll(types),
+            onSelected: (_) => onChanged(types),
           ),
       ],
     ),
@@ -403,6 +639,9 @@ class _NodeRow extends StatelessWidget {
     required this.onToggle,
     required this.onPriority,
     required this.onAction,
+    required this.onCreate,
+    required this.onDropOnto,
+    required this.onDropAbove,
   });
 
   final _TreeRow row;
@@ -418,36 +657,91 @@ class _NodeRow extends StatelessWidget {
   final VoidCallback onPriority;
   final ValueChanged<String> onAction;
 
+  /// Makes a new element and files it under this row.
+  final ValueChanged<_NewElement> onCreate;
+
+  /// Something was dropped on this row: file it underneath.
+  final ValueChanged<ElementRef> onDropOnto;
+
+  /// Something was dropped in the gap above this row: file it here, beside
+  /// this row rather than inside it.
+  final ValueChanged<ElementRef> onDropAbove;
+
   @override
   Widget build(BuildContext context) {
-    final LibraryTreeNode node = row.node;
+    final BrowserTreeNode node = row.node;
     final bool hasChildren = node.children.isNotEmpty;
     final bool isDismissed =
         node.status == Sm20ElementStatus.dismissed ||
         node.lifecycle == ElementLifecycle.dismissed;
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          // One rule per level of ancestry, so a deep extract can be traced
-          // back to the article it came from without counting pixels. The
-          // gap between rows belongs to the card, not to the guides, or the
-          // rules would break into dashes down the page.
-          for (int level = 0; level < row.depth; level++) const _IndentGuide(),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: _card(node, hasChildren, isDismissed),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _DropAboveStrip(node: node, onDrop: onDropAbove),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              // One rule per level of ancestry, so a deep extract can be
+              // traced back to the article it came from without counting
+              // pixels. The gap between rows belongs to the card, not to the
+              // guides, or the rules would break into dashes down the page.
+              for (int level = 0; level < row.depth; level++)
+                const _IndentGuide(),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: _draggableCard(node, hasChildren, isDismissed),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  /// The row, both as something that can be picked up and as somewhere to drop.
+  ///
+  /// A long press starts the drag on every platform, mouse included: a plain
+  /// drag would fight the list's own scrolling, and on a phone that is the
+  /// gesture that would be lost.
+  Widget _draggableCard(
+    BrowserTreeNode node,
+    bool hasChildren,
+    bool isDismissed,
+  ) {
+    final Widget card = _card(node, hasChildren, isDismissed);
+    return LongPressDraggable<ElementRef>(
+      data: node.ref,
+      feedback: _DragLabel(title: node.title, type: node.ref.type),
+      childWhenDragging: Opacity(opacity: 0.35, child: card),
+      child: DragTarget<ElementRef>(
+        onWillAcceptWithDetails: (DragTargetDetails<ElementRef> details) =>
+            details.data != node.ref,
+        onAcceptWithDetails: (DragTargetDetails<ElementRef> details) =>
+            onDropOnto(details.data),
+        builder:
+            (
+              BuildContext context,
+              List<ElementRef?> candidates,
+              List<dynamic> rejected,
+            ) => candidates.isEmpty
+            ? card
+            : DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.accent, width: 2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: card,
+              ),
       ),
     );
   }
 
   /// One row of the tree: the expand arrow, the type badge, the title and
   /// preview, then the counts and the per-element commands.
-  Widget _card(LibraryTreeNode node, bool hasChildren, bool isDismissed) {
+  Widget _card(BrowserTreeNode node, bool hasChildren, bool isDismissed) {
     return Material(
       color: isSelected
           ? AppColors.accent.withValues(alpha: 0.10)
@@ -475,6 +769,7 @@ class _NodeRow extends StatelessWidget {
                 onPressed: onPriority,
                 icon: const Icon(Icons.low_priority, size: 17),
               ),
+              _NewElementMenu(isRowMenu: true, onSelected: onCreate),
               _actionMenu(node, isDismissed),
             ],
           ),
@@ -503,7 +798,7 @@ class _NodeRow extends StatelessWidget {
 
   /// A dismissed element keeps its place in the tree but is struck through:
   /// its content is still there, it is only out of the queue.
-  Widget _titleAndPreview(LibraryTreeNode node, bool isDismissed) {
+  Widget _titleAndPreview(BrowserTreeNode node, bool isDismissed) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -534,7 +829,11 @@ class _NodeRow extends StatelessWidget {
 
   /// Only a source can be opened, renamed, or deleted; an extract is reached
   /// through its parent and removed with it.
-  Widget _actionMenu(LibraryTreeNode node, bool isDismissed) {
+  ///
+  /// The moves sit in the same menu, below a divider: they are about where the
+  /// row is kept rather than what it is, and each is disabled when the row is
+  /// already at that edge of its level.
+  Widget _actionMenu(BrowserTreeNode node, bool isDismissed) {
     final bool isSource = node.ref.type == ElementType.source;
     return PopupMenuButton<String>(
       tooltip: 'Element actions',
@@ -557,9 +856,183 @@ class _NodeRow extends StatelessWidget {
           ),
         if (isSource)
           const PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: 'move_up',
+          enabled: !row.isFirstAmongSiblings,
+          child: const Text('Move up'),
+        ),
+        PopupMenuItem<String>(
+          value: 'move_down',
+          enabled: !row.isLastAmongSiblings,
+          child: const Text('Move down'),
+        ),
+        PopupMenuItem<String>(
+          value: 'nest',
+          enabled: !row.isFirstAmongSiblings,
+          child: const Text('Nest under the row above'),
+        ),
+        PopupMenuItem<String>(
+          value: 'lift',
+          enabled: node.parentRef != null,
+          child: const Text('Move out one level'),
+        ),
       ],
     );
   }
+}
+
+/// What the New menu can make.
+enum _NewElement {
+  /// A topic typed straight into the dialog.
+  writtenTopic,
+
+  /// A topic imported from a file or pasted in.
+  importedTopic,
+
+  /// One or more cards, through the same formulation dialog the Reader uses.
+  card,
+}
+
+/// The New menu, in the app bar and on every row.
+///
+/// Extracts are deliberately not here. An extract is a passage cut out of
+/// something, and it carries the exact range it was cut from; there is no such
+/// range to record for one typed into a menu, so extracts are still made by
+/// selecting text in the Reader.
+class _NewElementMenu extends StatelessWidget {
+  const _NewElementMenu({
+    required this.onSelected,
+    this.isNarrow = false,
+    this.isRowMenu = false,
+  });
+
+  final ValueChanged<_NewElement> onSelected;
+
+  /// A narrow window drops the button's label and keeps the icon.
+  final bool isNarrow;
+
+  /// A row's menu is smaller and unlabelled whatever the width.
+  final bool isRowMenu;
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<_NewElement>(
+    tooltip: isRowMenu ? 'New element here' : 'New',
+    onSelected: onSelected,
+    icon: isRowMenu || isNarrow
+        ? Icon(Icons.add, size: isRowMenu ? 17 : 24)
+        : null,
+    itemBuilder: (BuildContext context) => const <PopupMenuEntry<_NewElement>>[
+      PopupMenuItem<_NewElement>(
+        value: _NewElement.writtenTopic,
+        child: ListTile(
+          dense: true,
+          leading: Icon(Icons.article_outlined),
+          title: Text('Topic'),
+        ),
+      ),
+      PopupMenuItem<_NewElement>(
+        value: _NewElement.importedTopic,
+        child: ListTile(
+          dense: true,
+          leading: Icon(Icons.file_open_outlined),
+          title: Text('Topic from markdown'),
+        ),
+      ),
+      PopupMenuItem<_NewElement>(
+        value: _NewElement.card,
+        child: ListTile(
+          dense: true,
+          leading: Icon(Icons.style_outlined),
+          title: Text('Cards'),
+        ),
+      ),
+    ],
+    child: isRowMenu || isNarrow
+        ? null
+        : const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.add, size: 18),
+                SizedBox(width: 6),
+                Text('New'),
+              ],
+            ),
+          ),
+  );
+}
+
+/// What a dragged row looks like while it is in the air.
+class _DragLabel extends StatelessWidget {
+  const _DragLabel({required this.title, required this.type});
+
+  final String title;
+  final ElementType type;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    elevation: 4,
+    borderRadius: BorderRadius.circular(6),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      constraints: const BoxConstraints(maxWidth: 280),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.accent),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          ElementTypeBadge(type: type),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              title.isEmpty ? '(untitled)' : title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// The gap above a row, as somewhere to drop.
+///
+/// Dropping on a row files the dragged element *inside* it; dropping in the
+/// gap files it *beside* it, in front of that row. Without the gap there is no
+/// gesture for "put it back at this level", only ever deeper.
+class _DropAboveStrip extends StatelessWidget {
+  const _DropAboveStrip({required this.node, required this.onDrop});
+
+  final BrowserTreeNode node;
+  final ValueChanged<ElementRef> onDrop;
+
+  @override
+  Widget build(BuildContext context) => DragTarget<ElementRef>(
+    onWillAcceptWithDetails: (DragTargetDetails<ElementRef> details) =>
+        details.data != node.ref,
+    onAcceptWithDetails: (DragTargetDetails<ElementRef> details) =>
+        onDrop(details.data),
+    builder:
+        (
+          BuildContext context,
+          List<ElementRef?> candidates,
+          List<dynamic> rejected,
+        ) => SizedBox(
+          height: 8,
+          child: candidates.isEmpty
+              ? null
+              : const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 3),
+                  child: ColoredBox(color: AppColors.accent),
+                ),
+        ),
+  );
 }
 
 /// One vertical rule marking a level of nesting.
@@ -590,10 +1063,14 @@ class _ElementDetailPane extends ConsumerStatefulWidget {
     required this.elementRef,
     required this.onClose,
     required this.onOpen,
+    required this.width,
   });
 
   final ElementRef elementRef;
   final VoidCallback onClose;
+
+  /// How wide to draw. Null when the pane has the screen to itself.
+  final double? width;
 
   /// Opens the element's own screen, for what the pane deliberately cannot do.
   final VoidCallback? onOpen;
@@ -633,7 +1110,7 @@ class _ElementDetailPaneState extends ConsumerState<_ElementDetailPane> {
   }
 
   Future<void> _save(ElementContent content) async {
-    final LibraryViewModel model = ref.read(libraryViewModelProvider.notifier);
+    final BrowserViewModel model = ref.read(browserViewModelProvider.notifier);
     switch (content.ref.type) {
       case ElementType.extract:
         await model.editExtract(content.ref.id, _body.text);
@@ -648,7 +1125,7 @@ class _ElementDetailPaneState extends ConsumerState<_ElementDetailPane> {
     }
     if (!mounted) return;
     ref.invalidate(elementContentProvider(content.ref));
-    ref.invalidate(contentTreeProvider);
+    ref.invalidate(browserTreeProvider);
   }
 
   @override
@@ -657,7 +1134,7 @@ class _ElementDetailPaneState extends ConsumerState<_ElementDetailPane> {
       elementContentProvider(widget.elementRef),
     );
     return Container(
-      width: _kDetailPaneWidth,
+      width: widget.width,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(left: BorderSide(color: AppColors.border)),

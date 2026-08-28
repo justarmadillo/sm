@@ -7,6 +7,8 @@
 /// how the running app changes them too.
 library;
 
+import 'package:incremental_reader/features/browser/browser_command_runner.dart';
+import 'package:incremental_reader/features/browser/browser_tree_query.dart';
 import 'package:incremental_reader/features/daily_queue/mercy_command_runner.dart';
 import 'package:incremental_reader/features/daily_queue/queue_command_runner.dart';
 import 'package:incremental_reader/features/daily_queue/queue_query.dart';
@@ -158,13 +160,33 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
-  late final PriorityBrowserCommandRunner browser = PriorityBrowserCommandRunner(
+  late final PriorityBrowserCommandRunner browser =
+      PriorityBrowserCommandRunner(
+        learning: learning,
+        transfer: transfer,
+        transactions: transactions,
+        context: context,
+        clock: clock,
+        ids: FakeIdGenerator(prefix: 'browser-$operationPrefix'),
+        diagnostics: diagnostics,
+      );
+
+  /// The Browser's tree, and the moves that rearrange it.
+  ///
+  /// Named for filing rather than for the screen, because [browser] above is
+  /// SM20's priority browser and the two have nothing to do with each other.
+  late final BrowserTreeQuery browserTree = BrowserTreeQuery(
+    content: content,
+    learning: learning,
+  );
+
+  late final BrowserCommandRunner filing = BrowserCommandRunner(
+    tree: browserTree,
     learning: learning,
     transfer: transfer,
     transactions: transactions,
-    context: context,
     clock: clock,
-    ids: FakeIdGenerator(prefix: 'browser-$operationPrefix'),
+    ids: FakeIdGenerator(prefix: 'filing-$operationPrefix'),
     diagnostics: diagnostics,
   );
 
@@ -253,19 +275,14 @@ final class AppHarness {
       'review_events',
       'mercy_batches',
     ]) {
-      final rows = await database
-          .customSelect('SELECT * FROM $table')
-          .get();
+      final rows = await database.customSelect('SELECT * FROM $table').get();
       final serialized = <String>[
         for (final row in rows)
-          (row.data.entries.toList()
-                ..sort(
-                  (MapEntry<String, Object?> a, MapEntry<String, Object?> b) =>
-                      a.key.compareTo(b.key),
-                ))
-              .map(
-                (MapEntry<String, Object?> e) => '\${e.key}=\${e.value}',
-              )
+          (row.data.entries.toList()..sort(
+                (MapEntry<String, Object?> a, MapEntry<String, Object?> b) =>
+                    a.key.compareTo(b.key),
+              ))
+              .map((MapEntry<String, Object?> e) => '\${e.key}=\${e.value}')
               .join(','),
       ]..sort();
       buffer.writeln('$table: ${serialized.join(' | ')}');

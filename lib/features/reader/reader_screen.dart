@@ -15,10 +15,10 @@ import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dart';
 import 'package:incremental_reader/features/extract/extract_context_overlay.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
-import 'package:incremental_reader/features/library/library_view_model.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/features/reader/typography_controller.dart';
@@ -29,9 +29,10 @@ import 'package:incremental_reader/features/reader/widgets/reader_side_panel.dar
 import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
 import 'package:incremental_reader/features/reader/widgets/selection_toolbar.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
-/// Pushes the Reader for [sourceId] and refreshes the Library on return.
+/// Pushes the Reader for [sourceId] and refreshes the Browser on return.
 Future<void> openReader(
   BuildContext context,
   WidgetRef ref, {
@@ -50,7 +51,7 @@ Future<void> openReader(
       ),
     ),
   );
-  await ref.read(libraryViewModelProvider.notifier).refresh();
+  await ref.read(browserViewModelProvider.notifier).refresh();
 }
 
 /// Opens a source from the queue and reports whether a terminal action
@@ -88,6 +89,7 @@ class ReaderScreen extends ConsumerStatefulWidget {
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   final GlobalKey<ReaderViewState> _readerKey = GlobalKey<ReaderViewState>();
   final GlobalKey _surfaceKey = GlobalKey();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   ReaderSelectionController? _selection;
   bool _hasOpenedAtMarker = false;
 
@@ -262,8 +264,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       });
     }
 
+    // 280 pixels of panel beside a 360-pixel screen would leave no readable
+    // measure at all, so on a phone the same panel slides in over the text
+    // instead of taking a column of its own.
+    final bool hasRoomForDockedPanel = !isCompactWidth(context);
+
     return Scaffold(
+      key: _scaffoldKey,
       appBar: _appBar(context, state, model),
+      endDrawer: hasRoomForDockedPanel
+          ? null
+          : Drawer(child: _sidePanel(state)),
       body: CallbackShortcuts(
         bindings: _keyboardShortcuts(context, state, model),
         child: Focus(
@@ -304,7 +315,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         controller,
                       ),
                     ),
-                    if (_isPanelOpen) _sidePanel(state),
+                    if (hasRoomForDockedPanel && _isPanelOpen)
+                      _sidePanel(state),
                   ],
                 ),
               ),
@@ -345,6 +357,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     ReaderUiState state,
     ReaderViewModel model,
   ) {
+    final bool isPanelDocked = _isPanelOpen && !isCompactWidth(context);
     return AppBar(
       title: Text(state.source.title),
       actions: <Widget>[
@@ -362,12 +375,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           tooltip: 'Reading appearance',
         ),
         IconButton(
-          onPressed: () => setState(() => _isPanelOpen = !_isPanelOpen),
+          onPressed: _togglePanel,
           icon: Icon(
-            _isPanelOpen ? Icons.view_sidebar : Icons.view_sidebar_outlined,
+            isPanelDocked ? Icons.view_sidebar : Icons.view_sidebar_outlined,
           ),
-          color: _isPanelOpen ? AppColors.accent : null,
-          tooltip: _isPanelOpen
+          color: isPanelDocked ? AppColors.accent : null,
+          tooltip: isPanelDocked
               ? 'Hide outline and extracts'
               : 'Show outline and extracts',
         ),
@@ -480,19 +493,41 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     );
   }
 
-  /// The outline and extract list beside the document.
+  /// Shows the panel, in whichever form this window has room for.
+  void _togglePanel() {
+    if (isCompactWidth(context)) {
+      _scaffoldKey.currentState?.openEndDrawer();
+      return;
+    }
+    setState(() => _isPanelOpen = !_isPanelOpen);
+  }
+
+  /// The outline and extract list beside the document, or over it.
   Widget _sidePanel(ReaderUiState state) {
+    final bool isPanelInDrawer = isCompactWidth(context);
     return ReaderSidePanel(
+      // A drawer already gives the panel its width; docked, it has to ask
+      // for one or it would take the whole reading column.
+      width: isPanelInDrawer ? null : kReaderSidePanelWidth,
       document: state.document,
       extracts: state.extracts,
       tab: _panelTab,
       currentBlockId: _currentBlockId,
       focusedExtractId: _focusedExtractId,
       onTabChanged: (ReaderPanelTab next) => setState(() => _panelTab = next),
-      onGoToBlock: (String blockId) =>
-          unawaited(_animateToBlock(state.document, blockId)),
-      onGoToExtract: _goToExtract,
-      onClose: () => setState(() => _isPanelOpen = false),
+      // In a drawer the panel covers the text it is about to scroll to, so
+      // choosing a destination has to dismiss it; docked, it stays put.
+      onGoToBlock: (String blockId) {
+        if (isPanelInDrawer) Navigator.of(context).pop();
+        unawaited(_animateToBlock(state.document, blockId));
+      },
+      onGoToExtract: (Extract extract) {
+        if (isPanelInDrawer) Navigator.of(context).pop();
+        _goToExtract(extract);
+      },
+      onClose: () => isPanelInDrawer
+          ? Navigator.of(context).pop()
+          : setState(() => _isPanelOpen = false),
     );
   }
 
@@ -564,7 +599,7 @@ class _TypographyDialog extends ConsumerWidget {
     return AlertDialog(
       title: const Text('Reading appearance'),
       content: SizedBox(
-        width: 440,
+        width: dialogContentWidth(context, preferred: 440),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -659,34 +694,41 @@ class _StatusBar extends StatelessWidget {
       ),
       child: DefaultTextStyle.merge(
         style: const TextStyle(fontSize: 12, color: AppColors.muted),
-        child: Row(
-          children: <Widget>[
-            if (state.mode == ReaderMode.browse) ...<Widget>[
-              const _StatusPillButton(
-                text: 'Browsing',
-                color: AppColors.softMarker,
+        // Three pieces of status on one line is more than a phone fits, and
+        // none of them is droppable, so on a narrow window they wrap instead.
+        child: isCompactWidth(context)
+            ? Wrap(
+                spacing: 12,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: _statusParts(due),
+              )
+            : Row(
+                children: <Widget>[
+                  ..._statusParts(due).take(2),
+                  const Spacer(),
+                  ..._statusParts(due).skip(2),
+                ],
               ),
-              const SizedBox(width: 12),
-              const Text('Nothing here changes progress or scheduling'),
-            ] else ...<Widget>[
-              const _StatusPillButton(
-                text: 'Reading today',
-                color: AppColors.accent,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                state.marker == null
-                    ? 'No marker placed yet'
-                    : '${state.progressPercent.toStringAsFixed(0)}% processed',
-              ),
-            ],
-            const Spacer(),
-            Text('Repetitions ${state.topic.repetitionCount} · next $due'),
-          ],
-        ),
       ),
     );
   }
+
+  /// What mode this is, how far the reading has got, and when it returns.
+  List<Widget> _statusParts(Object due) => <Widget>[
+    if (state.mode == ReaderMode.browse) ...<Widget>[
+      const _StatusPillButton(text: 'Browsing', color: AppColors.softMarker),
+      const Text('Nothing here changes progress or scheduling'),
+    ] else ...<Widget>[
+      const _StatusPillButton(text: 'Reading today', color: AppColors.accent),
+      Text(
+        state.marker == null
+            ? 'No marker placed yet'
+            : '${state.progressPercent.toStringAsFixed(0)}% processed',
+      ),
+    ],
+    Text('Repetitions ${state.topic.repetitionCount} · next $due'),
+  ];
 }
 
 class _StatusPillButton extends StatelessWidget {
@@ -809,46 +851,72 @@ class _ActionBar extends StatelessWidget {
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
-      child: ListenableBuilder(
-        listenable: controller,
-        builder: (BuildContext context, Widget? child) => Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                _hintFor(controller),
-                style: const TextStyle(fontSize: 12, color: AppColors.muted),
-              ),
-            ),
-            OutlinedButton(
-              onPressed:
-                  state.canCommitProgress &&
-                      !state.isBusy &&
-                      controller.canExtract
-                  ? onExtract
-                  : null,
-              child: const Text('Extract'),
-            ),
-            const SizedBox(width: 6),
-            if (state.canUndoEdit) ..._undoEditButton(),
-            if (state.canCommitProgress) ..._progressButtons(context),
-          ],
+      // The bar is the last thing above the Android gesture strip, so it has
+      // to give that strip its own space or Done sits under the swipe area.
+      child: SafeArea(
+        top: false,
+        child: ListenableBuilder(
+          listenable: controller,
+          builder: (BuildContext context, Widget? child) =>
+              isCompactWidth(context)
+              ? _hintAboveButtons(context)
+              : _oneLine(context),
         ),
       ),
     );
   }
 
+  /// Wide window: the hint reads to the left of the buttons.
+  Widget _oneLine(BuildContext context) => Row(
+    children: <Widget>[
+      Expanded(child: _hint()),
+      _buttons(context),
+    ],
+  );
+
+  /// Narrow window: six buttons and a sentence do not share a line, so the
+  /// sentence goes above and the buttons take as many rows as they need.
+  Widget _hintAboveButtons(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      _hint(),
+      const SizedBox(height: 8),
+      Align(alignment: Alignment.centerRight, child: _buttons(context)),
+    ],
+  );
+
+  Widget _hint() => Text(
+    _hintFor(controller),
+    style: const TextStyle(fontSize: 12, color: AppColors.muted),
+  );
+
+  Widget _buttons(BuildContext context) => Wrap(
+    spacing: 6,
+    runSpacing: 6,
+    alignment: WrapAlignment.end,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: <Widget>[
+      OutlinedButton(
+        onPressed:
+            state.canCommitProgress && !state.isBusy && controller.canExtract
+            ? onExtract
+            : null,
+        child: const Text('Extract'),
+      ),
+      if (state.canUndoEdit) _undoEditButton(),
+      if (state.canCommitProgress) ..._progressButtons(context),
+    ],
+  );
+
   /// Undoing an edit is a text operation, not a scheduling one, so it sits
   /// with the content actions, never touches the due date, and stays
   /// available in browse mode alongside the edit itself. It appends the
   /// reverse splice rather than rewinding.
-  List<Widget> _undoEditButton() => <Widget>[
-    TextButton.icon(
-      onPressed: state.isBusy ? null : () => unawaited(model.undoEdit()),
-      icon: const Icon(Icons.undo, size: 15),
-      label: const Text('Undo edit'),
-    ),
-    const SizedBox(width: 6),
-  ];
+  Widget _undoEditButton() => TextButton.icon(
+    onPressed: state.isBusy ? null : () => unawaited(model.undoEdit()),
+    icon: const Icon(Icons.undo, size: 15),
+    label: const Text('Undo edit'),
+  );
 
   /// The commands that move the schedule, so they appear only when this
   /// screen is allowed to record progress.
@@ -862,17 +930,14 @@ class _ActionBar extends StatelessWidget {
       onPressed: state.isBusy ? null : onFormulate,
       child: const Text('Formulate'),
     ),
-    const SizedBox(width: 6),
     TextButton(
       onPressed: state.isBusy ? null : model.dismiss,
       child: const Text('Dismiss source'),
     ),
-    const SizedBox(width: 6),
     OutlinedButton(
       onPressed: state.isBusy ? null : model.later,
       child: const Text('Later today'),
     ),
-    const SizedBox(width: 6),
     OutlinedButton(
       onPressed: state.isBusy
           ? null
@@ -882,7 +947,6 @@ class _ActionBar extends StatelessWidget {
             },
       child: const Text('Postpone…'),
     ),
-    const SizedBox(width: 6),
     FilledButton(
       onPressed: state.isBusy ? null : model.done,
       child: const Text('Done'),
@@ -918,7 +982,7 @@ Future<int?> _promptForDays(BuildContext context) async {
           return AlertDialog(
             title: const Text('Postpone by'),
             content: SizedBox(
-              width: 320,
+              width: dialogContentWidth(context, preferred: 320),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,

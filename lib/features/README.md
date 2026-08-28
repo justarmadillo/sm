@@ -4,7 +4,7 @@ If you can point at it in the running app, its code is in one of these folders.
 
 | Folder | The screen | What it does |
 |---|---|---|
-| `library/` | Contents | the knowledge tree, and importing a document |
+| `browser/` | Browser | the knowledge tree: making elements, and filing them |
 | `reader/` | Reader | reading a document and making extracts from it |
 | `extract/` | Extract | working one extract over, turning it into cards |
 | `review/` | Review | showing a card, revealing it, grading it |

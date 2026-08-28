@@ -1,9 +1,12 @@
 /// The user's count-based study session, mixing cards and topics.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/features/browser/browser_screen.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/features/daily_queue/queue_query.dart';
 import 'package:incremental_reader/features/daily_queue/queue_view_model.dart';
@@ -12,7 +15,6 @@ import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dar
 import 'package:incremental_reader/features/diagnostics/diagnostics_screen.dart';
 import 'package:incremental_reader/features/extract/extract_screen.dart';
 import 'package:incremental_reader/features/extract/extract_view_model.dart';
-import 'package:incremental_reader/features/library/library_screen.dart';
 import 'package:incremental_reader/features/priority/priority_browser_screen.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
@@ -25,6 +27,7 @@ import 'package:incremental_reader/scheduling/mercy/mercy.dart';
 import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/element_type_badge.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
 Future<void> openStudyQueue(BuildContext context, WidgetRef ref) async {
@@ -102,17 +105,33 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
   /// Everything is disabled while a route is opening, so a second tap cannot
   /// push the same screen twice.
   PreferredSizeWidget _appBar(BuildContext context, QueueViewModel model) {
+    // Six destinations do not fit beside a title on a phone. The two the
+    // session itself needs stay on the bar; the rest move into a menu, in the
+    // same order they had, so the wide layout is still the readable one.
+    final bool isNarrow = isCompactWidth(context);
     return AppBar(
       title: const Text('Study'),
       actions: <Widget>[
-        TextButton.icon(
-          onPressed: _isOpeningRoutes
-              ? null
-              : () => _openThenRefresh(model, () => openContents(context, ref)),
-          icon: const Icon(Icons.account_tree_outlined, size: 18),
-          label: const Text('Contents'),
-        ),
-        const SizedBox(width: 4),
+        if (isNarrow)
+          IconButton(
+            onPressed: _isOpeningRoutes
+                ? null
+                : () =>
+                      _openThenRefresh(model, () => openBrowser(context, ref)),
+            icon: const Icon(Icons.account_tree_outlined),
+            tooltip: 'Browser',
+          )
+        else ...<Widget>[
+          TextButton.icon(
+            onPressed: _isOpeningRoutes
+                ? null
+                : () =>
+                      _openThenRefresh(model, () => openBrowser(context, ref)),
+            icon: const Icon(Icons.account_tree_outlined, size: 18),
+            label: const Text('Browser'),
+          ),
+          const SizedBox(width: 4),
+        ],
         IconButton(
           // Undo lives here rather than on the review screen: that screen
           // closes the moment a grade commits, and the session is what the
@@ -121,36 +140,51 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
           icon: const Icon(Icons.undo),
           tooltip: 'Undo last grade (Ctrl+Z)',
         ),
-        IconButton(
-          onPressed: _isOpeningRoutes ? null : model.refresh,
-          icon: const Icon(Icons.refresh),
-          tooltip: 'Refresh queue',
-        ),
-        IconButton(
-          onPressed: _isOpeningRoutes
-              ? null
-              : () => _openThenRefresh(
-                  model,
-                  () => openPriorityBrowser(context, ref),
-                ),
-          icon: const Icon(Icons.low_priority),
-          tooltip: 'Priority queue',
-        ),
-        IconButton(
-          onPressed: _isOpeningRoutes
-              ? null
-              : () => openDiagnostics(context, ref),
-          icon: const Icon(Icons.insights_outlined),
-          tooltip: 'Diagnostics',
-        ),
-        IconButton(
-          onPressed: _isOpeningRoutes
-              ? null
-              : () => _openThenRefresh(model, () => openSettings(context, ref)),
-          icon: const Icon(Icons.settings_outlined),
-          tooltip: 'Settings',
-        ),
-        const SizedBox(width: 8),
+        if (isNarrow)
+          _MoreDestinationsMenu(
+            enabled: !_isOpeningRoutes,
+            onRefresh: model.refresh,
+            onPriorityQueue: () => _openThenRefresh(
+              model,
+              () => openPriorityBrowser(context, ref),
+            ),
+            onDiagnostics: () => openDiagnostics(context, ref),
+            onSettings: () =>
+                _openThenRefresh(model, () => openSettings(context, ref)),
+          )
+        else ...<Widget>[
+          IconButton(
+            onPressed: _isOpeningRoutes ? null : model.refresh,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh queue',
+          ),
+          IconButton(
+            onPressed: _isOpeningRoutes
+                ? null
+                : () => _openThenRefresh(
+                    model,
+                    () => openPriorityBrowser(context, ref),
+                  ),
+            icon: const Icon(Icons.low_priority),
+            tooltip: 'Priority queue',
+          ),
+          IconButton(
+            onPressed: _isOpeningRoutes
+                ? null
+                : () => openDiagnostics(context, ref),
+            icon: const Icon(Icons.insights_outlined),
+            tooltip: 'Diagnostics',
+          ),
+          IconButton(
+            onPressed: _isOpeningRoutes
+                ? null
+                : () =>
+                      _openThenRefresh(model, () => openSettings(context, ref)),
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+          ),
+          const SizedBox(width: 8),
+        ],
       ],
     );
   }
@@ -237,7 +271,11 @@ class _QueueBody extends StatelessWidget {
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 820),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 60),
+        // Tighter margins on a phone: 24 on each side of a 360-pixel screen
+        // is a sixth of the width spent before the first word.
+        padding: isCompactWidth(context)
+            ? const EdgeInsets.fromLTRB(14, 16, 14, 60)
+            : const EdgeInsets.fromLTRB(24, 24, 24, 60),
         children: <Widget>[
           Row(
             children: <Widget>[
@@ -282,6 +320,76 @@ class _QueueBody extends StatelessWidget {
   );
 }
 
+/// The destinations that do not fit on a phone's app bar.
+///
+/// A menu rather than a second row of icons: the bar is already the only
+/// place these live, and a row that wraps would push the queue itself down
+/// the screen on every rebuild.
+class _MoreDestinationsMenu extends StatelessWidget {
+  const _MoreDestinationsMenu({
+    required this.enabled,
+    required this.onRefresh,
+    required this.onPriorityQueue,
+    required this.onDiagnostics,
+    required this.onSettings,
+  });
+
+  final bool enabled;
+  final Future<void> Function() onRefresh;
+  final Future<void> Function() onPriorityQueue;
+  final Future<void> Function() onDiagnostics;
+  final Future<void> Function() onSettings;
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<String>(
+    enabled: enabled,
+    tooltip: 'More',
+    icon: const Icon(Icons.more_vert),
+    onSelected: (String destination) {
+      switch (destination) {
+        case 'refresh':
+          unawaited(onRefresh());
+        case 'priority':
+          unawaited(onPriorityQueue());
+        case 'diagnostics':
+          unawaited(onDiagnostics());
+        case 'settings':
+          unawaited(onSettings());
+      }
+    },
+    itemBuilder: (BuildContext context) => const <PopupMenuEntry<String>>[
+      PopupMenuItem<String>(
+        value: 'refresh',
+        child: ListTile(
+          leading: Icon(Icons.refresh),
+          title: Text('Refresh queue'),
+        ),
+      ),
+      PopupMenuItem<String>(
+        value: 'priority',
+        child: ListTile(
+          leading: Icon(Icons.low_priority),
+          title: Text('Priority queue'),
+        ),
+      ),
+      PopupMenuItem<String>(
+        value: 'diagnostics',
+        child: ListTile(
+          leading: Icon(Icons.insights_outlined),
+          title: Text('Diagnostics'),
+        ),
+      ),
+      PopupMenuItem<String>(
+        value: 'settings',
+        child: ListTile(
+          leading: Icon(Icons.settings_outlined),
+          title: Text('Settings'),
+        ),
+      ),
+    ],
+  );
+}
+
 /// SM20's current queue stage and its type counts.
 class _LoadPanel extends StatelessWidget {
   const _LoadPanel({
@@ -304,46 +412,69 @@ class _LoadPanel extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Wrap(
-              spacing: 20,
-              runSpacing: 6,
+      // Counts and bulk actions sit side by side while there is room for
+      // both, and stack once there is not: three labelled buttons and four
+      // chips on one line is what overflows first on a phone.
+      child: isCompactWidth(context)
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                _StageBadge(lane: state.projection.lane),
-                _CounterChip(label: 'due', value: '${counters.dueTotal}'),
-                _CounterChip(label: 'items', value: '${counters.dueCards}'),
-                _CounterChip(label: 'topics', value: '${counters.dueTopics}'),
+                _counters(state, counters),
+                const SizedBox(height: 10),
+                _bulkActions(context),
+              ],
+            )
+          : Row(
+              children: <Widget>[
+                Expanded(child: _counters(state, counters)),
+                _bulkActions(context),
               ],
             ),
-          ),
-          TextButton.icon(
-            onPressed: isRunning || state.isBusy
-                ? null
-                : () => _confirmSmartPostpone(context),
-            icon: const Icon(Icons.schedule_send, size: 16),
-            label: const Text('Smart Postpone'),
-          ),
-          TextButton.icon(
-            onPressed: isRunning || state.isBusy
-                ? null
-                : () => _confirmMercy(context),
-            icon: const Icon(Icons.event_repeat, size: 16),
-            label: const Text('Mercy'),
-          ),
-          // Always offered rather than hidden behind a query: a bulk calendar
-          // move the user cannot find the reverse of is not really reversible.
-          TextButton.icon(
-            onPressed: isRunning || state.isBusy ? null : model.undoMercy,
-            icon: const Icon(Icons.undo, size: 16),
-            label: const Text('Undo Mercy'),
-          ),
-          _LearnMenu(model: model, enabled: !(isRunning || state.isBusy)),
-        ],
-      ),
     );
   }
+
+  /// Which stage the queue is in, and how much of each kind is due.
+  Widget _counters(QueueUiState state, QueueCounters counters) => Wrap(
+    spacing: 20,
+    runSpacing: 6,
+    children: <Widget>[
+      _StageBadge(lane: state.projection.lane),
+      _CounterChip(label: 'due', value: '${counters.dueTotal}'),
+      _CounterChip(label: 'items', value: '${counters.dueCards}'),
+      _CounterChip(label: 'topics', value: '${counters.dueTopics}'),
+    ],
+  );
+
+  /// The commands that move a whole day's work at once.
+  Widget _bulkActions(BuildContext context) => Wrap(
+    spacing: 4,
+    runSpacing: 4,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: <Widget>[
+      TextButton.icon(
+        onPressed: isRunning || state.isBusy
+            ? null
+            : () => _confirmSmartPostpone(context),
+        icon: const Icon(Icons.schedule_send, size: 16),
+        label: const Text('Smart Postpone'),
+      ),
+      TextButton.icon(
+        onPressed: isRunning || state.isBusy
+            ? null
+            : () => _confirmMercy(context),
+        icon: const Icon(Icons.event_repeat, size: 16),
+        label: const Text('Mercy'),
+      ),
+      // Always offered rather than hidden behind a query: a bulk calendar
+      // move the user cannot find the reverse of is not really reversible.
+      TextButton.icon(
+        onPressed: isRunning || state.isBusy ? null : model.undoMercy,
+        icon: const Icon(Icons.undo, size: 16),
+        label: const Text('Undo Mercy'),
+      ),
+      _LearnMenu(model: model, enabled: !(isRunning || state.isBusy)),
+    ],
+  );
 
   /// Mercy is a two-step conversation: propose, then confirm the proposal.
   ///
@@ -427,7 +558,7 @@ class _LoadPanel extends StatelessWidget {
       builder: (BuildContext context) => AlertDialog(
         title: const Text('Apply this plan?'),
         content: SizedBox(
-          width: 420,
+          width: dialogContentWidth(context, preferred: 420),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -701,27 +832,34 @@ class _QueueEmpty extends StatelessWidget {
   Widget build(BuildContext context) {
     final int completed = state.completedThisSession;
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const Icon(
-            Icons.check_circle_outline,
-            size: 48,
-            color: AppColors.accent,
-          ),
-          const SizedBox(height: 14),
-          Text(
-            completed == 0 ? 'Nothing is due right now' : 'Queue complete',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            completed == 0
-                ? 'New reading and reviews will appear when eligible.'
-                : '$completed item${completed == 1 ? '' : 's'} completed.',
-            style: const TextStyle(color: AppColors.muted),
-          ),
-        ],
+      child: Padding(
+        // Room to breathe at the edges: on a phone the sentence below runs
+        // the full width of the screen without it.
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(
+              Icons.check_circle_outline,
+              size: 48,
+              color: AppColors.accent,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              completed == 0 ? 'Nothing is due right now' : 'Queue complete',
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              completed == 0
+                  ? 'New reading and reviews will appear when eligible.'
+                  : '$completed item${completed == 1 ? '' : 's'} completed.',
+              style: const TextStyle(color: AppColors.muted),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

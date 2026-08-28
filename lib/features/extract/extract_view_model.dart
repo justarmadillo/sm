@@ -8,10 +8,10 @@ import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/extract/extract_commands.dart';
 import 'package:incremental_reader/features/extract/extract_providers.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
-import 'package:incremental_reader/features/library/library_view_model.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/reader_providers.dart';
 import 'package:incremental_reader/scheduling/element.dart';
@@ -192,7 +192,7 @@ final class ExtractViewModel
   ///
   /// Allowed while browsing, unlike everything else here: correcting the words
   /// is not processing the element, and it is the whole point of opening an
-  /// extract from the Contents tree. [ExtractUiState.canEdit] still applies —
+  /// extract from the Browser tree. [ExtractUiState.canEdit] still applies —
   /// nested extracts hold coordinates into this text.
   Future<void> edit(String markdown) async {
     final current = state.valueOrNull;

@@ -1,4 +1,4 @@
-/// Runs every command the Reader and the Library can issue.
+/// Runs every command the Reader and the Browser can issue.
 ///
 /// One runner owns validation, transaction scope, the scheduling call,
 /// persistence, and the emitted events — in that order, for every command.

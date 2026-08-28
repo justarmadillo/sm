@@ -351,6 +351,40 @@ void main() {
       expect(resolved.range.matches(resolved.markdown), isTrue);
     });
 
+    testWidgets('a long press selects a word, and holding on extends it', (
+      WidgetTester tester,
+    ) async {
+      final document = Document.parse(sourceId: 's', markdown: _shortMarkdown);
+      final controller = ReaderSelectionController(document);
+      addTearDown(controller.dispose);
+      await pumpReader(tester, document, controller);
+
+      final paragraph = find.text(
+        'The second paragraph is plain and easy to select from end to end.',
+        findRichText: true,
+      );
+      final box = tester.getRect(paragraph);
+      // A finger drag scrolls, so touch selection begins with a long press.
+      final gesture = await tester.startGesture(
+        Offset(box.left + 1, box.top + 8),
+        kind: PointerDeviceKind.touch,
+      );
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      await gesture.moveTo(Offset(box.right - 1, box.bottom - 8));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      final resolved = controller.resolveSelection();
+      expect(resolved, isNotNull);
+      expect(
+        resolved!.markdown,
+        'The second paragraph is plain and easy to select from end to end.',
+      );
+      expect(document.isSameBlock(resolved.range), isTrue);
+      expect(resolved.range.matches(resolved.markdown), isTrue);
+    });
+
     testWidgets('a drag across blocks keeps the separators in the source', (
       WidgetTester tester,
     ) async {

@@ -20,6 +20,7 @@ import 'package:incremental_reader/scheduling/postpone/sm20_advance.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/element_type_badge.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
 /// Opens the browser.
@@ -338,47 +339,71 @@ class _FilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-    child: Row(
-      children: <Widget>[
-        Text(
-          '${state.entries.length} elements',
-          style: const TextStyle(fontSize: 13, color: AppColors.muted),
-        ),
-        const Spacer(),
-        TextButton.icon(
-          onPressed: state.isBusy || state.entries.isEmpty
-              ? null
-              : () => _confirmSmartPostpone(context),
-          icon: const Icon(Icons.schedule_send, size: 16),
-          label: const Text('Smart Postpone these'),
-        ),
-        TextButton.icon(
-          onPressed: state.isBusy || state.entries.isEmpty
-              ? null
-              : () => _promptAdvance(context),
-          icon: const Icon(Icons.fast_forward, size: 16),
-          label: const Text('Advance these'),
-        ),
-        for (final (String label, Set<ElementType> types)
-            in <(String, Set<ElementType>)>[
-              ('All', <ElementType>{}),
-              (
-                'Topics',
-                <ElementType>{ElementType.source, ElementType.extract},
+    // Two labelled buttons and three chips need more than a phone's width
+    // beside a count, so there they wrap onto their own lines underneath it.
+    child: isCompactWidth(context)
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _countLine(),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: <Widget>[..._bulkActions(context), ..._typeChips()],
               ),
-              ('Cards', <ElementType>{ElementType.card}),
-            ])
-          Padding(
-            padding: const EdgeInsets.only(left: 6),
-            child: FilterChip(
-              label: Text(label),
-              selected: _areSetsEqual(state.types, types),
-              onSelected: (_) => model.filterTo(types),
-            ),
+            ],
+          )
+        : Row(
+            children: <Widget>[
+              _countLine(),
+              const Spacer(),
+              ..._bulkActions(context),
+              for (final Widget chip in _typeChips())
+                Padding(padding: const EdgeInsets.only(left: 6), child: chip),
+            ],
           ),
-      ],
-    ),
   );
+
+  /// How many rows the current filter is showing.
+  Widget _countLine() => Text(
+    '${state.entries.length} elements',
+    style: const TextStyle(fontSize: 13, color: AppColors.muted),
+  );
+
+  /// The two commands that act on every row on screen at once.
+  List<Widget> _bulkActions(BuildContext context) => <Widget>[
+    TextButton.icon(
+      onPressed: state.isBusy || state.entries.isEmpty
+          ? null
+          : () => _confirmSmartPostpone(context),
+      icon: const Icon(Icons.schedule_send, size: 16),
+      label: const Text('Smart Postpone these'),
+    ),
+    TextButton.icon(
+      onPressed: state.isBusy || state.entries.isEmpty
+          ? null
+          : () => _promptAdvance(context),
+      icon: const Icon(Icons.fast_forward, size: 16),
+      label: const Text('Advance these'),
+    ),
+  ];
+
+  /// Which kinds of element the list is narrowed to.
+  List<Widget> _typeChips() => <Widget>[
+    for (final (String label, Set<ElementType> types)
+        in <(String, Set<ElementType>)>[
+          ('All', <ElementType>{}),
+          ('Topics', <ElementType>{ElementType.source, ElementType.extract}),
+          ('Cards', <ElementType>{ElementType.card}),
+        ])
+      FilterChip(
+        label: Text(label),
+        selected: _areSetsEqual(state.types, types),
+        onSelected: (_) => model.filterTo(types),
+      ),
+  ];
 
   /// Advance over exactly the rows the browser is showing.
   Future<void> _promptAdvance(BuildContext context) async {
@@ -440,30 +465,72 @@ class _ElementRow extends ConsumerWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
-        child: Row(
-          children: <Widget>[
-            _dragHandle(),
-            _percentCell(),
-            _typeBadgeCell(),
-            const SizedBox(width: 8),
-            Expanded(child: _titleAndPreview()),
-            _Cell(width: _kIntervalWidth, text: '${entry.intervalDays}'),
-            _Cell(width: _kCountWidth, text: '${entry.repetitions}'),
-            _Cell(width: _kCountWidth, text: '${entry.lapses}'),
-            _Cell(
-              width: _kDateWidth,
-              text: entry.lastRepetition?.toString() ?? '—',
-            ),
-            _Cell(width: _kDateWidth, text: entry.nextRepetition.toString()),
-            SizedBox(
-              width: _kActionsWidth,
-              child: _actionButtons(context, ref),
-            ),
-          ],
-        ),
+        child: isCompactWidth(context)
+            ? _stackedRow(context, ref)
+            : _columnedRow(context, ref),
       ),
     );
   }
+
+  /// The desktop shape: every measurement gets a column of its own, under the
+  /// heading that sorts by it.
+  Widget _columnedRow(BuildContext context, WidgetRef ref) => Row(
+    children: <Widget>[
+      _dragHandle(),
+      _percentCell(),
+      _typeBadgeCell(),
+      const SizedBox(width: 8),
+      Expanded(child: _titleAndPreview()),
+      _Cell(width: _kIntervalWidth, text: '${entry.intervalDays}'),
+      _Cell(width: _kCountWidth, text: '${entry.repetitions}'),
+      _Cell(width: _kCountWidth, text: '${entry.lapses}'),
+      _Cell(width: _kDateWidth, text: entry.lastRepetition?.toString() ?? '—'),
+      _Cell(width: _kDateWidth, text: entry.nextRepetition.toString()),
+      SizedBox(width: _kActionsWidth, child: _actionButtons(context, ref)),
+    ],
+  );
+
+  /// The phone shape. The five measurement columns need 324 pixels before the
+  /// title is given any, so they become one labelled line underneath instead:
+  /// unreadably narrow columns would be worse than a sentence.
+  Widget _stackedRow(BuildContext context, WidgetRef ref) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      Row(
+        children: <Widget>[
+          _dragHandle(),
+          _percentCell(),
+          _typeBadgeCell(),
+          const SizedBox(width: 8),
+          Expanded(child: _titleAndPreview()),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Row(
+        children: <Widget>[
+          const SizedBox(width: _kHandleWidth),
+          Expanded(child: _measurementLine()),
+          // The action row sizes itself to its four buttons, so it needs the
+          // same box here that the wide layout's column gives it.
+          SizedBox(width: _kActionsWidth, child: _actionButtons(context, ref)),
+        ],
+      ),
+    ],
+  );
+
+  /// The same five numbers the columns carry, named rather than positioned.
+  Widget _measurementLine() => Text(
+    <String>[
+      'interval ${entry.intervalDays}d',
+      'reps ${entry.repetitions}',
+      'lapses ${entry.lapses}',
+      'last ${entry.lastRepetition?.toString() ?? '—'}',
+      'next ${entry.nextRepetition}',
+    ].join('  ·  '),
+    maxLines: 2,
+    overflow: TextOverflow.ellipsis,
+    style: const TextStyle(fontSize: 11, color: AppColors.muted),
+  );
 
   /// A blank of the same width when the row cannot be dragged, so every row
   /// stays aligned whichever sort is active.
@@ -634,7 +701,7 @@ class _PriorityBatchDialogState extends State<_PriorityBatchDialog> {
   Widget build(BuildContext context) => AlertDialog(
     title: const Text('Batch priority'),
     content: SizedBox(
-      width: 460,
+      width: dialogContentWidth(context, preferred: 460),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -840,7 +907,7 @@ class _AdvanceDialogState extends State<_AdvanceDialog> {
   Widget build(BuildContext context) => AlertDialog(
     title: const Text('Advance'),
     content: SizedBox(
-      width: 380,
+      width: dialogContentWidth(context, preferred: 380),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -935,7 +1002,7 @@ Future<double?> _promptForDouble(
           return AlertDialog(
             title: Text(title),
             content: SizedBox(
-              width: 340,
+              width: dialogContentWidth(context, preferred: 340),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1002,7 +1069,7 @@ Future<int?> _promptForSpacing(BuildContext context) async {
           return AlertDialog(
             title: const Text('Every which element?'),
             content: SizedBox(
-              width: 340,
+              width: dialogContentWidth(context, preferred: 340),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1098,63 +1165,128 @@ class _HeaderRow extends StatelessWidget {
   final PriorityBrowserViewModel model;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    // 16 for the list's padding, 6 for the row card's own padding, plus the
-    // one-pixel border the card draws.
-    padding: const EdgeInsets.fromLTRB(23, 6, 23, 2),
-    child: Row(
-      children: <Widget>[
-        // Every spacer below is the same constant the row uses, so the
-        // headings sit over the columns they name by construction rather than
-        // by two layouts happening to agree.
-        const SizedBox(width: _kHandleWidth),
-        _ColumnHeader(
-          state: state,
-          model: model,
-          sort: PriorityBrowserSort.priority,
-          width: _kPercentWidth,
-          align: TextAlign.left,
-        ),
-        const SizedBox(width: _kBadgeWidth + 8),
-        Expanded(
-          child: _ColumnHeader(
+  Widget build(BuildContext context) {
+    // Headings sit over columns, and the narrow layout has no columns to sit
+    // over, so there the same sorts are offered as a menu instead.
+    if (isCompactWidth(context)) {
+      return _CompactSortBar(state: state, model: model);
+    }
+    return Padding(
+      // 16 for the list's padding, 6 for the row card's own padding, plus the
+      // one-pixel border the card draws.
+      padding: const EdgeInsets.fromLTRB(23, 6, 23, 2),
+      child: Row(
+        children: <Widget>[
+          // Every spacer below is the same constant the row uses, so the
+          // headings sit over the columns they name by construction rather than
+          // by two layouts happening to agree.
+          const SizedBox(width: _kHandleWidth),
+          _ColumnHeader(
             state: state,
             model: model,
-            sort: PriorityBrowserSort.title,
+            sort: PriorityBrowserSort.priority,
+            width: _kPercentWidth,
             align: TextAlign.left,
           ),
+          const SizedBox(width: _kBadgeWidth + 8),
+          Expanded(
+            child: _ColumnHeader(
+              state: state,
+              model: model,
+              sort: PriorityBrowserSort.title,
+              align: TextAlign.left,
+            ),
+          ),
+          _ColumnHeader(
+            state: state,
+            model: model,
+            sort: PriorityBrowserSort.interval,
+            width: _kIntervalWidth,
+          ),
+          _ColumnHeader(
+            state: state,
+            model: model,
+            sort: PriorityBrowserSort.repetitions,
+            width: _kCountWidth,
+          ),
+          _ColumnHeader(
+            state: state,
+            model: model,
+            sort: PriorityBrowserSort.lapses,
+            width: _kCountWidth,
+          ),
+          _ColumnHeader(
+            state: state,
+            model: model,
+            sort: PriorityBrowserSort.lastRepetition,
+            width: _kDateWidth,
+          ),
+          _ColumnHeader(
+            state: state,
+            model: model,
+            sort: PriorityBrowserSort.nextRepetition,
+            width: _kDateWidth,
+          ),
+          const SizedBox(width: _kActionsWidth),
+        ],
+      ),
+    );
+  }
+}
+
+/// The sort controls when there is no room for a row of column headings.
+///
+/// It names the sort in full rather than showing an icon: with the columns
+/// gone, the only way to tell what the list is ordered by is to say so.
+class _CompactSortBar extends StatelessWidget {
+  const _CompactSortBar({required this.state, required this.model});
+
+  final PriorityBrowserState state;
+  final PriorityBrowserViewModel model;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+    child: Row(
+      children: <Widget>[
+        const Text(
+          'Sorted by',
+          style: TextStyle(fontSize: 11, color: AppColors.muted),
         ),
-        _ColumnHeader(
-          state: state,
-          model: model,
-          sort: PriorityBrowserSort.interval,
-          width: _kIntervalWidth,
+        const SizedBox(width: 6),
+        PopupMenuButton<PriorityBrowserSort>(
+          tooltip: 'Sort by',
+          // Choosing the sort already in use reverses it, exactly as clicking
+          // an active column heading does on a wide window.
+          onSelected: model.sortBy,
+          itemBuilder: (BuildContext context) =>
+              <PopupMenuEntry<PriorityBrowserSort>>[
+                for (final PriorityBrowserSort sort
+                    in PriorityBrowserSort.values)
+                  PopupMenuItem<PriorityBrowserSort>(
+                    value: sort,
+                    child: Text(sort.label),
+                  ),
+              ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                state.sort.label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.accent,
+                ),
+              ),
+              Icon(
+                state.isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                size: 18,
+                color: AppColors.accent,
+              ),
+            ],
+          ),
         ),
-        _ColumnHeader(
-          state: state,
-          model: model,
-          sort: PriorityBrowserSort.repetitions,
-          width: _kCountWidth,
-        ),
-        _ColumnHeader(
-          state: state,
-          model: model,
-          sort: PriorityBrowserSort.lapses,
-          width: _kCountWidth,
-        ),
-        _ColumnHeader(
-          state: state,
-          model: model,
-          sort: PriorityBrowserSort.lastRepetition,
-          width: _kDateWidth,
-        ),
-        _ColumnHeader(
-          state: state,
-          model: model,
-          sort: PriorityBrowserSort.nextRepetition,
-          width: _kDateWidth,
-        ),
-        const SizedBox(width: _kActionsWidth),
       ],
     ),
   );

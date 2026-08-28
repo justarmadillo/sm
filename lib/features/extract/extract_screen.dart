@@ -22,6 +22,7 @@ import 'package:incremental_reader/features/reader/widgets/reader_selection.dart
 import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
 import 'package:incremental_reader/features/reader/widgets/selection_toolbar.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
 Future<StudyRouteResult> openExtract(
@@ -326,11 +327,13 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
       builder: (BuildContext context) => AlertDialog(
         title: const Text('Edit extract'),
         content: SizedBox(
-          width: 620,
+          width: dialogContentWidth(context, preferred: 620),
           child: TextField(
             controller: controller,
             autofocus: true,
-            minLines: 8,
+            // Eight lines plus a title, two buttons and an open keyboard is
+            // more height than a phone has, and the field scrolls anyway.
+            minLines: isCompactWidth(context) ? 4 : 8,
             maxLines: 18,
             decoration: const InputDecoration(
               labelText: 'Markdown',
@@ -457,26 +460,41 @@ class _ExtractStatusBar extends StatelessWidget {
       color: AppColors.surface,
       border: Border(bottom: BorderSide(color: AppColors.border)),
     ),
-    child: Row(
-      children: <Widget>[
-        _StatusPill(
-          text: state.canMutate ? 'Processing' : 'Browsing',
-          color: state.canMutate ? AppColors.accent : AppColors.softMarker,
-        ),
-        const SizedBox(width: 12),
-        Text(
-          '${state.children.length} nested · ${state.cards.length} cards',
-          style: const TextStyle(fontSize: 12, color: AppColors.muted),
-        ),
-        const Spacer(),
-        Text(
-          'Repetitions ${state.topic.repetitionCount} · '
-          '${state.effectiveDueDay ?? state.topic.schedule.algorithmicDueDay}',
-          style: const TextStyle(fontSize: 12, color: AppColors.muted),
-        ),
-      ],
-    ),
+    // The same trade the Reader's bar makes: nothing here is droppable, so on
+    // a narrow window the three parts wrap rather than overflow.
+    child: isCompactWidth(context)
+        ? Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: _statusParts(),
+          )
+        : Row(
+            children: <Widget>[
+              ..._statusParts().take(2),
+              const Spacer(),
+              ..._statusParts().skip(2),
+            ],
+          ),
   );
+
+  /// Whether this visit can change anything, what the extract holds, and when
+  /// it comes back.
+  List<Widget> _statusParts() => <Widget>[
+    _StatusPill(
+      text: state.canMutate ? 'Processing' : 'Browsing',
+      color: state.canMutate ? AppColors.accent : AppColors.softMarker,
+    ),
+    Text(
+      '${state.children.length} nested · ${state.cards.length} cards',
+      style: const TextStyle(fontSize: 12, color: AppColors.muted),
+    ),
+    Text(
+      'Repetitions ${state.topic.repetitionCount} · '
+      '${state.effectiveDueDay ?? state.topic.schedule.algorithmicDueDay}',
+      style: const TextStyle(fontSize: 12, color: AppColors.muted),
+    ),
+  ];
 }
 
 class _StatusPill extends StatelessWidget {
@@ -523,51 +541,74 @@ class _ExtractActionBar extends StatelessWidget {
       color: AppColors.surface,
       border: Border(top: BorderSide(color: AppColors.border)),
     ),
-    child: ListenableBuilder(
-      listenable: selection,
-      builder: (BuildContext context, Widget? child) => Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              !state.canMutate
-                  ? 'Browsing: you can still correct the text.'
-                  : selection.hasSelection && !selection.canExtract
-                  ? 'Select within one block.'
-                  : selection.canExtract
-                  ? 'Selection ready — Extract more (Ctrl+E).'
-                  : 'Refine, extract further, or formulate cards.',
-              style: const TextStyle(fontSize: 12, color: AppColors.muted),
-            ),
-          ),
-          if (state.canMutate) ...<Widget>[
-            OutlinedButton(
-              onPressed: !state.isBusy && selection.canExtract
-                  ? onExtract
-                  : null,
-              child: const Text('Extract more'),
-            ),
-            const SizedBox(width: 6),
-            FilledButton.tonal(
-              onPressed: state.isBusy ? null : onFormulate,
-              child: const Text('Formulate'),
-            ),
-            const SizedBox(width: 12),
-            TextButton(
-              onPressed: state.isBusy ? null : onDismiss,
-              child: const Text('Dismiss'),
-            ),
-            OutlinedButton(
-              onPressed: state.isBusy ? null : onLater,
-              child: const Text('Later'),
-            ),
-            const SizedBox(width: 6),
-            FilledButton(
-              onPressed: state.isBusy ? null : onDone,
-              child: const Text('Done'),
-            ),
-          ],
-        ],
+    // The bar is the last thing above the Android gesture strip, so it has to
+    // give that strip its own space or Done sits under the swipe area.
+    child: SafeArea(
+      top: false,
+      child: ListenableBuilder(
+        listenable: selection,
+        builder: (BuildContext context, Widget? child) =>
+            isCompactWidth(context)
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  _hint(),
+                  const SizedBox(height: 8),
+                  Align(alignment: Alignment.centerRight, child: _buttons()),
+                ],
+              )
+            : Row(
+                children: <Widget>[
+                  Expanded(child: _hint()),
+                  _buttons(),
+                ],
+              ),
       ),
     ),
+  );
+
+  /// What the selection currently allows, in one sentence.
+  Widget _hint() => Text(
+    !state.canMutate
+        ? 'Browsing: you can still correct the text.'
+        : selection.hasSelection && !selection.canExtract
+        ? 'Select within one block.'
+        : selection.canExtract
+        ? 'Selection ready — Extract more (Ctrl+E).'
+        : 'Refine, extract further, or formulate cards.',
+    style: const TextStyle(fontSize: 12, color: AppColors.muted),
+  );
+
+  /// Wraps onto a second row rather than overflowing when the window is too
+  /// narrow to hold five buttons on one line.
+  Widget _buttons() => Wrap(
+    spacing: 6,
+    runSpacing: 6,
+    alignment: WrapAlignment.end,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: <Widget>[
+      if (state.canMutate) ...<Widget>[
+        OutlinedButton(
+          onPressed: !state.isBusy && selection.canExtract ? onExtract : null,
+          child: const Text('Extract more'),
+        ),
+        FilledButton.tonal(
+          onPressed: state.isBusy ? null : onFormulate,
+          child: const Text('Formulate'),
+        ),
+        TextButton(
+          onPressed: state.isBusy ? null : onDismiss,
+          child: const Text('Dismiss'),
+        ),
+        OutlinedButton(
+          onPressed: state.isBusy ? null : onLater,
+          child: const Text('Later'),
+        ),
+        FilledButton(
+          onPressed: state.isBusy ? null : onDone,
+          child: const Text('Done'),
+        ),
+      ],
+    ],
   );
 }

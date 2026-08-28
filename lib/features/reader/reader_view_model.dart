@@ -3,7 +3,7 @@
 /// Every schedule-touching action is an explicit command; everything else —
 /// scrolling, selecting, opening context — changes only view state. The two
 /// modes exist to keep that honest: **browse** mode cannot mutate progress at
-/// all, so looking something up in the Library can never be mistaken by the
+/// all, so looking something up in the Browser can never be mistaken by the
 /// scheduler for having read it.
 library;
 
@@ -17,10 +17,10 @@ import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/extract/extract_commands.dart';
 import 'package:incremental_reader/features/extract/extract_providers.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
-import 'package:incremental_reader/features/library/library_view_model.dart';
 import 'package:incremental_reader/features/reader/reader_command_runner.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/reader_providers.dart';
@@ -557,7 +557,7 @@ final class ReaderViewModel
           ),
       apply: (ReaderUiState s, TopicState topic) =>
           s.copyWith(topic: topic, isDone: true, wasRepetition: false),
-      success: (_) => 'Dismissed. It stays in the Library.',
+      success: (_) => 'Dismissed. It stays in the Browser.',
     );
   }
 
@@ -803,7 +803,7 @@ final class ReaderViewModel
     // Deliberately not gated on [canCommitProgress]. Browse mode exists so
     // that looking something up is never mistaken for having read it, and
     // fixing a typo is neither progress nor a schedule change — refusing it
-    // only made every element opened from the Contents tree a dead end.
+    // only made every element opened from the Browser tree a dead end.
     if (current == null || current.isBusy) return;
     state = AsyncValue<ReaderUiState>.data(current.copyWith(isBusy: true));
 

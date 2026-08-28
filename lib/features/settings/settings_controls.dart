@@ -6,10 +6,13 @@
 /// which would make the whole screen decoration.
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/screen_width.dart';
 
 /// A titled group of settings.
 class SettingsSection extends StatelessWidget {
@@ -86,33 +89,49 @@ class SettingsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 14),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Expanded(
-          child: Column(
+    // A 190-pixel control beside a sentence leaves the sentence a column too
+    // narrow to read on a phone, so there the control moves underneath it.
+    child: isCompactWidth(context)
+        ? Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(
-                label,
-                style: const TextStyle(fontSize: 13, color: AppColors.text),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                hint,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.muted,
-                  height: 1.45,
-                ),
-              ),
+              _labelAndHint(),
+              const SizedBox(height: 8),
+              _control(context),
+            ],
+          )
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(child: _labelAndHint()),
+              const SizedBox(width: 18),
+              SizedBox(width: controlWidth, child: control),
             ],
           ),
+  );
+
+  /// What the setting is called, and what changing it does.
+  Widget _labelAndHint() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      Text(label, style: const TextStyle(fontSize: 13, color: AppColors.text)),
+      const SizedBox(height: 2),
+      Text(
+        hint,
+        style: const TextStyle(
+          fontSize: 11,
+          color: AppColors.muted,
+          height: 1.45,
         ),
-        const SizedBox(width: 18),
-        SizedBox(width: controlWidth, child: control),
-      ],
-    ),
+      ),
+    ],
+  );
+
+  /// The control keeps its own width where the screen still has it: a text
+  /// field stretched across a phone reads as a paragraph, not a number.
+  Widget _control(BuildContext context) => SizedBox(
+    width: math.min(controlWidth, MediaQuery.sizeOf(context).width - 40),
+    child: control,
   );
 }
 
