@@ -44,7 +44,7 @@ void main() {
           step: 0,
           stability: null,
           difficulty: null,
-          reps: 0,
+          repetitionCount: 0,
           lapses: 0,
         );
         final stored = await DriftLearningRepository(
@@ -67,7 +67,7 @@ void main() {
             step: 0,
             stability: null,
             difficulty: null,
-            reps: 0,
+            repetitionCount: 0,
             lapses: 0,
           ),
           throwsA(isA<Object>()),
@@ -81,7 +81,7 @@ void main() {
             step: -1,
             stability: null,
             difficulty: null,
-            reps: 0,
+            repetitionCount: 0,
             lapses: 0,
           ),
           throwsA(isA<Object>()),
@@ -94,7 +94,7 @@ void main() {
             step: null,
             stability: null,
             difficulty: null,
-            reps: 0,
+            repetitionCount: 0,
             lapses: 0,
           ),
           throwsA(isA<Object>()),
@@ -108,7 +108,7 @@ void main() {
             step: 0,
             stability: 2,
             difficulty: 5,
-            reps: 1,
+            repetitionCount: 1,
             lapses: 0,
           ),
           throwsA(isA<Object>()),
@@ -122,7 +122,7 @@ void main() {
             step: 0,
             stability: 1,
             difficulty: null,
-            reps: 1,
+            repetitionCount: 1,
             lapses: 0,
           ),
           throwsA(isA<Object>()),
@@ -136,7 +136,7 @@ void main() {
             step: 0,
             stability: 1,
             difficulty: 5,
-            reps: 1,
+            repetitionCount: 1,
             lapses: 2,
           ),
           throwsA(isA<Object>()),
@@ -224,7 +224,7 @@ void main() {
       expect(promotedNew, isNotNull);
       expect(promotedNew!.memory.state, CardLearningState.learning);
       expect(promotedNew.memory.step, 0);
-      expect(promotedNew.memory.reps, 0);
+      expect(promotedNew.memory.repetitionCount, 0);
       expect(promotedNew.memory.stability, isNull);
       expect(promotedNew.memory.difficulty, isNull);
 
@@ -234,7 +234,7 @@ void main() {
       expect(review.memory.step, isNull);
       expect(review.memory.stability, 2.5);
       expect(review.memory.difficulty, 5.5);
-      expect(review.memory.reps, 3);
+      expect(review.memory.repetitionCount, 3);
 
       final operationIndex = await database
           .customSelect(
@@ -412,7 +412,7 @@ Future<void> _insertMemory(
   required int? step,
   required double? stability,
   required double? difficulty,
-  required int reps,
+  required int repetitionCount,
   required int lapses,
 }) => database.customStatement(
   'INSERT INTO card_memories (card_id, stability, difficulty, state, step, '
@@ -424,7 +424,7 @@ Future<void> _insertMemory(
     difficulty,
     state,
     step,
-    reps,
+    repetitionCount,
     lapses,
     1000,
     1000,

@@ -78,134 +78,154 @@ class _ReviewBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Review'),
-        actions: <Widget>[
-          IconButton(
-            tooltip: 'Priority (Alt+P)',
-            onPressed: state.isBusy
-                ? null
-                : () => showPriorityDialog(
-                    context,
-                    ref,
-                    elementRef: ElementRef(
-                      id: state.card.id,
-                      type: ElementType.card,
-                    ),
-                  ),
-            icon: const Icon(Icons.tune, size: 18),
-          ),
-          IconButton(
-            tooltip: 'Edit this card (E)',
-            onPressed: state.isBusy || state.isEditing
-                ? null
-                : () => model.setEditing(true),
-            icon: const Icon(Icons.edit_outlined, size: 18),
-          ),
-          if (state.card.parent case final CardParent parent)
-            TextButton.icon(
-              onPressed: state.isBusy
-                  ? null
-                  : () => parent.isExtract
-                        ? openExtract(
-                            context,
-                            ref,
-                            extractId: parent.id,
-                            mode: ExtractMode.browse,
-                          )
-                        : openReader(
-                            context,
-                            ref,
-                            sourceId: parent.id,
-                            mode: ReaderMode.browse,
-                          ),
-              icon: Icon(
-                state.isLeech
-                    ? Icons.warning_amber_rounded
-                    : Icons.account_tree_outlined,
-                size: 17,
-                color: state.isLeech ? AppColors.softMarker : null,
-              ),
-              label: Text(parent.isExtract ? 'Open extract' : 'Open article'),
-            ),
-          const SizedBox(width: 8),
-        ],
-      ),
+      appBar: _appBar(context, ref),
       body: CallbackShortcuts(
-        bindings: <ShortcutActivator, VoidCallback>{
-          const SingleActivator(LogicalKeyboardKey.space): model.revealAnswer,
-          const SingleActivator(LogicalKeyboardKey.enter): model.revealAnswer,
-          const SingleActivator(LogicalKeyboardKey.digit1): () =>
-              model.grade(CardRating.again),
-          const SingleActivator(LogicalKeyboardKey.digit2): () =>
-              model.grade(CardRating.hard),
-          const SingleActivator(LogicalKeyboardKey.digit3): () =>
-              model.grade(CardRating.good),
-          const SingleActivator(LogicalKeyboardKey.digit4): () =>
-              model.grade(CardRating.easy),
-          const SingleActivator(LogicalKeyboardKey.numpad1): () =>
-              model.grade(CardRating.again),
-          const SingleActivator(LogicalKeyboardKey.numpad2): () =>
-              model.grade(CardRating.hard),
-          const SingleActivator(LogicalKeyboardKey.numpad3): () =>
-              model.grade(CardRating.good),
-          const SingleActivator(LogicalKeyboardKey.numpad4): () =>
-              model.grade(CardRating.easy),
-          // Undo-last-grade and edit-during-review, both one key away: a
-          // misgraded card and a badly worded one are the two things that go
-          // wrong mid-session, and neither should cost a trip to another
-          // screen.
-          const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
-              model.undoLastGrade,
-          const SingleActivator(LogicalKeyboardKey.keyE): () =>
-              model.setEditing(true),
-          kPriorityShortcut: () => showPriorityDialog(
-            context,
-            ref,
-            elementRef: ElementRef(id: state.card.id, type: ElementType.card),
-          ),
-        },
+        bindings: _keyboardShortcuts(context, ref),
         child: Focus(
           autofocus: true,
           child: Column(
             children: <Widget>[
               _ReviewStatus(state: state),
-              Expanded(
-                child: Center(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 820),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: <Widget>[
-                          if (state.isEditing)
-                            _CardEditor(state: state, model: model)
-                          else ...<Widget>[
-                            _CardPanel(
-                              label: 'QUESTION',
-                              markdown: state.question,
-                            ),
-                            if (state.isAnswerRevealed) ...<Widget>[
-                              const SizedBox(height: 18),
-                              _CardPanel(
-                                label: 'ANSWER',
-                                markdown: state.answer,
-                                emphasized: true,
-                              ),
-                            ],
-                          ],
-                          if (state.isLeech && !state.isEditing) ...<Widget>[
-                            const SizedBox(height: 18),
-                            _LeechNotice(lapses: state.lapses),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              Expanded(child: _cardArea()),
               _ReviewActions(state: state, model: model),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The title bar: priority, edit, and the way back to where the card came
+  /// from.
+  PreferredSizeWidget _appBar(BuildContext context, WidgetRef ref) {
+    return AppBar(
+      title: const Text('Review'),
+      actions: <Widget>[
+        IconButton(
+          tooltip: 'Priority (Alt+P)',
+          onPressed: state.isBusy ? null : () => _openPriority(context, ref),
+          icon: const Icon(Icons.tune, size: 18),
+        ),
+        IconButton(
+          tooltip: 'Edit this card (E)',
+          onPressed: state.isBusy || state.isEditing
+              ? null
+              : () => model.setEditing(true),
+          icon: const Icon(Icons.edit_outlined, size: 18),
+        ),
+        if (state.card.parent case final CardParent parent)
+          _openParentButton(context, ref, parent),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  /// Opens the extract or article this card was formulated from, in browse
+  /// mode: looking at the source is not a repetition of it.
+  Widget _openParentButton(
+    BuildContext context,
+    WidgetRef ref,
+    CardParent parent,
+  ) {
+    return TextButton.icon(
+      onPressed: state.isBusy
+          ? null
+          : () => parent.isExtract
+                ? openExtract(
+                    context,
+                    ref,
+                    extractId: parent.id,
+                    mode: ExtractMode.browse,
+                  )
+                : openReader(
+                    context,
+                    ref,
+                    sourceId: parent.id,
+                    mode: ReaderMode.browse,
+                  ),
+      icon: Icon(
+        state.isLeech
+            ? Icons.warning_amber_rounded
+            : Icons.account_tree_outlined,
+        size: 17,
+        color: state.isLeech ? AppColors.softMarker : null,
+      ),
+      label: Text(parent.isExtract ? 'Open extract' : 'Open article'),
+    );
+  }
+
+  void _openPriority(BuildContext context, WidgetRef ref) {
+    showPriorityDialog(
+      context,
+      ref,
+      elementRef: ElementRef(id: state.card.id, type: ElementType.card),
+    );
+  }
+
+  /// Space or Enter reveals; 1-4 grade, on both the number row and the numpad.
+  ///
+  /// Undo-last-grade and edit-during-review are both one key away: a misgraded
+  /// card and a badly worded one are the two things that go wrong mid-session,
+  /// and neither should cost a trip to another screen.
+  Map<ShortcutActivator, VoidCallback> _keyboardShortcuts(
+    BuildContext context,
+    WidgetRef ref,
+  ) {
+    return <ShortcutActivator, VoidCallback>{
+      const SingleActivator(LogicalKeyboardKey.space): model.revealAnswer,
+      const SingleActivator(LogicalKeyboardKey.enter): model.revealAnswer,
+      const SingleActivator(LogicalKeyboardKey.digit1): () =>
+          model.grade(CardRating.again),
+      const SingleActivator(LogicalKeyboardKey.digit2): () =>
+          model.grade(CardRating.hard),
+      const SingleActivator(LogicalKeyboardKey.digit3): () =>
+          model.grade(CardRating.good),
+      const SingleActivator(LogicalKeyboardKey.digit4): () =>
+          model.grade(CardRating.easy),
+      const SingleActivator(LogicalKeyboardKey.numpad1): () =>
+          model.grade(CardRating.again),
+      const SingleActivator(LogicalKeyboardKey.numpad2): () =>
+          model.grade(CardRating.hard),
+      const SingleActivator(LogicalKeyboardKey.numpad3): () =>
+          model.grade(CardRating.good),
+      const SingleActivator(LogicalKeyboardKey.numpad4): () =>
+          model.grade(CardRating.easy),
+      const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
+          model.undoLastGrade,
+      const SingleActivator(LogicalKeyboardKey.keyE): () =>
+          model.setEditing(true),
+      kPriorityShortcut: () => _openPriority(context, ref),
+    };
+  }
+
+  /// The card itself: the editor while editing, otherwise the question and —
+  /// once revealed — the answer.
+  Widget _cardArea() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              if (state.isEditing)
+                _CardEditor(state: state, model: model)
+              else ...<Widget>[
+                _CardPanel(label: 'QUESTION', markdown: state.question),
+                if (state.isAnswerRevealed) ...<Widget>[
+                  const SizedBox(height: 18),
+                  _CardPanel(
+                    label: 'ANSWER',
+                    markdown: state.answer,
+                    emphasized: true,
+                  ),
+                ],
+              ],
+              if (state.isLeech && !state.isEditing) ...<Widget>[
+                const SizedBox(height: 18),
+                _LeechNotice(lapses: state.lapses),
+              ],
             ],
           ),
         ),

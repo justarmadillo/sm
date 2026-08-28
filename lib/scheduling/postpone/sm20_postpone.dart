@@ -3,7 +3,7 @@
 /// This module is deliberately side-effect free. It identifies the exact
 /// candidates and target dates that the executable would pass to its low-level
 /// rescheduler. Application code persists those mutations for topics and cards
-/// in one transaction, while sharing the one application-wide [Sm20Prng].
+/// in one transaction, while sharing the one application-wide [Sm20RandomNumberGenerator].
 library;
 
 import 'dart:math' as math;
@@ -12,7 +12,8 @@ import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/sm20_numeric.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
-import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart' show kSm20MaximumStoredInterval;
+import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart'
+    show kSm20MaximumStoredInterval;
 import 'package:incremental_reader/settings/smart_postpone_settings.dart';
 import 'package:meta/meta.dart';
 
@@ -147,7 +148,7 @@ final class SmartPostponeResult {
     required this.didForcedPassRun,
     required this.wasStoppedAtProtectedCount,
     required this.randomDraws,
-    required this.prngState,
+    required this.randomNumberState,
   });
 
   final SmartPostponeSettings profile;
@@ -158,7 +159,7 @@ final class SmartPostponeResult {
   final bool didForcedPassRun;
   final bool wasStoppedAtProtectedCount;
   final int randomDraws;
-  final Sm20PrngState prngState;
+  final Sm20RandomNumberGeneratorState randomNumberState;
 
   int get warningCount => decisions
       .where((SmartPostponeDecision value) => value.warnsAboveTwoHundredDays)
@@ -174,7 +175,7 @@ final class SmartPostponeEngine {
     required SmartPostponeSettings profile,
     required PriorityScale priorityScale,
     required StudyDay today,
-    required Sm20Prng prng,
+    required Sm20RandomNumberGenerator randomNumbers,
     Iterable<SmartPostponeSettings> applicableSubbranchProfiles =
         const <SmartPostponeSettings>[],
   }) {
@@ -184,29 +185,29 @@ final class SmartPostponeEngine {
     );
     _validateProfile(effective);
 
-    final List<Sm20PostponeCandidate> ordered = source.toList();
-    for (final Sm20PostponeCandidate candidate in ordered) {
+    final List<Sm20PostponeCandidate> orderedCandidates = source.toList();
+    for (final Sm20PostponeCandidate candidate in orderedCandidates) {
       _requireSameZone(today, candidate.lastReviewDay, 'lastReviewDay');
       _requireSameZone(today, candidate.scheduledDay, 'scheduledDay');
     }
     if (effective.method == SmartPostponeMethod.topCount) {
       sm20HeapSortDescendingInPlace<Sm20PostponeCandidate>(
-        ordered,
+        orderedCandidates,
         keyOf: (Sm20PostponeCandidate candidate) =>
             priorityScale.positionOf(candidate.priority)?.displayPosition ?? 0,
       );
     }
 
-    final int drawsBefore = prng.drawCount;
+    final int drawsBefore = randomNumbers.drawCount;
     final List<SmartPostponeDecision> decisions = <SmartPostponeDecision>[];
     final Set<ElementRef> postponed = <ElementRef>{};
     var stopped = false;
 
     bool wasProtectedRemainderReached() =>
         effective.method == SmartPostponeMethod.topCount &&
-        ordered.length - postponed.length <= effective.protectedCount;
+        orderedCandidates.length - postponed.length <= effective.protectedCount;
 
-    for (final Sm20PostponeCandidate candidate in ordered) {
+    for (final Sm20PostponeCandidate candidate in orderedCandidates) {
       if (wasProtectedRemainderReached()) {
         stopped = true;
         break;
@@ -217,7 +218,7 @@ final class SmartPostponeEngine {
         profile: effective,
         priorityScale: priorityScale,
         today: today,
-        prng: prng,
+        randomNumbers: randomNumbers,
       );
       if (decision == null) continue;
       decisions.add(decision);
@@ -226,9 +227,10 @@ final class SmartPostponeEngine {
 
     var didForcedPassRun = false;
     if (effective.method == SmartPostponeMethod.topCount &&
-        ordered.length - postponed.length > effective.protectedCount) {
+        orderedCandidates.length - postponed.length >
+            effective.protectedCount) {
       didForcedPassRun = true;
-      for (final Sm20PostponeCandidate candidate in ordered) {
+      for (final Sm20PostponeCandidate candidate in orderedCandidates) {
         if (wasProtectedRemainderReached()) {
           stopped = true;
           break;
@@ -246,13 +248,14 @@ final class SmartPostponeEngine {
     }
 
     final List<ElementRef> sourceOrder = <ElementRef>[
-      for (final Sm20PostponeCandidate candidate in ordered) candidate.ref,
+      for (final Sm20PostponeCandidate candidate in orderedCandidates)
+        candidate.ref,
     ];
     final List<ElementRef> postponedOrder = <ElementRef>[
       for (final SmartPostponeDecision decision in decisions) decision.ref,
     ];
     final List<ElementRef> unpostponed = <ElementRef>[
-      for (final Sm20PostponeCandidate candidate in ordered)
+      for (final Sm20PostponeCandidate candidate in orderedCandidates)
         if (!postponed.contains(candidate.ref)) candidate.ref,
     ];
     return SmartPostponeResult(
@@ -263,8 +266,8 @@ final class SmartPostponeEngine {
       unpostponed: List<ElementRef>.unmodifiable(unpostponed),
       didForcedPassRun: didForcedPassRun,
       wasStoppedAtProtectedCount: stopped,
-      randomDraws: prng.drawCount - drawsBefore,
-      prngState: prng.state,
+      randomDraws: randomNumbers.drawCount - drawsBefore,
+      randomNumberState: randomNumbers.state,
     );
   }
 
@@ -282,7 +285,7 @@ final class SmartPostponeEngine {
     required SmartPostponeSettings profile,
     required PriorityScale priorityScale,
     required StudyDay today,
-    required Sm20Prng prng,
+    required Sm20RandomNumberGenerator randomNumbers,
   }) {
     final int age = candidate.ageOn(today);
     final double priority = priorityScale.percentageOf(candidate.priority);
@@ -290,7 +293,8 @@ final class SmartPostponeEngine {
     // Types outside the item/topic families bypass the parameter gates and
     // configured clamps, but still run the common priority scaling and Spread
     // path with the evaluator's default 1.01 factor.
-    final bool isGenericCandidate = !candidate.isItem && !candidate.isTopicFamily;
+    final bool isGenericCandidate =
+        !candidate.isItem && !candidate.isTopicFamily;
 
     if (candidate.isItem) {
       if (profile.shouldSkipItems ||
@@ -332,7 +336,11 @@ final class SmartPostponeEngine {
     var randomDraws = 0;
     if (!profile.isSimulationOnly) {
       delay = sm20RoundEven(
-        sm20Spread(center: delay.toDouble(), width: delay / 2, prng: prng),
+        sm20Spread(
+          center: delay.toDouble(),
+          width: delay / 2,
+          randomNumbers: randomNumbers,
+        ),
       );
       randomDraws = 2;
     }
@@ -607,7 +615,10 @@ final class AutoPostponeEngine {
 
   final SmartPostponeEngine smart;
 
-  AutoPostponeResult run(AutoPostponeRequest request, Sm20Prng prng) {
+  AutoPostponeResult run(
+    AutoPostponeRequest request,
+    Sm20RandomNumberGenerator randomNumbers,
+  ) {
     if (!request.isAutomaticPostponeEnabled) {
       return AutoPostponeResult(
         outcome: AutoPostponeOutcome.disabled,
@@ -681,7 +692,7 @@ final class AutoPostponeEngine {
       profile: profile,
       priorityScale: request.priorityScale,
       today: request.today,
-      prng: prng,
+      randomNumbers: randomNumbers,
     );
     return AutoPostponeResult(
       outcome: AutoPostponeOutcome.ran,

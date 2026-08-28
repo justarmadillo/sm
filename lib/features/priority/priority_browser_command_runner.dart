@@ -17,7 +17,7 @@ library;
 import 'package:incremental_reader/features/priority/priority_browser_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduling_journal.dart';
 import 'package:incremental_reader/scheduling/postpone/sm20_advance.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
@@ -114,46 +114,47 @@ final class PriorityBrowserCommandRunner {
   ///
   /// Cards are skipped: FSRS owns item memory here, and its own first
   /// interval comes from the first genuine grade rather than from a dialog.
-  Future<Result<PriorityBrowserCommandOutcome>> remember(RememberElements command) =>
-      _run(command, kBrowserRememberKind, (StudyDay day) async {
-        final AppSettings settings = await _context.settings();
-        final TopicScheduler scheduler = await _context.topicScheduler();
-        final PriorityScale scale = await _context.priorityScale();
-        final List<ElementRef> changedRefs = <ElementRef>[];
-        var skipped = 0;
+  Future<Result<PriorityBrowserCommandOutcome>> remember(
+    RememberElements command,
+  ) => _run(command, kBrowserRememberKind, (StudyDay day) async {
+    final AppSettings settings = await _context.settings();
+    final TopicScheduler scheduler = await _context.topicScheduler();
+    final PriorityScale scale = await _context.priorityScale();
+    final List<ElementRef> changedRefs = <ElementRef>[];
+    var skipped = 0;
 
-        for (final ElementRef ref in command.refs) {
-          final TopicState? topic = await _topic(ref);
-          if (topic == null) {
-            skipped += 1;
-            continue;
-          }
-          final TopicTransition transition = scheduler.remember(
-            topic,
-            day,
-            firstIntervalLow: settings.remember.firstIntervalLowDays,
-            firstIntervalHigh: settings.remember.firstIntervalHighDays,
-            priorityScale: scale,
-          );
-          if (!transition.isChange) {
-            skipped += 1;
-            continue;
-          }
-          await _writeTopic(
-            command,
-            before: topic,
-            after: transition.state,
-            eventType: RevlogEventType.topicRead,
-          );
-          changedRefs.add(ref);
-        }
-        await _context.savePrngState(scheduler.prng.state);
-        return PriorityBrowserCommandOutcome(
-          changedRefs: changedRefs,
-          skipped: skipped,
-          randomDraws: scheduler.prng.drawCount,
-        );
-      });
+    for (final ElementRef ref in command.refs) {
+      final TopicState? topic = await _topic(ref);
+      if (topic == null) {
+        skipped += 1;
+        continue;
+      }
+      final TopicTransition transition = scheduler.remember(
+        topic,
+        day,
+        firstIntervalLow: settings.remember.firstIntervalLowDays,
+        firstIntervalHigh: settings.remember.firstIntervalHighDays,
+        priorityScale: scale,
+      );
+      if (!transition.isChange) {
+        skipped += 1;
+        continue;
+      }
+      await _writeTopic(
+        command,
+        before: topic,
+        after: transition.state,
+        eventType: ReviewLogEventType.topicRead,
+      );
+      changedRefs.add(ref);
+    }
+    await _context.saveRandomNumberState(scheduler.randomNumbers.state);
+    return PriorityBrowserCommandOutcome(
+      changedRefs: changedRefs,
+      skipped: skipped,
+      randomDraws: scheduler.randomNumbers.drawCount,
+    );
+  });
 
   /// Forget: clear a memorized record back to pending.
   ///
@@ -161,186 +162,198 @@ final class PriorityBrowserCommandRunner {
   /// item branch also writes its own difficulty constant, which belongs to
   /// SM20's item model and has no FSRS counterpart; resetting to a new card
   /// is the FSRS-native meaning of the same command.
-  Future<Result<PriorityBrowserCommandOutcome>> forget(ForgetElements command) =>
-      _run(command, kBrowserForgetKind, (StudyDay day) async {
-        final TopicScheduler scheduler = await _context.topicScheduler();
-        final List<ElementRef> changedRefs = <ElementRef>[];
-        var skipped = 0;
+  Future<Result<PriorityBrowserCommandOutcome>> forget(
+    ForgetElements command,
+  ) => _run(command, kBrowserForgetKind, (StudyDay day) async {
+    final TopicScheduler scheduler = await _context.topicScheduler();
+    final List<ElementRef> changedRefs = <ElementRef>[];
+    var skipped = 0;
 
-        for (final ElementRef ref in command.refs) {
-          if (ref.type == ElementType.card) {
-            final CardState? card = await _learning.findCardState(ref.id);
-            if (card == null || card.memory.reps == 0) {
-              skipped += 1;
-              continue;
-            }
-            final CardState after = card.copyWith(
-              schedule: card.schedule.copyWith(
-                dueDay: day,
-                originalDueDay: day,
-                revision: card.schedule.revision + 1,
-                updatedAtUtc: command.timestampUtc,
-              ),
-              memory: CardMemory.newCard(
-                cardId: card.memory.cardId,
-                dueAtUtc: command.timestampUtc,
-              ),
-            );
-            await _learning.saveCardState(after);
-            await _logCard(
-              command,
-              before: card,
-              after: after,
-              eventType: RevlogEventType.resume,
-            );
-            changedRefs.add(ref);
-            continue;
-          }
-          final TopicState? topic = await _topic(ref);
-          if (topic == null) {
-            skipped += 1;
-            continue;
-          }
-          final TopicTransition transition = scheduler.forget(topic, day);
-          if (!transition.isChange) {
-            skipped += 1;
-            continue;
-          }
-          await _writeTopic(
-            command,
-            before: topic,
-            after: transition.state,
-            eventType: RevlogEventType.resume,
-          );
-          changedRefs.add(ref);
+    for (final ElementRef ref in command.refs) {
+      if (ref.type == ElementType.card) {
+        final CardState? card = await _learning.findCardState(ref.id);
+        if (card == null || card.memory.repetitionCount == 0) {
+          skipped += 1;
+          continue;
         }
-        await _removeFromQueues(changedRefs, shouldIncludeFinalDrill: true);
-        return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
-      });
+        final CardState after = card.copyWith(
+          schedule: card.schedule.copyWith(
+            dueDay: day,
+            originalDueDay: day,
+            revision: card.schedule.revision + 1,
+            updatedAtUtc: command.timestampUtc,
+          ),
+          memory: CardMemory.newCard(
+            cardId: card.memory.cardId,
+            dueAtUtc: command.timestampUtc,
+          ),
+        );
+        await _learning.saveCardState(after);
+        await _logCard(
+          command,
+          before: card,
+          after: after,
+          eventType: ReviewLogEventType.resume,
+        );
+        changedRefs.add(ref);
+        continue;
+      }
+      final TopicState? topic = await _topic(ref);
+      if (topic == null) {
+        skipped += 1;
+        continue;
+      }
+      final TopicTransition transition = scheduler.forget(topic, day);
+      if (!transition.isChange) {
+        skipped += 1;
+        continue;
+      }
+      await _writeTopic(
+        command,
+        before: topic,
+        after: transition.state,
+        eventType: ReviewLogEventType.resume,
+      );
+      changedRefs.add(ref);
+    }
+    await _removeFromQueues(changedRefs, shouldIncludeFinalDrill: true);
+    return PriorityBrowserCommandOutcome(
+      changedRefs: changedRefs,
+      skipped: skipped,
+    );
+  });
 
   /// Dismiss: stop scheduling and send the record to priority 100.
-  Future<Result<PriorityBrowserCommandOutcome>> dismiss(DismissElements command) =>
-      _run(command, kBrowserDismissKind, (StudyDay day) async {
-        final TopicScheduler scheduler = await _context.topicScheduler();
-        var scale = await _context.priorityScale();
-        final List<ElementRef> changedRefs = <ElementRef>[];
-        var skipped = 0;
+  Future<Result<PriorityBrowserCommandOutcome>> dismiss(
+    DismissElements command,
+  ) => _run(command, kBrowserDismissKind, (StudyDay day) async {
+    final TopicScheduler scheduler = await _context.topicScheduler();
+    var scale = await _context.priorityScale();
+    final List<ElementRef> changedRefs = <ElementRef>[];
+    var skipped = 0;
 
-        for (final ElementRef ref in command.refs) {
-          if (ref.type == ElementType.card) {
-            final CardState? card = await _learning.findCardState(ref.id);
-            if (card == null ||
-                card.schedule.lifecycle == ElementLifecycle.dismissed) {
-              skipped += 1;
-              continue;
-            }
-            final PriorityRank bottom = scale.rankForSetPriority(
-              card.schedule.priority,
-              100,
-            );
-            final CardState after = card.copyWith(
-              schedule: card.schedule.copyWith(
-                lifecycle: ElementLifecycle.dismissed,
-                priority: bottom,
-                revision: card.schedule.revision + 1,
-                updatedAtUtc: command.timestampUtc,
-              ),
-            );
-            await _learning.saveCardState(after);
-            await _logCard(
-              command,
-              before: card,
-              after: after,
-              eventType: RevlogEventType.dismiss,
-            );
-            scale = scale.replacing(card.schedule.priority, bottom);
-            changedRefs.add(ref);
-            continue;
-          }
-          final TopicState? topic = await _topic(ref);
-          if (topic == null) {
-            skipped += 1;
-            continue;
-          }
-          final TopicTransition transition = scheduler.dismiss(
-            topic,
-            day,
-            priorityScale: scale,
-          );
-          if (!transition.isChange) {
-            skipped += 1;
-            continue;
-          }
-          await _writeTopic(
-            command,
-            before: topic,
-            after: transition.state,
-            eventType: RevlogEventType.dismiss,
-          );
-          // Every insertion shifts the live order, so the next element in the
-          // same selection must be ranked against the collection as it now is.
-          scale = scale.replacing(
-            topic.schedule.priority,
-            transition.state.schedule.priority,
-          );
-          changedRefs.add(ref);
+    for (final ElementRef ref in command.refs) {
+      if (ref.type == ElementType.card) {
+        final CardState? card = await _learning.findCardState(ref.id);
+        if (card == null ||
+            card.schedule.lifecycle == ElementLifecycle.dismissed) {
+          skipped += 1;
+          continue;
         }
-        await _removeFromQueues(changedRefs, shouldIncludeFinalDrill: true);
-        return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
-      });
+        final PriorityRank bottom = scale.rankForSetPriority(
+          card.schedule.priority,
+          100,
+        );
+        final CardState after = card.copyWith(
+          schedule: card.schedule.copyWith(
+            lifecycle: ElementLifecycle.dismissed,
+            priority: bottom,
+            revision: card.schedule.revision + 1,
+            updatedAtUtc: command.timestampUtc,
+          ),
+        );
+        await _learning.saveCardState(after);
+        await _logCard(
+          command,
+          before: card,
+          after: after,
+          eventType: ReviewLogEventType.dismiss,
+        );
+        scale = scale.replacing(card.schedule.priority, bottom);
+        changedRefs.add(ref);
+        continue;
+      }
+      final TopicState? topic = await _topic(ref);
+      if (topic == null) {
+        skipped += 1;
+        continue;
+      }
+      final TopicTransition transition = scheduler.dismiss(
+        topic,
+        day,
+        priorityScale: scale,
+      );
+      if (!transition.isChange) {
+        skipped += 1;
+        continue;
+      }
+      await _writeTopic(
+        command,
+        before: topic,
+        after: transition.state,
+        eventType: ReviewLogEventType.dismiss,
+      );
+      // Every insertion shifts the live order, so the next element in the
+      // same selection must be ranked against the collection as it now is.
+      scale = scale.replacing(
+        topic.schedule.priority,
+        transition.state.schedule.priority,
+      );
+      changedRefs.add(ref);
+    }
+    await _removeFromQueues(changedRefs, shouldIncludeFinalDrill: true);
+    return PriorityBrowserCommandOutcome(
+      changedRefs: changedRefs,
+      skipped: skipped,
+    );
+  });
 
   /// Undismiss: the status byte only. Dismiss's cleared fields stay cleared.
-  Future<Result<PriorityBrowserCommandOutcome>> undismiss(UndismissElements command) =>
-      _run(command, kBrowserUndismissKind, (StudyDay day) async {
-        final TopicScheduler scheduler = await _context.topicScheduler();
-        final List<ElementRef> changedRefs = <ElementRef>[];
-        var skipped = 0;
+  Future<Result<PriorityBrowserCommandOutcome>> undismiss(
+    UndismissElements command,
+  ) => _run(command, kBrowserUndismissKind, (StudyDay day) async {
+    final TopicScheduler scheduler = await _context.topicScheduler();
+    final List<ElementRef> changedRefs = <ElementRef>[];
+    var skipped = 0;
 
-        for (final ElementRef ref in command.refs) {
-          if (ref.type == ElementType.card) {
-            final CardState? card = await _learning.findCardState(ref.id);
-            if (card == null ||
-                card.schedule.lifecycle != ElementLifecycle.dismissed) {
-              skipped += 1;
-              continue;
-            }
-            final CardState after = card.copyWith(
-              schedule: card.schedule.copyWith(
-                lifecycle: ElementLifecycle.active,
-                revision: card.schedule.revision + 1,
-                updatedAtUtc: command.timestampUtc,
-              ),
-            );
-            await _learning.saveCardState(after);
-            await _logCard(
-              command,
-              before: card,
-              after: after,
-              eventType: RevlogEventType.resume,
-            );
-            changedRefs.add(ref);
-            continue;
-          }
-          final TopicState? topic = await _topic(ref);
-          if (topic == null) {
-            skipped += 1;
-            continue;
-          }
-          final TopicTransition transition = scheduler.undismiss(topic);
-          if (!transition.isChange) {
-            skipped += 1;
-            continue;
-          }
-          await _writeTopic(
-            command,
-            before: topic,
-            after: transition.state,
-            eventType: RevlogEventType.resume,
-          );
-          changedRefs.add(ref);
+    for (final ElementRef ref in command.refs) {
+      if (ref.type == ElementType.card) {
+        final CardState? card = await _learning.findCardState(ref.id);
+        if (card == null ||
+            card.schedule.lifecycle != ElementLifecycle.dismissed) {
+          skipped += 1;
+          continue;
         }
-        return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
-      });
+        final CardState after = card.copyWith(
+          schedule: card.schedule.copyWith(
+            lifecycle: ElementLifecycle.active,
+            revision: card.schedule.revision + 1,
+            updatedAtUtc: command.timestampUtc,
+          ),
+        );
+        await _learning.saveCardState(after);
+        await _logCard(
+          command,
+          before: card,
+          after: after,
+          eventType: ReviewLogEventType.resume,
+        );
+        changedRefs.add(ref);
+        continue;
+      }
+      final TopicState? topic = await _topic(ref);
+      if (topic == null) {
+        skipped += 1;
+        continue;
+      }
+      final TopicTransition transition = scheduler.undismiss(topic);
+      if (!transition.isChange) {
+        skipped += 1;
+        continue;
+      }
+      await _writeTopic(
+        command,
+        before: topic,
+        after: transition.state,
+        eventType: ReviewLogEventType.resume,
+      );
+      changedRefs.add(ref);
+    }
+    return PriorityBrowserCommandOutcome(
+      changedRefs: changedRefs,
+      skipped: skipped,
+    );
+  });
 
   /// Done: the scheduler-visible half of deletion.
   ///
@@ -373,7 +386,7 @@ final class PriorityBrowserCommandRunner {
               command,
               before: card,
               after: after,
-              eventType: RevlogEventType.dismiss,
+              eventType: ReviewLogEventType.dismiss,
             );
             changedRefs.add(ref);
             continue;
@@ -392,12 +405,15 @@ final class PriorityBrowserCommandRunner {
             command,
             before: topic,
             after: transition.state,
-            eventType: RevlogEventType.dismiss,
+            eventType: ReviewLogEventType.dismiss,
           );
           changedRefs.add(ref);
         }
         await _removeFromQueues(changedRefs, shouldIncludeFinalDrill: true);
-        return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+        return PriorityBrowserCommandOutcome(
+          changedRefs: changedRefs,
+          skipped: skipped,
+        );
       });
 
   /// Add to drill: queue membership only, appended once, in selection order.
@@ -424,7 +440,10 @@ final class PriorityBrowserCommandRunner {
     if (changedRefs.isNotEmpty) {
       await _context.saveRuntimeState(runtime.copyWith(finalDrill: drill));
     }
-    return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+    return PriorityBrowserCommandOutcome(
+      changedRefs: changedRefs,
+      skipped: skipped,
+    );
   });
 
   /// Add to outstanding, or Add all.
@@ -487,7 +506,7 @@ final class PriorityBrowserCommandRunner {
       final Set<ElementRef> members = outstanding.toSet();
       await _context.saveRuntimeState(
         runtime.copyWith(
-          prngSeed: scheduler.prng.state.seed,
+          randomNumberSeed: scheduler.randomNumbers.state.seed,
           outstanding: outstanding,
           outstandingItems: <ElementRef>[
             for (final ElementRef ref in runtime.outstandingItems)
@@ -508,7 +527,10 @@ final class PriorityBrowserCommandRunner {
         ),
       );
     }
-    return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+    return PriorityBrowserCommandOutcome(
+      changedRefs: changedRefs,
+      skipped: skipped,
+    );
   });
 
   /// Reset history: drop the external history block and nothing else.
@@ -532,18 +554,22 @@ final class PriorityBrowserCommandRunner {
       await _learning.saveTopic(scheduler.resetHistory(topic));
       changedRefs.add(ref);
     }
-    return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+    return PriorityBrowserCommandOutcome(
+      changedRefs: changedRefs,
+      skipped: skipped,
+    );
   });
 
   /// Set A: store an A-factor directly on normal topics.
-  Future<Result<PriorityBrowserCommandOutcome>> setAFactor(SetTopicAFactor command) =>
-      _run(command, kBrowserSetAKind, (StudyDay _) async {
-        final TopicScheduler scheduler = await _context.topicScheduler();
-        return _editAFactor(
-          command,
-          (TopicState topic) => scheduler.setAFactor(topic, command.value),
-        );
-      });
+  Future<Result<PriorityBrowserCommandOutcome>> setAFactor(
+    SetTopicAFactor command,
+  ) => _run(command, kBrowserSetAKind, (StudyDay _) async {
+    final TopicScheduler scheduler = await _context.topicScheduler();
+    return _editAFactor(
+      command,
+      (TopicState topic) => scheduler.setAFactor(topic, command.value),
+    );
+  });
 
   /// Modify A: `A = 1.01 + m * (A - 1.01)` on normal topics.
   Future<Result<PriorityBrowserCommandOutcome>> modifyAFactor(
@@ -561,76 +587,81 @@ final class PriorityBrowserCommandRunner {
   /// A topic Advance is a real forced bulk repetition — it adapts A and
   /// priority with the bulk denominators — while an item Advance is only a
   /// low-level reschedule. Both share the one draw the engine already took.
-  Future<Result<PriorityBrowserCommandOutcome>> advance(AdvanceElements command) =>
-      _run(command, kBrowserAdvanceKind, (StudyDay day) async {
-        final Sm20CollectionState runtime = await _context.runtimeState();
-        final Sm20Prng prng = Sm20Prng(seed: runtime.prngSeed);
-        final List<Sm20AdvanceCandidate> source = <Sm20AdvanceCandidate>[];
-        final Map<ElementRef, _BrowserRecord> records =
-            <ElementRef, _BrowserRecord>{};
-        for (final ElementRef ref in command.refs) {
-          final _BrowserRecord? record = await _record(ref);
-          if (record == null) continue;
-          records[ref] = record;
-          source.add(
-            Sm20AdvanceCandidate(
-              ref: ref,
-              isMemorized: record.isMemorized,
-              storedInterval: record.storedInterval,
-              lastReviewDay: record.lastReviewDay,
-            ),
-          );
-        }
+  Future<Result<PriorityBrowserCommandOutcome>> advance(
+    AdvanceElements command,
+  ) => _run(command, kBrowserAdvanceKind, (StudyDay day) async {
+    final Sm20CollectionState runtime = await _context.runtimeState();
+    final Sm20RandomNumberGenerator randomNumbers = Sm20RandomNumberGenerator(
+      seed: runtime.randomNumberSeed,
+    );
+    final List<Sm20AdvanceCandidate> source = <Sm20AdvanceCandidate>[];
+    final Map<ElementRef, _BrowserRecord> records =
+        <ElementRef, _BrowserRecord>{};
+    for (final ElementRef ref in command.refs) {
+      final _BrowserRecord? record = await _record(ref);
+      if (record == null) continue;
+      records[ref] = record;
+      source.add(
+        Sm20AdvanceCandidate(
+          ref: ref,
+          isMemorized: record.isMemorized,
+          storedInterval: record.storedInterval,
+          lastReviewDay: record.lastReviewDay,
+        ),
+      );
+    }
 
-        final Sm20AdvanceResult result = const Sm20AdvanceEngine().run(
-          source: source,
-          scope: command.scope,
-          horizonDays: command.horizonDays,
+    final Sm20AdvanceResult result = const Sm20AdvanceEngine().run(
+      source: source,
+      scope: command.scope,
+      horizonDays: command.horizonDays,
+      today: day,
+      randomNumbers: randomNumbers,
+    );
+
+    final TopicScheduler scheduler = TopicScheduler(
+      randomNumbers: randomNumbers,
+    );
+    final PriorityScale scale = await _context.priorityScale();
+    final List<ElementRef> changedRefs = <ElementRef>[];
+    for (final Sm20AdvanceDecision decision in result.decisions) {
+      final _BrowserRecord record = records[decision.ref]!;
+      if (decision.isItem) {
+        await _rescheduleTo(
+          command,
+          record,
+          targetDay: decision.targetDay,
           today: day,
-          prng: prng,
         );
+        changedRefs.add(decision.ref);
+        continue;
+      }
+      final TopicTransition transition = scheduler.forceRepetition(
+        record.topic!,
+        day,
+        interval: decision.newInterval,
+        isBulkOperation: true,
+        priorityScale: scale,
+      );
+      if (!transition.isChange) continue;
+      await _writeTopic(
+        command,
+        before: record.topic!,
+        after: transition.state,
+        eventType: ReviewLogEventType.topicRead,
+      );
+      changedRefs.add(decision.ref);
+    }
 
-        final TopicScheduler scheduler = TopicScheduler(prng: prng);
-        final PriorityScale scale = await _context.priorityScale();
-        final List<ElementRef> changedRefs = <ElementRef>[];
-        for (final Sm20AdvanceDecision decision in result.decisions) {
-          final _BrowserRecord record = records[decision.ref]!;
-          if (decision.isItem) {
-            await _rescheduleTo(
-              command,
-              record,
-              targetDay: decision.targetDay,
-              today: day,
-            );
-            changedRefs.add(decision.ref);
-            continue;
-          }
-          final TopicTransition transition = scheduler.forceRepetition(
-            record.topic!,
-            day,
-            interval: decision.newInterval,
-            isBulkOperation: true,
-            priorityScale: scale,
-          );
-          if (!transition.isChange) continue;
-          await _writeTopic(
-            command,
-            before: record.topic!,
-            after: transition.state,
-            eventType: RevlogEventType.topicRead,
-          );
-          changedRefs.add(decision.ref);
-        }
-
-        // The draws are consumed whether or not a decision survived, so the
-        // seed is written back even for a run that changed nothing.
-        await _context.savePrngState(prng.state);
-        return PriorityBrowserCommandOutcome(
-          changedRefs: changedRefs,
-          skipped: command.refs.length - changedRefs.length,
-          randomDraws: result.randomDraws,
-        );
-      });
+    // The draws are consumed whether or not a decision survived, so the
+    // seed is written back even for a run that changed nothing.
+    await _context.saveRandomNumberState(randomNumbers.state);
+    return PriorityBrowserCommandOutcome(
+      changedRefs: changedRefs,
+      skipped: command.refs.length - changedRefs.length,
+      randomDraws: result.randomDraws,
+    );
+  });
 
   Future<PriorityBrowserCommandOutcome> _editAFactor(
     PriorityBrowserSelectionCommand command,
@@ -655,7 +686,10 @@ final class PriorityBrowserCommandRunner {
       await _learning.saveTopic(edited);
       changedRefs.add(ref);
     }
-    return PriorityBrowserCommandOutcome(changedRefs: changedRefs, skipped: skipped);
+    return PriorityBrowserCommandOutcome(
+      changedRefs: changedRefs,
+      skipped: skipped,
+    );
   }
 
   Future<TopicState?> _topic(ElementRef ref) async =>
@@ -694,7 +728,7 @@ final class PriorityBrowserCommandRunner {
         command,
         before: card,
         after: after,
-        eventType: RevlogEventType.manualReschedule,
+        eventType: ReviewLogEventType.manualReschedule,
       );
       return;
     }
@@ -709,7 +743,7 @@ final class PriorityBrowserCommandRunner {
       command,
       before: before,
       after: moved.state,
-      eventType: RevlogEventType.manualReschedule,
+      eventType: ReviewLogEventType.manualReschedule,
     );
   }
 
@@ -733,7 +767,7 @@ final class PriorityBrowserCommandRunner {
     PriorityBrowserSelectionCommand command, {
     required TopicState before,
     required TopicState after,
-    required RevlogEventType eventType,
+    required ReviewLogEventType eventType,
   }) async {
     final TopicState stored = after.copyWith(
       schedule: after.schedule.copyWith(updatedAtUtc: command.timestampUtc),
@@ -766,7 +800,7 @@ final class PriorityBrowserCommandRunner {
     PriorityBrowserSelectionCommand command, {
     required CardState before,
     required CardState after,
-    required RevlogEventType eventType,
+    required ReviewLogEventType eventType,
   }) async {
     final PriorityScale scale = await _context.priorityScale();
     await _journal.append(
@@ -789,8 +823,10 @@ final class PriorityBrowserCommandRunner {
     );
   }
 
-  String _itemOperation(PriorityBrowserSelectionCommand command, ElementRef ref) =>
-      '${command.operationId.value}:${ref.type.name}:${ref.id}';
+  String _itemOperation(
+    PriorityBrowserSelectionCommand command,
+    ElementRef ref,
+  ) => '${command.operationId.value}:${ref.type.name}:${ref.id}';
 
   /// Drops [refs] from every durable queue store.
   Future<void> _removeFromQueues(
@@ -824,44 +860,48 @@ final class PriorityBrowserCommandRunner {
     Future<PriorityBrowserCommandOutcome> Function(StudyDay day) body,
   ) async {
     try {
-      return await _transactions.run<Result<PriorityBrowserCommandOutcome>>(() async {
-        if (await _learning.hasActivity(command.operationId.value, kind)) {
-          // A resent bulk command is the same command: replaying it would
-          // insert, raise, or advance a second time.
-          return const Ok<PriorityBrowserCommandOutcome>(PriorityBrowserCommandOutcome.empty());
-        }
-        final PriorityBrowserCommandOutcome outcome = await body(command.day);
-        await _learning.appendActivity(
-          ActivityRecord(
-            id: _ids.newId(),
-            operationId: command.operationId.value,
-            kind: kind,
-            atUtc: command.timestampUtc,
-            metadata: <String, Object?>{
-              'day': command.day.toString(),
-              'selected': command.refs.length,
-              'changed': outcome.changedRefCount,
-              'skipped': outcome.skipped,
-              'random_draws': outcome.randomDraws,
-            },
-          ),
-        );
-        if (outcome.changedRefCount > 0) await _transfer.advanceGeneration();
-        _diagnostics.record(
-          DiagnosticEvent(
-            level: DiagnosticLevel.info,
-            name: kind,
-            timestampUtc: _clock.nowUtc(),
-            operationId: command.operationId,
-            fields: <String, Object?>{
-              'selected': command.refs.length,
-              'changed': outcome.changedRefCount,
-              'skipped': outcome.skipped,
-            },
-          ),
-        );
-        return Ok<PriorityBrowserCommandOutcome>(outcome);
-      });
+      return await _transactions.run<Result<PriorityBrowserCommandOutcome>>(
+        () async {
+          if (await _learning.hasActivity(command.operationId.value, kind)) {
+            // A resent bulk command is the same command: replaying it would
+            // insert, raise, or advance a second time.
+            return const Ok<PriorityBrowserCommandOutcome>(
+              PriorityBrowserCommandOutcome.empty(),
+            );
+          }
+          final PriorityBrowserCommandOutcome outcome = await body(command.day);
+          await _learning.appendActivity(
+            ActivityRecord(
+              id: _ids.newId(),
+              operationId: command.operationId.value,
+              kind: kind,
+              atUtc: command.timestampUtc,
+              metadata: <String, Object?>{
+                'day': command.day.toString(),
+                'selected': command.refs.length,
+                'changed': outcome.changedRefCount,
+                'skipped': outcome.skipped,
+                'random_draws': outcome.randomDraws,
+              },
+            ),
+          );
+          if (outcome.changedRefCount > 0) await _transfer.advanceGeneration();
+          _diagnostics.record(
+            DiagnosticEvent(
+              level: DiagnosticLevel.info,
+              name: kind,
+              timestampUtc: _clock.nowUtc(),
+              operationId: command.operationId,
+              fields: <String, Object?>{
+                'selected': command.refs.length,
+                'changed': outcome.changedRefCount,
+                'skipped': outcome.skipped,
+              },
+            ),
+          );
+          return Ok<PriorityBrowserCommandOutcome>(outcome);
+        },
+      );
     } on Object catch (error, stackTrace) {
       final UnexpectedFailure failure = UnexpectedFailure(
         'command $kind failed',
@@ -895,7 +935,7 @@ final class _BrowserRecord {
   _BrowserRecord.card(CardState value, {required StudyDayCalendar calendar})
     : topic = null,
       card = value,
-      isMemorized = value.memory.reps > 0,
+      isMemorized = value.memory.repetitionCount > 0,
       storedInterval = value.memory.scheduledDays == null
           ? 0
           : value.memory.scheduledDays!.round(),

@@ -17,7 +17,7 @@ import 'dart:convert';
 import 'package:incremental_reader/features/priority/priority_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduler_event.dart';
 import 'package:incremental_reader/scheduling/history/scheduling_journal.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
@@ -240,7 +240,7 @@ final class PriorityCommandRunner {
 
     final schedules = <ElementSchedule>[];
     final changes = <({ElementSchedule before, ElementSchedule after})>[];
-    final entries = <RevlogEntry>[];
+    final entries = <ReviewLogEntry>[];
     final DateTime now = command.timestampUtc;
     var sourcePosition = 1;
     for (final record in records) {
@@ -296,14 +296,14 @@ final class PriorityCommandRunner {
         _journal.build(
           operationId: command.operationId.value,
           ref: schedule.ref,
-          eventType: RevlogEventType.priorityChange,
+          eventType: ReviewLogEventType.priorityChange,
           atUtc: now,
-          before: RevlogSnapshot(
+          before: ReviewLogSnapshot(
             priorityKey: schedule.priority.orderKey,
             pressure: current / 100,
             lifecycle: schedule.lifecycle.index,
           ),
-          after: RevlogSnapshot(
+          after: ReviewLogSnapshot(
             priorityKey: rank.orderKey,
             lifecycle: schedule.lifecycle.index,
           ),
@@ -371,7 +371,7 @@ final class PriorityCommandRunner {
     }
     final CardState? card = await _learning.findCardState(ref.id);
     if (card == null) return Sm20ElementStatus.deleted.index;
-    return card.memory.reps == 0
+    return card.memory.repetitionCount == 0
         ? Sm20ElementStatus.pending.index
         : Sm20ElementStatus.memorized.index;
   }
@@ -417,14 +417,14 @@ final class PriorityCommandRunner {
     await _journal.append(
       operationId: command.operationId.value,
       ref: schedule.ref,
-      eventType: RevlogEventType.priorityChange,
+      eventType: ReviewLogEventType.priorityChange,
       atUtc: command.timestampUtc,
-      before: RevlogSnapshot(
+      before: ReviewLogSnapshot(
         priorityKey: schedule.priority.orderKey,
         pressure: scale.pressureOf(schedule.priority),
         lifecycle: schedule.lifecycle.index,
       ),
-      after: RevlogSnapshot(
+      after: ReviewLogSnapshot(
         priorityKey: rank.orderKey,
         pressure: scale.pressureOf(rank),
         lifecycle: schedule.lifecycle.index,

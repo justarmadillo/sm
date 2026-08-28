@@ -19,7 +19,7 @@ import 'package:incremental_reader/documents/source_edit.dart';
 import 'package:incremental_reader/documents/text_splice.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduler_event.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/sm20_numeric.dart';
@@ -148,9 +148,7 @@ SourcesCompanion sourceToCompanion(Source source, {int revision = 1}) =>
       markerUtf8: Value<int?>(source.resume.marker?.utf8Offset),
       markerRevision: Value<int?>(source.resume.marker?.contentRevision),
       softUtf8: Value<int?>(source.resume.softPosition?.utf8Offset),
-      softRevision: Value<int?>(
-        source.resume.softPosition?.contentRevision,
-      ),
+      softRevision: Value<int?>(source.resume.softPosition?.contentRevision),
       contentRevision: Value<int>(source.contentRevision),
       revision: Value<int>(revision),
     );
@@ -167,7 +165,7 @@ Block blockFromRow(BlockRow row) => Block(
   contentSpans: decodeContentSpans(row.contentSpans),
   headingLevel: row.headingLevel,
   codeLanguage: row.codeLanguage,
-  ordered: row.ordered,
+  isOrderedListItem: row.ordered,
   listMarker: row.listMarker,
   listDepth: row.listDepth,
   quoteDepth: row.quoteDepth,
@@ -187,7 +185,7 @@ BlocksCompanion blockToCompanion(Block block, String sourceId) =>
       contentSpans: encodeContentSpans(block.contentSpans),
       headingLevel: Value<int?>(block.headingLevel),
       codeLanguage: Value<String?>(block.codeLanguage),
-      ordered: Value<bool>(block.ordered),
+      ordered: Value<bool>(block.isOrderedListItem),
       listMarker: Value<String?>(block.listMarker),
       listDepth: Value<int>(block.listDepth),
       quoteDepth: Value<int>(block.quoteDepth),
@@ -375,12 +373,12 @@ TopicStatesCompanion topicStateToCompanion(TopicState topic) =>
       revision: Value<int>(topic.revision),
     );
 
-/// Domain [RevlogEntry] from its append-only row.
-RevlogEntry revlogFromRow(RevlogRow row) => RevlogEntry(
+/// Domain [ReviewLogEntry] from its append-only row.
+ReviewLogEntry reviewLogFromRow(RevlogRow row) => ReviewLogEntry(
   id: row.id,
   operationId: row.operationId,
   ref: ElementRef(id: row.elementId, type: ElementType.values[row.elementType]),
-  eventType: RevlogEventType.fromValue(row.eventType),
+  eventType: ReviewLogEventType.fromValue(row.eventType),
   atUtc: fromEpochMs(row.atUtc),
   grade: row.grade,
   elapsedDays: row.elapsedDays,
@@ -389,21 +387,21 @@ RevlogEntry revlogFromRow(RevlogRow row) => RevlogEntry(
   postponeCount: row.postponeCount,
   schedulerVersion: row.schedulerVersion,
   parametersVersion: row.parametersVersion,
-  before: RevlogSnapshot(
+  before: ReviewLogSnapshot(
     dueAtUtc: row.dueBeforeUtc == null ? null : fromEpochMs(row.dueBeforeUtc!),
     intervalDays: row.intervalBefore,
     aFactor: row.aFactorBefore,
     stability: row.stabilityBefore,
     difficulty: row.difficultyBefore,
     learningState: row.stateBefore,
-    reps: row.repsBefore,
+    repetitionCount: row.repsBefore,
     lapses: row.lapsesBefore,
     priorityKey: row.priorityBefore,
     pressure: row.pressureBefore,
     readFraction: row.readFractionBefore,
     lifecycle: row.lifecycleBefore,
   ),
-  after: RevlogSnapshot(
+  after: ReviewLogSnapshot(
     dueAtUtc: row.dueAfterUtc == null ? null : fromEpochMs(row.dueAfterUtc!),
     intervalDays: row.intervalAfter,
     aFactor: row.aFactorAfter,
@@ -421,7 +419,7 @@ RevlogEntry revlogFromRow(RevlogRow row) => RevlogEntry(
 );
 
 /// Row companion for one repetition-log entry.
-RevlogEntriesCompanion revlogToCompanion(RevlogEntry entry) =>
+RevlogEntriesCompanion reviewLogToCompanion(ReviewLogEntry entry) =>
     RevlogEntriesCompanion.insert(
       id: entry.id,
       operationId: entry.operationId,
@@ -452,7 +450,7 @@ RevlogEntriesCompanion revlogToCompanion(RevlogEntry entry) =>
       difficultyAfter: Value<double?>(entry.after.difficulty),
       stateBefore: Value<int?>(entry.before.learningState),
       stateAfter: Value<int?>(entry.after.learningState),
-      repsBefore: Value<int?>(entry.before.reps),
+      repsBefore: Value<int?>(entry.before.repetitionCount),
       lapsesBefore: Value<int?>(entry.before.lapses),
       priorityBefore: Value<String?>(entry.before.priorityKey),
       priorityAfter: Value<String?>(entry.after.priorityKey),
@@ -476,7 +474,7 @@ CardMemory cardMemoryFromRow(CardMemoryRow row) => CardMemory(
   step: row.step,
   stability: row.stability,
   difficulty: row.difficulty,
-  reps: row.reps,
+  repetitionCount: row.reps,
   lapses: row.lapses,
   lastReviewAtUtc: row.lastReviewUtc == null
       ? null
@@ -499,7 +497,7 @@ CardMemoriesCompanion cardMemoryToCompanion(CardMemory memory) =>
       difficulty: Value<double?>(memory.difficulty),
       state: memory.state.value,
       step: Value<int?>(memory.step),
-      reps: Value<int>(memory.reps),
+      reps: Value<int>(memory.repetitionCount),
       lapses: Value<int>(memory.lapses),
       lastReviewUtc: Value<int?>(
         memory.lastReviewAtUtc == null

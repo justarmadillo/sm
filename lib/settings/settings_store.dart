@@ -41,12 +41,14 @@ final class SettingsStore {
       // the same executable/UI domains as decoded values.
       final AppSettings canonical = AppSettings.fromMap(settings.toMap());
       final Map<String, String> next = canonical.toMap();
-      final Map<String, String> stored = await _repository.readAll();
+      final Map<String, String> stored = await _repository.listAllValues();
       final changedValues = <String, String>{
         for (final MapEntry<String, String> entry in next.entries)
           if (stored[entry.key] != entry.value) entry.key: entry.value,
       };
-      if (changedValues.isNotEmpty) await _repository.writeAll(changedValues);
+      if (changedValues.isNotEmpty) {
+        await _repository.saveAllValues(changedValues);
+      }
       for (final String key in stored.keys) {
         if (!next.containsKey(key) && _isReplacedSchedulerKey(key)) {
           await _repository.deleteKey(key);
@@ -69,7 +71,7 @@ final class SettingsStore {
   void invalidate() => _cached = null;
 
   Future<AppSettings> _read() async =>
-      AppSettings.fromMap(await _repository.readAll());
+      AppSettings.fromMap(await _repository.listAllValues());
 }
 
 bool _isReplacedSchedulerKey(String key) =>

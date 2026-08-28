@@ -36,7 +36,7 @@ void main() {
       final Sm20MercyScore cardScore = _score(700000);
       final Sm20MercyPlan plan = Sm20MercyPlan(
         gathered: <Sm20MercyCandidate>[card, topic],
-        ordered: <Sm20MercyCandidate?>[topic, card],
+        orderedCandidates: <Sm20MercyCandidate?>[topic, card],
         assignments: <Sm20MercyAssignment>[
           Sm20MercyAssignment(
             candidate: topic,
@@ -60,7 +60,7 @@ void main() {
         reschedulingDays: 2,
         blockSize: 1,
         randomDraws: 2,
-        prngState: Sm20PrngState(0x10203040),
+        randomNumberState: Sm20RandomNumberGeneratorState(0x10203040),
         deletedPlaceholderCount: 0,
       );
 
@@ -71,7 +71,7 @@ void main() {
         gatheringDays: 10,
         mode: MercyMode.random,
         gatherMode: Sm20MercyGatherMode.collection,
-        prngSeedBefore: 0x01020304,
+        randomNumberSeedBefore: 0x01020304,
         canonicalStates: <ElementRef, String>{
           topicRef: '{"kind":"topic"}',
           cardRef: '{"kind":"card"}',
@@ -88,8 +88,8 @@ void main() {
       expect(decoded.gatheredCount, 2);
       expect(decoded.mode, MercyMode.random);
       expect(decoded.gatherMode, Sm20MercyGatherMode.collection);
-      expect(decoded.prngSeedBefore, 0x01020304);
-      expect(decoded.prngSeedAfter, 0x10203040);
+      expect(decoded.randomNumberSeedBefore, 0x01020304);
+      expect(decoded.randomNumberSeedAfter, 0x10203040);
       expect(decoded.moves.first.scheduleRevision, 7);
       expect(decoded.moves.first.canonicalBefore, '{"kind":"topic"}');
       expect(
@@ -119,13 +119,13 @@ void main() {
         final MercyPreview preview = MercyPreview.fromPlan(
           plan: Sm20MercyPlan(
             gathered: <Sm20MercyCandidate>[placeholder],
-            ordered: const <Sm20MercyCandidate?>[null],
+            orderedCandidates: const <Sm20MercyCandidate?>[null],
             assignments: const <Sm20MercyAssignment>[],
             scores: const <ElementRef, Sm20MercyScore>{},
             reschedulingDays: 1,
             blockSize: 1,
             randomDraws: 0,
-            prngState: Sm20PrngState(9),
+            randomNumberState: Sm20RandomNumberGeneratorState(9),
             deletedPlaceholderCount: 1,
           ),
           today: _day(10),
@@ -133,7 +133,7 @@ void main() {
           gatheringDays: 10,
           mode: MercyMode.sourceOrder,
           gatherMode: Sm20MercyGatherMode.subset,
-          prngSeedBefore: 9,
+          randomNumberSeedBefore: 9,
           canonicalStates: const <ElementRef, String>{},
         );
 
@@ -205,7 +205,7 @@ void main() {
           step: null,
           stability: 12.5,
           difficulty: 6.25,
-          reps: 8,
+          repetitionCount: 8,
           lapses: 2,
           lastReviewAtUtc: DateTime.utc(2026, 3, 3, 9),
           dueAtUtc: DateTime.utc(2026, 3, 15, 9),
@@ -223,7 +223,7 @@ void main() {
 
       expect(encodeMercyCardState(decoded), encoded);
       expect(decoded, card);
-      expect(decoded.memory.reps, 8);
+      expect(decoded.memory.repetitionCount, 8);
       expect(decoded.memory.postponeCount, 4);
     });
   });

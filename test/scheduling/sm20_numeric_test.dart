@@ -125,50 +125,59 @@ void main() {
     });
   });
 
-  group('Sm20Prng', () {
+  group('Sm20RandomNumberGenerator', () {
     test('matches all six seed-zero advanced states', () {
-      final Sm20Prng prng = Sm20Prng();
+      final Sm20RandomNumberGenerator randomNumbers =
+          Sm20RandomNumberGenerator();
       expect(
-        <int>[for (var draw = 0; draw < 6; draw++) prng.advance()],
+        <int>[for (var draw = 0; draw < 6; draw++) randomNumbers.advance()],
         <int>[1, 134775814, 3698175007, 870078620, 1172187917, 2884733762],
       );
-      expect(prng.seed, 2884733762);
-      expect(prng.state, Sm20PrngState(2884733762));
-      expect(prng.drawCount, 6);
+      expect(randomNumbers.seed, 2884733762);
+      expect(randomNumbers.state, Sm20RandomNumberGeneratorState(2884733762));
+      expect(randomNumbers.drawCount, 6);
     });
 
     test('Random returns the advanced state multiplied by two to minus 32', () {
-      final Sm20Prng prng = Sm20Prng();
-      expect(prng.nextDouble(), 1 / 4294967296.0);
-      expect(prng.seed, 1);
-      expect(prng.drawCount, 1);
+      final Sm20RandomNumberGenerator randomNumbers =
+          Sm20RandomNumberGenerator();
+      expect(randomNumbers.nextDouble(), 1 / 4294967296.0);
+      expect(randomNumbers.seed, 1);
+      expect(randomNumbers.drawCount, 1);
     });
 
     test('Random(N) uses the unsigned high product', () {
-      final Sm20Prng ordinary = Sm20Prng(seed: 1);
+      final Sm20RandomNumberGenerator ordinary = Sm20RandomNumberGenerator(
+        seed: 1,
+      );
       expect(ordinary.nextInt(1000), 31);
       expect(ordinary.seed, 134775814);
 
-      final Sm20Prng highWords = Sm20Prng(seed: 0xffffffff);
+      final Sm20RandomNumberGenerator highWords = Sm20RandomNumberGenerator(
+        seed: 0xffffffff,
+      );
       expect(highWords.nextInt(0xffffffff), 4160191483);
       expect(highWords.seed, 4160191484);
     });
 
     test('Random(0) returns zero but still consumes its draw', () {
-      final Sm20Prng prng = Sm20Prng(seed: 123456789);
-      expect(prng.nextInt(0), 0);
-      expect(prng.seed, 2335298922);
-      expect(prng.drawCount, 1);
+      final Sm20RandomNumberGenerator randomNumbers = Sm20RandomNumberGenerator(
+        seed: 123456789,
+      );
+      expect(randomNumbers.nextInt(0), 0);
+      expect(randomNumbers.seed, 2335298922);
+      expect(randomNumbers.drawCount, 1);
     });
 
     test('a persisted state continues the same global sequence', () {
-      final Sm20Prng original = Sm20Prng()
+      final Sm20RandomNumberGenerator original = Sm20RandomNumberGenerator()
         ..advance()
         ..advance();
-      final Sm20PrngState checkpoint = original.state;
+      final Sm20RandomNumberGeneratorState checkpoint = original.state;
       final int expected = original.advance();
 
-      final Sm20Prng resumed = Sm20Prng.fromState(checkpoint);
+      final Sm20RandomNumberGenerator resumed =
+          Sm20RandomNumberGenerator.fromState(checkpoint);
       expect(resumed.advance(), expected);
       expect(resumed.drawCount, 1);
 
@@ -178,10 +187,16 @@ void main() {
     });
 
     test('rejects values outside the unsigned 32-bit domain', () {
-      expect(() => Sm20Prng(seed: -1), throwsRangeError);
-      expect(() => Sm20Prng(seed: 0x100000000), throwsRangeError);
-      expect(() => Sm20Prng().nextInt(-1), throwsRangeError);
-      expect(() => Sm20Prng().nextInt(0x100000000), throwsRangeError);
+      expect(() => Sm20RandomNumberGenerator(seed: -1), throwsRangeError);
+      expect(
+        () => Sm20RandomNumberGenerator(seed: 0x100000000),
+        throwsRangeError,
+      );
+      expect(() => Sm20RandomNumberGenerator().nextInt(-1), throwsRangeError);
+      expect(
+        () => Sm20RandomNumberGenerator().nextInt(0x100000000),
+        throwsRangeError,
+      );
     });
   });
 
@@ -195,46 +210,63 @@ void main() {
         (101, 1, 101),
       ];
       for (final (double center, double width, int expected) in cases) {
-        final Sm20Prng prng = Sm20Prng();
+        final Sm20RandomNumberGenerator randomNumbers =
+            Sm20RandomNumberGenerator();
         expect(
-          sm20RoundEven(sm20Spread(center: center, width: width, prng: prng)),
+          sm20RoundEven(
+            sm20Spread(
+              center: center,
+              width: width,
+              randomNumbers: randomNumbers,
+            ),
+          ),
           expected,
           reason: 'center=$center width=$width',
         );
-        expect(prng.seed, 134775814);
-        expect(prng.drawCount, 2);
+        expect(randomNumbers.seed, 134775814);
+        expect(randomNumbers.drawCount, 2);
       }
     });
 
     test('applies the sign draw and exact logarithmic curve', () {
-      final Sm20Prng prng = Sm20Prng(seed: 1);
+      final Sm20RandomNumberGenerator randomNumbers = Sm20RandomNumberGenerator(
+        seed: 1,
+      );
       expect(
-        sm20Spread(center: 20, width: 10, prng: prng),
+        sm20Spread(center: 20, width: 10, randomNumbers: randomNumbers),
         closeTo(19.93147538794108, 1e-12),
       );
-      expect(prng.seed, 3698175007);
-      expect(prng.drawCount, 2);
+      expect(randomNumbers.seed, 3698175007);
+      expect(randomNumbers.drawCount, 2);
     });
 
     test('honors the ordered width clamps and absolute floor', () {
-      final Sm20Prng capped = Sm20Prng(seed: 123456789);
-      final Sm20Prng explicitHundred = Sm20Prng(seed: 123456789);
+      final Sm20RandomNumberGenerator capped = Sm20RandomNumberGenerator(
+        seed: 123456789,
+      );
+      final Sm20RandomNumberGenerator explicitHundred =
+          Sm20RandomNumberGenerator(seed: 123456789);
       expect(
-        sm20Spread(center: 300, width: 200, prng: capped),
-        sm20Spread(center: 300, width: 100, prng: explicitHundred),
+        sm20Spread(center: 300, width: 200, randomNumbers: capped),
+        sm20Spread(center: 300, width: 100, randomNumbers: explicitHundred),
       );
 
-      final Sm20Prng centerRelative = Sm20Prng();
-      expect(sm20Spread(center: -10, width: 500, prng: centerRelative), 1);
+      final Sm20RandomNumberGenerator centerRelative =
+          Sm20RandomNumberGenerator();
+      expect(
+        sm20Spread(center: -10, width: 500, randomNumbers: centerRelative),
+        1,
+      );
       expect(centerRelative.drawCount, 2);
     });
 
     test('every call consumes exactly two values from the shared stream', () {
-      final Sm20Prng prng = Sm20Prng();
-      sm20Spread(center: 8, width: 8, prng: prng);
-      sm20Spread(center: 8, width: 8, prng: prng);
-      expect(prng.seed, 870078620);
-      expect(prng.drawCount, 4);
+      final Sm20RandomNumberGenerator randomNumbers =
+          Sm20RandomNumberGenerator();
+      sm20Spread(center: 8, width: 8, randomNumbers: randomNumbers);
+      sm20Spread(center: 8, width: 8, randomNumbers: randomNumbers);
+      expect(randomNumbers.seed, 870078620);
+      expect(randomNumbers.drawCount, 4);
     });
   });
 

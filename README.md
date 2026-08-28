@@ -1,6 +1,10 @@
 # incremental_reader
 
-A new Flutter project.
+An incremental reading and spaced repetition app.
+
+**Writing code here?** Read [RULES.md](RULES.md) first — naming, structure,
+and the database names that must never be renamed. Then `lib/README.md`,
+which is the map of the source tree.
 
 ## Getting Started
 

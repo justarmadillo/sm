@@ -11,7 +11,7 @@ import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduling_journal.dart';
 import 'package:incremental_reader/scheduling/postpone/sm20_postpone.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
@@ -91,7 +91,8 @@ final class QueueCommandRunner {
       return await _transactions.run<Result<AdmissionOutcome>>(() async {
         var settings = await _context.settings();
         final Sm20CollectionState before = await _context.runtimeState();
-        final Sm20Prng prng = Sm20Prng(seed: before.prngSeed);
+        final Sm20RandomNumberGenerator randomNumbers =
+            Sm20RandomNumberGenerator(seed: before.randomNumberSeed);
         var candidates = await loadCandidates(command.day);
         var byRef = <ElementRef, QueueCandidate>{
           for (final QueueCandidate candidate in candidates)
@@ -119,17 +120,19 @@ final class QueueCommandRunner {
           runtime: before,
           candidates: candidates,
           outstanding: outstandingBeforePostpone,
-          prng: prng,
+          randomNumbers: randomNumbers,
         );
         if (automatic.shouldDisableAutoPostpone) {
           settings = settings.copyWith(
-            postpone: settings.postpone.copyWith(isAutomaticPostponeEnabled: false),
+            postpone: settings.postpone.copyWith(
+              isAutomaticPostponeEnabled: false,
+            ),
           );
         }
         final Set<ElementRef> automaticallyPostponed =
             automatic.smartPostpone?.postponed.toSet() ?? <ElementRef>{};
         final Sm20CollectionState runtime = before.copyWith(
-          prngSeed: prng.state.seed,
+          randomNumberSeed: randomNumbers.state.seed,
           lastAutomaticPostponeDay: automatic.lastAutoRunDay,
           outstanding: <ElementRef>[
             for (final ElementRef ref in before.outstanding)
@@ -185,15 +188,18 @@ final class QueueCommandRunner {
           for (final ElementRef ref in outstanding)
             if (byRef[ref]?.isCard ?? false) ref,
         };
-        final bool wasAlreadySorted = runtime.lastAutomaticSortDay == command.day;
+        final bool wasAlreadySorted =
+            runtime.lastAutomaticSortDay == command.day;
         final bool shouldSort =
-            settings.queue.shouldSortAutomatically && !wasAlreadySorted && outstanding.isNotEmpty;
+            settings.queue.shouldSortAutomatically &&
+            !wasAlreadySorted &&
+            outstanding.isNotEmpty;
         final QueuePolicy policy = await _context.queuePolicy();
         final QueuePlan outstandingPlan = policy.build(
           candidates: candidates,
           nowUtc: _clock.nowUtc(),
           today: command.day,
-          prng: prng,
+          randomNumbers: randomNumbers,
           combinedOrder: outstanding,
           outstandingItemMembership: itemMembership,
           shouldSort: shouldSort,
@@ -257,8 +263,12 @@ final class QueueCommandRunner {
             for (final ElementRef ref in finalDrill)
               if (byRef[ref] case final QueueCandidate candidate) candidate,
           ];
-          if (settings.queue.shouldRandomizeFinalDrill && runtime.learningMode != 1) {
-            QueuePolicy.randomizeFixedSize<QueueCandidate>(drill, prng);
+          if (settings.queue.shouldRandomizeFinalDrill &&
+              runtime.learningMode != 1) {
+            QueuePolicy.randomizeFixedSize<QueueCandidate>(
+              drill,
+              randomNumbers,
+            );
             finalDrill
               ..clear()
               ..addAll(drill.map((QueueCandidate value) => value.ref));
@@ -266,7 +276,7 @@ final class QueueCommandRunner {
           visible = QueuePlan.stage(
             candidates: drill,
             lane: QueueLane.finalDrill,
-            prngState: prng.state,
+            randomNumberState: randomNumbers.state,
           );
         } else if (hasHeldPending || (visible.isEmpty && pending.isNotEmpty)) {
           learningMode = 2;
@@ -276,12 +286,12 @@ final class QueueCommandRunner {
                 if (byRef[ref] case final QueueCandidate candidate) candidate,
             ],
             lane: QueueLane.pending,
-            prngState: prng.state,
+            randomNumberState: randomNumbers.state,
           );
         }
 
         final Sm20CollectionState after = runtime.copyWith(
-          prngSeed: prng.state.seed,
+          randomNumberSeed: randomNumbers.state.seed,
           learningStartDay: runtime.learningStartDay ?? command.day,
           lastAutomaticSortDay: lastSort,
           lastCollectionUseUtc: command.timestampUtc,
@@ -331,7 +341,7 @@ final class QueueCommandRunner {
               'pending': pending.length,
               'auto_postpone_outcome': automatic.outcome.name,
               'automatically_postponed': automaticallyPostponed.length,
-              'prng_seed': prng.state.seed,
+              'prng_seed': randomNumbers.state.seed,
             },
           ),
         );
@@ -480,8 +490,9 @@ final class QueueCommandRunner {
         }
         // One shared stream: a manual reshuffle advances it exactly as the
         // automatic randomizations do, and every later draw moves with it.
-        final Sm20Prng prng = Sm20Prng(seed: runtime.prngSeed);
-        QueuePolicy.randomizeFixedSize<ElementRef>(queue, prng);
+        final Sm20RandomNumberGenerator randomNumbers =
+            Sm20RandomNumberGenerator(seed: runtime.randomNumberSeed);
+        QueuePolicy.randomizeFixedSize<ElementRef>(queue, randomNumbers);
         final Sm20CollectionState next = switch (command.queue) {
           // The combined order is what the user sees; the per-type lists stay
           // as they are, exactly as the daily sort leaves them.
@@ -494,7 +505,7 @@ final class QueueCommandRunner {
           Sm20RandomizableQueue.pending => runtime.copyWith(pending: queue),
         };
         await _context.saveRuntimeState(
-          next.copyWith(prngSeed: prng.state.seed),
+          next.copyWith(randomNumberSeed: randomNumbers.state.seed),
         );
         await _learning.appendActivity(
           ActivityRecord(
@@ -505,7 +516,7 @@ final class QueueCommandRunner {
             metadata: <String, Object?>{
               'queue': command.queue.name,
               'count': queue.length,
-              'prng_seed': prng.state.seed,
+              'prng_seed': randomNumbers.state.seed,
             },
           ),
         );
@@ -562,13 +573,14 @@ final class QueueCommandRunner {
           outstanding: outstanding,
           atUtc: command.timestampUtc,
         );
-        final Sm20Prng prng = Sm20Prng(seed: runtime.prngSeed);
+        final Sm20RandomNumberGenerator randomNumbers =
+            Sm20RandomNumberGenerator(seed: runtime.randomNumberSeed);
         final SmartPostponeResult result = const SmartPostponeEngine().run(
           source: source,
           profile: profile,
           priorityScale: await _context.priorityScale(),
           today: command.day,
-          prng: prng,
+          randomNumbers: randomNumbers,
           applicableSubbranchProfiles: command.applicableSubbranchProfiles,
         );
         if (result.profile.isSimulationOnly) {
@@ -583,12 +595,12 @@ final class QueueCommandRunner {
           today: command.day,
           candidates: candidates,
           result: result,
-          eventType: RevlogEventType.postpone,
+          eventType: ReviewLogEventType.postpone,
         );
         final Set<ElementRef> moved = result.postponed.toSet();
         await _context.saveRuntimeState(
           runtime.copyWith(
-            prngSeed: prng.state.seed,
+            randomNumberSeed: randomNumbers.state.seed,
             outstanding: runtime.outstanding
                 .where((ElementRef ref) => !moved.contains(ref))
                 .toList(),
@@ -638,7 +650,7 @@ final class QueueCommandRunner {
     required Sm20CollectionState runtime,
     required List<QueueCandidate> candidates,
     required List<ElementRef> outstanding,
-    required Sm20Prng prng,
+    required Sm20RandomNumberGenerator randomNumbers,
   }) async {
     final PriorityScale priorityScale = await _context.priorityScale();
     final List<Sm20PostponeCandidate> scheduled = await _postponeCandidates(
@@ -651,7 +663,8 @@ final class QueueCommandRunner {
       AutoPostponeRequest(
         today: command.day,
         nowUtc: command.timestampUtc,
-        isAutomaticPostponeEnabled: settings.postpone.isAutomaticPostponeEnabled,
+        isAutomaticPostponeEnabled:
+            settings.postpone.isAutomaticPostponeEnabled,
         lastAutoRunDay: runtime.lastAutomaticPostponeDay,
         isCollectionNonEmpty: candidates.isNotEmpty,
         lastCollectionUseUtc: runtime.lastCollectionUseUtc,
@@ -662,13 +675,15 @@ final class QueueCommandRunner {
         defaultProfile: settings.postpone.defaultProfile,
         priorityScale: priorityScale,
       ),
-      prng,
+      randomNumbers,
     );
 
     if (automatic.shouldDisableAutoPostpone) {
       final Result<AppSettings> saved = await _context.saveSettings(
         settings.copyWith(
-          postpone: settings.postpone.copyWith(isAutomaticPostponeEnabled: false),
+          postpone: settings.postpone.copyWith(
+            isAutomaticPostponeEnabled: false,
+          ),
         ),
       );
       if (saved case Err<AppSettings>(:final failure)) {
@@ -684,7 +699,7 @@ final class QueueCommandRunner {
       today: command.day,
       candidates: candidates,
       result: result,
-      eventType: RevlogEventType.autoPostpone,
+      eventType: ReviewLogEventType.autoPostpone,
     );
     return automatic;
   }
@@ -785,7 +800,7 @@ final class QueueCommandRunner {
         final CardMemory memory = card.memory;
         // Reps, not the FSRS learning state, decide memorization: FSRS calls a
         // never-reviewed card Learning, and SM20 treats that record as Pending.
-        final bool isMemorized = memory.reps > 0;
+        final bool isMemorized = memory.repetitionCount > 0;
         source.add(
           Sm20PostponeCandidate(
             ref: ref,
@@ -842,7 +857,7 @@ final class QueueCommandRunner {
     required StudyDay today,
     required List<QueueCandidate> candidates,
     required SmartPostponeResult result,
-    required RevlogEventType eventType,
+    required ReviewLogEventType eventType,
   }) async {
     final List<SmartPostponeDecision> writes = <SmartPostponeDecision>[
       for (final SmartPostponeDecision decision in result.decisions)
@@ -862,7 +877,7 @@ final class QueueCommandRunner {
       learning: _learning,
       ids: _ids,
     );
-    final List<RevlogEntry> revlog = <RevlogEntry>[];
+    final List<ReviewLogEntry> reviewLog = <ReviewLogEntry>[];
     var written = 0;
 
     for (final SmartPostponeDecision decision in writes) {
@@ -892,7 +907,7 @@ final class QueueCommandRunner {
           schedule: moved.schedule.copyWith(updatedAtUtc: atUtc),
         );
         await _learning.saveCardState(after);
-        revlog.add(
+        reviewLog.add(
           journal.build(
             operationId: itemOperation,
             ref: decision.ref,
@@ -924,7 +939,7 @@ final class QueueCommandRunner {
           schedule: moved.state.schedule.copyWith(updatedAtUtc: atUtc),
         );
         await _learning.saveTopic(after);
-        revlog.add(
+        reviewLog.add(
           journal.build(
             operationId: itemOperation,
             ref: decision.ref,
@@ -950,7 +965,7 @@ final class QueueCommandRunner {
       written += 1;
     }
 
-    if (revlog.isNotEmpty) await _learning.appendRevlogBatch(revlog);
+    if (reviewLog.isNotEmpty) await _learning.appendReviewLogBatch(reviewLog);
     return written;
   }
 

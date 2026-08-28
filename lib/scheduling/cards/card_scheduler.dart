@@ -135,7 +135,7 @@ final class CardMemory {
     required int? step,
     required double? stability,
     required double? difficulty,
-    required int reps,
+    required int repetitionCount,
     required int lapses,
     required DateTime? lastReviewAtUtc,
     required DateTime dueAtUtc,
@@ -155,7 +155,7 @@ final class CardMemory {
     if (lastReviewAtUtc != null) {
       _requireUtc(lastReviewAtUtc, 'lastReviewAtUtc');
     }
-    if (reps < 0 || lapses < 0 || lapses > reps) {
+    if (repetitionCount < 0 || lapses < 0 || lapses > repetitionCount) {
       throw ArgumentError('review counters are inconsistent');
     }
     if (step != null && step < 0) {
@@ -172,7 +172,7 @@ final class CardMemory {
         'stability and difficulty must either both be null or both be set',
       );
     }
-    if (reps > 0 && (stability == null || difficulty == null)) {
+    if (repetitionCount > 0 && (stability == null || difficulty == null)) {
       throw ArgumentError('reviewed cards need stability and difficulty');
     }
     if (schedulerVersion.isEmpty || parametersVersion.isEmpty) {
@@ -195,7 +195,7 @@ final class CardMemory {
       step: step,
       stability: stability,
       difficulty: difficulty,
-      reps: reps,
+      repetitionCount: repetitionCount,
       lapses: lapses,
       lastReviewAtUtc: lastReviewAtUtc,
       dueAtUtc: dueAtUtc,
@@ -215,7 +215,7 @@ final class CardMemory {
     required this.step,
     required this.stability,
     required this.difficulty,
-    required this.reps,
+    required this.repetitionCount,
     required this.lapses,
     required this.lastReviewAtUtc,
     required this.dueAtUtc,
@@ -240,7 +240,7 @@ final class CardMemory {
     step: 0,
     stability: null,
     difficulty: null,
-    reps: 0,
+    repetitionCount: 0,
     lapses: 0,
     lastReviewAtUtc: null,
     dueAtUtc: dueAtUtc,
@@ -256,7 +256,7 @@ final class CardMemory {
     step: map['step'] as int?,
     stability: (map['stability'] as num?)?.toDouble(),
     difficulty: (map['difficulty'] as num?)?.toDouble(),
-    reps: _required<int>(map, 'reps'),
+    repetitionCount: _required<int>(map, 'reps'),
     lapses: _required<int>(map, 'lapses'),
     lastReviewAtUtc: _instantOrNull(map['last_review_at_utc_ms']),
     dueAtUtc: _instant(_required<int>(map, 'due_at_utc_ms')),
@@ -286,7 +286,7 @@ final class CardMemory {
 
   final double? stability;
   final double? difficulty;
-  final int reps;
+  final int repetitionCount;
   final int lapses;
   final DateTime? lastReviewAtUtc;
   final DateTime dueAtUtc;
@@ -294,7 +294,7 @@ final class CardMemory {
   final String schedulerVersion;
   final String parametersVersion;
 
-  /// Deferrals so far. Never a review, so it is counted apart from [reps].
+  /// Deferrals so far. Never a review, so it is counted apart from [repetitionCount].
   final int postponeCount;
 
   /// Interval produced by the most recent genuine review, when applicable.
@@ -306,7 +306,7 @@ final class CardMemory {
   final int revision;
 
   /// A card with no recorded reviews yet.
-  bool get isNew => reps == 0;
+  bool get isNew => repetitionCount == 0;
 
   /// Whether the card is part-way through a learning or relearning run.
   ///
@@ -355,7 +355,7 @@ final class CardMemory {
       step: step,
       stability: stability,
       difficulty: difficulty,
-      reps: reps,
+      repetitionCount: repetitionCount,
       lapses: lapses,
       lastReviewAtUtc: adjustedLastReviewAtUtc,
       dueAtUtc: targetDueAtUtc,
@@ -376,7 +376,7 @@ final class CardMemory {
     'step': step,
     'stability': stability,
     'difficulty': difficulty,
-    'reps': reps,
+    'reps': repetitionCount,
     'lapses': lapses,
     'last_review_at_utc_ms': lastReviewAtUtc?.millisecondsSinceEpoch,
     'due_at_utc_ms': dueAtUtc.millisecondsSinceEpoch,
@@ -413,7 +413,7 @@ final class CardMemory {
       other.step == step &&
       other.stability == stability &&
       other.difficulty == difficulty &&
-      other.reps == reps &&
+      other.repetitionCount == repetitionCount &&
       other.lapses == lapses &&
       other.lastReviewAtUtc == lastReviewAtUtc &&
       other.dueAtUtc == dueAtUtc &&
@@ -432,7 +432,7 @@ final class CardMemory {
     step,
     stability,
     difficulty,
-    reps,
+    repetitionCount,
     lapses,
     lastReviewAtUtc,
     dueAtUtc,
@@ -657,7 +657,7 @@ final class CardScheduler implements FsrsAdapter {
       step: result.card.step,
       stability: result.card.stability,
       difficulty: result.card.difficulty,
-      reps: state.memory.reps + 1,
+      repetitionCount: state.memory.repetitionCount + 1,
       lapses: state.memory.lapses + (hasLapsed ? 1 : 0),
       lastReviewAtUtc: result.card.lastReview,
       dueAtUtc: result.card.due,
@@ -774,7 +774,7 @@ final class CardScheduler implements FsrsAdapter {
       step: prior.step,
       stability: prior.stability,
       difficulty: prior.difficulty,
-      reps: prior.reps,
+      repetitionCount: prior.repetitionCount,
       lapses: prior.lapses,
       lastReviewAtUtc: prior.lastReviewAtUtc,
       dueAtUtc: prior.dueAtUtc,

@@ -346,7 +346,7 @@ void main() {
       );
 
       final first = (await harness.review.review(command)).unwrap().state;
-      expect(first.memory.reps, 1);
+      expect(first.memory.repetitionCount, 1);
       expect(first.memory.lastReviewAtUtc, reviewedAt);
       expect(first.memory.stability, isNotNull);
       expect(first.memory.difficulty, isNotNull);
@@ -407,7 +407,7 @@ void main() {
           timestampUtc: clock.nowUtc(),
         ),
       )).unwrap().state;
-      expect(second.memory.reps, 2);
+      expect(second.memory.repetitionCount, 2);
       final afterRestartRecords = await harness.learning.listReviewsForCard(
         card.id,
       );

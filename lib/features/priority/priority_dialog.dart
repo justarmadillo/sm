@@ -44,10 +44,10 @@ class _PriorityDialog extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<PrioritySliderState> state = ref.watch(
-      prioritySliderProvider(elementRef),
+      prioritySliderViewModelProvider(elementRef),
     );
     final PrioritySliderViewModel model = ref.read(
-      prioritySliderProvider(elementRef).notifier,
+      prioritySliderViewModelProvider(elementRef).notifier,
     );
 
     return AlertDialog(
@@ -63,7 +63,8 @@ class _PriorityDialog extends ConsumerWidget {
             height: 160,
             child: Center(child: Text('No priority for this element.\n$error')),
           ),
-          data: (PrioritySliderState slider) => _SliderBody(state: slider, model: model),
+          data: (PrioritySliderState slider) =>
+              _SliderBody(state: slider, model: model),
         ),
       ),
       actions: <Widget>[
@@ -75,13 +76,13 @@ class _PriorityDialog extends ConsumerWidget {
           onPressed: state.valueOrNull == null || state.valueOrNull!.isBusy
               ? null
               : () async {
-                  final bool ok = await model.commit();
+                  final bool didCommit = await model.commit();
                   if (!context.mounted) return;
-                  if (ok) {
+                  if (didCommit) {
                     Navigator.of(context).pop(true);
                   } else {
                     final String? message = ref
-                        .read(prioritySliderProvider(elementRef))
+                        .read(prioritySliderViewModelProvider(elementRef))
                         .valueOrNull
                         ?.message
                         ?.text;
@@ -105,73 +106,18 @@ class _SliderBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int total = state.context.position.total;
-    final int position = ((state.draftPercent / 100) * (total - 1)).round() + 1;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: <Widget>[
-            Text(
-              '${state.draftPercent.toStringAsFixed(1)}%',
-              style: const TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w700,
-                color: AppColors.accent,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'position $position of $total',
-              style: const TextStyle(fontSize: 13, color: AppColors.muted),
-            ),
-            const Spacer(),
-            IconButton(
-              tooltip: 'More important (Shift+Ctrl+Up)',
-              onPressed: state.isBusy ? null : () => model.step(shouldIncrease: true),
-              icon: const Icon(Icons.keyboard_arrow_up),
-            ),
-            IconButton(
-              tooltip: 'Less important (Shift+Ctrl+Down)',
-              onPressed: state.isBusy
-                  ? null
-                  : () => model.step(shouldIncrease: false),
-              icon: const Icon(Icons.keyboard_arrow_down),
-            ),
-          ],
-        ),
-        Slider(
-          value: state.draftPercent,
-          max: 100,
-          divisions: 200,
-          label: '${state.draftPercent.toStringAsFixed(1)}%',
-          onChanged: state.isBusy ? null : model.draft,
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Text(
-                '0% — most important',
-                style: TextStyle(fontSize: 11, color: AppColors.muted),
-              ),
-              Text(
-                '100% — least',
-                style: TextStyle(fontSize: 11, color: AppColors.muted),
-              ),
-            ],
-          ),
-        ),
+        _readout(),
+        _slider(),
+        _scaleLegend(),
         const SizedBox(height: 16),
         // Naming the neighbours is what turns an abstract percent into a
-        // judgement the user can actually make.
-        // These follow the slider: they name where the element would land at
-        // the drafted percent, not where it sits now.
+        // judgement the user can actually make. These follow the slider: they
+        // name where the element would land at the drafted percent, not where
+        // it sits now.
         _NeighbourLine(label: 'Before', entry: state.draftAbove),
         const SizedBox(height: 6),
         _NeighbourLine(label: 'After', entry: state.draftBelow),
@@ -183,6 +129,80 @@ class _SliderBody extends StatelessWidget {
           style: TextStyle(fontSize: 12, color: AppColors.muted, height: 1.45),
         ),
       ],
+    );
+  }
+
+  /// The drafted percent, its position in the collection, and the two keys
+  /// that nudge it one place at a time.
+  ///
+  /// The position is shown alongside the percent because "12.5%" means
+  /// nothing on its own, while "position 40 of 320" does.
+  Widget _readout() {
+    final int total = state.context.position.total;
+    final int position = ((state.draftPercent / 100) * (total - 1)).round() + 1;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: <Widget>[
+        Text(
+          '${state.draftPercent.toStringAsFixed(1)}%',
+          style: const TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w700,
+            color: AppColors.accent,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          'position $position of $total',
+          style: const TextStyle(fontSize: 13, color: AppColors.muted),
+        ),
+        const Spacer(),
+        IconButton(
+          tooltip: 'More important (Shift+Ctrl+Up)',
+          onPressed: state.isBusy
+              ? null
+              : () => model.step(shouldIncrease: true),
+          icon: const Icon(Icons.keyboard_arrow_up),
+        ),
+        IconButton(
+          tooltip: 'Less important (Shift+Ctrl+Down)',
+          onPressed: state.isBusy
+              ? null
+              : () => model.step(shouldIncrease: false),
+          icon: const Icon(Icons.keyboard_arrow_down),
+        ),
+      ],
+    );
+  }
+
+  Widget _slider() {
+    return Slider(
+      value: state.draftPercent,
+      max: 100,
+      divisions: 200,
+      label: '${state.draftPercent.toStringAsFixed(1)}%',
+      onChanged: state.isBusy ? null : model.draft,
+    );
+  }
+
+  /// The scale runs the opposite way to intuition, so both ends say so.
+  Widget _scaleLegend() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Text(
+            '0% — most important',
+            style: TextStyle(fontSize: 11, color: AppColors.muted),
+          ),
+          Text(
+            '100% — least',
+            style: TextStyle(fontSize: 11, color: AppColors.muted),
+          ),
+        ],
+      ),
     );
   }
 }

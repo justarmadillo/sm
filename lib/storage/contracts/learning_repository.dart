@@ -6,7 +6,7 @@ library;
 
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduler_event.dart';
 import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
@@ -129,7 +129,10 @@ abstract interface class LearningRepository {
   Future<void> saveSchedule(ElementSchedule schedule);
 
   /// Every schedule, ordered by priority, for the priority browser.
-  Future<List<ElementSchedule>> listByPriority({int? limit, int? offset});
+  Future<List<ElementSchedule>> listSchedulesByPriority({
+    int? limit,
+    int? offset,
+  });
 
   /// Appends one activity record.
   Future<void> appendActivity(ActivityRecord record);
@@ -149,16 +152,19 @@ abstract interface class LearningRepository {
   /// Called by every command that changes a schedule, in the same transaction
   /// as the change. The log is the only record that cannot be rebuilt from
   /// current state, so a write that skips it loses information permanently.
-  Future<void> appendRevlog(RevlogEntry entry);
+  Future<void> appendReviewLog(ReviewLogEntry entry);
 
   /// Appends many entries at once, for the daily valve and Mercy.
-  Future<void> appendRevlogBatch(List<RevlogEntry> entries);
+  Future<void> appendReviewLogBatch(List<ReviewLogEntry> entries);
 
   /// Everything that happened to [ref], oldest first.
-  Future<List<RevlogEntry>> listRevlogFor(ElementRef ref, {int? limit});
+  Future<List<ReviewLogEntry>> listReviewLogForElement(
+    ElementRef ref, {
+    int? limit,
+  });
 
   /// The most recent entries across the whole collection, newest first.
-  Future<List<RevlogEntry>> listRecentRevlog({int limit = 100});
+  Future<List<ReviewLogEntry>> listRecentReviewLog({int limit = 100});
 
   /// Appends the authoritative scheduler event. Events are never updated or
   /// deleted; an undo is another event referencing its target.
@@ -197,7 +203,7 @@ abstract interface class LearningRepository {
   Future<StoredMercyBatch?> findLastAppliedMercyBatch();
 
   /// How many entries of each event type were written on [day].
-  Future<Map<RevlogEventType, int>> countRevlogOn(StudyDay day);
+  Future<Map<ReviewLogEventType, int>> countReviewLogEventsOn(StudyDay day);
 
   /// The most recent non-practice review of [cardId], or null.
   Future<ReviewRecord?> findLastReview(String cardId);
@@ -206,7 +212,7 @@ abstract interface class LearningRepository {
   ///
   /// Undo-last-grade is a session affordance, so it works on whatever was
   /// graded last rather than only on the card currently open.
-  Future<ReviewRecord?> findLastReviewOverall();
+  Future<ReviewRecord?> findLastReviewInCollection();
 
   /// Priority keys of every non-deleted learning element, ascending.
   ///

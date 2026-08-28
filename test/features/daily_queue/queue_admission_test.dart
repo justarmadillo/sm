@@ -11,7 +11,7 @@ import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/features/daily_queue/queue_query.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
@@ -236,11 +236,11 @@ void main() {
       expect(applied.isErr, isTrue);
       // A refused apply writes nothing, so no element carries a Mercy row.
       expect(
-        await harness.learning.listRecentRevlog(limit: 200),
+        await harness.learning.listRecentReviewLog(limit: 200),
         isNot(
           contains(
-            predicate<RevlogEntry>(
-              (RevlogEntry e) => e.eventType == RevlogEventType.mercy,
+            predicate<ReviewLogEntry>(
+              (ReviewLogEntry e) => e.eventType == ReviewLogEventType.mercy,
             ),
           ),
         ),
@@ -271,9 +271,9 @@ void main() {
         ),
       );
       expect(
-        (await harness.learning.listRecentRevlog(
+        (await harness.learning.listRecentReviewLog(
           limit: 200,
-        )).where((RevlogEntry e) => e.eventType == RevlogEventType.mercy),
+        )).where((ReviewLogEntry e) => e.eventType == ReviewLogEventType.mercy),
         isNotEmpty,
         reason: 'applying Mercy journals one row per moved element',
       );
@@ -398,9 +398,10 @@ void main() {
         OperationId(expected),
       );
       // Anything the automatic pass did move carries that same id.
-      for (final RevlogEntry entry
-          in (await harness.learning.listRecentRevlog(limit: 200)).where(
-            (RevlogEntry e) => e.eventType == RevlogEventType.autoPostpone,
+      for (final ReviewLogEntry entry
+          in (await harness.learning.listRecentReviewLog(limit: 200)).where(
+            (ReviewLogEntry e) =>
+                e.eventType == ReviewLogEventType.autoPostpone,
           )) {
         expect(entry.operationId, expected);
       }

@@ -58,7 +58,7 @@ QueueCandidate _card(String id, PriorityRank priority) {
         step: null,
         stability: 5,
         difficulty: 5,
-        reps: 1,
+        repetitionCount: 1,
         lapses: 0,
         lastReviewAtUtc: _now.subtract(const Duration(days: 1)),
         dueAtUtc: _now.subtract(const Duration(hours: 1)),
@@ -109,7 +109,7 @@ void main() {
         candidates: all,
         nowUtc: _now,
         today: _today,
-        prng: Sm20Prng(seed: 0),
+        randomNumbers: Sm20RandomNumberGenerator(seed: 0),
         combinedOrder: <ElementRef>[for (final QueueCandidate c in all) c.ref],
         outstandingItemMembership: <ElementRef>{
           for (final QueueCandidate c in all)
@@ -137,7 +137,7 @@ void main() {
         candidates: all,
         nowUtc: _now,
         today: _today,
-        prng: Sm20Prng(seed: 0),
+        randomNumbers: Sm20RandomNumberGenerator(seed: 0),
         combinedOrder: <ElementRef>[for (final QueueCandidate c in all) c.ref],
         outstandingItemMembership: <ElementRef>{all.first.ref},
       );
@@ -168,7 +168,7 @@ void main() {
             candidates: all,
             nowUtc: _now,
             today: _today,
-            prng: Sm20Prng(seed: 0),
+            randomNumbers: Sm20RandomNumberGenerator(seed: 0),
             combinedOrder: <ElementRef>[
               for (final QueueCandidate c in all) c.ref,
             ],
@@ -188,13 +188,15 @@ void main() {
         for (var i = 0; i < 3; i += 1) _card('card-$i', ranks[i]),
         for (var i = 0; i < 3; i += 1) _topic('topic-$i', ranks[3 + i]),
       ];
-      final Sm20Prng prng = Sm20Prng(seed: 12345);
-      final int before = prng.state.seed;
+      final Sm20RandomNumberGenerator randomNumbers = Sm20RandomNumberGenerator(
+        seed: 12345,
+      );
+      final int before = randomNumbers.state.seed;
       _policy(all).build(
         candidates: all,
         nowUtc: _now,
         today: _today,
-        prng: prng,
+        randomNumbers: randomNumbers,
         combinedOrder: <ElementRef>[for (final QueueCandidate c in all) c.ref],
         outstandingItemMembership: <ElementRef>{
           for (final QueueCandidate c in all)
@@ -204,7 +206,7 @@ void main() {
         // build must be free of draws.
         shouldSort: false,
       );
-      expect(prng.state.seed, before);
+      expect(randomNumbers.state.seed, before);
     });
 
     test('a sorted build draws at least once per element', () {
@@ -216,13 +218,17 @@ void main() {
         for (var i = 0; i < 3; i += 1) _topic('topic-$i', ranks[3 + i]),
       ];
       var draws = 0;
-      final Sm20Prng counting = Sm20Prng(seed: 7);
-      final Sm20Prng reference = Sm20Prng(seed: 7);
+      final Sm20RandomNumberGenerator counting = Sm20RandomNumberGenerator(
+        seed: 7,
+      );
+      final Sm20RandomNumberGenerator reference = Sm20RandomNumberGenerator(
+        seed: 7,
+      );
       _policy(all).build(
         candidates: all,
         nowUtc: _now,
         today: _today,
-        prng: counting,
+        randomNumbers: counting,
         combinedOrder: <ElementRef>[for (final QueueCandidate c in all) c.ref],
         outstandingItemMembership: <ElementRef>{
           for (final QueueCandidate c in all)
@@ -238,8 +244,10 @@ void main() {
 
     test('fixed-size randomization is a permutation, not a resample', () {
       final List<int> values = <int>[for (var i = 0; i < 12; i += 1) i];
-      final Sm20Prng prng = Sm20Prng(seed: 3);
-      QueuePolicy.randomizeFixedSize<int>(values, prng);
+      final Sm20RandomNumberGenerator randomNumbers = Sm20RandomNumberGenerator(
+        seed: 3,
+      );
+      QueuePolicy.randomizeFixedSize<int>(values, randomNumbers);
       expect(values..sort(), <int>[for (var i = 0; i < 12; i += 1) i]);
     });
   });
@@ -272,7 +280,7 @@ void main() {
         candidates: all,
         nowUtc: _now,
         today: _today,
-        prng: Sm20Prng(seed: 0),
+        randomNumbers: Sm20RandomNumberGenerator(seed: 0),
         combinedOrder: <ElementRef>[
           for (final QueueCandidate c in all)
             if (!c.isPending) c.ref,
@@ -292,18 +300,20 @@ void main() {
         _topic('a', ranks[0]),
         _card('b', ranks[1]),
       ];
-      final Sm20PrngState state = Sm20Prng(seed: 99).state;
+      final Sm20RandomNumberGeneratorState state = Sm20RandomNumberGenerator(
+        seed: 99,
+      ).state;
       final QueuePlan plan = QueuePlan.stage(
         candidates: drill,
         lane: QueueLane.finalDrill,
-        prngState: state,
+        randomNumberState: state,
       );
       expect(plan.entries, hasLength(2));
       expect(
         plan.scored.map((ScoredCandidate s) => s.lane),
         everyElement(QueueLane.finalDrill),
       );
-      expect(plan.prngState.seed, state.seed);
+      expect(plan.randomNumberState.seed, state.seed);
     });
   });
 
@@ -321,7 +331,7 @@ void main() {
                   candidates: all,
                   nowUtc: _now,
                   today: _today,
-                  prng: Sm20Prng(seed: 4242),
+                  randomNumbers: Sm20RandomNumberGenerator(seed: 4242),
                   combinedOrder: <ElementRef>[
                     for (final QueueCandidate c in all) c.ref,
                   ],
@@ -341,7 +351,7 @@ void main() {
         candidates: const <QueueCandidate>[],
         nowUtc: _now,
         today: _today,
-        prng: Sm20Prng(seed: 0),
+        randomNumbers: Sm20RandomNumberGenerator(seed: 0),
       );
       expect(plan.entries, isEmpty);
       expect(plan.isEmpty, isTrue);

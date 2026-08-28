@@ -56,7 +56,7 @@ final class QueueCandidate {
 
   /// Pending is a separate fallback stage, never injected into Outstanding.
   bool get isPending => isCard
-      ? card!.memory.reps == 0
+      ? card!.memory.repetitionCount == 0
       : topic!.status == Sm20ElementStatus.pending;
 
   bool isDue({required DateTime nowUtc, required StudyDay today}) {
@@ -124,10 +124,10 @@ final class QueuePlan {
     required this.prioritySortedTopics,
     required this.counters,
     required this.scored,
-    required this.prngState,
+    required this.randomNumberState,
   });
 
-  factory QueuePlan.empty(Sm20PrngState state) => QueuePlan(
+  factory QueuePlan.empty(Sm20RandomNumberGeneratorState state) => QueuePlan(
     entries: const <QueueCandidate>[],
     prioritySortedItems: const <QueueCandidate>[],
     prioritySortedTopics: const <QueueCandidate>[],
@@ -139,7 +139,7 @@ final class QueuePlan {
       admittedNewCards: 0,
     ),
     scored: const <ScoredCandidate>[],
-    prngState: state,
+    randomNumberState: state,
   );
 
   /// A separate fallback learning stage.  Final Drill and Pending are never
@@ -147,7 +147,7 @@ final class QueuePlan {
   factory QueuePlan.stage({
     required Iterable<QueueCandidate> candidates,
     required QueueLane lane,
-    required Sm20PrngState prngState,
+    required Sm20RandomNumberGeneratorState randomNumberState,
   }) {
     final List<QueueCandidate> entries = List<QueueCandidate>.unmodifiable(
       candidates,
@@ -172,7 +172,7 @@ final class QueuePlan {
       prioritySortedTopics: const <QueueCandidate>[],
       counters: QueuePolicy._counters(cards, topics),
       scored: scored,
-      prngState: prngState,
+      randomNumberState: randomNumberState,
     );
   }
 
@@ -181,7 +181,7 @@ final class QueuePlan {
   final List<QueueCandidate> prioritySortedTopics;
   final QueueCounters counters;
   final List<ScoredCandidate> scored;
-  final Sm20PrngState prngState;
+  final Sm20RandomNumberGeneratorState randomNumberState;
   bool get isEmpty => entries.isEmpty;
 }
 
@@ -200,7 +200,7 @@ final class QueuePolicy {
     required Iterable<QueueCandidate> candidates,
     required DateTime nowUtc,
     required StudyDay today,
-    required Sm20Prng prng,
+    required Sm20RandomNumberGenerator randomNumbers,
     Iterable<ElementRef>? combinedOrder,
     Set<ElementRef>? outstandingItemMembership,
     bool shouldSort = true,
@@ -236,7 +236,7 @@ final class QueuePolicy {
         }
       }
     }
-    if (outstanding.isEmpty) return QueuePlan.empty(prng.state);
+    if (outstanding.isEmpty) return QueuePlan.empty(randomNumbers.state);
 
     final Set<ElementRef>? membership = outstandingItemMembership;
     final List<ScoredCandidate> items = <ScoredCandidate>[];
@@ -275,7 +275,7 @@ final class QueuePolicy {
           ...items,
           ...topics,
         ]),
-        prngState: prng.state,
+        randomNumberState: randomNumbers.state,
       );
     }
 
@@ -290,12 +290,12 @@ final class QueuePolicy {
     final List<ScoredCandidate> randomizedItems = _randomizedExtraction(
       items,
       settings.itemRandomization,
-      prng,
+      randomNumbers,
     );
     final List<ScoredCandidate> randomizedTopics = _randomizedExtraction(
       topics,
       settings.topicRandomization,
-      prng,
+      randomNumbers,
     );
     final List<ScoredCandidate> merged = _merge(
       randomizedItems,
@@ -314,7 +314,7 @@ final class QueuePolicy {
       ),
       counters: _counters(items.length, topics.length),
       scored: List<ScoredCandidate>.unmodifiable(merged),
-      prngState: prng.state,
+      randomNumberState: randomNumbers.state,
     );
   }
 
@@ -329,7 +329,7 @@ final class QueuePolicy {
   static List<ScoredCandidate> _randomizedExtraction(
     List<ScoredCandidate> sorted,
     int slider,
-    Sm20Prng prng,
+    Sm20RandomNumberGenerator randomNumbers,
   ) {
     final List<ScoredCandidate> remaining = <ScoredCandidate>[...sorted];
     final List<ScoredCandidate> output = <ScoredCandidate>[];
@@ -338,11 +338,14 @@ final class QueuePolicy {
     for (var i = 1; i <= count; i++) {
       final double x = (i - 1) / count;
       final double gate = math.pow(x, 1 / curve).toDouble();
-      final double update = prng.nextDouble();
+      final double update = randomNumbers.nextDouble();
       var index = 0;
       if (gate > update) {
-        final double depth = math.pow(prng.nextDouble(), 1 / curve).toDouble();
-        index = (prng.nextDouble() * depth * remaining.length).truncate();
+        final double depth = math
+            .pow(randomNumbers.nextDouble(), 1 / curve)
+            .toDouble();
+        index = (randomNumbers.nextDouble() * depth * remaining.length)
+            .truncate();
       }
       output.add(remaining.removeAt(index.clamp(0, remaining.length - 1)));
     }
@@ -358,22 +361,23 @@ final class QueuePolicy {
     final double topicFraction = topicPercent.clamp(0, 100) / 100;
     var itemIndex = 0;
     var topicIndex = 0;
-    var ni = 0;
-    var nt = 0;
+    var itemsPlaced = 0;
+    var topicsPlaced = 0;
     final int total = items.length + topics.length;
     for (var slot = 0; slot < total; slot++) {
-      bool shouldChooseItem = (1 - topicFraction) > ni / (ni + nt + 1);
+      bool shouldChooseItem =
+          (1 - topicFraction) > itemsPlaced / (itemsPlaced + topicsPlaced + 1);
       if (shouldChooseItem) {
-        ni++;
+        itemsPlaced++;
         if (itemIndex >= items.length) {
           shouldChooseItem = false;
-          nt++;
+          topicsPlaced++;
         }
       } else {
-        nt++;
+        topicsPlaced++;
         if (topicIndex >= topics.length) {
           shouldChooseItem = true;
-          ni++;
+          itemsPlaced++;
         }
       }
       output.add(shouldChooseItem ? items[itemIndex++] : topics[topicIndex++]);
@@ -390,13 +394,16 @@ final class QueuePolicy {
   );
 
   /// Fixed-full-range swap used by Final Drill and Mercy mode 3.
-  static void randomizeFixedSize<T>(List<T> queue, Sm20Prng prng) {
+  static void randomizeFixedSize<T>(
+    List<T> queue,
+    Sm20RandomNumberGenerator randomNumbers,
+  ) {
     final int count = queue.length;
-    for (var i = 0; i < count; i++) {
-      final int j = prng.nextInt(count);
-      final T value = queue[i];
-      queue[i] = queue[j];
-      queue[j] = value;
+    for (var position = 0; position < count; position++) {
+      final int swapWith = randomNumbers.nextInt(count);
+      final T value = queue[position];
+      queue[position] = queue[swapWith];
+      queue[swapWith] = value;
     }
   }
 }

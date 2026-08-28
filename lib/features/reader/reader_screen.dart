@@ -178,9 +178,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// on a visible passage instead of an unmarked position. Choosing the same
   /// one again clears the paint.
   void _goToExtract(Extract extract) {
-    final bool clearing = _focusedExtractId == extract.id;
-    setState(() => _focusedExtractId = clearing ? null : extract.id);
-    if (clearing) return;
+    final bool isAlreadyFocused = _focusedExtractId == extract.id;
+    setState(() => _focusedExtractId = isAlreadyFocused ? null : extract.id);
+    if (isAlreadyFocused) return;
     unawaited(
       _readerKey.currentState?.animateToAnchor(
             extract.provenance.startAnchor,
@@ -242,6 +242,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     );
   }
 
+  /// The Reader screen, top to bottom: status bar, optional banners, the
+  /// reading surface beside the side panel, then the action bar.
   Widget _buildReader(
     BuildContext context,
     ReaderUiState state,
@@ -261,57 +263,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(state.source.title),
-        actions: <Widget>[
-          if (state.mode == ReaderMode.browse)
-            TextButton(
-              onPressed: model.continueScheduled,
-              child: const Text('Continue reading'),
-            ),
-          IconButton(
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (BuildContext context) => const _TypographyDialog(),
-            ),
-            icon: const Icon(Icons.text_fields),
-            tooltip: 'Reading appearance',
-          ),
-          IconButton(
-            onPressed: () => setState(() => _isPanelOpen = !_isPanelOpen),
-            icon: Icon(
-              _isPanelOpen ? Icons.view_sidebar : Icons.view_sidebar_outlined,
-            ),
-            color: _isPanelOpen ? AppColors.accent : null,
-            tooltip: _isPanelOpen
-                ? 'Hide outline and extracts'
-                : 'Show outline and extracts',
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
+      appBar: _appBar(context, state, model),
       body: CallbackShortcuts(
-        bindings: <ShortcutActivator, VoidCallback>{
-          // Keyboard-first on Windows: the three terminal actions and the
-          // marker are reachable without leaving the keyboard.
-          const SingleActivator(LogicalKeyboardKey.enter, control: true):
-              model.done,
-          const SingleActivator(LogicalKeyboardKey.keyL, control: true): () =>
-              model.later(),
-          const SingleActivator(LogicalKeyboardKey.keyM, control: true): () {
-            final anchor = _readerKey.currentState?.topVisibleAnchor;
-            if (anchor != null) unawaited(model.placeMarkerAt(anchor));
-          },
-          const SingleActivator(LogicalKeyboardKey.keyE, control: true): () =>
-              _extractSelection(model),
-          // SuperMemo's own key for "make an item out of this".
-          const SingleActivator(LogicalKeyboardKey.keyZ, alt: true): () =>
-              unawaited(_formulate(model, state)),
-          // And its key for "how important is this?".
-          kPriorityShortcut: () => unawaited(
-            showPriorityDialog(context, ref, elementRef: state.topic.ref),
-          ),
-        },
+        bindings: _keyboardShortcuts(context, state, model),
         child: Focus(
           // Not while a block is open in the editor: a rebuild that re-attaches
           // this node would otherwise reclaim focus from the field mid-word.
@@ -340,102 +294,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 child: Row(
                   children: <Widget>[
                     Expanded(
-                      child: Stack(
-                        key: _surfaceKey,
-                        children: <Widget>[
-                          ReaderView(
-                            key: _readerKey,
-                            document: state.document,
-                            controller: controller,
-                            typography: typography,
-                            marker: state.marker,
-                            onGutterTap: state.canCommitProgress
-                                ? model.placeMarkerAt
-                                : null,
-                            extractMarks: _extractMarks,
-                            extractHighlights: _extractHighlights,
-                            onExtractMarksTap: (Block block) =>
-                                _openContext(context, state, model, block),
-                            onVisiblePositionChanged: (ReaderAnchor anchor) {
-                              unawaited(model.recordPosition(anchor));
-                              _updateCurrentBlock(
-                                state.document.blockForAnchor(anchor)?.id,
-                              );
-                            },
-                            editingBlockId: state.editingBlockId,
-                            isBusy: state.isBusy,
-                            onEditCommit: (Block block, String markdown) =>
-                                unawaited(model.commitEdit(block, markdown)),
-                            onEditCancel: (Block _) => model.cancelEditing(),
-                            onEditDelete: (Block block) =>
-                                unawaited(model.deleteBlock(block)),
-                          ),
-                          SelectionToolbarLayer(
-                            controller: controller,
-                            canExtract: state.canCommitProgress,
-                            canSetMarker: state.canCommitProgress,
-                            extractHint: !state.canCommitProgress
-                                ? 'Choose Continue reading to extract from '
-                                      'this source'
-                                : 'Extraction spanning several blocks is not '
-                                      'supported yet',
-                            toSurfaceSpace: _toSurfaceSpace,
-                            surfaceSize: () => _surfaceSize,
-                            onExtract: () => _extractSelection(model),
-                            onSetMarker: () {
-                              final anchor = controller
-                                  .resolveSelection()
-                                  ?.range
-                                  .startAnchor;
-                              if (anchor != null) {
-                                unawaited(model.placeMarkerAt(anchor));
-                                controller.clear();
-                              }
-                            },
-                            onCopy: () {
-                              final resolved = controller.resolveSelection();
-                              if (resolved == null) return;
-                              unawaited(
-                                Clipboard.setData(
-                                  ClipboardData(text: resolved.markdown),
-                                ),
-                              );
-                              showToast(context, 'Copied');
-                            },
-                            // Available while browsing too: correcting the
-                            // text is not recording a repetition.
-                            onEditBlock: () {
-                              final anchor = controller
-                                  .resolveSelection()
-                                  ?.range
-                                  .startAnchor;
-                              if (anchor == null) return;
-                              final block = state.document.blockForAnchor(
-                                anchor,
-                              );
-                              if (block == null) return;
-                              controller.clear();
-                              model.beginEditing(block);
-                            },
-                          ),
-                        ],
+                      child: _readingSurface(
+                        context,
+                        state,
+                        model,
+                        typography,
+                        controller,
                       ),
                     ),
-                    if (_isPanelOpen)
-                      ReaderSidePanel(
-                        document: state.document,
-                        extracts: state.extracts,
-                        tab: _panelTab,
-                        currentBlockId: _currentBlockId,
-                        focusedExtractId: _focusedExtractId,
-                        onTabChanged: (ReaderPanelTab next) =>
-                            setState(() => _panelTab = next),
-                        onGoToBlock: (String blockId) => unawaited(
-                          _animateToBlock(state.document, blockId),
-                        ),
-                        onGoToExtract: _goToExtract,
-                        onClose: () => setState(() => _isPanelOpen = false),
-                      ),
+                    if (_isPanelOpen) _sidePanel(state),
                   ],
                 ),
               ),
@@ -450,6 +317,163 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// The title bar: the source's name, and the three things reachable from it.
+  PreferredSizeWidget _appBar(
+    BuildContext context,
+    ReaderUiState state,
+    ReaderViewModel model,
+  ) {
+    return AppBar(
+      title: Text(state.source.title),
+      actions: <Widget>[
+        if (state.mode == ReaderMode.browse)
+          TextButton(
+            onPressed: model.continueScheduled,
+            child: const Text('Continue reading'),
+          ),
+        IconButton(
+          onPressed: () => showDialog<void>(
+            context: context,
+            builder: (BuildContext context) => const _TypographyDialog(),
+          ),
+          icon: const Icon(Icons.text_fields),
+          tooltip: 'Reading appearance',
+        ),
+        IconButton(
+          onPressed: () => setState(() => _isPanelOpen = !_isPanelOpen),
+          icon: Icon(
+            _isPanelOpen ? Icons.view_sidebar : Icons.view_sidebar_outlined,
+          ),
+          color: _isPanelOpen ? AppColors.accent : null,
+          tooltip: _isPanelOpen
+              ? 'Hide outline and extracts'
+              : 'Show outline and extracts',
+        ),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  /// Keyboard-first on Windows: the three terminal actions and the marker are
+  /// reachable without leaving the keyboard.
+  Map<ShortcutActivator, VoidCallback> _keyboardShortcuts(
+    BuildContext context,
+    ReaderUiState state,
+    ReaderViewModel model,
+  ) {
+    return <ShortcutActivator, VoidCallback>{
+      const SingleActivator(LogicalKeyboardKey.enter, control: true):
+          model.done,
+      const SingleActivator(LogicalKeyboardKey.keyL, control: true): () =>
+          model.later(),
+      const SingleActivator(LogicalKeyboardKey.keyM, control: true): () {
+        final anchor = _readerKey.currentState?.topVisibleAnchor;
+        if (anchor != null) unawaited(model.placeMarkerAt(anchor));
+      },
+      const SingleActivator(LogicalKeyboardKey.keyE, control: true): () =>
+          _extractSelection(model),
+      // SuperMemo's own key for "make an item out of this".
+      const SingleActivator(LogicalKeyboardKey.keyZ, alt: true): () =>
+          unawaited(_formulate(model, state)),
+      // And its key for "how important is this?".
+      kPriorityShortcut: () => unawaited(
+        showPriorityDialog(context, ref, elementRef: state.topic.ref),
+      ),
+    };
+  }
+
+  /// The document itself, with the selection toolbar floating over it.
+  ///
+  /// Both layers share one [ReaderSelectionController], which is why they are
+  /// stacked here rather than built independently.
+  Widget _readingSurface(
+    BuildContext context,
+    ReaderUiState state,
+    ReaderViewModel model,
+    ReaderTypography typography,
+    ReaderSelectionController controller,
+  ) {
+    return Stack(
+      key: _surfaceKey,
+      children: <Widget>[
+        ReaderView(
+          key: _readerKey,
+          document: state.document,
+          controller: controller,
+          typography: typography,
+          marker: state.marker,
+          onGutterTap: state.canCommitProgress ? model.placeMarkerAt : null,
+          extractMarks: _extractMarks,
+          extractHighlights: _extractHighlights,
+          onExtractMarksTap: (Block block) =>
+              _openContext(context, state, model, block),
+          onVisiblePositionChanged: (ReaderAnchor anchor) {
+            unawaited(model.recordPosition(anchor));
+            _updateCurrentBlock(state.document.blockForAnchor(anchor)?.id);
+          },
+          editingBlockId: state.editingBlockId,
+          isBusy: state.isBusy,
+          onEditCommit: (Block block, String markdown) =>
+              unawaited(model.commitEdit(block, markdown)),
+          onEditCancel: (Block _) => model.cancelEditing(),
+          onEditDelete: (Block block) => unawaited(model.deleteBlock(block)),
+        ),
+        SelectionToolbarLayer(
+          controller: controller,
+          canExtract: state.canCommitProgress,
+          canSetMarker: state.canCommitProgress,
+          extractHint: !state.canCommitProgress
+              ? 'Choose Continue reading to extract from this source'
+              : 'Extraction spanning several blocks is not supported yet',
+          toSurfaceSpace: _toSurfaceSpace,
+          surfaceSize: () => _surfaceSize,
+          onExtract: () => _extractSelection(model),
+          onSetMarker: () {
+            final anchor = controller.resolveSelection()?.range.startAnchor;
+            if (anchor != null) {
+              unawaited(model.placeMarkerAt(anchor));
+              controller.clear();
+            }
+          },
+          onCopy: () {
+            final resolved = controller.resolveSelection();
+            if (resolved == null) return;
+            unawaited(
+              Clipboard.setData(ClipboardData(text: resolved.markdown)),
+            );
+            showToast(context, 'Copied');
+          },
+          // Available while browsing too: correcting the text is not
+          // recording a repetition.
+          onEditBlock: () {
+            final anchor = controller.resolveSelection()?.range.startAnchor;
+            if (anchor == null) return;
+            final block = state.document.blockForAnchor(anchor);
+            if (block == null) return;
+            controller.clear();
+            model.beginEditing(block);
+          },
+        ),
+      ],
+    );
+  }
+
+  /// The outline and extract list beside the document.
+  Widget _sidePanel(ReaderUiState state) {
+    return ReaderSidePanel(
+      document: state.document,
+      extracts: state.extracts,
+      tab: _panelTab,
+      currentBlockId: _currentBlockId,
+      focusedExtractId: _focusedExtractId,
+      onTabChanged: (ReaderPanelTab next) => setState(() => _panelTab = next),
+      onGoToBlock: (String blockId) =>
+          unawaited(_animateToBlock(state.document, blockId)),
+      onGoToExtract: _goToExtract,
+      onClose: () => setState(() => _isPanelOpen = false),
     );
   }
 
@@ -619,11 +643,17 @@ class _StatusBar extends StatelessWidget {
         child: Row(
           children: <Widget>[
             if (state.mode == ReaderMode.browse) ...<Widget>[
-              const _StatusPillButton(text: 'Browsing', color: AppColors.softMarker),
+              const _StatusPillButton(
+                text: 'Browsing',
+                color: AppColors.softMarker,
+              ),
               const SizedBox(width: 12),
               const Text('Nothing here changes progress or scheduling'),
             ] else ...<Widget>[
-              const _StatusPillButton(text: 'Reading today', color: AppColors.accent),
+              const _StatusPillButton(
+                text: 'Reading today',
+                color: AppColors.accent,
+              ),
               const SizedBox(width: 12),
               Text(
                 state.marker == null
@@ -780,60 +810,65 @@ class _ActionBar extends StatelessWidget {
               child: const Text('Extract'),
             ),
             const SizedBox(width: 6),
-            // Undoing an edit is a text operation, not a scheduling one, so it
-            // sits with the content actions, never touches the due date, and
-            // stays available in browse mode alongside the edit itself. It
-            // appends the reverse splice rather than rewinding.
-            if (state.canUndoEdit) ...<Widget>[
-              TextButton.icon(
-                onPressed: state.isBusy
-                    ? null
-                    : () => unawaited(model.undoEdit()),
-                icon: const Icon(Icons.undo, size: 15),
-                label: const Text('Undo edit'),
-              ),
-              const SizedBox(width: 6),
-            ],
-            if (state.canCommitProgress) ...<Widget>[
-              OutlinedButton(
-                onPressed: state.isBusy ? null : onFormulate,
-                child: const Text('Formulate'),
-              ),
-              const SizedBox(width: 6),
-              TextButton(
-                onPressed: state.isBusy ? null : model.dismiss,
-                child: const Text('Dismiss source'),
-              ),
-              const SizedBox(width: 6),
-              // Two different commands, deliberately distinct. Later Today
-              // moves the element inside today's queue and leaves the due
-              // date alone, so it comes back in this same session; Postpone
-              // takes it off today entirely.
-              OutlinedButton(
-                onPressed: state.isBusy ? null : model.later,
-                child: const Text('Later today'),
-              ),
-              const SizedBox(width: 6),
-              OutlinedButton(
-                onPressed: state.isBusy
-                    ? null
-                    : () async {
-                        final int? days = await _promptForDays(context);
-                        if (days != null) await model.later(days: days);
-                      },
-                child: const Text('Postpone…'),
-              ),
-              const SizedBox(width: 6),
-              FilledButton(
-                onPressed: state.isBusy ? null : model.done,
-                child: const Text('Done'),
-              ),
-            ],
+            if (state.canUndoEdit) ..._undoEditButton(),
+            if (state.canCommitProgress) ..._progressButtons(context),
           ],
         ),
       ),
     );
   }
+
+  /// Undoing an edit is a text operation, not a scheduling one, so it sits
+  /// with the content actions, never touches the due date, and stays
+  /// available in browse mode alongside the edit itself. It appends the
+  /// reverse splice rather than rewinding.
+  List<Widget> _undoEditButton() => <Widget>[
+    TextButton.icon(
+      onPressed: state.isBusy ? null : () => unawaited(model.undoEdit()),
+      icon: const Icon(Icons.undo, size: 15),
+      label: const Text('Undo edit'),
+    ),
+    const SizedBox(width: 6),
+  ];
+
+  /// The commands that move the schedule, so they appear only when this
+  /// screen is allowed to record progress.
+  ///
+  /// Later Today and Postpone are two different commands, deliberately
+  /// distinct: Later Today moves the element inside today's queue and leaves
+  /// the due date alone, so it comes back in this same session; Postpone
+  /// takes it off today entirely.
+  List<Widget> _progressButtons(BuildContext context) => <Widget>[
+    OutlinedButton(
+      onPressed: state.isBusy ? null : onFormulate,
+      child: const Text('Formulate'),
+    ),
+    const SizedBox(width: 6),
+    TextButton(
+      onPressed: state.isBusy ? null : model.dismiss,
+      child: const Text('Dismiss source'),
+    ),
+    const SizedBox(width: 6),
+    OutlinedButton(
+      onPressed: state.isBusy ? null : model.later,
+      child: const Text('Later today'),
+    ),
+    const SizedBox(width: 6),
+    OutlinedButton(
+      onPressed: state.isBusy
+          ? null
+          : () async {
+              final int? days = await _promptForDays(context);
+              if (days != null) await model.later(days: days);
+            },
+      child: const Text('Postpone…'),
+    ),
+    const SizedBox(width: 6),
+    FilledButton(
+      onPressed: state.isBusy ? null : model.done,
+      child: const Text('Done'),
+    ),
+  ];
 
   String _hintFor(ReaderSelectionController selection) {
     if (!state.canCommitProgress) {
@@ -859,7 +894,8 @@ Future<int?> _promptForDays(BuildContext context) async {
       builder: (BuildContext context) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setState) {
           final int? value = int.tryParse(controller.text.trim());
-          final bool valid = value != null && value >= 1 && value <= 3650;
+          final bool isDayCountValid =
+              value != null && value >= 1 && value <= 3650;
           return AlertDialog(
             title: const Text('Postpone by'),
             content: SizedBox(
@@ -895,7 +931,7 @@ Future<int?> _promptForDays(BuildContext context) async {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: valid
+                onPressed: isDayCountValid
                     ? () => Navigator.of(context).pop(value)
                     : null,
                 child: const Text('Postpone'),

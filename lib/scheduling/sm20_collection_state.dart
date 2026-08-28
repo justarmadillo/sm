@@ -8,7 +8,7 @@ import 'package:meta/meta.dart';
 @immutable
 final class Sm20CollectionState {
   const Sm20CollectionState({
-    this.prngSeed = 0,
+    this.randomNumberSeed = 0,
     this.learningStartDay,
     this.lastAutomaticSortDay,
     this.lastAutomaticPostponeDay,
@@ -22,7 +22,7 @@ final class Sm20CollectionState {
     this.subsetQueues = const <String, List<ElementRef>>{},
   });
 
-  final int prngSeed;
+  final int randomNumberSeed;
   final StudyDay? learningStartDay;
   final StudyDay? lastAutomaticSortDay;
   final StudyDay? lastAutomaticPostponeDay;
@@ -42,7 +42,7 @@ final class Sm20CollectionState {
   final Map<String, List<ElementRef>> subsetQueues;
 
   Sm20CollectionState copyWith({
-    int? prngSeed,
+    int? randomNumberSeed,
     Object? learningStartDay = _keep,
     Object? lastAutomaticSortDay = _keep,
     Object? lastAutomaticPostponeDay = _keep,
@@ -55,7 +55,7 @@ final class Sm20CollectionState {
     List<ElementRef>? finalDrill,
     Map<String, List<ElementRef>>? subsetQueues,
   }) => Sm20CollectionState(
-    prngSeed: prngSeed ?? this.prngSeed,
+    randomNumberSeed: randomNumberSeed ?? this.randomNumberSeed,
     learningStartDay: identical(learningStartDay, _keep)
         ? this.learningStartDay
         : learningStartDay as StudyDay?,

@@ -40,7 +40,8 @@ void main() {
     PriorityRank.middle,
   ]);
 
-  TopicScheduler scheduler() => TopicScheduler(prng: Sm20Prng(seed: 0));
+  TopicScheduler scheduler() =>
+      TopicScheduler(randomNumbers: Sm20RandomNumberGenerator(seed: 0));
 
   test('an Outstanding element is only shifted inside the queue', () {
     // Overdue by six days, which is the ordinary case for a backlog.

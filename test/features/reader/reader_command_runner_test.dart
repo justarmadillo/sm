@@ -351,7 +351,7 @@ void main() {
 
     test('advances the dataset generation', () async {
       final source = await harness.importFixture();
-      final before = (await harness.transfer.findIdentity()).generation;
+      final before = (await harness.transfer.findDatasetIdentity()).generation;
       await harness.reader.completeEncounter(
         CompleteTopicEncounter(
           harness.nextOperation(),
@@ -359,7 +359,7 @@ void main() {
         ),
       );
       expect(
-        (await harness.transfer.findIdentity()).generation,
+        (await harness.transfer.findDatasetIdentity()).generation,
         greaterThan(before),
       );
     });

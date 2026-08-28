@@ -31,7 +31,7 @@ import 'package:incremental_reader/documents/source_edit.dart';
 import 'package:incremental_reader/documents/text_splice.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduler_event.dart';
 import 'package:incremental_reader/scheduling/history/scheduling_journal.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
@@ -349,7 +349,7 @@ final class ReaderCommandRunner {
     final runtime = await _context.runtimeState();
     await _context.saveRuntimeState(
       runtime.copyWith(
-        prngSeed: transition.prngState.seed,
+        randomNumberSeed: transition.randomNumberState.seed,
         outstanding: runtime.outstanding
             .where((ElementRef value) => value != command.ref)
             .toList(),
@@ -372,8 +372,8 @@ final class ReaderCommandRunner {
         operationId: command.operationId.value,
         ref: command.ref,
         eventType: event is TopicLifecycleChanged
-            ? RevlogEventType.finish
-            : RevlogEventType.topicRead,
+            ? ReviewLogEventType.finish
+            : ReviewLogEventType.topicRead,
         atUtc: command.timestampUtc,
         before: _journal.topicSnapshot(
           topic,
@@ -462,7 +462,9 @@ final class ReaderCommandRunner {
         final TopicScheduler scheduler = await _context.topicScheduler();
         final PriorityScale scale = await _context.priorityScale();
         final runtime = await _context.runtimeState();
-        final bool isAlreadyOutstanding = runtime.outstanding.contains(topic.ref);
+        final bool isAlreadyOutstanding = runtime.outstanding.contains(
+          topic.ref,
+        );
         final TopicTransition transition = command.until == null
             ? scheduler.laterToday(
                 topic,
@@ -511,7 +513,7 @@ final class ReaderCommandRunner {
             outstanding: outstanding,
             outstandingTopics: outstandingTopics,
             pending: pending,
-            prngSeed: transition.prngState.seed,
+            randomNumberSeed: transition.randomNumberState.seed,
           ),
         );
         final TopicState after = transition.state;
@@ -519,8 +521,8 @@ final class ReaderCommandRunner {
           operationId: command.operationId.value,
           ref: command.ref,
           eventType: command.isAutomatic
-              ? RevlogEventType.autoPostpone
-              : RevlogEventType.postpone,
+              ? ReviewLogEventType.autoPostpone
+              : ReviewLogEventType.postpone,
           atUtc: command.timestampUtc,
           before: _journal.topicSnapshot(topic, calendar: calendar),
           after: _journal.topicSnapshot(after, calendar: calendar),
@@ -576,11 +578,11 @@ final class ReaderCommandRunner {
             ConflictFailure('the topic changed before reschedule committed'),
           );
         }
-        await _context.savePrngState(transition.prngState);
+        await _context.saveRandomNumberState(transition.randomNumberState);
         await _journal.append(
           operationId: command.operationId.value,
           ref: command.ref,
-          eventType: RevlogEventType.manualReschedule,
+          eventType: ReviewLogEventType.manualReschedule,
           atUtc: command.timestampUtc,
           before: _journal.topicSnapshot(topic, calendar: calendar),
           after: _journal.topicSnapshot(transition.state, calendar: calendar),
@@ -605,7 +607,7 @@ final class ReaderCommandRunner {
     command,
     command.ref,
     'topic.dismissed',
-    RevlogEventType.dismiss,
+    ReviewLogEventType.dismiss,
     Sm20ElementStatus.dismissed,
   );
 
@@ -614,7 +616,7 @@ final class ReaderCommandRunner {
     command,
     command.ref,
     'topic.undismissed',
-    RevlogEventType.resume,
+    ReviewLogEventType.resume,
     Sm20ElementStatus.pending,
   );
 
@@ -623,7 +625,7 @@ final class ReaderCommandRunner {
     command,
     ElementRef(id: command.sourceId, type: ElementType.source),
     'source.deleted',
-    RevlogEventType.dismiss,
+    ReviewLogEventType.dismiss,
     Sm20ElementStatus.deleted,
   );
 
@@ -727,7 +729,7 @@ final class ReaderCommandRunner {
     AppCommand command,
     ElementRef ref,
     String kind,
-    RevlogEventType eventType,
+    ReviewLogEventType eventType,
     Sm20ElementStatus target,
   ) => _run<TopicState>(command, kind, () async {
     final TopicState? topic = await _learning.findTopic(ref);
@@ -745,7 +747,7 @@ final class ReaderCommandRunner {
       Sm20ElementStatus.deleted => scheduler.delete(topic, day),
       Sm20ElementStatus.memorized => TopicTransition.unchanged(
         topic,
-        scheduler.prngState,
+        scheduler.randomNumberState,
       ),
     };
     if (!result.isChange) return Ok<TopicState>(result.state);
@@ -766,7 +768,7 @@ final class ReaderCommandRunner {
     if (result.state.status == Sm20ElementStatus.pending) pending.add(ref);
     await _context.saveRuntimeState(
       runtime.copyWith(
-        prngSeed: result.prngState.seed,
+        randomNumberSeed: result.randomNumberState.seed,
         outstanding: runtime.outstanding
             .where((ElementRef value) => value != ref)
             .toList(),
@@ -838,7 +840,7 @@ final class ReaderCommandRunner {
     await _journal.append(
       operationId: command.operationId.value,
       ref: topic.ref,
-      eventType: RevlogEventType.created,
+      eventType: ReviewLogEventType.created,
       atUtc: command.timestampUtc,
       after: _journal.topicSnapshot(
         topic,
@@ -857,34 +859,54 @@ final class ReaderCommandRunner {
   /// Replaces one block's markdown.
   ///
   /// Editing text is not a repetition. Nothing here reads or writes a
-  /// schedule, a priority, a revlog entry, or a scheduler event, and the
+  /// schedule, a priority, a review log entry, or a scheduler event, and the
   /// source's due date is exactly where it was before.
   Future<Result<SourceEdited>> editSourceBlock(EditSourceBlock command) =>
-      _runEdit(command, kSourceEditedKind, (Document document) {
-        final Block? block = document.blockById(command.blockId);
-        if (block == null) return null;
-        return spliceForBlockEdit(document, block, command.markdown);
-      }, sourceId: command.sourceId, base: command.baseContentRevision);
+      _runEdit(
+        command,
+        kSourceEditedKind,
+        (Document document) {
+          final Block? block = document.blockById(command.blockId);
+          if (block == null) return null;
+          return spliceForBlockEdit(document, block, command.markdown);
+        },
+        sourceId: command.sourceId,
+        base: command.baseContentRevision,
+      );
 
   /// Removes one block, separator included.
   Future<Result<SourceEdited>> deleteSourceBlock(DeleteSourceBlock command) =>
-      _runEdit(command, kSourceEditedKind, (Document document) {
-        final Block? block = document.blockById(command.blockId);
-        if (block == null) return null;
-        return spliceForBlockRemoval(document, block);
-      }, sourceId: command.sourceId, base: command.baseContentRevision);
+      _runEdit(
+        command,
+        kSourceEditedKind,
+        (Document document) {
+          final Block? block = document.blockById(command.blockId);
+          if (block == null) return null;
+          return spliceForBlockRemoval(document, block);
+        },
+        sourceId: command.sourceId,
+        base: command.baseContentRevision,
+      );
 
   /// Adds a new block after an existing one.
   Future<Result<SourceEdited>> insertSourceBlock(InsertSourceBlock command) =>
-      _runEdit(command, kSourceEditedKind, (Document document) {
-        final Block? block = document.blockById(command.afterBlockId);
-        if (block == null) return null;
-        return spliceForBlockInsertion(document, block, command.markdown);
-      }, sourceId: command.sourceId, base: command.baseContentRevision);
+      _runEdit(
+        command,
+        kSourceEditedKind,
+        (Document document) {
+          final Block? block = document.blockById(command.afterBlockId);
+          if (block == null) return null;
+          return spliceForBlockInsertion(document, block, command.markdown);
+        },
+        sourceId: command.sourceId,
+        base: command.baseContentRevision,
+      );
 
   /// Reverses the most recent edit, as a new forward edit.
   Future<Result<SourceEdited>> undoSourceEdit(UndoSourceEdit command) async {
-    final SourceEdit? last = await _content.findLatestSourceEdit(command.sourceId);
+    final SourceEdit? last = await _content.findLatestSourceEdit(
+      command.sourceId,
+    );
     if (last == null) {
       return const Err<SourceEdited>(
         ConflictFailure('there is nothing to undo on this source'),
@@ -935,11 +957,7 @@ final class ReaderCommandRunner {
           final Source? unchanged = await _content.findSource(sourceId);
           if (unchanged == null) return _missingSource<SourceEdited>(sourceId);
           return Ok<SourceEdited>(
-            SourceEdited(
-              source: unchanged,
-              document: document,
-              outcome: null,
-            ),
+            SourceEdited(source: unchanged, document: document, outcome: null),
           );
         }
 

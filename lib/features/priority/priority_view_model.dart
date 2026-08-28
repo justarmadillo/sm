@@ -71,12 +71,21 @@ final class PrioritySliderState {
     draftPercent: draftPercent ?? this.draftPercent,
     isBusy: isBusy ?? this.isBusy,
     message: shouldClearMessage ? null : (message ?? this.message),
-    draftAbove: shouldClearDraftNeighbours ? null : (draftAbove ?? this.draftAbove),
-    draftBelow: shouldClearDraftNeighbours ? null : (draftBelow ?? this.draftBelow),
+    draftAbove: shouldClearDraftNeighbours
+        ? null
+        : (draftAbove ?? this.draftAbove),
+    draftBelow: shouldClearDraftNeighbours
+        ? null
+        : (draftBelow ?? this.draftBelow),
   );
 }
 
 /// One element's priority, editable.
+///
+/// `arg` below is Riverpod's name for the value the dialog was opened with —
+/// here the [ElementRef] passed to `prioritySliderViewModelProvider(...)`. It
+/// is inherited from `FamilyAsyncNotifier` and cannot be renamed, so read
+/// `arg` as "the element whose priority is being edited".
 final class PrioritySliderViewModel
     extends FamilyAsyncNotifier<PrioritySliderState, ElementRef> {
   @override
@@ -200,7 +209,7 @@ final AsyncNotifierProviderFamily<
   PrioritySliderState,
   ElementRef
 >
-prioritySliderProvider =
+prioritySliderViewModelProvider =
     AsyncNotifierProvider.family<
       PrioritySliderViewModel,
       PrioritySliderState,
@@ -610,99 +619,120 @@ final class PriorityBrowserViewModel
           Sm20ReviewMode.reviewAll => 'Reviewing all',
           Sm20ReviewMode.reviewTopics => 'Reviewing topics',
         },
-        (PriorityBrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
-            commandRunner.startReview(
-              StartBrowserReview(
-                operation,
-                refs: refs,
-                day: day,
-                mode: mode,
-                timestampUtc: ref.read(clockProvider).nowUtc(),
-              ),
-            ),
+        (
+          PriorityBrowserCommandRunner commandRunner,
+          OperationId operation,
+          StudyDay day,
+        ) => commandRunner.startReview(
+          StartBrowserReview(
+            operation,
+            refs: refs,
+            day: day,
+            mode: mode,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        ),
       );
 
   Future<void> remember(List<ElementRef> refs) => _browserCommand(
     'Remembered',
-    (PriorityBrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
-        commandRunner.remember(
-          RememberElements(
-            operation,
-            refs: refs,
-            day: day,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        ),
+    (
+      PriorityBrowserCommandRunner commandRunner,
+      OperationId operation,
+      StudyDay day,
+    ) => commandRunner.remember(
+      RememberElements(
+        operation,
+        refs: refs,
+        day: day,
+        timestampUtc: ref.read(clockProvider).nowUtc(),
+      ),
+    ),
   );
 
   /// Forget: return memorized records to the pending store.
   Future<void> forget(List<ElementRef> refs) => _browserCommand(
     'Forgotten',
-    (PriorityBrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
-        commandRunner.forget(
-          ForgetElements(
-            operation,
-            refs: refs,
-            day: day,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        ),
+    (
+      PriorityBrowserCommandRunner commandRunner,
+      OperationId operation,
+      StudyDay day,
+    ) => commandRunner.forget(
+      ForgetElements(
+        operation,
+        refs: refs,
+        day: day,
+        timestampUtc: ref.read(clockProvider).nowUtc(),
+      ),
+    ),
   );
 
   /// Dismiss: stop scheduling and send priority to the bottom.
   Future<void> dismiss(List<ElementRef> refs) => _browserCommand(
     'Dismissed',
-    (PriorityBrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
-        commandRunner.dismiss(
-          DismissElements(
-            operation,
-            refs: refs,
-            day: day,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        ),
+    (
+      PriorityBrowserCommandRunner commandRunner,
+      OperationId operation,
+      StudyDay day,
+    ) => commandRunner.dismiss(
+      DismissElements(
+        operation,
+        refs: refs,
+        day: day,
+        timestampUtc: ref.read(clockProvider).nowUtc(),
+      ),
+    ),
   );
 
   /// Undismiss: restore the status only.
   Future<void> undismiss(List<ElementRef> refs) => _browserCommand(
     'Undismissed',
-    (PriorityBrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
-        commandRunner.undismiss(
-          UndismissElements(
-            operation,
-            refs: refs,
-            day: day,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        ),
+    (
+      PriorityBrowserCommandRunner commandRunner,
+      OperationId operation,
+      StudyDay day,
+    ) => commandRunner.undismiss(
+      UndismissElements(
+        operation,
+        refs: refs,
+        day: day,
+        timestampUtc: ref.read(clockProvider).nowUtc(),
+      ),
+    ),
   );
 
   /// Done: remove from scheduling entirely.
   Future<void> done(List<ElementRef> refs) => _browserCommand(
     'Done',
-    (PriorityBrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
-        commandRunner.done(
-          DoneElements(
-            operation,
-            refs: refs,
-            day: day,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        ),
+    (
+      PriorityBrowserCommandRunner commandRunner,
+      OperationId operation,
+      StudyDay day,
+    ) => commandRunner.done(
+      DoneElements(
+        operation,
+        refs: refs,
+        day: day,
+        timestampUtc: ref.read(clockProvider).nowUtc(),
+      ),
+    ),
   );
 
   /// Add to drill: Final Drill membership only.
   Future<void> addToFinalDrill(List<ElementRef> refs) => _browserCommand(
     'Added to Final Drill',
-    (PriorityBrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
-        commandRunner.addToFinalDrill(
-          AddToFinalDrill(
-            operation,
-            refs: refs,
-            day: day,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        ),
+    (
+      PriorityBrowserCommandRunner commandRunner,
+      OperationId operation,
+      StudyDay day,
+    ) => commandRunner.addToFinalDrill(
+      AddToFinalDrill(
+        operation,
+        refs: refs,
+        day: day,
+        timestampUtc: ref.read(clockProvider).nowUtc(),
+      ),
+    ),
   );
 
   /// Add to outstanding, or Add all.
@@ -712,63 +742,75 @@ final class PriorityBrowserViewModel
     bool shouldRescheduleSameDay = false,
   }) => _browserCommand(
     'Added to Outstanding',
-    (PriorityBrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
-        commandRunner.addToOutstanding(
-          AddToOutstanding(
-            operation,
-            refs: refs,
-            day: day,
-            everyWhich: everyWhich,
-            shouldRescheduleSameDay: shouldRescheduleSameDay,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        ),
+    (
+      PriorityBrowserCommandRunner commandRunner,
+      OperationId operation,
+      StudyDay day,
+    ) => commandRunner.addToOutstanding(
+      AddToOutstanding(
+        operation,
+        refs: refs,
+        day: day,
+        everyWhich: everyWhich,
+        shouldRescheduleSameDay: shouldRescheduleSameDay,
+        timestampUtc: ref.read(clockProvider).nowUtc(),
+      ),
+    ),
   );
 
   /// Reset history: drop the external history block and nothing else.
   Future<void> resetHistory(List<ElementRef> refs) => _browserCommand(
     'History reset',
-    (PriorityBrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
-        commandRunner.resetHistory(
-          ResetElementHistory(
-            operation,
-            refs: refs,
-            day: day,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        ),
+    (
+      PriorityBrowserCommandRunner commandRunner,
+      OperationId operation,
+      StudyDay day,
+    ) => commandRunner.resetHistory(
+      ResetElementHistory(
+        operation,
+        refs: refs,
+        day: day,
+        timestampUtc: ref.read(clockProvider).nowUtc(),
+      ),
+    ),
   );
 
   /// Set A directly, for normal topics.
   Future<void> setAFactor(List<ElementRef> refs, double value) =>
       _browserCommand(
         'A-factor set',
-        (PriorityBrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
-            commandRunner.setAFactor(
-              SetTopicAFactor(
-                operation,
-                refs: refs,
-                day: day,
-                value: value,
-                timestampUtc: ref.read(clockProvider).nowUtc(),
-              ),
-            ),
+        (
+          PriorityBrowserCommandRunner commandRunner,
+          OperationId operation,
+          StudyDay day,
+        ) => commandRunner.setAFactor(
+          SetTopicAFactor(
+            operation,
+            refs: refs,
+            day: day,
+            value: value,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        ),
       );
 
   /// Modify A by a multiplier, for normal topics.
   Future<void> modifyAFactor(List<ElementRef> refs, double multiplier) =>
       _browserCommand(
         'A-factor modified',
-        (PriorityBrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
-            commandRunner.modifyAFactor(
-              ModifyTopicAFactor(
-                operation,
-                refs: refs,
-                day: day,
-                multiplier: multiplier,
-                timestampUtc: ref.read(clockProvider).nowUtc(),
-              ),
-            ),
+        (
+          PriorityBrowserCommandRunner commandRunner,
+          OperationId operation,
+          StudyDay day,
+        ) => commandRunner.modifyAFactor(
+          ModifyTopicAFactor(
+            operation,
+            refs: refs,
+            day: day,
+            multiplier: multiplier,
+            timestampUtc: ref.read(clockProvider).nowUtc(),
+          ),
+        ),
       );
 
   /// Advance: pull future work closer to today across a horizon.
@@ -778,17 +820,20 @@ final class PriorityBrowserViewModel
     required int horizonDays,
   }) => _browserCommand(
     'Advanced',
-    (PriorityBrowserCommandRunner commandRunner, OperationId operation, StudyDay day) =>
-        commandRunner.advance(
-          AdvanceElements(
-            operation,
-            refs: refs,
-            day: day,
-            scope: scope,
-            horizonDays: horizonDays,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        ),
+    (
+      PriorityBrowserCommandRunner commandRunner,
+      OperationId operation,
+      StudyDay day,
+    ) => commandRunner.advance(
+      AdvanceElements(
+        operation,
+        refs: refs,
+        day: day,
+        scope: scope,
+        horizonDays: horizonDays,
+        timestampUtc: ref.read(clockProvider).nowUtc(),
+      ),
+    ),
   );
 
   /// Runs one browser command and reports what it actually changed.
@@ -845,7 +890,7 @@ final class PriorityBrowserViewModel
 }
 
 final AsyncNotifierProvider<PriorityBrowserViewModel, PriorityBrowserState>
-priorityBrowserProvider =
+priorityBrowserViewModelProvider =
     AsyncNotifierProvider<PriorityBrowserViewModel, PriorityBrowserState>(
       PriorityBrowserViewModel.new,
     );

@@ -44,7 +44,7 @@ final class ReaderTypographyNotifier extends Notifier<ReaderTypography> {
     final settings = ref.read(settingsRepositoryProvider);
     final Map<String, String> stored;
     try {
-      stored = await settings.readAll();
+      stored = await settings.listAllValues();
     } on Object {
       return;
     }
@@ -92,9 +92,9 @@ final class ReaderTypographyNotifier extends Notifier<ReaderTypography> {
       final settings = ref.read(settingsRepositoryProvider);
       // A failed preference write must not interrupt reading.
       try {
-        await settings.write(kFontSizeKey, '${next.fontSize}');
-        await settings.write(kColumnWidthKey, '${next.columnWidth}');
-        await settings.write(kLineHeightKey, '${next.lineHeight}');
+        await settings.saveValue(kFontSizeKey, '${next.fontSize}');
+        await settings.saveValue(kColumnWidthKey, '${next.columnWidth}');
+        await settings.saveValue(kLineHeightKey, '${next.lineHeight}');
       } on Object {
         return;
       }

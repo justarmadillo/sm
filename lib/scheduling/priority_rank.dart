@@ -309,21 +309,27 @@ final class PriorityScale {
     required bool isBulkOperation,
   }) {
     if (_keys.isEmpty) return current;
-    final int old = oldInterval < 1 ? 1 : oldInterval;
-    final int next = newInterval;
-    if (old == next) return current;
+    final int previousInterval = oldInterval < 1 ? 1 : oldInterval;
+    final int nextInterval = newInterval;
+    if (previousInterval == nextInterval) return current;
 
-    var correction = 80 * (1 - mathMin(old, next) / mathMax(old, next));
+    var correction =
+        80 *
+        (1 -
+            _smallerOf(previousInterval, nextInterval) /
+                _largerOf(previousInterval, nextInterval));
     if (isBulkOperation) correction /= 3;
     final double scale = (100 - correction) / 100;
     final double currentPercent = percentageOf(current);
-    double target = next < old
+    double target = nextInterval < previousInterval
         ? currentPercent * scale
         : currentPercent / scale;
-    final int oldPosition = positionOf(current)?.displayPosition ?? 1;
+    final int currentPosition = positionOf(current)?.displayPosition ?? 1;
     var targetPosition = positionForPercentage(target);
-    if (targetPosition == oldPosition) {
-      targetPosition += next < old ? -1 : 1;
+    if (targetPosition == currentPosition) {
+      // The correction was too small to move a whole position; nudge it one
+      // step in the direction the interval moved so the change is visible.
+      targetPosition += nextInterval < previousInterval ? -1 : 1;
       targetPosition = targetPosition.clamp(1, _keys.length);
       target = percentageForPosition(targetPosition);
     }
@@ -361,44 +367,60 @@ final class PriorityScale {
   }
 }
 
-double mathMin(num a, num b) => a < b ? a.toDouble() : b.toDouble();
+double _smallerOf(num first, num second) =>
+    first < second ? first.toDouble() : second.toDouble();
 
-double mathMax(num a, num b) => a > b ? a.toDouble() : b.toDouble();
+double _largerOf(num first, num second) =>
+    first > second ? first.toDouble() : second.toDouble();
 
-/// The order key strictly between [a] and [b].
+/// The order key strictly between [lower] and [upper], where a null [upper]
+/// means "after everything".
 ///
 /// This is the fractional-indexing midpoint: treat the keys as fractions in
 /// base 62 and find a shortest string between them. Keys never end in `0`, so
 /// there is always room to insert again on either side.
-String _midpoint(String a, String? b) {
-  assert(b == null || a.compareTo(b) < 0, 'bounds must be ascending');
-  assert(!a.endsWith('0'), 'order key must not end with a zero digit');
-  assert(b == null || !b.endsWith('0'), 'order key must not end with a zero');
+String _midpoint(String lower, String? upper) {
+  assert(
+    upper == null || lower.compareTo(upper) < 0,
+    'bounds must be ascending',
+  );
+  assert(!lower.endsWith('0'), 'order key must not end with a zero digit');
+  assert(
+    upper == null || !upper.endsWith('0'),
+    'order key must not end with a zero',
+  );
 
-  if (b != null) {
+  if (upper != null) {
     // Keep any shared prefix and recurse on the remainder.
-    var n = 0;
-    while (n < b.length && (n < a.length ? a[n] : '0') == b[n]) {
-      n++;
+    var sharedPrefixLength = 0;
+    while (sharedPrefixLength < upper.length &&
+        (sharedPrefixLength < lower.length ? lower[sharedPrefixLength] : '0') ==
+            upper[sharedPrefixLength]) {
+      sharedPrefixLength++;
     }
-    if (n > 0) {
-      return b.substring(0, n) +
-          _midpoint(n < a.length ? a.substring(n) : '', b.substring(n));
+    if (sharedPrefixLength > 0) {
+      return upper.substring(0, sharedPrefixLength) +
+          _midpoint(
+            sharedPrefixLength < lower.length
+                ? lower.substring(sharedPrefixLength)
+                : '',
+            upper.substring(sharedPrefixLength),
+          );
     }
   }
 
-  final digitA = a.isEmpty ? 0 : orderKeyDigits.indexOf(a[0]);
-  final digitB = b == null
+  final lowerDigit = lower.isEmpty ? 0 : orderKeyDigits.indexOf(lower[0]);
+  final upperDigit = upper == null
       ? orderKeyDigits.length
-      : orderKeyDigits.indexOf(b[0]);
-  if (digitB - digitA > 1) {
-    final mid = (0.5 * (digitA + digitB)).round();
-    return orderKeyDigits[mid];
+      : orderKeyDigits.indexOf(upper[0]);
+  if (upperDigit - lowerDigit > 1) {
+    final middleDigit = (0.5 * (lowerDigit + upperDigit)).round();
+    return orderKeyDigits[middleDigit];
   }
   // The leading digits are adjacent: descend into whichever side has room.
-  if (b != null && b.length > 1) {
-    return b.substring(0, 1);
+  if (upper != null && upper.length > 1) {
+    return upper.substring(0, 1);
   }
-  return orderKeyDigits[digitA] +
-      _midpoint(a.isEmpty ? '' : a.substring(1), null);
+  return orderKeyDigits[lowerDigit] +
+      _midpoint(lower.isEmpty ? '' : lower.substring(1), null);
 }

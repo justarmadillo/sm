@@ -130,40 +130,47 @@ final class DelphiReal48 {
 
 /// A persistable snapshot of SM20's one-word global random state.
 @immutable
-final class Sm20PrngState {
+final class Sm20RandomNumberGeneratorState {
   /// Creates a state from an unsigned 32-bit [seed].
-  factory Sm20PrngState(int seed) {
+  factory Sm20RandomNumberGeneratorState(int seed) {
     RangeError.checkValueInInterval(seed, 0, _uint32Mask, 'seed');
-    return Sm20PrngState._(seed);
+    return Sm20RandomNumberGeneratorState._(seed);
   }
 
-  const Sm20PrngState._(this.seed);
+  const Sm20RandomNumberGeneratorState._(this.seed);
 
   /// The unsigned 32-bit Delphi seed.
   final int seed;
 
   @override
   bool operator ==(Object other) =>
-      other is Sm20PrngState && other.seed == seed;
+      other is Sm20RandomNumberGeneratorState && other.seed == seed;
 
   @override
   int get hashCode => seed.hashCode;
 
   @override
   String toString() =>
-      'Sm20PrngState(0x${seed.toRadixString(16).padLeft(8, '0')})';
+      'Sm20RandomNumberGeneratorState(0x${seed.toRadixString(16).padLeft(8, '0')})';
 }
 
 /// SM20's mutable, application-wide Delphi random stream.
 ///
+/// A pseudo-random number generator (PRNG): given the same starting seed it
+/// replays the exact same sequence of numbers, which is why the seed is
+/// persisted. That reproducibility is what lets a randomized queue or a Mercy
+/// batch be undone and re-derived rather than guessed at.
+///
 /// Pass the same instance to every scheduling subsystem. [drawCount] is
 /// diagnostic and intentionally not part of the persisted state.
-final class Sm20Prng {
+final class Sm20RandomNumberGenerator {
   /// Starts at unsigned 32-bit [seed].
-  Sm20Prng({int seed = 0}) : _seed = Sm20PrngState(seed).seed;
+  Sm20RandomNumberGenerator({int seed = 0})
+    : _seed = Sm20RandomNumberGeneratorState(seed).seed;
 
   /// Continues from a persisted [state].
-  Sm20Prng.fromState(Sm20PrngState state) : _seed = state.seed;
+  Sm20RandomNumberGenerator.fromState(Sm20RandomNumberGeneratorState state)
+    : _seed = state.seed;
 
   int _seed;
   int _drawCount = 0;
@@ -172,7 +179,8 @@ final class Sm20Prng {
   int get seed => _seed;
 
   /// A persistable snapshot of [seed].
-  Sm20PrngState get state => Sm20PrngState._(_seed);
+  Sm20RandomNumberGeneratorState get state =>
+      Sm20RandomNumberGeneratorState._(_seed);
 
   /// Number of values consumed since construction or [restore].
   int get drawCount => _drawCount;
@@ -197,7 +205,7 @@ final class Sm20Prng {
   }
 
   /// Restores the global stream and resets only its diagnostic draw counter.
-  void restore(Sm20PrngState state) {
+  void restore(Sm20RandomNumberGeneratorState state) {
     _seed = state.seed;
     _drawCount = 0;
   }
@@ -207,7 +215,7 @@ final class Sm20Prng {
 double sm20Spread({
   required double center,
   required double width,
-  required Sm20Prng prng,
+  required Sm20RandomNumberGenerator randomNumbers,
 }) {
   // The order is part of the contract, including the apparently redundant
   // non-negative clamp after the center-relative upper clamp.
@@ -216,10 +224,10 @@ double sm20Spread({
   adjustedWidth = math.max(adjustedWidth, 0.0);
   adjustedWidth = math.min(adjustedWidth, 100.0);
 
-  final double first = prng.nextDouble();
+  final double first = randomNumbers.nextDouble();
   var z = -10.857763300760043 * math.log(1 - (first / 2) * 1.979793637145314);
 
-  final double second = prng.nextDouble();
+  final double second = randomNumbers.nextDouble();
   if (second > 0.5) z = -z;
 
   return math.max(1.0, center + (z / 50) * adjustedWidth);

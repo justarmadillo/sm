@@ -579,10 +579,10 @@ class AppDatabase extends _$AppDatabase {
     final rows = await customSelect(
       'PRAGMA table_info(${table.actualTableName})',
     ).get();
-    final bool present = rows.any(
+    final bool hasColumn = rows.any(
       (QueryRow row) => row.read<String>('name') == column.name,
     );
-    if (!present) await m.addColumn(table, column);
+    if (!hasColumn) await m.addColumn(table, column);
   }
 
   /// Adds a column used only by an intermediate historical migration.

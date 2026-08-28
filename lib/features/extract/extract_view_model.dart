@@ -133,6 +133,12 @@ final class ExtractUiState {
   );
 }
 
+/// The Extract screen's ViewModel, one per open extract.
+///
+/// `arg` below is Riverpod's name for the value the screen was opened with —
+/// here the [ExtractRequest] passed to `extractViewModelProvider(...)`. It is
+/// inherited from `FamilyAsyncNotifier` and cannot be renamed, so read `arg`
+/// as "the request this screen was opened with".
 final class ExtractViewModel
     extends FamilyAsyncNotifier<ExtractUiState, ExtractRequest> {
   DateTime? _sessionStartedAt;

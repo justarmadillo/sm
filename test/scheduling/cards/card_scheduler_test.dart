@@ -30,7 +30,7 @@ void main() {
       expect(memory.step, 0);
       expect(memory.stability, isNull);
       expect(memory.difficulty, isNull);
-      expect(memory.reps, 0);
+      expect(memory.repetitionCount, 0);
       expect(memory.lapses, 0);
       expect(memory.isNew, isTrue);
       expect(memory.isDueAt(start), isTrue);
@@ -43,7 +43,7 @@ void main() {
         step: 0,
         stability: 3.125,
         difficulty: 6.75,
-        reps: 8,
+        repetitionCount: 8,
         lapses: 2,
         lastReviewAtUtc: start,
         dueAtUtc: start.add(const Duration(minutes: 10)),
@@ -70,7 +70,7 @@ void main() {
           step: 0,
           stability: 1,
           difficulty: 5,
-          reps: 1,
+          repetitionCount: 1,
           lapses: 0,
           lastReviewAtUtc: start,
           dueAtUtc: start,
@@ -181,7 +181,7 @@ void main() {
       expect(hasLapsed.state.memory.state, CardLearningState.relearning);
       expect(hasLapsed.state.memory.step, 0);
       expect(hasLapsed.state.memory.lapses, 1);
-      expect(hasLapsed.state.memory.reps, 3);
+      expect(hasLapsed.state.memory.repetitionCount, 3);
       expect(
         hasLapsed.state.memory.dueAtUtc,
         graduated.state.memory.dueAtUtc.add(const Duration(minutes: 10)),

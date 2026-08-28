@@ -19,12 +19,12 @@ final class Sm20RuntimeStore {
   final SettingsRepository _repository;
 
   Future<Sm20CollectionState> load({required String zoneId}) async {
-    final String? raw = await _repository.read(kSm20RuntimeSettingKey);
+    final String? raw = await _repository.findValue(kSm20RuntimeSettingKey);
     if (raw == null || raw.isEmpty) return const Sm20CollectionState();
     try {
       final Map<String, Object?> map = jsonDecode(raw) as Map<String, Object?>;
       return Sm20CollectionState(
-        prngSeed: _uint32(map['seed']),
+        randomNumberSeed: _uint32(map['seed']),
         learningStartDay: _day(map['learning_start_day'], zoneId),
         lastAutomaticSortDay: _day(map['last_auto_sort_day'], zoneId),
         lastAutomaticPostponeDay: _day(map['last_auto_postpone_day'], zoneId),
@@ -42,11 +42,11 @@ final class Sm20RuntimeStore {
     }
   }
 
-  Future<void> save(Sm20CollectionState state) => _repository.write(
+  Future<void> save(Sm20CollectionState state) => _repository.saveValue(
     kSm20RuntimeSettingKey,
     jsonEncode(<String, Object?>{
       'version': 1,
-      'seed': state.prngSeed & 0xFFFFFFFF,
+      'seed': state.randomNumberSeed & 0xFFFFFFFF,
       'learning_start_day': state.learningStartDay?.epochDay,
       'last_auto_sort_day': state.lastAutomaticSortDay?.epochDay,
       'last_auto_postpone_day': state.lastAutomaticPostponeDay?.epochDay,

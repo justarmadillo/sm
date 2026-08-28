@@ -112,7 +112,7 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
     ref.invalidate(studyCalendarProvider);
     ref.invalidate(diagnosticsProvider);
     ref.invalidate(queueViewModelProvider);
-    ref.invalidate(priorityBrowserProvider);
+    ref.invalidate(priorityBrowserViewModelProvider);
 
     state = AsyncValue<SettingsUiState>.data(
       SettingsUiState(

@@ -134,7 +134,8 @@ final class PostponeSettings {
     Map<String, SmartPostponeSettings>? namedProfiles,
     Map<int, String>? branchProfileAssignments,
   }) => PostponeSettings(
-    isAutomaticPostponeEnabled: isAutomaticPostponeEnabled ?? this.isAutomaticPostponeEnabled,
+    isAutomaticPostponeEnabled:
+        isAutomaticPostponeEnabled ?? this.isAutomaticPostponeEnabled,
     defaultProfile: defaultProfile ?? this.defaultProfile,
     namedProfiles: namedProfiles ?? this.namedProfiles,
     branchProfileAssignments:
@@ -146,8 +147,8 @@ final class PostponeSettings {
       other is PostponeSettings &&
       other.isAutomaticPostponeEnabled == isAutomaticPostponeEnabled &&
       other.defaultProfile == defaultProfile &&
-      _sameMap(other.namedProfiles, namedProfiles) &&
-      _sameMap(other.branchProfileAssignments, branchProfileAssignments);
+      _mapsAreEqual(other.namedProfiles, namedProfiles) &&
+      _mapsAreEqual(other.branchProfileAssignments, branchProfileAssignments);
 
   @override
   int get hashCode => Object.hash(
@@ -158,10 +159,13 @@ final class PostponeSettings {
   );
 }
 
-bool _sameMap<K, V>(Map<K, V> a, Map<K, V> b) {
-  if (a.length != b.length) return false;
-  for (final MapEntry<K, V> entry in a.entries) {
-    if (!b.containsKey(entry.key) || b[entry.key] != entry.value) return false;
+/// Order-independent map comparison, matching [_mapHash].
+bool _mapsAreEqual<K, V>(Map<K, V> first, Map<K, V> second) {
+  if (first.length != second.length) return false;
+  for (final MapEntry<K, V> entry in first.entries) {
+    if (!second.containsKey(entry.key) || second[entry.key] != entry.value) {
+      return false;
+    }
   }
   return true;
 }

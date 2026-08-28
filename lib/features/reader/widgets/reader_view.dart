@@ -315,122 +315,137 @@ class ReaderViewState extends State<ReaderView> {
         ? null
         : widget.document.blockForAnchor(marker)?.id;
 
-    // Raw pointer events rather than a drag recognizer: a selection drag must
-    // not enter the gesture arena against the scrollable, and on desktop a
-    // mouse drag does not scroll anyway, so there is nothing to arbitrate.
-    final bool editing = widget.editingBlockId != null;
+    final bool isEditing = widget.editingBlockId != null;
 
     return Focus(
       focusNode: _keyboardFocus,
       // Autofocus would take the caret away from the editor the moment a
       // rebuild put this widget back in the tree.
-      autofocus: !editing,
-      onKeyEvent: editing ? null : _onKeyEvent,
-      // While a block is open in the editor the reading surface's own gestures
-      // are off. They are not merely unnecessary — the double-tap recognizer
-      // holds the gesture arena for its timeout, so every click inside the
-      // editor waits on it, and the tap handler would pull keyboard focus back
-      // out of the field the user is typing in.
-      child: Listener(
-        onPointerDown: editing ? null : _onPointerDown,
-        onPointerMove: editing ? null : _onPointerMove,
-        onPointerUp: editing ? null : _onPointerUp,
-        onPointerCancel: editing ? null : _onPointerCancel,
-        // A wheel tick means the user is travelling, not selecting. Without
-        // this a press that never became a drag stayed armed, and the first
-        // pixel of pointer movement after the page had scrolled underneath it
-        // swept a selection from wherever that stale origin now pointed.
-        onPointerSignal: editing ? null : (PointerSignalEvent _) => _endDrag(),
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: editing
-              ? null
-              : () {
-                  // Clicking the text is also how the reader takes keyboard
-                  // focus back from a toolbar button.
-                  _keyboardFocus.requestFocus();
-                  widget.controller.clear();
-                },
-          onDoubleTapDown: editing
-              ? null
-              : (TapDownDetails details) =>
-                    widget.controller.selectWordAt(details.globalPosition),
-          child: Center(
-            child: ConstrainedBox(
-              key: _columnKey,
-              constraints: BoxConstraints(
-                maxWidth: widget.typography.columnWidth,
-              ),
-              // A permanently visible, draggable scrollbar: in a 50k-word
-              // chapter it is both the position indicator and the only quick
-              // way to travel, exactly as in a document viewer.
-              child: ScrollbarTheme(
-                data: ScrollbarThemeData(
-                  thumbVisibility: const WidgetStatePropertyAll<bool>(true),
-                  thickness: const WidgetStatePropertyAll<double>(9),
-                  radius: const Radius.circular(5),
-                  interactive: true,
-                  thumbColor: WidgetStateProperty.resolveWith<Color>(
-                    (Set<WidgetState> states) =>
-                        states.contains(WidgetState.dragged) ||
-                            states.contains(WidgetState.hovered)
-                        ? AppColors.muted.withValues(alpha: 0.65)
-                        : AppColors.muted.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: ListenableBuilder(
-                  listenable: widget.controller,
-                  builder: (BuildContext context, Widget? child) {
-                    return ScrollablePositionedList.builder(
-                      itemScrollController: _scrollController,
-                      scrollOffsetController: _offsetController,
-                      itemPositionsListener: _positions,
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 120),
-                      itemCount: widget.document.blocks.length,
-                      itemBuilder: (BuildContext context, int index) {
-                        final block = widget.document.blocks[index];
-                        return BlockView(
-                          block: block,
-                          typography: widget.typography,
-                          highlights: _highlightsFor(block),
-                          isMarkerPainted: block.id == markerBlockId,
-                          extractMarks: widget.extractMarks[block.id] ?? 0,
-                          onGutterTap: widget.onGutterTap == null
-                              ? null
-                              : (Block block, Offset position) {
-                                  final anchor =
-                                      widget.controller.anchorAtGlobalPosition(
-                                        position,
-                                        blockId: block.id,
-                                      ) ??
-                                      ReaderAnchor(
-                                        utf8Offset: block.sourceStartUtf8,
-                                        contentRevision:
-                                            widget.document.contentRevision,
-                                      );
-                                  widget.onGutterTap!(anchor);
-                                },
-                          onExtractMarksTap: widget.onExtractMarksTap,
-                          isEditing: widget.editingBlockId == block.id,
-                          isBusy: widget.isBusy,
-                          onEditCommit: widget.onEditCommit,
-                          onEditCancel: widget.onEditCancel,
-                          onEditDelete: widget.onEditDelete,
-                          onParagraphMounted:
-                              widget.controller.registerParagraph,
-                          onParagraphUnmounted:
-                              widget.controller.unregisterParagraph,
-                        );
-                      },
-                    );
-                  },
-                ),
+      autofocus: !isEditing,
+      onKeyEvent: isEditing ? null : _onKeyEvent,
+      child: _selectionGestures(
+        isEditing: isEditing,
+        child: Center(
+          child: ConstrainedBox(
+            key: _columnKey,
+            constraints: BoxConstraints(
+              maxWidth: widget.typography.columnWidth,
+            ),
+            child: _scrollbarTheme(
+              child: ListenableBuilder(
+                listenable: widget.controller,
+                builder: (BuildContext context, Widget? child) =>
+                    _blockList(markerBlockId),
               ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  /// Raw pointer events rather than a drag recognizer: a selection drag must
+  /// not enter the gesture arena against the scrollable, and on desktop a
+  /// mouse drag does not scroll anyway, so there is nothing to arbitrate.
+  ///
+  /// While a block is open in the editor these are all off. They are not
+  /// merely unnecessary — the double-tap recognizer holds the gesture arena
+  /// for its timeout, so every click inside the editor waits on it, and the
+  /// tap handler would pull keyboard focus back out of the field the user is
+  /// typing in.
+  Widget _selectionGestures({required bool isEditing, required Widget child}) {
+    return Listener(
+      onPointerDown: isEditing ? null : _onPointerDown,
+      onPointerMove: isEditing ? null : _onPointerMove,
+      onPointerUp: isEditing ? null : _onPointerUp,
+      onPointerCancel: isEditing ? null : _onPointerCancel,
+      // A wheel tick means the user is travelling, not selecting. Without
+      // this a press that never became a drag stayed armed, and the first
+      // pixel of pointer movement after the page had scrolled underneath it
+      // swept a selection from wherever that stale origin now pointed.
+      onPointerSignal: isEditing ? null : (PointerSignalEvent _) => _endDrag(),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: isEditing
+            ? null
+            : () {
+                // Clicking the text is also how the reader takes keyboard
+                // focus back from a toolbar button.
+                _keyboardFocus.requestFocus();
+                widget.controller.clear();
+              },
+        onDoubleTapDown: isEditing
+            ? null
+            : (TapDownDetails details) =>
+                  widget.controller.selectWordAt(details.globalPosition),
+        child: child,
+      ),
+    );
+  }
+
+  /// A permanently visible, draggable scrollbar: in a 50k-word chapter it is
+  /// both the position indicator and the only quick way to travel, exactly as
+  /// in a document viewer.
+  Widget _scrollbarTheme({required Widget child}) {
+    return ScrollbarTheme(
+      data: ScrollbarThemeData(
+        thumbVisibility: const WidgetStatePropertyAll<bool>(true),
+        thickness: const WidgetStatePropertyAll<double>(9),
+        radius: const Radius.circular(5),
+        interactive: true,
+        thumbColor: WidgetStateProperty.resolveWith<Color>(
+          (Set<WidgetState> states) =>
+              states.contains(WidgetState.dragged) ||
+                  states.contains(WidgetState.hovered)
+              ? AppColors.muted.withValues(alpha: 0.65)
+              : AppColors.muted.withValues(alpha: 0.35),
+        ),
+      ),
+      child: child,
+    );
+  }
+
+  /// One [BlockView] per block, built lazily so a long document costs only
+  /// what is on screen.
+  Widget _blockList(String? markerBlockId) {
+    return ScrollablePositionedList.builder(
+      itemScrollController: _scrollController,
+      scrollOffsetController: _offsetController,
+      itemPositionsListener: _positions,
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 120),
+      itemCount: widget.document.blocks.length,
+      itemBuilder: (BuildContext context, int index) {
+        final block = widget.document.blocks[index];
+        return BlockView(
+          block: block,
+          typography: widget.typography,
+          highlights: _highlightsFor(block),
+          isMarkerPainted: block.id == markerBlockId,
+          extractMarks: widget.extractMarks[block.id] ?? 0,
+          onGutterTap: widget.onGutterTap == null ? null : _onBlockGutterTap,
+          onExtractMarksTap: widget.onExtractMarksTap,
+          isEditing: widget.editingBlockId == block.id,
+          isBusy: widget.isBusy,
+          onEditCommit: widget.onEditCommit,
+          onEditCancel: widget.onEditCancel,
+          onEditDelete: widget.onEditDelete,
+          onParagraphMounted: widget.controller.registerParagraph,
+          onParagraphUnmounted: widget.controller.unregisterParagraph,
+        );
+      },
+    );
+  }
+
+  /// Resolves a gutter click to a precise in-block anchor, falling back to the
+  /// block's own start when the click misses any character.
+  void _onBlockGutterTap(Block block, Offset position) {
+    final anchor =
+        widget.controller.anchorAtGlobalPosition(position, blockId: block.id) ??
+        ReaderAnchor(
+          utf8Offset: block.sourceStartUtf8,
+          contentRevision: widget.document.contentRevision,
+        );
+    widget.onGutterTap!(anchor);
   }
 
   /// What to paint over [block]: the live selection first, then the

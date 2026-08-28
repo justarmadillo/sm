@@ -15,7 +15,7 @@ import 'package:incremental_reader/features/daily_queue/queue_providers.dart';
 import 'package:incremental_reader/features/diagnostics/diagnostics_providers.dart';
 import 'package:incremental_reader/features/diagnostics/diagnostics_query.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/metrics/scheduler_metrics.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
@@ -138,63 +138,73 @@ class _CollectionPanel extends ConsumerWidget {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (Object error, StackTrace stack) => Text('$error'),
-        data: (CollectionDiagnostics collection) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Wrap(
-              spacing: 26,
-              runSpacing: 12,
-              children: <Widget>[
-                _LabelledStat(label: 'Study day', value: collection.today.toString()),
-                _LabelledStat(label: 'Elements', value: '${collection.totalElements}'),
-                _LabelledStat(
-                  label: 'Outstanding items',
-                  value: '${collection.counters.dueCards}',
-                ),
-                _LabelledStat(
-                  label: 'Outstanding topics',
-                  value: '${collection.counters.dueTopics}',
-                ),
-                _LabelledStat(
-                  label: 'Indexed',
-                  value: '${collection.indexedDocuments}',
-                  hint: collection.isSearchIndexValid
-                      ? 'Search index consistent'
-                      : 'Search index needs a rebuild',
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Repetition log today',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppColors.muted,
-              ),
-            ),
-            const SizedBox(height: 6),
-            if (collection.eventsToday.isEmpty)
-              const Text(
-                'Nothing recorded yet.',
-                style: TextStyle(fontSize: 12, color: AppColors.muted),
-              )
-            else
-              Wrap(
-                spacing: 20,
-                runSpacing: 8,
-                children: <Widget>[
-                  for (final MapEntry<RevlogEventType, int> entry
-                      in collection.eventsToday.entries)
-                    _LabelledStat(
-                      label: entry.key.storageName,
-                      value: '${entry.value}',
-                    ),
-                ],
-              ),
-          ],
-        ),
+        data: _todayBody,
       ),
+    );
+  }
+
+  Widget _todayBody(CollectionDiagnostics collection) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Wrap(
+          spacing: 26,
+          runSpacing: 12,
+          children: _collectionStats(collection),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Repetition log today',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: AppColors.muted,
+          ),
+        ),
+        const SizedBox(height: 6),
+        _eventsToday(collection),
+      ],
+    );
+  }
+
+  /// The size of the collection and how much of it is due right now.
+  List<Widget> _collectionStats(CollectionDiagnostics collection) => <Widget>[
+    _LabelledStat(label: 'Study day', value: collection.today.toString()),
+    _LabelledStat(label: 'Elements', value: '${collection.totalElements}'),
+    _LabelledStat(
+      label: 'Outstanding items',
+      value: '${collection.counters.dueCards}',
+    ),
+    _LabelledStat(
+      label: 'Outstanding topics',
+      value: '${collection.counters.dueTopics}',
+    ),
+    _LabelledStat(
+      label: 'Indexed',
+      value: '${collection.indexedDocuments}',
+      hint: collection.isSearchIndexValid
+          ? 'Search index consistent'
+          : 'Search index needs a rebuild',
+    ),
+  ];
+
+  /// One count per kind of thing that happened today, so an unexpected event
+  /// type showing up is visible at a glance.
+  Widget _eventsToday(CollectionDiagnostics collection) {
+    if (collection.eventsToday.isEmpty) {
+      return const Text(
+        'Nothing recorded yet.',
+        style: TextStyle(fontSize: 12, color: AppColors.muted),
+      );
+    }
+    return Wrap(
+      spacing: 20,
+      runSpacing: 8,
+      children: <Widget>[
+        for (final MapEntry<ReviewLogEventType, int> entry
+            in collection.eventsToday.entries)
+          _LabelledStat(label: entry.key.storageName, value: '${entry.value}'),
+      ],
     );
   }
 }
@@ -240,74 +250,81 @@ class _MetricsBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Wrap(
-          spacing: 26,
-          runSpacing: 14,
-          children: <Widget>[
-            _LabelledStat(
-              label: 'Overdue now',
-              value:
-                  '${metrics.overdueCards} cards, '
-                  '${metrics.overdueTopics} topics',
-            ),
-            _LabelledStat(
-              label: 'Next 7 days',
-              value: '${_cards(7)} cards, ${_topics(7)} topics',
-            ),
-            _LabelledStat(
-              label: 'Next 30 days',
-              value: '${_cards(30)} cards, ${_topics(30)} topics',
-            ),
-            _LabelledStat(label: 'Manual Later', value: '${metrics.manualLaterCount}'),
-            _LabelledStat(
-              label: 'Mercy',
-              value: metrics.mercyCount == 0
-                  ? 'none'
-                  : '${metrics.mercyCount} batches',
-              hint: metrics.mercyBatchSizes.isEmpty
-                  ? null
-                  : 'Sizes: ${metrics.mercyBatchSizes.join(', ')}.',
-            ),
-            _LabelledStat(
-              label: 'Reviews / encounters',
-              value:
-                  '${metrics.actualCardReviews} / ${metrics.topicsCompleted}',
-              hint: 'Genuine only: practice and undone events are excluded.',
-            ),
-            _LabelledStat(
-              label: 'Card/topic mix',
-              value: metrics.cardTopicOpportunityRatio.value == null
-                  ? 'none'
-                  : '${metrics.cardTopicOpportunityRatio.value!.toStringAsFixed(1)} to 1',
-              hint:
-                  'Opportunities actually taken, not slots offered. The target '
-                  'is four to one.',
-            ),
-          ],
-        ),
+        Wrap(spacing: 26, runSpacing: 14, children: _headlineStats()),
         const SizedBox(height: 14),
         const _MetricHeading('Lateness and retention by priority decile'),
-        for (final PriorityDecileMetric decile in metrics.priorityDeciles)
-          if (decile.allLateness.count > 0)
-            Text(
-              'D${decile.decile}: median '
-              '${_days(decile.allLateness.median)} late, p95 '
-              '${_days(decile.allLateness.p95)}'
-              '${_retention(decile)}',
-              style: const TextStyle(fontSize: 12),
-            ),
+        ..._decileLines(),
         const SizedBox(height: 14),
         const _MetricHeading('Topic policies in use'),
-        for (final TopicPolicyMetric policy in metrics.topicPolicies)
-          Text(
-            '${policy.policyVersion}: ${policy.intervals.count} topics, median '
-            'interval ${_days(policy.intervals.median)}, median A '
-            '${policy.aFactors.median?.toStringAsFixed(2) ?? 'none'}',
-            style: const TextStyle(fontSize: 12),
-          ),
+        ..._policyLines(),
       ],
     );
   }
+
+  /// The load ahead, the relief commands used, and whether the session mix
+  /// matched what the scheduler was aiming for.
+  List<Widget> _headlineStats() => <Widget>[
+    _LabelledStat(
+      label: 'Overdue now',
+      value: '${metrics.overdueCards} cards, ${metrics.overdueTopics} topics',
+    ),
+    _LabelledStat(
+      label: 'Next 7 days',
+      value: '${_cards(7)} cards, ${_topics(7)} topics',
+    ),
+    _LabelledStat(
+      label: 'Next 30 days',
+      value: '${_cards(30)} cards, ${_topics(30)} topics',
+    ),
+    _LabelledStat(label: 'Manual Later', value: '${metrics.manualLaterCount}'),
+    _LabelledStat(
+      label: 'Mercy',
+      value: metrics.mercyCount == 0 ? 'none' : '${metrics.mercyCount} batches',
+      hint: metrics.mercyBatchSizes.isEmpty
+          ? null
+          : 'Sizes: ${metrics.mercyBatchSizes.join(', ')}.',
+    ),
+    _LabelledStat(
+      label: 'Reviews / encounters',
+      value: '${metrics.actualCardReviews} / ${metrics.topicsCompleted}',
+      hint: 'Genuine only: practice and undone events are excluded.',
+    ),
+    _LabelledStat(
+      label: 'Card/topic mix',
+      value: metrics.cardTopicOpportunityRatio.value == null
+          ? 'none'
+          : '${metrics.cardTopicOpportunityRatio.value!.toStringAsFixed(1)} to 1',
+      hint:
+          'Opportunities actually taken, not slots offered. The target is '
+          'four to one.',
+    ),
+  ];
+
+  /// Deciles with no observations are skipped: an empty band says nothing,
+  /// and printing it would only pad the list.
+  List<Widget> _decileLines() => <Widget>[
+    for (final PriorityDecileMetric decile in metrics.priorityDeciles)
+      if (decile.allLateness.count > 0)
+        Text(
+          'D${decile.decile}: median '
+          '${_days(decile.allLateness.median)} late, p95 '
+          '${_days(decile.allLateness.p95)}'
+          '${_retention(decile)}',
+          style: const TextStyle(fontSize: 12),
+        ),
+  ];
+
+  /// More than one policy version in this list means the collection is
+  /// part-way through a scheduler change.
+  List<Widget> _policyLines() => <Widget>[
+    for (final TopicPolicyMetric policy in metrics.topicPolicies)
+      Text(
+        '${policy.policyVersion}: ${policy.intervals.count} topics, median '
+        'interval ${_days(policy.intervals.median)}, median A '
+        '${policy.aFactors.median?.toStringAsFixed(2) ?? 'none'}',
+        style: const TextStyle(fontSize: 12),
+      ),
+  ];
 
   String _days(double? value) =>
       value == null ? 'none' : '${value.toStringAsFixed(1)}d';
@@ -352,66 +369,73 @@ class _CommandsPanel extends ConsumerWidget {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (Object error, StackTrace stack) => Text('$error'),
+        // Capped at 40: this panel is for seeing what just happened.
         data: (List<ActivityRecord> records) => Column(
           children: <Widget>[
             for (final ActivityRecord record in records.take(40))
-              InkWell(
-                onTap: record.ref == null ? null : () => onSelect(record.ref!),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 5),
-                  child: Row(
-                    children: <Widget>[
-                      SizedBox(
-                        width: 132,
-                        child: Text(
-                          record.atUtc
-                              .toIso8601String()
-                              .substring(0, 19)
-                              .replaceFirst('T', ' '),
-                          style: const TextStyle(
-                            fontFamily: 'Consolas',
-                            fontSize: 11,
-                            color: AppColors.muted,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 210,
-                        child: Text(
-                          record.kind,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          <String>[
-                            if (record.ref != null) '${record.ref}',
-                            if (record.durationMs != null)
-                              '${record.durationMs}ms',
-                            if (record.metadata != null)
-                              record.metadata.toString(),
-                          ].join('  ·  '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: 'Consolas',
-                            fontSize: 11,
-                            color: AppColors.muted,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _commandRow(record),
           ],
         ),
       ),
     );
   }
+
+  /// Timestamp, command name, then whatever detail the command recorded.
+  /// Tapping a row that names an element selects it in the element panel.
+  Widget _commandRow(ActivityRecord record) {
+    return InkWell(
+      onTap: record.ref == null ? null : () => onSelect(record.ref!),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: <Widget>[
+            SizedBox(
+              width: 132,
+              child: Text(
+                record.atUtc
+                    .toIso8601String()
+                    .substring(0, 19)
+                    .replaceFirst('T', ' '),
+                style: const TextStyle(
+                  fontFamily: 'Consolas',
+                  fontSize: 11,
+                  color: AppColors.muted,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 210,
+              child: Text(
+                record.kind,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                _detailLine(record),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Consolas',
+                  fontSize: 11,
+                  color: AppColors.muted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _detailLine(ActivityRecord record) => <String>[
+    if (record.ref != null) '${record.ref}',
+    if (record.durationMs != null) '${record.durationMs}ms',
+    if (record.metadata != null) record.metadata.toString(),
+  ].join('  ·  ');
 }
 
 class _ElementPanel extends ConsumerWidget {
@@ -432,123 +456,136 @@ class _ElementPanel extends ConsumerWidget {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (Object error, StackTrace stack) => Text('$error'),
-        data: (ElementDiagnostics? element) {
-          if (element == null) {
-            return const Text('That element has no schedule.');
-          }
-          final TopicState? topic = element.topic;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              if (element.title != null) ...<Widget>[
-                Text(
-                  element.title!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
-                ),
-                const SizedBox(height: 10),
-              ],
-              Wrap(
-                spacing: 26,
-                runSpacing: 12,
-                children: <Widget>[
-                  _LabelledStat(
-                    label: 'Lifecycle',
-                    value: element.schedule.lifecycle.name,
-                  ),
-                  _LabelledStat(
-                    label: 'Priority',
-                    value: element.position == null
-                        ? element.schedule.priority.orderKey
-                        : '${element.position!.percent.toStringAsFixed(1)}%',
-                  ),
-                  _LabelledStat(
-                    label: 'Due',
-                    value: element.schedule.algorithmicDueDay.toString(),
-                  ),
-                  _LabelledStat(
-                    label: 'Original due',
-                    value: element.schedule.originalDueDay.toString(),
-                  ),
-                  if (topic != null) ...<Widget>[
-                    _LabelledStat(
-                      label: 'Interval',
-                      value: '${topic.intervalDays.toStringAsFixed(2)}d',
-                    ),
-                    _LabelledStat(
-                      label: 'A-factor',
-                      value: topic.aFactor.toStringAsFixed(3),
-                    ),
-                    _LabelledStat(label: 'Encounters', value: '${topic.encounters}'),
-                    _LabelledStat(label: 'Postponed', value: '${topic.postponeCount}'),
-                  ],
-                  if (element.card case final card?) ...<Widget>[
-                    _LabelledStat(label: 'State', value: card.memory.state.name),
-                    _LabelledStat(label: 'Reps', value: '${card.memory.reps}'),
-                    _LabelledStat(label: 'Lapses', value: '${card.memory.lapses}'),
-                    _LabelledStat(
-                      label: 'Stability',
-                      value: card.memory.stability?.toStringAsFixed(2) ?? '—',
-                    ),
-                    _LabelledStat(
-                      label: 'Difficulty',
-                      value: card.memory.difficulty?.toStringAsFixed(2) ?? '—',
-                    ),
-                  ],
-                ],
-              ),
-              if (element.nextIntervalPreview case final preview?) ...<Widget>[
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    border: Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    'Next SM20 topic interval: $preview days. '
-                    'The preview uses a copy of the persisted Delphi PRNG; '
-                    'it does not advance collection state.',
-                    style: const TextStyle(
-                      fontFamily: 'Consolas',
-                      fontSize: 11,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              const Text(
-                'History',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.muted,
-                ),
-              ),
-              const SizedBox(height: 6),
-              if (element.history.isEmpty)
-                const Text(
-                  'Nothing recorded yet.',
-                  style: TextStyle(fontSize: 12, color: AppColors.muted),
-                )
-              else
-                for (final RevlogEntry entry in element.history.take(60))
-                  _HistoryRow(entry: entry),
-            ],
-          );
-        },
+        data: _elementBody,
       ),
     );
+  }
+
+  Widget _elementBody(ElementDiagnostics? element) {
+    if (element == null) return const Text('That element has no schedule.');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (element.title != null) ...<Widget>[
+          Text(
+            element.title!,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13),
+          ),
+          const SizedBox(height: 10),
+        ],
+        Wrap(spacing: 26, runSpacing: 12, children: _stats(element)),
+        if (element.nextIntervalPreview case final preview?) ...<Widget>[
+          const SizedBox(height: 14),
+          _nextIntervalPreview(preview),
+        ],
+        const SizedBox(height: 16),
+        const Text(
+          'History',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: AppColors.muted,
+          ),
+        ),
+        const SizedBox(height: 6),
+        ..._history(element),
+      ],
+    );
+  }
+
+  /// The schedule everything has, then whichever of the topic and card
+  /// records this element actually carries.
+  List<Widget> _stats(ElementDiagnostics element) {
+    final TopicState? topic = element.topic;
+    return <Widget>[
+      _LabelledStat(label: 'Lifecycle', value: element.schedule.lifecycle.name),
+      _LabelledStat(
+        label: 'Priority',
+        value: element.position == null
+            ? element.schedule.priority.orderKey
+            : '${element.position!.percent.toStringAsFixed(1)}%',
+      ),
+      _LabelledStat(
+        label: 'Due',
+        value: element.schedule.algorithmicDueDay.toString(),
+      ),
+      _LabelledStat(
+        label: 'Original due',
+        value: element.schedule.originalDueDay.toString(),
+      ),
+      if (topic != null) ...<Widget>[
+        _LabelledStat(
+          label: 'Interval',
+          value: '${topic.intervalDays.toStringAsFixed(2)}d',
+        ),
+        _LabelledStat(
+          label: 'A-factor',
+          value: topic.aFactor.toStringAsFixed(3),
+        ),
+        _LabelledStat(label: 'Encounters', value: '${topic.encounters}'),
+        _LabelledStat(label: 'Postponed', value: '${topic.postponeCount}'),
+      ],
+      if (element.card case final card?) ...<Widget>[
+        _LabelledStat(label: 'State', value: card.memory.state.name),
+        _LabelledStat(label: 'Reps', value: '${card.memory.repetitionCount}'),
+        _LabelledStat(label: 'Lapses', value: '${card.memory.lapses}'),
+        _LabelledStat(
+          label: 'Stability',
+          value: card.memory.stability?.toStringAsFixed(2) ?? '—',
+        ),
+        _LabelledStat(
+          label: 'Difficulty',
+          value: card.memory.difficulty?.toStringAsFixed(2) ?? '—',
+        ),
+      ],
+    ];
+  }
+
+  Widget _nextIntervalPreview(Object preview) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        'Next SM20 topic interval: $preview days. '
+        'The preview uses a copy of the persisted Delphi PRNG; '
+        'it does not advance collection state.',
+        style: const TextStyle(
+          fontFamily: 'Consolas',
+          fontSize: 11,
+          height: 1.5,
+        ),
+      ),
+    );
+  }
+
+  /// Capped at 60 rows: this panel is for seeing what just happened, not for
+  /// reading the whole log.
+  List<Widget> _history(ElementDiagnostics element) {
+    if (element.history.isEmpty) {
+      return const <Widget>[
+        Text(
+          'Nothing recorded yet.',
+          style: TextStyle(fontSize: 12, color: AppColors.muted),
+        ),
+      ];
+    }
+    return <Widget>[
+      for (final ReviewLogEntry entry in element.history.take(60))
+        _HistoryRow(entry: entry),
+    ];
   }
 }
 
 class _HistoryRow extends StatelessWidget {
   const _HistoryRow({required this.entry});
 
-  final RevlogEntry entry;
+  final ReviewLogEntry entry;
 
   @override
   Widget build(BuildContext context) => Padding(

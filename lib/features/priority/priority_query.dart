@@ -157,7 +157,7 @@ final class PriorityQuery {
       final StudyDayCalendar calendar = await _context.calendar();
       return _Repetitions(
         intervalDays: (card.memory.scheduledDays ?? 0).round(),
-        repetitions: card.memory.reps,
+        repetitions: card.memory.repetitionCount,
         lapses: card.memory.lapses,
         lastRepetition: card.memory.lastReviewAtUtc == null
             ? null

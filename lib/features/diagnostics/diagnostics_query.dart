@@ -13,7 +13,7 @@ library;
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
@@ -45,7 +45,7 @@ final class ElementDiagnostics {
   final PriorityPosition? position;
 
   /// Its repetition log, newest first.
-  final List<RevlogEntry> history;
+  final List<ReviewLogEntry> history;
 
   /// Pacing state, for a source or extract.
   final TopicState? topic;
@@ -81,7 +81,7 @@ final class CollectionDiagnostics {
   final Map<ElementType, Map<ElementLifecycle, int>> byLifecycle;
 
   /// What the repetition log recorded today, by event type.
-  final Map<RevlogEventType, int> eventsToday;
+  final Map<ReviewLogEventType, int> eventsToday;
 
   final int indexedDocuments;
   final bool isSearchIndexValid;
@@ -140,7 +140,7 @@ final class DiagnosticsQuery {
       ref: ref,
       schedule: schedule,
       position: scale.positionOf(schedule.priority),
-      history: (await _learning.listRevlogFor(
+      history: (await _learning.listReviewLogForElement(
         ref,
         limit: 200,
       )).reversed.toList(growable: false),
@@ -160,7 +160,7 @@ final class DiagnosticsQuery {
       today: today,
       counters: counters,
       byLifecycle: await _learning.countByLifecycle(),
-      eventsToday: await _learning.countRevlogOn(today),
+      eventsToday: await _learning.countReviewLogEventsOn(today),
       indexedDocuments: await _search.countDocuments(),
       isSearchIndexValid: await _search.isIndexValid(),
       settings: await _context.settings(),

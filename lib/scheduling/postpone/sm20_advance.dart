@@ -96,7 +96,7 @@ final class Sm20AdvanceResult {
     required this.decisions,
     required this.considered,
     required this.randomDraws,
-    required this.prngState,
+    required this.randomNumberState,
   });
 
   final Sm20AdvanceScope scope;
@@ -107,7 +107,7 @@ final class Sm20AdvanceResult {
   final int considered;
 
   final int randomDraws;
-  final Sm20PrngState prngState;
+  final Sm20RandomNumberGeneratorState randomNumberState;
 }
 
 /// The exact selection and draw arithmetic of section 8.5.
@@ -125,7 +125,7 @@ final class Sm20AdvanceEngine {
     required Sm20AdvanceScope scope,
     required int horizonDays,
     required StudyDay today,
-    required Sm20Prng prng,
+    required Sm20RandomNumberGenerator randomNumbers,
   }) {
     if (horizonDays < scope.minimumDays ||
         horizonDays > kSm20AdvanceMaximumDays) {
@@ -136,7 +136,7 @@ final class Sm20AdvanceEngine {
         'horizonDays',
       );
     }
-    final int drawsBefore = prng.drawCount;
+    final int drawsBefore = randomNumbers.drawCount;
     final List<Sm20AdvanceDecision> decisions = <Sm20AdvanceDecision>[];
     var considered = 0;
 
@@ -153,7 +153,7 @@ final class Sm20AdvanceEngine {
       if (oldInterval <= horizonDays) continue;
 
       considered += 1;
-      var r = sm20RoundEven(prng.nextDouble() * horizonDays) + 1;
+      var r = sm20RoundEven(randomNumbers.nextDouble() * horizonDays) + 1;
       if (candidate.isItem) {
         // The item branch aims at a day rather than an interval, then
         // re-expresses it as days since the last review with a floor of two.
@@ -179,8 +179,8 @@ final class Sm20AdvanceEngine {
       horizonDays: horizonDays,
       decisions: List<Sm20AdvanceDecision>.unmodifiable(decisions),
       considered: considered,
-      randomDraws: prng.drawCount - drawsBefore,
-      prngState: prng.state,
+      randomDraws: randomNumbers.drawCount - drawsBefore,
+      randomNumberState: randomNumbers.state,
     );
   }
 }

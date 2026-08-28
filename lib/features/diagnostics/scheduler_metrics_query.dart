@@ -16,7 +16,7 @@ import 'package:incremental_reader/features/daily_queue/queue_command_runner.dar
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/metrics/scheduler_metrics.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
@@ -135,15 +135,14 @@ final class SchedulerMetricsQuery {
   }) async {
     final List<DailySchedulerActivity> activity = <DailySchedulerActivity>[];
     for (StudyDay day = windowStart; day <= today; day = day.addDays(1)) {
-      final Map<RevlogEventType, int> counts = await _learning.countRevlogOn(
-        day,
-      );
-      final int reviews = counts[RevlogEventType.review] ?? 0;
-      final int encounters = counts[RevlogEventType.topicRead] ?? 0;
+      final Map<ReviewLogEventType, int> counts = await _learning
+          .countReviewLogEventsOn(day);
+      final int reviews = counts[ReviewLogEventType.review] ?? 0;
+      final int encounters = counts[ReviewLogEventType.topicRead] ?? 0;
       activity.add(
         DailySchedulerActivity(
           day: day,
-          manualLaterCount: counts[RevlogEventType.postpone] ?? 0,
+          manualLaterCount: counts[ReviewLogEventType.postpone] ?? 0,
           actualCardReviews: reviews,
           topicsCompleted: encounters,
           cardOpportunities: reviews,
@@ -181,13 +180,15 @@ final class SchedulerMetricsQuery {
     required StudyDayCalendar calendar,
     required PriorityScale scale,
   }) async {
-    final List<RevlogEntry> recent = await _learning.listRecentRevlog(limit: 2000);
+    final List<ReviewLogEntry> recent = await _learning.listRecentReviewLog(
+      limit: 2000,
+    );
     final List<PriorityOutcomeMetricSample> outcomes =
         <PriorityOutcomeMetricSample>[];
-    for (final RevlogEntry entry in recent) {
+    for (final ReviewLogEntry entry in recent) {
       if (calendar.dayOf(entry.atUtc) < windowStart) continue;
-      final bool isReview = entry.eventType == RevlogEventType.review;
-      final bool isEncounter = entry.eventType == RevlogEventType.topicRead;
+      final bool isReview = entry.eventType == ReviewLogEventType.review;
+      final bool isEncounter = entry.eventType == ReviewLogEventType.topicRead;
       if (!isReview && !isEncounter) continue;
       final double? pressure =
           entry.before.pressure ??

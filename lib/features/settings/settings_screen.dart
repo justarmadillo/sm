@@ -72,7 +72,8 @@ class SettingsScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
             Center(child: Text('Could not load settings.\n$error')),
-        data: (SettingsUiState settings) => _SettingsBody(state: settings, model: model),
+        data: (SettingsUiState settings) =>
+            _SettingsBody(state: settings, model: model),
       ),
     );
   }
@@ -272,7 +273,9 @@ class _SettingsBody extends StatelessWidget {
           value: draft.queue.shouldConfirmStageTransitions,
           onChanged: (bool value) => model.edit(
             (AppSettings settings) => settings.copyWith(
-              queue: settings.queue.copyWith(shouldConfirmStageTransitions: value),
+              queue: settings.queue.copyWith(
+                shouldConfirmStageTransitions: value,
+              ),
             ),
           ),
         ),
@@ -440,7 +443,9 @@ class _SettingsBody extends StatelessWidget {
           value: draft.postpone.isAutomaticPostponeEnabled,
           onChanged: (bool value) => model.edit(
             (AppSettings settings) => settings.copyWith(
-              postpone: settings.postpone.copyWith(isAutomaticPostponeEnabled: value),
+              postpone: settings.postpone.copyWith(
+                isAutomaticPostponeEnabled: value,
+              ),
             ),
           ),
         ),
@@ -451,7 +456,8 @@ class _SettingsBody extends StatelessWidget {
         control: StringField(
           value: smart.profileName,
           onChanged: (String value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(profileName: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(profileName: value),
           ),
         ),
       ),
@@ -467,8 +473,9 @@ class _SettingsBody extends StatelessWidget {
             SmartPostponeScope.branch: 'Branch or concept',
             SmartPostponeScope.browser: 'Current browser',
           },
-          onChanged: (SmartPostponeScope value) =>
-              _editSmartPostpone((SmartPostponeSettings settings) => settings.copyWith(scope: value)),
+          onChanged: (SmartPostponeScope value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(scope: value),
+          ),
         ),
       ),
       SettingsRow(
@@ -479,7 +486,8 @@ class _SettingsBody extends StatelessWidget {
           min: 0,
           max: 0xFFFFFFFF,
           onChanged: (int value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(rootElementId: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(rootElementId: value),
           ),
         ),
       ),
@@ -495,7 +503,8 @@ class _SettingsBody extends StatelessWidget {
             SmartPostponeMethod.parameters: 'Parameters only',
           },
           onChanged: (SmartPostponeMethod value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(method: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(method: value),
           ),
         ),
       ),
@@ -509,7 +518,8 @@ class _SettingsBody extends StatelessWidget {
           min: 1,
           max: 20000,
           onChanged: (int value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(protectedCount: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(protectedCount: value),
           ),
         ),
       ),
@@ -521,7 +531,8 @@ class _SettingsBody extends StatelessWidget {
         control: SwitchField(
           value: smart.isSimulationOnly,
           onChanged: (bool value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(isSimulationOnly: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(isSimulationOnly: value),
           ),
         ),
       ),
@@ -544,7 +555,8 @@ class _SettingsBody extends StatelessWidget {
           max: 400,
           suffix: '%',
           onChanged: (int value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(itemDelayPercent: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(itemDelayPercent: value),
           ),
         ),
       ),
@@ -557,7 +569,8 @@ class _SettingsBody extends StatelessWidget {
           max: 1900,
           suffix: '%',
           onChanged: (int value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(topicDelayPercent: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(topicDelayPercent: value),
           ),
         ),
       ),
@@ -623,7 +636,8 @@ class _SettingsBody extends StatelessWidget {
         control: SwitchField(
           value: smart.shouldSkipItems,
           onChanged: (bool value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(shouldSkipItems: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(shouldSkipItems: value),
           ),
         ),
       ),
@@ -633,7 +647,8 @@ class _SettingsBody extends StatelessWidget {
         control: SwitchField(
           value: smart.shouldSkipTopics,
           onChanged: (bool value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(shouldSkipTopics: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(shouldSkipTopics: value),
           ),
         ),
       ),
@@ -646,7 +661,8 @@ class _SettingsBody extends StatelessWidget {
           max: 4000,
           suffix: 'd',
           onChanged: (int value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(itemAgeCutoffDays: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(itemAgeCutoffDays: value),
           ),
         ),
       ),
@@ -659,7 +675,8 @@ class _SettingsBody extends StatelessWidget {
           max: 4000,
           suffix: 'd',
           onChanged: (int value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(topicAgeCutoffDays: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(topicAgeCutoffDays: value),
           ),
         ),
       ),
@@ -688,7 +705,8 @@ class _SettingsBody extends StatelessWidget {
           min: 1.01,
           max: 6,
           onChanged: (double value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(topicAFactorCutoff: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(topicAFactorCutoff: value),
           ),
         ),
       ),
@@ -770,7 +788,8 @@ class _SettingsBody extends StatelessWidget {
             SmartPostponeSubbranchMode.liberal: 'Most liberal',
           },
           onChanged: (SmartPostponeSubbranchMode value) => _editSmartPostpone(
-            (SmartPostponeSettings settings) => settings.copyWith(subbranchMode: value),
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(subbranchMode: value),
           ),
         ),
       ),
@@ -1165,13 +1184,11 @@ class _ProfileRegistryState extends State<_ProfileRegistry> {
 
   @override
   Widget build(BuildContext context) {
-    final String selected = _liveName(_selected);
-    final String branchProfile = _liveName(_branchProfile);
     final Map<String, String> options = <String, String>{
       for (final String name in _postpone.profileNames) name: name,
     };
-    final List<int> roots = _postpone.branchProfileAssignments.keys.toList()
-      ..sort();
+    final List<int> assignedRoots =
+        _postpone.branchProfileAssignments.keys.toList()..sort();
 
     return SettingsSection(
       title: 'Smart Postpone — profiles',
@@ -1180,127 +1197,156 @@ class _ProfileRegistryState extends State<_ProfileRegistry> {
           'runs and the one the fields above edit. Saving under another name '
           'stores a copy that a branch can use instead.',
       children: <Widget>[
-        SettingsRow(
-          label: 'Save the edited record as',
-          hint:
-              'Stores every field above, including the two inert modifier '
-              'flags. Saving over an existing name replaces it.',
-          controlWidth: 260,
-          control: Row(
-            children: <Widget>[
-              Expanded(
-                child: StringField(
-                  value: _name,
-                  onChanged: (String value) => setState(() => _name = value),
-                ),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed:
-                    _name.trim().isEmpty ||
-                        _name.trim() == PostponeSettings.defaultProfileName
-                    ? null
-                    : _save,
-                child: const Text('Save'),
-              ),
-            ],
-          ),
-        ),
-        SettingsRow(
-          label: 'Managed profile',
-          hint:
-              'Load copies the stored record into Default, which is what the '
-              'automatic run and the fields above use. Delete also removes '
-              'every branch assignment that named it.',
-          controlWidth: 300,
-          control: Row(
-            children: <Widget>[
-              Expanded(
-                child: ChoiceField<String>(
-                  value: selected,
-                  options: options,
-                  onChanged: (String value) =>
-                      setState(() => _selected = value),
-                ),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton(onPressed: _load, child: const Text('Load')),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed: selected == PostponeSettings.defaultProfileName
-                    ? null
-                    : _delete,
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        ),
-        SettingsRow(
-          label: 'Reset Default to the shipped record',
-          hint:
-              'Restores the binary-derived Default profile without touching '
-              'any other setting or saved profile.',
-          control: OutlinedButton(
-            onPressed: () => _editPostpone(
-              (PostponeSettings current) =>
-                  current.replaceDefault(const SmartPostponeSettings()),
-            ),
-            child: const Text('Reset Default'),
-          ),
-        ),
-        SettingsRow(
-          label: 'Assign a profile to a branch',
-          hint:
-              'Branch runs merge the profiles of every enclosing branch, '
-              'outer to inner, using the sub-branch mode above.',
-          controlWidth: 320,
-          control: Row(
-            children: <Widget>[
-              SizedBox(
-                width: 96,
-                child: IntField(
-                  value: _branchRoot,
-                  min: 0,
-                  max: 0xFFFFFFFF,
-                  onChanged: (int value) => setState(() => _branchRoot = value),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ChoiceField<String>(
-                  value: branchProfile,
-                  options: options,
-                  onChanged: (String value) =>
-                      setState(() => _branchProfile = value),
-                ),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton(onPressed: _assign, child: const Text('Assign')),
-            ],
-          ),
-        ),
-        if (roots.isEmpty)
-          const SettingsRow(
-            label: 'Branch assignments',
-            hint: 'No branch overrides the Default profile.',
-            control: SizedBox.shrink(),
-          )
-        else
-          for (final int root in roots)
-            SettingsRow(
-              label: 'Branch $root',
-              hint:
-                  'Uses ${_postpone.branchProfileAssignments[root]} when a '
-                  'run reaches this branch.',
-              control: OutlinedButton(
-                onPressed: () => _editPostpone(
-                  (PostponeSettings current) =>
-                      current.unassignBranchProfile(root),
-                ),
-                child: const Text('Unassign'),
-              ),
-            ),
+        _saveAsRow(),
+        _managedProfileRow(options),
+        _resetDefaultRow(),
+        _assignBranchRow(options),
+        ..._branchAssignmentRows(assignedRoots),
       ],
     );
+  }
+
+  /// Names and stores a copy of whatever Default currently holds.
+  Widget _saveAsRow() {
+    final String trimmedName = _name.trim();
+    return SettingsRow(
+      label: 'Save the edited record as',
+      hint:
+          'Stores every field above, including the two inert modifier flags. '
+          'Saving over an existing name replaces it.',
+      controlWidth: 260,
+      control: Row(
+        children: <Widget>[
+          Expanded(
+            child: StringField(
+              value: _name,
+              onChanged: (String value) => setState(() => _name = value),
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            // Default is permanent, so it cannot be saved over by name.
+            onPressed:
+                trimmedName.isEmpty ||
+                    trimmedName == PostponeSettings.defaultProfileName
+                ? null
+                : _save,
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Loads a stored profile into Default, or deletes it.
+  Widget _managedProfileRow(Map<String, String> options) {
+    final String selected = _liveName(_selected);
+    return SettingsRow(
+      label: 'Managed profile',
+      hint:
+          'Load copies the stored record into Default, which is what the '
+          'automatic run and the fields above use. Delete also removes every '
+          'branch assignment that named it.',
+      controlWidth: 300,
+      control: Row(
+        children: <Widget>[
+          Expanded(
+            child: ChoiceField<String>(
+              value: selected,
+              options: options,
+              onChanged: (String value) => setState(() => _selected = value),
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(onPressed: _load, child: const Text('Load')),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: selected == PostponeSettings.defaultProfileName
+                ? null
+                : _delete,
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _resetDefaultRow() {
+    return SettingsRow(
+      label: 'Reset Default to the shipped record',
+      hint:
+          'Restores the binary-derived Default profile without touching any '
+          'other setting or saved profile.',
+      control: OutlinedButton(
+        onPressed: () => _editPostpone(
+          (PostponeSettings current) =>
+              current.replaceDefault(const SmartPostponeSettings()),
+        ),
+        child: const Text('Reset Default'),
+      ),
+    );
+  }
+
+  /// Points one branch of the tree at a profile other than Default.
+  Widget _assignBranchRow(Map<String, String> options) {
+    return SettingsRow(
+      label: 'Assign a profile to a branch',
+      hint:
+          'Branch runs merge the profiles of every enclosing branch, outer to '
+          'inner, using the sub-branch mode above.',
+      controlWidth: 320,
+      control: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 96,
+            child: IntField(
+              value: _branchRoot,
+              min: 0,
+              max: 0xFFFFFFFF,
+              onChanged: (int value) => setState(() => _branchRoot = value),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ChoiceField<String>(
+              value: _liveName(_branchProfile),
+              options: options,
+              onChanged: (String value) =>
+                  setState(() => _branchProfile = value),
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(onPressed: _assign, child: const Text('Assign')),
+        ],
+      ),
+    );
+  }
+
+  /// One removable row per branch that overrides Default.
+  List<Widget> _branchAssignmentRows(List<int> assignedRoots) {
+    if (assignedRoots.isEmpty) {
+      return const <Widget>[
+        SettingsRow(
+          label: 'Branch assignments',
+          hint: 'No branch overrides the Default profile.',
+          control: SizedBox.shrink(),
+        ),
+      ];
+    }
+    return <Widget>[
+      for (final int root in assignedRoots)
+        SettingsRow(
+          label: 'Branch $root',
+          hint:
+              'Uses ${_postpone.branchProfileAssignments[root]} when a run '
+              'reaches this branch.',
+          control: OutlinedButton(
+            onPressed: () => _editPostpone(
+              (PostponeSettings current) => current.unassignBranchProfile(root),
+            ),
+            child: const Text('Unassign'),
+          ),
+        ),
+    ];
   }
 }

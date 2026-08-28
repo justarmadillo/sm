@@ -59,7 +59,7 @@ void main() {
     for (final (double a, int interval, int expected) in vectors) {
       test('A=$a, I=$interval yields $expected', () {
         final TopicScheduler scheduler = TopicScheduler(
-          prng: Sm20Prng(seed: 0),
+          randomNumbers: Sm20RandomNumberGenerator(seed: 0),
         );
         expect(
           scheduler.nextAutomaticInterval(
@@ -71,15 +71,20 @@ void main() {
     }
 
     test('consumes exactly two draws from the shared stream', () {
-      final Sm20Prng prng = Sm20Prng(seed: 0);
-      final TopicScheduler scheduler = TopicScheduler(prng: prng);
+      final Sm20RandomNumberGenerator randomNumbers = Sm20RandomNumberGenerator(
+        seed: 0,
+      );
+      final TopicScheduler scheduler = TopicScheduler(
+        randomNumbers: randomNumbers,
+      );
       scheduler.nextAutomaticInterval(_topic(interval: 10, aFactor: 2));
 
-      final Sm20Prng reference = Sm20Prng(seed: 0)
-        ..advance()
-        ..advance();
+      final Sm20RandomNumberGenerator reference =
+          Sm20RandomNumberGenerator(seed: 0)
+            ..advance()
+            ..advance();
       expect(
-        prng.state.seed,
+        randomNumbers.state.seed,
         reference.state.seed,
         reason: 'one interval is two draws, no more and no fewer',
       );
@@ -90,7 +95,7 @@ void main() {
       // has to push it past, or a topic would stall on the same day forever.
       for (var seed = 0; seed < 40; seed += 1) {
         final TopicScheduler scheduler = TopicScheduler(
-          prng: Sm20Prng(seed: seed),
+          randomNumbers: Sm20RandomNumberGenerator(seed: seed),
         );
         expect(
           scheduler.nextAutomaticInterval(_topic(interval: 10, aFactor: 1.01)),
@@ -104,17 +109,32 @@ void main() {
     test('reproduces the three Real48 byte vectors', () {
       final DelphiReal48 two = DelphiReal48.fromDouble(2);
       expect(
-        TopicScheduler.adjustAFactorRaw(two, 10, 20, isBulkOperation: false).bytes,
+        TopicScheduler.adjustAFactorRaw(
+          two,
+          10,
+          20,
+          isBulkOperation: false,
+        ).bytes,
         _hex('82db0d417407'),
         reason: 'a grown interval raises A',
       );
       expect(
-        TopicScheduler.adjustAFactorRaw(two, 20, 10, isBulkOperation: false).bytes,
+        TopicScheduler.adjustAFactorRaw(
+          two,
+          20,
+          10,
+          isBulkOperation: false,
+        ).bytes,
         _hex('814be47d1771'),
         reason: 'a shrunk interval lowers A',
       );
       expect(
-        TopicScheduler.adjustAFactorRaw(two, 10, 20, isBulkOperation: true).bytes,
+        TopicScheduler.adjustAFactorRaw(
+          two,
+          10,
+          20,
+          isBulkOperation: true,
+        ).bytes,
         _hex('82ba189d8b01'),
         reason: 'a bulk repetition moves A far less',
       );
@@ -123,7 +143,12 @@ void main() {
     test('an unchanged interval leaves the stored bytes alone', () {
       final DelphiReal48 a = DelphiReal48.fromDouble(2);
       expect(
-        TopicScheduler.adjustAFactorRaw(a, 10, 10, isBulkOperation: false).bytes,
+        TopicScheduler.adjustAFactorRaw(
+          a,
+          10,
+          10,
+          isBulkOperation: false,
+        ).bytes,
         a.bytes,
       );
     });
@@ -132,7 +157,9 @@ void main() {
   group('blank-topic A and the text-length override (item 5)', () {
     test('a new topic stores the blank-topic bytes', () {
       final StudyDay today = StudyDay.parse('2026-03-05', zoneId: 'UTC');
-      final TopicScheduler scheduler = TopicScheduler(prng: Sm20Prng(seed: 0));
+      final TopicScheduler scheduler = TopicScheduler(
+        randomNumbers: Sm20RandomNumberGenerator(seed: 0),
+      );
       const ElementRef ref = ElementRef(id: 'new', type: ElementType.source);
       final TopicState created = scheduler.createFor(
         ref: ref,

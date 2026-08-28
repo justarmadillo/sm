@@ -45,18 +45,21 @@ final class MigratedPosition {
 /// The three rules, for a splice replacing `[a, b)` with `n` bytes:
 ///
 /// * `offset < a` — unchanged; the edit happened after it.
-/// * `offset > b` — shifted by `n - (b - a)`; the edit happened before it.
-/// * `a <= offset <= b` — a boundary, resolved below.
+/// * `offset > editEnd` — shifted by `n - (editEnd - editStart)`; the edit
+///   happened before it.
+/// * `editStart <= offset <= editEnd` — a boundary, resolved below.
 ///
 /// The boundaries:
 ///
-/// * `a < offset < b` — the text it pointed at was removed. Collapses to `a`
-///   and reports [MigratedPosition.wasInsideEdit].
-/// * `offset == a == b` (a pure insertion at the position) — ambiguous by
-///   definition, so [gravity] decides: [PositionGravity.left] stays at `a`,
-///   [PositionGravity.right] moves to `a + n`.
-/// * `offset == a < b` — stays at `a`, the surviving text before the edit.
-/// * `offset == b > a` — moves to `a + n`, immediately after the new text.
+/// * `editStart < offset < editEnd` — the text it pointed at was removed.
+///   Collapses to `editStart` and reports [MigratedPosition.wasInsideEdit].
+/// * `offset == editStart == editEnd` (a pure insertion at the position) —
+///   ambiguous by definition, so [gravity] decides: [PositionGravity.left]
+///   stays at `editStart`, [PositionGravity.right] moves to `editStart + n`.
+/// * `offset == editStart < editEnd` — stays at `editStart`, the surviving
+///   text before the edit.
+/// * `offset == editEnd > editStart` — moves to `editStart + n`, immediately
+///   after the new text.
 int migrateOffsetSimple(
   int offset,
   TextSplice splice, {
@@ -69,23 +72,27 @@ MigratedPosition migrateOffset(
   TextSplice splice, {
   PositionGravity gravity = PositionGravity.left,
 }) {
-  final a = splice.startUtf8;
-  final b = splice.endUtf8;
+  final editStart = splice.startUtf8;
+  final editEnd = splice.endUtf8;
 
-  if (offset < a) return MigratedPosition(offset);
-  if (offset > b) return MigratedPosition(offset + splice.shift);
+  if (offset < editStart) return MigratedPosition(offset);
+  if (offset > editEnd) return MigratedPosition(offset + splice.shift);
 
-  // Every remaining case is a boundary: a <= offset <= b.
-  if (a == b) {
+  // Every remaining case is a boundary: editStart <= offset <= editEnd.
+  if (editStart == editEnd) {
     // Pure insertion exactly at the position. Nothing was removed, so this is
     // never "inside" an edit; only gravity separates the two answers.
     return MigratedPosition(
-      gravity == PositionGravity.left ? a : a + splice.insertedLength,
+      gravity == PositionGravity.left
+          ? editStart
+          : editStart + splice.insertedLength,
     );
   }
-  if (offset == a) return MigratedPosition(a);
-  if (offset == b) return MigratedPosition(a + splice.insertedLength);
-  return MigratedPosition(a, wasInsideEdit: true);
+  if (offset == editStart) return MigratedPosition(editStart);
+  if (offset == editEnd) {
+    return MigratedPosition(editStart + splice.insertedLength);
+  }
+  return MigratedPosition(editStart, wasInsideEdit: true);
 }
 
 /// Moves [anchor] across [splice] and stamps it with [contentRevision].
@@ -145,11 +152,7 @@ final class MigratedRange {
 /// The two ends carry opposite gravity on purpose, so a range never grows to
 /// swallow text typed at either of its edges: the start moves after an
 /// insertion at the start, the end stays before an insertion at the end.
-MigratedRange migrateRange(
-  int startUtf8,
-  int endUtf8,
-  TextSplice splice,
-) {
+MigratedRange migrateRange(int startUtf8, int endUtf8, TextSplice splice) {
   final start = migrateOffset(
     startUtf8,
     splice,
@@ -172,8 +175,8 @@ MigratedRange migrateRange(
 /// A pure insertion strictly inside the range counts: it changed the bytes the
 /// range covers even though it removed none.
 bool _overlapsEdit(int start, int end, TextSplice splice) {
-  final a = splice.startUtf8;
-  final b = splice.endUtf8;
-  if (splice.isPureInsertion) return a > start && a < end;
-  return a < end && b > start;
+  final editStart = splice.startUtf8;
+  final editEnd = splice.endUtf8;
+  if (splice.isPureInsertion) return editStart > start && editStart < end;
+  return editStart < end && editEnd > start;
 }

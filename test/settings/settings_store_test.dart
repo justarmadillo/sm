@@ -52,18 +52,20 @@ final class _MemorySettingsRepository implements SettingsRepository {
   final Map<String, String> values;
 
   @override
-  Future<String?> read(String key) async => values[key];
+  Future<String?> findValue(String key) async => values[key];
 
   @override
-  Future<Map<String, String>> readAll() async => <String, String>{...values};
+  Future<Map<String, String>> listAllValues() async => <String, String>{
+    ...values,
+  };
 
   @override
-  Future<void> write(String key, String value) async {
+  Future<void> saveValue(String key, String value) async {
     values[key] = value;
   }
 
   @override
-  Future<void> writeAll(Map<String, String> next) async {
+  Future<void> saveAllValues(Map<String, String> next) async {
     values.addAll(next);
   }
 

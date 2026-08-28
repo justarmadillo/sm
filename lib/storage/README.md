@@ -23,6 +23,20 @@ Drift turns a Dart getter name into a SQL column name. Renaming
 `parentIsSource` there renames the column, and every existing collection stops
 loading. The comment at the top of that file says what to do instead.
 
+This is why a few names in `database/` are shorter or older-looking than the
+rest of the app. They are frozen because a shipped collection already uses
+them, and the plain-English name lives on the Dart side of the converter:
+
+| Frozen in the database | Plain name in the app | Bridged by |
+|---|---|---|
+| `RevlogEntries`, `RevlogRow`, table `revlog_entries` | `ReviewLogEntry` | `reviewLogFromRow` |
+| column `reps` | `repetitionCount` | `cardMemoryFromRow` |
+| keys `prng_seed`, `seed` | `randomNumberSeed` | `Sm20RuntimeStore` |
+
+The same rule holds for any string used as a storage key: a JSON key inside a
+snapshot, an enum's `storageName`, or a settings key. Renaming the Dart symbol
+around them is safe; renaming the string is a migration.
+
 `database/app_database.g.dart` is generated — never edit it by hand.
 
 ## The verbs, so you can guess a method name
@@ -30,6 +44,9 @@ loading. The comment at the top of that file says what to do instead.
 `find…` one row or nothing · `list…` many rows · `count…` how many ·
 `insert…` create · `update…` change an existing row · `save…` either ·
 `append…` add to a log that is never rewritten · `delete…` remove for good.
+
+These hold in the key/value settings store too: `findValue`, `saveValue`,
+`listAllValues`, `saveAllValues`, `deleteKey`.
 
 `compareAndSwap…` is the exception that keeps an "and" in its name: comparing
 and swapping are one indivisible step, and splitting them would let a

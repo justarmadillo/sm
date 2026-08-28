@@ -5,7 +5,7 @@ import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduling_journal.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
@@ -217,7 +217,7 @@ final class FormulationCommandRunner {
           await _journal.append(
             operationId: command.operationId.value,
             ref: ref,
-            eventType: RevlogEventType.created,
+            eventType: ReviewLogEventType.created,
             atUtc: command.timestampUtc,
             after: _journal.cardSnapshot(state),
             metadata: <String, Object?>{

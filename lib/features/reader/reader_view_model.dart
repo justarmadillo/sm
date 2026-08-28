@@ -273,12 +273,19 @@ final class ReaderUiState {
     isBusy: isBusy ?? this.isBusy,
     isDone: isDone ?? this.isDone,
     wasRepetition: wasRepetition ?? this.wasRepetition,
-    editingBlockId: shouldClearEditing ? null : (editingBlockId ?? this.editingBlockId),
+    editingBlockId: shouldClearEditing
+        ? null
+        : (editingBlockId ?? this.editingBlockId),
     canUndoEdit: canUndoEdit ?? this.canUndoEdit,
   );
 }
 
 /// The Reader's ViewModel, one per open source.
+///
+/// `arg` below is Riverpod's name for the value the screen was opened with —
+/// here the [ReaderRequest] passed to `readerViewModelProvider(...)`. It is
+/// inherited from `FamilyAsyncNotifier` and cannot be renamed, so read `arg`
+/// as "the request this screen was opened with".
 final class ReaderViewModel
     extends FamilyAsyncNotifier<ReaderUiState, ReaderRequest> {
   DateTime? _sessionStartedAt;
@@ -502,7 +509,9 @@ final class ReaderViewModel
           s.copyWith(topic: topic, isDone: true, wasRepetition: false),
       successAsync: (TopicState topic) async {
         final StudyDay due = await _refreshEffectiveDue(topic);
-        final StudyDay today = await ref.read(readerCommandRunnerProvider).today();
+        final StudyDay today = await ref
+            .read(readerCommandRunnerProvider)
+            .today();
         // Later Today on an element that is already Outstanding is a
         // queue-only shift: section 8.4 leaves the due date alone. Reporting
         // the canonical due here would name a day that has already passed for
@@ -774,9 +783,7 @@ final class ReaderViewModel
   Future<void> undoEdit() => _runEdit(
     (OperationId operation, ReaderUiState current) => ref
         .read(readerCommandRunnerProvider)
-        .undoSourceEdit(
-          UndoSourceEdit(operation, sourceId: current.source.id),
-        ),
+        .undoSourceEdit(UndoSourceEdit(operation, sourceId: current.source.id)),
   );
 
   /// Shared body for the editing commands.
@@ -849,7 +856,8 @@ final class ReaderViewModel
         .length;
     final int stale = outcome.provenanceUpdates
         .where(
-          (ProvenanceUpdate update) => update.provenance.state == ProvenanceState.stale,
+          (ProvenanceUpdate update) =>
+              update.provenance.state == ProvenanceState.stale,
         )
         .length;
     if (orphaned == 0 && stale == 0) return const UiMessage('Saved');

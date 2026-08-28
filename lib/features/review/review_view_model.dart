@@ -96,6 +96,12 @@ final class ReviewUiState {
   );
 }
 
+/// The Review screen's ViewModel, one per card under review.
+///
+/// `arg` below is Riverpod's name for the value the screen was opened with —
+/// here the card id passed to `reviewViewModelProvider(...)`. It is inherited
+/// from `FamilyAsyncNotifier` and cannot be renamed, so read `arg` as "the id
+/// of the card being reviewed".
 final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
   DateTime? _startedAt;
 

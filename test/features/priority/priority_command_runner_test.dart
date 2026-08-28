@@ -13,7 +13,7 @@ import 'package:incremental_reader/features/priority/priority_commands.dart';
 import 'package:incremental_reader/features/priority/priority_query.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
@@ -154,9 +154,10 @@ void main() {
         ),
       );
 
-      final RevlogEntry entry = (await harness.learning.listRevlogFor(ref))
-          .firstWhere(
-            (RevlogEntry e) => e.eventType == RevlogEventType.priorityChange,
+      final ReviewLogEntry entry =
+          (await harness.learning.listReviewLogForElement(ref)).firstWhere(
+            (ReviewLogEntry e) =>
+                e.eventType == ReviewLogEventType.priorityChange,
           );
       expect(entry.before.priorityKey, isNotNull);
       expect(entry.after.priorityKey, isNotNull);
@@ -337,11 +338,12 @@ void main() {
       );
 
       for (final Source source in selected) {
-        final RevlogEntry entry =
-            (await harness.learning.listRevlogFor(
+        final ReviewLogEntry entry =
+            (await harness.learning.listReviewLogForElement(
               harness.refOf(source),
             )).firstWhere(
-              (RevlogEntry e) => e.eventType == RevlogEventType.priorityChange,
+              (ReviewLogEntry e) =>
+                  e.eventType == ReviewLogEventType.priorityChange,
             );
         expect(entry.metadata!['mode'], 'spread');
         expect(entry.metadata!['of'], 3);

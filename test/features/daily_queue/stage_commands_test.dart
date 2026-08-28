@@ -273,7 +273,7 @@ void main() {
       final Sm20CollectionState after = await harness.runtime();
       // The same elements, and one shared stream that moved with them.
       expect(after.outstanding.toSet(), before.outstanding.toSet());
-      expect(after.prngSeed, isNot(before.prngSeed));
+      expect(after.randomNumberSeed, isNot(before.randomNumberSeed));
     });
 
     test('a queue shorter than two elements consumes no randomness', () async {
@@ -290,7 +290,10 @@ void main() {
         ),
       );
 
-      expect((await harness.runtime()).prngSeed, before.prngSeed);
+      expect(
+        (await harness.runtime()).randomNumberSeed,
+        before.randomNumberSeed,
+      );
     });
   });
 }

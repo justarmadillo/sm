@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/storage/contracts/settings_repository.dart';
+
 /// Setting key holding the day of the last successful backup.
 const String kLastBackupDayKey = 'backup.last_day';
 
@@ -22,11 +23,11 @@ Future<File?> runDailyBackupIfDue(ProviderContainer container) async {
   final String today = (await container.read(schedulingContextProvider).today())
       .toString();
 
-  if (await settings.read(kLastBackupDayKey) == today) return null;
+  if (await settings.findValue(kLastBackupDayKey) == today) return null;
 
   final result = await container.read(backupServiceProvider).createBackup();
   if (result.isErr) return null;
-  await settings.write(kLastBackupDayKey, today);
+  await settings.saveValue(kLastBackupDayKey, today);
   return result.valueOrNull;
 }
 

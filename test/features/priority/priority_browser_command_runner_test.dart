@@ -144,14 +144,15 @@ void main() {
       clock.advance(const Duration(days: 3));
       final StudyDay today = await harness.today();
 
-      final Result<PriorityBrowserCommandOutcome> result = await harness.browser.forget(
-        ForgetElements(
-          harness.operation(),
-          refs: <ElementRef>[harness.refOf(source)],
-          day: today,
-          timestampUtc: clock.nowUtc(),
-        ),
-      );
+      final Result<PriorityBrowserCommandOutcome> result = await harness.browser
+          .forget(
+            ForgetElements(
+              harness.operation(),
+              refs: <ElementRef>[harness.refOf(source)],
+              day: today,
+              timestampUtc: clock.nowUtc(),
+            ),
+          );
       expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
 
       final TopicState after = await harness.topicOf(source);
@@ -406,7 +407,8 @@ void main() {
       final StudyDay today = await harness.today();
       final ElementRef ref = harness.refOf(source);
 
-      final Result<PriorityBrowserCommandOutcome> ordinary = await harness.browser
+      final Result<PriorityBrowserCommandOutcome> ordinary = await harness
+          .browser
           .addToOutstanding(
             AddToOutstanding(
               harness.operation(),
@@ -502,7 +504,10 @@ void main() {
       );
       final Sm20CollectionState runtimeAfter = await harness.context
           .runtimeState();
-      expect(runtimeAfter.prngSeed, isNot(runtimeBefore.prngSeed));
+      expect(
+        runtimeAfter.randomNumberSeed,
+        isNot(runtimeBefore.randomNumberSeed),
+      );
     });
 
     test('is a low-level reschedule for a card', () async {
@@ -543,7 +548,7 @@ void main() {
         card.memory.cardId,
       ))!;
       expect(after.memory.dueAtUtc.isBefore(before.memory.dueAtUtc), isTrue);
-      expect(after.memory.reps, before.memory.reps);
+      expect(after.memory.repetitionCount, before.memory.repetitionCount);
       expect(after.memory.stability, before.memory.stability);
       expect(after.memory.difficulty, before.memory.difficulty);
       expect(after.schedule.priority, before.schedule.priority);

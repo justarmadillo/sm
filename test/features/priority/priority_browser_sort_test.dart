@@ -19,7 +19,7 @@ PriorityEntry _entry({
   required String key,
   String title = 'Element',
   int interval = 0,
-  int reps = 0,
+  int repetitionCount = 0,
   int lapses = 0,
   String? lastRep,
   String next = '2026-03-05',
@@ -37,7 +37,7 @@ PriorityEntry _entry({
     title: title,
     preview: '',
     intervalDays: interval,
-    repetitions: reps,
+    repetitions: repetitionCount,
     lapses: lapses,
     lastRepetition: lastRep == null ? null : _day(lastRep),
   );
@@ -50,9 +50,27 @@ List<String> _ids(List<PriorityEntry> entries) => <String>[
 void main() {
   group('ordering by a column', () {
     final List<PriorityEntry> entries = <PriorityEntry>[
-      _entry(id: 'a', key: 'V', title: 'Zebra', interval: 10, reps: 3),
-      _entry(id: 'b', key: 'W', title: 'apple', interval: 2, reps: 1),
-      _entry(id: 'c', key: 'X', title: 'Mango', interval: 30, reps: 7),
+      _entry(
+        id: 'a',
+        key: 'V',
+        title: 'Zebra',
+        interval: 10,
+        repetitionCount: 3,
+      ),
+      _entry(
+        id: 'b',
+        key: 'W',
+        title: 'apple',
+        interval: 2,
+        repetitionCount: 1,
+      ),
+      _entry(
+        id: 'c',
+        key: 'X',
+        title: 'Mango',
+        interval: 30,
+        repetitionCount: 7,
+      ),
     ];
 
     test('interval ascending, then descending', () {

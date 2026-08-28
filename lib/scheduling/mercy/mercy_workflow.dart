@@ -77,8 +77,8 @@ final class MercyPreview {
     required this.gatheredCount,
     required this.blockSize,
     required this.randomDraws,
-    required this.prngSeedBefore,
-    required this.prngSeedAfter,
+    required this.randomNumberSeedBefore,
+    required this.randomNumberSeedAfter,
     required this.deletedPlaceholderCount,
     this.gatherMode = Sm20MercyGatherMode.collection,
   });
@@ -89,7 +89,7 @@ final class MercyPreview {
     required StudyDay collectionLearningStartDay,
     required int gatheringDays,
     required MercyMode mode,
-    required int prngSeedBefore,
+    required int randomNumberSeedBefore,
     required Map<ElementRef, String> canonicalStates,
     Sm20MercyGatherMode gatherMode = Sm20MercyGatherMode.collection,
   }) => MercyPreview(
@@ -102,8 +102,8 @@ final class MercyPreview {
     gatheredCount: plan.gathered.length,
     blockSize: plan.blockSize,
     randomDraws: plan.randomDraws,
-    prngSeedBefore: prngSeedBefore,
-    prngSeedAfter: plan.prngState.seed,
+    randomNumberSeedBefore: randomNumberSeedBefore,
+    randomNumberSeedAfter: plan.randomNumberState.seed,
     deletedPlaceholderCount: plan.deletedPlaceholderCount,
     moves: List<MercyPlannedMove>.unmodifiable(<MercyPlannedMove>[
       for (final Sm20MercyAssignment assignment in plan.assignments)
@@ -137,8 +137,8 @@ final class MercyPreview {
       gatheredCount: map['gathered_count']! as int,
       blockSize: map['block_size']! as int,
       randomDraws: map['random_draws']! as int,
-      prngSeedBefore: map['prng_seed_before']! as int,
-      prngSeedAfter: map['prng_seed_after']! as int,
+      randomNumberSeedBefore: map['prng_seed_before']! as int,
+      randomNumberSeedAfter: map['prng_seed_after']! as int,
       deletedPlaceholderCount: map['deleted_placeholder_count']! as int,
       moves: List<MercyPlannedMove>.unmodifiable(<MercyPlannedMove>[
         for (final Object? raw in map['items']! as List<Object?>)
@@ -170,8 +170,8 @@ final class MercyPreview {
   final int gatheredCount;
   final int blockSize;
   final int randomDraws;
-  final int prngSeedBefore;
-  final int prngSeedAfter;
+  final int randomNumberSeedBefore;
+  final int randomNumberSeedAfter;
   final int deletedPlaceholderCount;
 
   int get selectedCount => moves.length;
@@ -212,8 +212,8 @@ final class MercyPreview {
     'gathered_count': gatheredCount,
     'block_size': blockSize,
     'random_draws': randomDraws,
-    'prng_seed_before': prngSeedBefore,
-    'prng_seed_after': prngSeedAfter,
+    'prng_seed_before': randomNumberSeedBefore,
+    'prng_seed_after': randomNumberSeedAfter,
     'deleted_placeholder_count': deletedPlaceholderCount,
     'items': <Map<String, Object?>>[
       for (final MercyPlannedMove move in moves)
@@ -272,7 +272,10 @@ final class MercyAppliedBatchSnapshot {
 
 /// A stale preview/undo is refused before any canonical state is written.
 final class StaleMercyPreview implements Exception {
-  const StaleMercyPreview(this.message, {this.changedRefs = const <ElementRef>[]});
+  const StaleMercyPreview(
+    this.message, {
+    this.changedRefs = const <ElementRef>[],
+  });
 
   final String message;
   final Iterable<ElementRef> changedRefs;
@@ -354,28 +357,30 @@ String encodeMercyAppliedBatch(MercyAppliedBatchSnapshot snapshot) =>
     });
 
 MercyAppliedBatchSnapshot decodeMercyAppliedBatch(String source) {
-  final Map<String, Object?> map = _asJsonMap(jsonDecode(source), 'Mercy batch');
+  final Map<String, Object?> map = _asJsonMap(
+    jsonDecode(source),
+    'Mercy batch',
+  );
   final String zoneId = map['zone_id']! as String;
   return MercyAppliedBatchSnapshot(
     batchId: map['batch_id']! as String,
     appliedEventId: map['applied_event_id']! as String,
     policyVersion: map['policy_version']! as String,
     studyDay: _day(map['study_day']! as int, zoneId),
-    moves:
-        List<MercyAppliedMove>.unmodifiable(<MercyAppliedMove>[
-          for (final Object? raw in map['items']! as List<Object?>)
-            (() {
-              final Map<String, Object?> value = _asJsonMap(raw, 'Mercy item');
-              return MercyAppliedMove(
-                ref: _ref(value),
-                beforeState: value['before_state']! as String,
-                afterState: value['after_state']! as String,
-                fromDay: _day(value['from_day']! as int, zoneId),
-                toDay: _day(value['to_day']! as int, zoneId),
-                appliedEventId: value['applied_event_id']! as String,
-              );
-            })(),
-        ]),
+    moves: List<MercyAppliedMove>.unmodifiable(<MercyAppliedMove>[
+      for (final Object? raw in map['items']! as List<Object?>)
+        (() {
+          final Map<String, Object?> value = _asJsonMap(raw, 'Mercy item');
+          return MercyAppliedMove(
+            ref: _ref(value),
+            beforeState: value['before_state']! as String,
+            afterState: value['after_state']! as String,
+            fromDay: _day(value['from_day']! as int, zoneId),
+            toDay: _day(value['to_day']! as int, zoneId),
+            appliedEventId: value['applied_event_id']! as String,
+          );
+        })(),
+    ]),
   );
 }
 
@@ -399,7 +404,10 @@ String encodeMercyTopicState(TopicState state) => jsonEncode(<String, Object?>{
 });
 
 TopicState decodeMercyTopicState(String source) {
-  final Map<String, Object?> map = _asJsonMap(jsonDecode(source), 'topic state');
+  final Map<String, Object?> map = _asJsonMap(
+    jsonDecode(source),
+    'topic state',
+  );
   final ElementSchedule schedule = _schedule(
     _asJsonMap(map['schedule'], 'topic schedule'),
   );

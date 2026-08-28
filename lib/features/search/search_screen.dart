@@ -80,7 +80,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final AsyncValue<List<SearchResult>> results = ref.watch(
       searchResultsProvider,
     );
-    final Set<ElementType> types = ref.watch(searchTypesProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Search')),
@@ -89,67 +88,80 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           constraints: const BoxConstraints(maxWidth: 860),
           child: Column(
             children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: TextField(
-                  controller: _controller,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Search articles, extracts, and cards',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  onChanged: (String value) =>
-                      ref.read(searchTextProvider.notifier).state = value,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: <Widget>[
-                    for (final (String label, Set<ElementType> filter)
-                        in <(String, Set<ElementType>)>[
-                          ('Everything', <ElementType>{}),
-                          ('Articles', <ElementType>{ElementType.source}),
-                          ('Extracts', <ElementType>{ElementType.extract}),
-                          ('Cards', <ElementType>{ElementType.card}),
-                        ])
-                      Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: FilterChip(
-                          label: Text(label),
-                          selected:
-                              types.length == filter.length &&
-                              types.containsAll(filter),
-                          onSelected: (_) =>
-                              ref.read(searchTypesProvider.notifier).state =
-                                  filter,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: results.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (Object error, StackTrace stack) =>
-                      Center(child: Text('Search failed.\n$error')),
-                  data: (List<SearchResult> results) => results.isEmpty
-                      ? _Empty(query: _controller.text)
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 60),
-                          itemCount: results.length,
-                          itemBuilder: (BuildContext context, int index) =>
-                              _ResultTile(result: results[index]),
-                        ),
-                ),
-              ),
+              _queryField(),
+              _typeFilterChips(),
+              Expanded(child: _results(results)),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// Writing here updates the query provider, which the results watch: there
+  /// is no search button because there is no search step to trigger.
+  Widget _queryField() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      child: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          hintText: 'Search articles, extracts, and cards',
+          prefixIcon: Icon(Icons.search),
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        onChanged: (String value) =>
+            ref.read(searchTextProvider.notifier).state = value,
+      ),
+    );
+  }
+
+  /// An empty filter set means "everything", so no chip needs a special case.
+  Widget _typeFilterChips() {
+    final Set<ElementType> selectedTypes = ref.watch(searchTypesProvider);
+    const List<(String, Set<ElementType>)> filters =
+        <(String, Set<ElementType>)>[
+          ('Everything', <ElementType>{}),
+          ('Articles', <ElementType>{ElementType.source}),
+          ('Extracts', <ElementType>{ElementType.extract}),
+          ('Cards', <ElementType>{ElementType.card}),
+        ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: <Widget>[
+          for (final (String label, Set<ElementType> filter) in filters)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: FilterChip(
+                label: Text(label),
+                selected:
+                    selectedTypes.length == filter.length &&
+                    selectedTypes.containsAll(filter),
+                onSelected: (_) =>
+                    ref.read(searchTypesProvider.notifier).state = filter,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _results(AsyncValue<List<SearchResult>> results) {
+    return results.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (Object error, StackTrace stack) =>
+          Center(child: Text('Search failed.\n$error')),
+      data: (List<SearchResult> found) => found.isEmpty
+          ? _Empty(query: _controller.text)
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 60),
+              itemCount: found.length,
+              itemBuilder: (BuildContext context, int index) =>
+                  _ResultTile(result: found[index]),
+            ),
     );
   }
 }
@@ -201,58 +213,68 @@ class _ResultTile extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Text(
-                          result.typeLabel.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                            color: color,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            result.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        if (result.schedule case final schedule?)
-                          Text(
-                            schedule.lifecycle.isSchedulable
-                                ? 'due ${result.effectiveDueDay ?? schedule.algorithmicDueDay}'
-                                : schedule.lifecycle.name,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.muted,
-                            ),
-                          ),
-                      ],
-                    ),
+                    _headingRow(color),
                     const SizedBox(height: 4),
-                    Text(
-                      result.snippet.replaceAll(RegExp(r'\s+'), ' '),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.muted,
-                        height: 1.45,
-                      ),
-                    ),
+                    _snippet(),
                   ],
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// What kind of element it is, its title, and when it is next due.
+  Widget _headingRow(Color color) {
+    return Row(
+      children: <Widget>[
+        Text(
+          result.typeLabel.toUpperCase(),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            color: color,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            result.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ),
+        if (result.schedule case final schedule?) _dueLabel(schedule),
+      ],
+    );
+  }
+
+  /// A due date only means something for an element the scheduler still
+  /// hands out; otherwise the lifecycle itself is the useful word.
+  Widget _dueLabel(ElementSchedule schedule) {
+    return Text(
+      schedule.lifecycle.isSchedulable
+          ? 'due ${result.effectiveDueDay ?? schedule.algorithmicDueDay}'
+          : schedule.lifecycle.name,
+      style: const TextStyle(fontSize: 11, color: AppColors.muted),
+    );
+  }
+
+  /// The matching text, with runs of whitespace collapsed so a match that
+  /// straddles a line break still reads as one phrase.
+  Widget _snippet() {
+    return Text(
+      result.snippet.replaceAll(RegExp(r'\s+'), ' '),
+      maxLines: 3,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        fontSize: 12,
+        color: AppColors.muted,
+        height: 1.45,
       ),
     );
   }

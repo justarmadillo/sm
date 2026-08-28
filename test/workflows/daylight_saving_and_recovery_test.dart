@@ -12,7 +12,7 @@ import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
@@ -187,7 +187,9 @@ void main() {
         id: source.id,
         type: ElementType.source,
       );
-      final int logBefore = (await harness.learning.listRevlogFor(ref)).length;
+      final int logBefore = (await harness.learning.listReviewLogForElement(
+        ref,
+      )).length;
 
       final Result<TopicState> rejected = await harness.reader.reschedule(
         RescheduleTopic(
@@ -199,7 +201,10 @@ void main() {
       );
 
       expect(rejected.failureOrNull, isA<ValidationFailure>());
-      expect(await harness.learning.listRevlogFor(ref), hasLength(logBefore));
+      expect(
+        await harness.learning.listReviewLogForElement(ref),
+        hasLength(logBefore),
+      );
       expect(
         (await harness.learning.listRecentActivity()).where(
           (r) => r.kind == 'topic.rescheduled',
@@ -219,7 +224,7 @@ void main() {
 
       expect(missing.failureOrNull, isA<NotFoundFailure>());
       expect(
-        await harness.learning.listRecentRevlog(),
+        await harness.learning.listRecentReviewLog(),
         isEmpty,
         reason: 'nothing happened, so nothing is recorded as having happened',
       );
@@ -256,9 +261,9 @@ void main() {
       expect(after.schedule.dueDay, due);
       expect(after.encounters, 1);
       expect(
-        (await harness.learning.listRevlogFor(
-          ref,
-        )).where((RevlogEntry e) => e.eventType == RevlogEventType.topicRead),
+        (await harness.learning.listReviewLogForElement(ref)).where(
+          (ReviewLogEntry e) => e.eventType == ReviewLogEventType.topicRead,
+        ),
         hasLength(1),
       );
     });

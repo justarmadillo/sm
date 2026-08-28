@@ -41,7 +41,7 @@ final class Block {
     required List<Utf16Span> contentSpans,
     this.headingLevel,
     this.codeLanguage,
-    this.ordered = false,
+    this.isOrderedListItem = false,
     this.listMarker,
     this.listDepth = 0,
     this.quoteDepth = 0,
@@ -76,8 +76,9 @@ final class Block {
   /// Info string of a fenced code block, when present.
   final String? codeLanguage;
 
-  /// Whether a [BlockType.listItem] belongs to an ordered list.
-  final bool ordered;
+  /// Whether a [BlockType.listItem] belongs to a numbered list (`1.`) rather
+  /// than a bulleted one (`-`).
+  final bool isOrderedListItem;
 
   /// Literal list marker, for example `-` or `3.`.
   final String? listMarker;

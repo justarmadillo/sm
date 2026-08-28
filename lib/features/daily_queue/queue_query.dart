@@ -68,7 +68,7 @@ final class QueueProjection {
   /// An empty day.
   static QueueProjection emptyOn(StudyDay today) => QueueProjection(
     entries: const <QueueEntry>[],
-    counters: QueuePlan.empty(Sm20PrngState(0)).counters,
+    counters: QueuePlan.empty(Sm20RandomNumberGeneratorState(0)).counters,
     today: today,
     requiresStageConfirmation: false,
   );
@@ -114,7 +114,8 @@ final class QueueQuery {
   ///
   Future<QueueProjection> load() async {
     final StudyDay today = await _context.today();
-    final Result<AdmissionOutcome> outcome = await _commandRunner.runDailyAdmission(
+    final Result<AdmissionOutcome>
+    outcome = await _commandRunner.runDailyAdmission(
       RunDailyAdmission(
         // Derived, not random: this is what makes the day's valve idempotent
         // across refreshes, restarts, and crashes.
@@ -173,7 +174,9 @@ final class QueueQuery {
           candidates: await _commandRunner.loadCandidates(today),
           nowUtc: _clock.nowUtc(),
           today: today,
-          prng: Sm20Prng(seed: runtime.prngSeed),
+          randomNumbers: Sm20RandomNumberGenerator(
+            seed: runtime.randomNumberSeed,
+          ),
           combinedOrder: runtime.outstanding,
           outstandingItemMembership: runtime.outstandingItems.toSet(),
           shouldSort: false,

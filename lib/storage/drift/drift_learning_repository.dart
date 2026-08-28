@@ -10,7 +10,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduler_event.dart';
 import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
@@ -377,7 +377,7 @@ final class DriftLearningRepository implements LearningRepository {
       .insertOnConflictUpdate(scheduleToCompanion(schedule));
 
   @override
-  Future<List<ElementSchedule>> listByPriority({
+  Future<List<ElementSchedule>> listSchedulesByPriority({
     int? limit,
     int? offset,
   }) async {
@@ -425,21 +425,25 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
-  Future<void> appendRevlog(RevlogEntry entry) =>
-      _database.into(_database.revlogEntries).insert(revlogToCompanion(entry));
+  Future<void> appendReviewLog(ReviewLogEntry entry) => _database
+      .into(_database.revlogEntries)
+      .insert(reviewLogToCompanion(entry));
 
   @override
-  Future<void> appendRevlogBatch(List<RevlogEntry> entries) async {
+  Future<void> appendReviewLogBatch(List<ReviewLogEntry> entries) async {
     if (entries.isEmpty) return;
     await _database.batch((Batch batch) {
       batch.insertAll(_database.revlogEntries, <RevlogEntriesCompanion>[
-        for (final entry in entries) revlogToCompanion(entry),
+        for (final entry in entries) reviewLogToCompanion(entry),
       ]);
     });
   }
 
   @override
-  Future<List<RevlogEntry>> listRevlogFor(ElementRef ref, {int? limit}) async {
+  Future<List<ReviewLogEntry>> listReviewLogForElement(
+    ElementRef ref, {
+    int? limit,
+  }) async {
     final query = _database.select(_database.revlogEntries)
       ..where(
         ($RevlogEntriesTable t) =>
@@ -451,11 +455,11 @@ final class DriftLearningRepository implements LearningRepository {
       ]);
     if (limit != null) query.limit(limit);
     final rows = await query.get();
-    return <RevlogEntry>[for (final row in rows) revlogFromRow(row)];
+    return <ReviewLogEntry>[for (final row in rows) reviewLogFromRow(row)];
   }
 
   @override
-  Future<List<RevlogEntry>> listRecentRevlog({int limit = 100}) async {
+  Future<List<ReviewLogEntry>> listRecentReviewLog({int limit = 100}) async {
     final rows =
         await (_database.select(_database.revlogEntries)
               ..orderBy(<OrderClauseGenerator<$RevlogEntriesTable>>[
@@ -463,7 +467,7 @@ final class DriftLearningRepository implements LearningRepository {
               ])
               ..limit(limit))
             .get();
-    return <RevlogEntry>[for (final row in rows) revlogFromRow(row)];
+    return <ReviewLogEntry>[for (final row in rows) reviewLogFromRow(row)];
   }
 
   @override
@@ -524,7 +528,9 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
-  Future<Map<RevlogEventType, int>> countRevlogOn(StudyDay day) async {
+  Future<Map<ReviewLogEventType, int>> countReviewLogEventsOn(
+    StudyDay day,
+  ) async {
     // Day boundaries come from the caller's calendar, so the log is bucketed
     // by the same study day the scheduler used rather than by UTC midnight.
     final int from = day.epochDay * Duration.millisecondsPerDay;
@@ -536,11 +542,10 @@ final class DriftLearningRepository implements LearningRepository {
           variables: <Variable<Object>>[Variable<int>(from), Variable<int>(to)],
         )
         .get();
-    return <RevlogEventType, int>{
+    return <ReviewLogEventType, int>{
       for (final row in rows)
-        RevlogEventType.fromValue(row.read<int>('event_type')): row.read<int>(
-          'n',
-        ),
+        ReviewLogEventType.fromValue(row.read<int>('event_type')): row
+            .read<int>('n'),
     };
   }
 
@@ -549,7 +554,7 @@ final class DriftLearningRepository implements LearningRepository {
       _findLastUnundoneReview(cardId);
 
   @override
-  Future<ReviewRecord?> findLastReviewOverall() =>
+  Future<ReviewRecord?> findLastReviewInCollection() =>
       _findLastUnundoneReview(null);
 
   Future<ReviewRecord?> _findLastUnundoneReview(String? cardId) async {

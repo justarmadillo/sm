@@ -19,7 +19,7 @@ import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduler_event.dart';
 import 'package:incremental_reader/scheduling/history/scheduling_journal.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
@@ -168,7 +168,7 @@ final class ReviewCommandRunner {
         await _journal.append(
           operationId: command.operationId.value,
           ref: ElementRef(id: command.cardId, type: ElementType.card),
-          eventType: RevlogEventType.review,
+          eventType: ReviewLogEventType.review,
           atUtc: reviewedAt,
           before: _journal.cardSnapshot(before, pressure: pressure),
           after: _journal.cardSnapshot(transition.state, pressure: pressure),
@@ -332,7 +332,7 @@ final class ReviewCommandRunner {
           if (replayed != null) return Ok<CardState>(replayed);
         }
         final ReviewRecord? record = command.cardId == null
-            ? await _learning.findLastReviewOverall()
+            ? await _learning.findLastReviewInCollection()
             : await _learning.findLastReview(command.cardId!);
         if (record == null) {
           return const Err<CardState>(
@@ -380,7 +380,7 @@ final class ReviewCommandRunner {
         await _journal.append(
           operationId: command.operationId.value,
           ref: ElementRef(id: record.cardId, type: ElementType.card),
-          eventType: RevlogEventType.undo,
+          eventType: ReviewLogEventType.undo,
           atUtc: command.timestampUtc,
           before: _journal.cardSnapshot(current),
           after: _journal.cardSnapshot(restored),
@@ -531,7 +531,9 @@ final class ReviewCommandRunner {
         final StudyDayCalendar calendar = await _context.calendar();
         final StudyDay today = calendar.dayOf(command.timestampUtc);
         final runtime = await _context.runtimeState();
-        final bool isAlreadyOutstanding = runtime.outstanding.contains(state.ref);
+        final bool isAlreadyOutstanding = runtime.outstanding.contains(
+          state.ref,
+        );
         final StudyDay until = command.until ?? today;
         final bool isBlockedBySameDayGuard =
             command.until == null &&
@@ -565,8 +567,8 @@ final class ReviewCommandRunner {
           operationId: command.operationId.value,
           ref: ElementRef(id: command.cardId, type: ElementType.card),
           eventType: command.isAutomatic
-              ? RevlogEventType.autoPostpone
-              : RevlogEventType.postpone,
+              ? ReviewLogEventType.autoPostpone
+              : ReviewLogEventType.postpone,
           atUtc: command.timestampUtc,
           before: _journal.cardSnapshot(state),
           after: _journal.cardSnapshot(after),
@@ -626,7 +628,7 @@ final class ReviewCommandRunner {
     await _journal.append(
       operationId: command.operationId.value,
       ref: ElementRef(id: command.cardId, type: ElementType.card),
-      eventType: RevlogEventType.practice,
+      eventType: ReviewLogEventType.practice,
       atUtc: reviewedAt,
       before: _journal.cardSnapshot(state, pressure: pressure),
       after: _journal.cardSnapshot(state, pressure: pressure),
@@ -684,7 +686,7 @@ final class ReviewCommandRunner {
     final StudyDay tomorrow = today.addDays(1);
     final CardScheduler scheduler = await _context.cardScheduler();
 
-    final entries = <RevlogEntry>[];
+    final entries = <ReviewLogEntry>[];
     for (final Card sibling in siblings) {
       final CardState? state = await _learning.findCardState(sibling.id);
       if (state == null) continue;
@@ -711,7 +713,7 @@ final class ReviewCommandRunner {
         _journal.build(
           operationId: command.operationId.value,
           ref: ElementRef(id: sibling.id, type: ElementType.card),
-          eventType: RevlogEventType.bury,
+          eventType: ReviewLogEventType.bury,
           atUtc: command.timestampUtc,
           before: _journal.cardSnapshot(state),
           after: _journal.cardSnapshot(after),
@@ -799,7 +801,11 @@ final class ReviewCommandRunner {
 
   Future<void> _restoreToOutstanding(CardState state) async {
     if (!state.memory.isNew) {
-      await _placeInOutstanding(state.ref, shouldInclude: true, shouldInsertAtFront: true);
+      await _placeInOutstanding(
+        state.ref,
+        shouldInclude: true,
+        shouldInsertAtFront: true,
+      );
       return;
     }
     final runtime = await _context.runtimeState();

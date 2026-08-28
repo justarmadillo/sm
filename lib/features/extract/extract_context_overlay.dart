@@ -62,29 +62,8 @@ class _ExtractContextDialogState extends State<_ExtractContextDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final index = widget.document.indexOfBlock(widget.block.id) ?? 0;
-    final from = (index - _radius).clamp(0, widget.document.blocks.length - 1);
-    final to = (index + _radius).clamp(0, widget.document.blocks.length - 1);
-    final surrounding = widget.document.blocks.sublist(from, to + 1);
-
     return AlertDialog(
-      title: Row(
-        children: <Widget>[
-          const Text('Context'),
-          const SizedBox(width: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: AppColors.softMarker.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Text(
-              'Browsing',
-              style: TextStyle(fontSize: 11, color: AppColors.softMarker),
-            ),
-          ),
-        ],
-      ),
+      title: _title(),
       content: SizedBox(
         width: 640,
         child: SingleChildScrollView(
@@ -92,23 +71,7 @@ class _ExtractContextDialogState extends State<_ExtractContextDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(
-                widget.extracts.length == 1
-                    ? '1 extract taken here'
-                    : '${widget.extracts.length} extracts taken here',
-                style: const TextStyle(fontSize: 12, color: AppColors.muted),
-              ),
-              const SizedBox(height: 8),
-              for (final extract in widget.extracts)
-                _ExtractCard(
-                  extract: extract,
-                  onOpen: () => Navigator.of(context).pop(
-                    ExtractContextAction.goToAnchor(
-                      extract.provenance.startAnchor,
-                      extractId: extract.id,
-                    ),
-                  ),
-                ),
+              ..._extractList(context),
               const SizedBox(height: 16),
               const Text(
                 'In the document',
@@ -119,36 +82,15 @@ class _ExtractContextDialogState extends State<_ExtractContextDialog> {
                 ),
               ),
               const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  border: Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    for (final surroundingBlock in surrounding)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: RichText(
-                          text: buildBlockSpan(
-                            surroundingBlock,
-                            ReaderTypography.standard,
-                            highlights: _highlightsFor(surroundingBlock),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+              _surroundingText(),
             ],
           ),
         ),
       ),
       actions: <Widget>[
         TextButton(
+          // Two more blocks each time, up to a limit: this is a peek at the
+          // context, not a second reader.
           onPressed: _radius >= 6
               ? null
               : () => setState(() => _radius = _radius + 2),
@@ -159,6 +101,85 @@ class _ExtractContextDialogState extends State<_ExtractContextDialog> {
           child: const Text('Close'),
         ),
       ],
+    );
+  }
+
+  /// The "Browsing" badge says looking here does not count as a repetition.
+  Widget _title() {
+    return Row(
+      children: <Widget>[
+        const Text('Context'),
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppColors.softMarker.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Text(
+            'Browsing',
+            style: TextStyle(fontSize: 11, color: AppColors.softMarker),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Every extract taken from this block, each one a way back to it.
+  List<Widget> _extractList(BuildContext context) {
+    return <Widget>[
+      Text(
+        widget.extracts.length == 1
+            ? '1 extract taken here'
+            : '${widget.extracts.length} extracts taken here',
+        style: const TextStyle(fontSize: 12, color: AppColors.muted),
+      ),
+      const SizedBox(height: 8),
+      for (final extract in widget.extracts)
+        _ExtractCard(
+          extract: extract,
+          onOpen: () => Navigator.of(context).pop(
+            ExtractContextAction.goToAnchor(
+              extract.provenance.startAnchor,
+              extractId: extract.id,
+            ),
+          ),
+        ),
+    ];
+  }
+
+  /// The block and [_radius] blocks either side of it, clamped to the
+  /// document so the first and last blocks still show what they can.
+  Widget _surroundingText() {
+    final index = widget.document.indexOfBlock(widget.block.id) ?? 0;
+    final lastIndex = widget.document.blocks.length - 1;
+    final from = (index - _radius).clamp(0, lastIndex);
+    final to = (index + _radius).clamp(0, lastIndex);
+    final surrounding = widget.document.blocks.sublist(from, to + 1);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          for (final surroundingBlock in surrounding)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: RichText(
+                text: buildBlockSpan(
+                  surroundingBlock,
+                  ReaderTypography.standard,
+                  highlights: _highlightsFor(surroundingBlock),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

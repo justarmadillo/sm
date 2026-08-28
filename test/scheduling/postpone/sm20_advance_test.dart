@@ -52,37 +52,41 @@ void main() {
     });
 
     test('records rejected before the draw consume no randomness', () {
-      final Sm20Prng prng = Sm20Prng(seed: 0x12345678);
+      final Sm20RandomNumberGenerator randomNumbers = Sm20RandomNumberGenerator(
+        seed: 0x12345678,
+      );
       final Sm20AdvanceResult result = _run(<Sm20AdvanceCandidate>[
         // Wrong type for the scope.
         _candidate('card', type: ElementType.card, interval: 200),
         // Not memorized.
-        _candidate('pending', memorized: false, interval: 200),
+        _candidate('pending', isMemorized: false, interval: 200),
         // Reviewed today.
         _candidate('today', interval: 200, lastReview: 100),
         // Never reviewed.
         _candidate('fresh', interval: 200, lastReview: null),
         // Interval already inside the horizon.
         _candidate('short', interval: 30),
-      ], prng: prng);
+      ], randomNumbers: randomNumbers);
 
       expect(result.considered, 0);
       expect(result.randomDraws, 0);
       expect(result.decisions, isEmpty);
-      expect(prng.state.seed, 0x12345678);
+      expect(randomNumbers.state.seed, 0x12345678);
     });
 
     test('a rejected r still consumes its draw', () {
       // With a one-day horizon, `r` is 1 or 2 and the interval is 2, so about
       // half of these are rejected — yet every candidate that reached the
       // test drew exactly once, which is the property the stream depends on.
-      final Sm20Prng prng = Sm20Prng(seed: 0x12345678);
+      final Sm20RandomNumberGenerator randomNumbers = Sm20RandomNumberGenerator(
+        seed: 0x12345678,
+      );
       final Sm20AdvanceResult result = _run(
         <Sm20AdvanceCandidate>[
           for (var i = 0; i < 16; i++) _candidate('topic-$i', interval: 2),
         ],
         horizonDays: 1,
-        prng: prng,
+        randomNumbers: randomNumbers,
       );
 
       expect(result.considered, 16);
@@ -94,10 +98,12 @@ void main() {
     });
 
     test('the topic branch schedules r days from today', () {
-      final Sm20Prng prng = Sm20Prng(seed: 0x12345678);
+      final Sm20RandomNumberGenerator randomNumbers = Sm20RandomNumberGenerator(
+        seed: 0x12345678,
+      );
       final Sm20AdvanceResult result = _run(<Sm20AdvanceCandidate>[
         _candidate('topic', interval: 400, lastReview: 20),
-      ], prng: prng);
+      ], randomNumbers: randomNumbers);
 
       final Sm20AdvanceDecision decision = result.decisions.single;
       expect(decision.isItem, isFalse);
@@ -108,7 +114,9 @@ void main() {
     });
 
     test('the item branch re-expresses r as days since the last review', () {
-      final Sm20Prng prng = Sm20Prng(seed: 0x9e3779b9);
+      final Sm20RandomNumberGenerator randomNumbers = Sm20RandomNumberGenerator(
+        seed: 0x9e3779b9,
+      );
       final Sm20AdvanceResult result = _run(
         <Sm20AdvanceCandidate>[
           _candidate(
@@ -119,7 +127,7 @@ void main() {
           ),
         ],
         scope: Sm20AdvanceScope.items,
-        prng: prng,
+        randomNumbers: randomNumbers,
       );
 
       final Sm20AdvanceDecision decision = result.decisions.single;
@@ -135,7 +143,9 @@ void main() {
     });
 
     test('a stale item is floored at two days rather than moved backwards', () {
-      final Sm20Prng prng = Sm20Prng(seed: 0x12345678);
+      final Sm20RandomNumberGenerator randomNumbers = Sm20RandomNumberGenerator(
+        seed: 0x12345678,
+      );
       final Sm20AdvanceResult result = _run(
         <Sm20AdvanceCandidate>[
           // The last review is in the future relative to today, which the
@@ -148,7 +158,7 @@ void main() {
           ),
         ],
         scope: Sm20AdvanceScope.items,
-        prng: prng,
+        randomNumbers: randomNumbers,
       );
 
       expect(result.considered, 1);
@@ -157,7 +167,9 @@ void main() {
     });
 
     test('All advances topics and items in one shared stream', () {
-      final Sm20Prng shared = Sm20Prng(seed: 0x12345678);
+      final Sm20RandomNumberGenerator shared = Sm20RandomNumberGenerator(
+        seed: 0x12345678,
+      );
       final Sm20AdvanceResult result = _run(
         <Sm20AdvanceCandidate>[
           _candidate('topic', interval: 400, lastReview: 20),
@@ -169,12 +181,12 @@ void main() {
           ),
         ],
         scope: Sm20AdvanceScope.all,
-        prng: shared,
+        randomNumbers: shared,
       );
 
       expect(result.considered, 2);
       expect(result.randomDraws, 2);
-      expect(result.prngState.seed, shared.state.seed);
+      expect(result.randomNumberState.seed, shared.state.seed);
       expect(result.decisions.map((Sm20AdvanceDecision d) => d.isItem), <bool>[
         false,
         true,
@@ -186,7 +198,7 @@ void main() {
         <Sm20AdvanceCandidate>[
           for (var i = 0; i < 12; i++) _candidate('topic-$i', interval: 400),
         ],
-        prng: Sm20Prng(seed: seed),
+        randomNumbers: Sm20RandomNumberGenerator(seed: seed),
       ).decisions.map((Sm20AdvanceDecision d) => d.newInterval).toList();
 
       expect(intervalsFor(0x12345678), intervalsFor(0x12345678));
@@ -199,24 +211,24 @@ Sm20AdvanceResult _run(
   List<Sm20AdvanceCandidate> source, {
   Sm20AdvanceScope scope = Sm20AdvanceScope.topics,
   int horizonDays = kSm20AdvanceDefaultDays,
-  Sm20Prng? prng,
+  Sm20RandomNumberGenerator? randomNumbers,
 }) => const Sm20AdvanceEngine().run(
   source: source,
   scope: scope,
   horizonDays: horizonDays,
   today: _day(100),
-  prng: prng ?? Sm20Prng(seed: 0x12345678),
+  randomNumbers: randomNumbers ?? Sm20RandomNumberGenerator(seed: 0x12345678),
 );
 
 Sm20AdvanceCandidate _candidate(
   String id, {
   ElementType type = ElementType.source,
-  bool memorized = true,
+  bool isMemorized = true,
   int interval = 100,
   int? lastReview = 10,
 }) => Sm20AdvanceCandidate(
   ref: ElementRef(id: id, type: type),
-  isMemorized: memorized,
+  isMemorized: isMemorized,
   storedInterval: interval,
   lastReviewDay: lastReview == null ? null : _day(lastReview),
 );

@@ -53,7 +53,6 @@ class _SmartPostponeDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int warnings = result.warningCount;
     return AlertDialog(
       title: const Text('Apply Smart Postpone?'),
       content: SizedBox(
@@ -62,52 +61,17 @@ class _SmartPostponeDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              '${result.postponed.length} of ${result.sourceOrder.length} '
-              'element${result.sourceOrder.length == 1 ? '' : 's'} move; '
-              '${result.unpostponed.length} stay.',
-            ),
+            Text(_moveCountLine()),
             const SizedBox(height: 6),
             Text(
-              'Profile ${result.profile.profileName}, scope '
-              '${result.profile.scope.name}. '
-              '${result.wasStoppedAtProtectedCount ? 'The protected count stopped the pass. ' : ''}'
-              '${result.didForcedPassRun ? 'A forced pass ran to reach the requested count. ' : ''}'
-              'This performs no repetitions: A-factors, priority, repetition '
-              'counts, and lapses are left untouched.',
+              _passExplanation(),
               style: const TextStyle(fontSize: 12, color: AppColors.muted),
             ),
-            if (warnings > 0) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(
-                '$warnings element${warnings == 1 ? ' moves' : 's move'} more '
-                'than 200 days away.',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+            if (result.warningCount > 0) ..._longMoveWarning(),
             const SizedBox(height: 12),
             const Text('Proposed moves:'),
             const SizedBox(height: 4),
-            Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    for (final SmartPostponeDecision decision
-                        in result.decisions)
-                      Text(
-                        '${decision.ref.type.name} ${decision.ref.id}  —  '
-                        '+${decision.delayDays}d to ${decision.targetDay}'
-                        '${decision.warnsAboveTwoHundredDays ? '  (long)' : ''}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                  ],
-                ),
-              ),
-            ),
+            Flexible(child: _moveList()),
           ],
         ),
       ),
@@ -121,6 +85,55 @@ class _SmartPostponeDialog extends StatelessWidget {
           child: const Text('Postpone'),
         ),
       ],
+    );
+  }
+
+  /// How many elements move, out of how many were considered.
+  String _moveCountLine() =>
+      '${result.postponed.length} of ${result.sourceOrder.length} '
+      'element${result.sourceOrder.length == 1 ? '' : 's'} move; '
+      '${result.unpostponed.length} stay.';
+
+  /// Which profile ran, what stopped or extended it, and the reassurance that
+  /// this is a calendar move rather than a repetition.
+  String _passExplanation() =>
+      'Profile ${result.profile.profileName}, scope '
+      '${result.profile.scope.name}. '
+      '${result.wasStoppedAtProtectedCount ? 'The protected count stopped the pass. ' : ''}'
+      '${result.didForcedPassRun ? 'A forced pass ran to reach the requested count. ' : ''}'
+      'This performs no repetitions: A-factors, priority, repetition counts, '
+      'and lapses are left untouched.';
+
+  /// A move past 200 days is far enough that the user should see it called
+  /// out before approving the batch.
+  List<Widget> _longMoveWarning() {
+    final int warnings = result.warningCount;
+    return <Widget>[
+      const SizedBox(height: 8),
+      Text(
+        '$warnings element${warnings == 1 ? ' moves' : 's move'} more than '
+        '200 days away.',
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    ];
+  }
+
+  /// Every decision the pass made, so the batch is inspectable before it is
+  /// written.
+  Widget _moveList() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          for (final SmartPostponeDecision decision in result.decisions)
+            Text(
+              '${decision.ref.type.name} ${decision.ref.id}  —  '
+              '+${decision.delayDays}d to ${decision.targetDay}'
+              '${decision.warnsAboveTwoHundredDays ? '  (long)' : ''}',
+              style: const TextStyle(fontSize: 12),
+            ),
+        ],
+      ),
     );
   }
 }

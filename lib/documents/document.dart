@@ -208,9 +208,7 @@ final class Document {
     if (!isSameBlock(range)) return '';
     final block = blockAtOffset(range.startUtf8);
     if (block == null) return '';
-    final start = block.utf8ToRendered(
-      _blockRelative(block, range.startUtf8),
-    );
+    final start = block.utf8ToRendered(_blockRelative(block, range.startUtf8));
     final end = block.utf8ToRendered(_blockRelative(block, range.endUtf8));
     return block.markdownFragmentForRendered(start, end);
   }
@@ -264,41 +262,56 @@ final class Document {
   /// under which a source may close itself. Reaching the end alone never is:
   /// an article can be read through and still deserve another pass.
   int wordsOutside(List<(ReaderAnchor, ReaderAnchor)> ranges) {
-    final covered = <int, List<(int, int)>>{};
-    for (final (ReaderAnchor a, ReaderAnchor b) in ranges) {
-      final bool forward = a.utf8Offset <= b.utf8Offset;
-      final ReaderAnchor start = forward ? a : b;
-      final ReaderAnchor end = forward ? b : a;
-      final int? from = blockIndexAtOffset(start.utf8Offset);
-      final int? to = blockIndexAtOffset(end.utf8Offset);
-      if (from == null || to == null) continue;
+    // Per block index, the rendered-text spans already claimed by an extract.
+    final coveredSpansByBlock = <int, List<(int, int)>>{};
+    for (final (ReaderAnchor firstAnchor, ReaderAnchor secondAnchor)
+        in ranges) {
+      // A range may be stored in either direction; normalize before slicing.
+      final bool isForward = firstAnchor.utf8Offset <= secondAnchor.utf8Offset;
+      final ReaderAnchor start = isForward ? firstAnchor : secondAnchor;
+      final ReaderAnchor end = isForward ? secondAnchor : firstAnchor;
+      final int? firstBlockIndex = blockIndexAtOffset(start.utf8Offset);
+      final int? lastBlockIndex = blockIndexAtOffset(end.utf8Offset);
+      if (firstBlockIndex == null || lastBlockIndex == null) continue;
 
-      for (var i = from; i <= to; i++) {
-        final Block block = blocks[i];
-        final int lo = i == from
+      for (
+        var blockIndex = firstBlockIndex;
+        blockIndex <= lastBlockIndex;
+        blockIndex++
+      ) {
+        final Block block = blocks[blockIndex];
+        final int coveredStart = blockIndex == firstBlockIndex
             ? block.utf8ToRendered(_blockRelative(block, start.utf8Offset))
             : 0;
-        final int hi = i == to
+        final int coveredEnd = blockIndex == lastBlockIndex
             ? block.utf8ToRendered(_blockRelative(block, end.utf8Offset))
             : block.renderedText.length;
-        if (hi <= lo) continue;
-        (covered[i] ??= <(int, int)>[]).add((lo, hi));
+        if (coveredEnd <= coveredStart) continue;
+        (coveredSpansByBlock[blockIndex] ??= <(int, int)>[]).add((
+          coveredStart,
+          coveredEnd,
+        ));
       }
     }
 
     var words = 0;
-    for (var i = 0; i < blocks.length; i++) {
-      final String text = blocks[i].renderedText;
-      final List<(int, int)>? spans = covered[i];
-      if (spans == null) {
+    for (var blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+      final String text = blocks[blockIndex].renderedText;
+      final List<(int, int)>? coveredSpans = coveredSpansByBlock[blockIndex];
+      if (coveredSpans == null) {
         words += countWords(text);
         continue;
       }
-      spans.sort(((int, int) x, (int, int) y) => x.$1.compareTo(y.$1));
+      // Sorted so the walk below can treat overlapping extracts as one run.
+      coveredSpans.sort(
+        ((int, int) first, (int, int) second) => first.$1.compareTo(second.$1),
+      );
       var cursor = 0;
-      for (final (int lo, int hi) in spans) {
-        if (lo > cursor) words += countWords(text.substring(cursor, lo));
-        if (hi > cursor) cursor = hi;
+      for (final (int coveredStart, int coveredEnd) in coveredSpans) {
+        if (coveredStart > cursor) {
+          words += countWords(text.substring(cursor, coveredStart));
+        }
+        if (coveredEnd > cursor) cursor = coveredEnd;
       }
       if (cursor < text.length) words += countWords(text.substring(cursor));
     }

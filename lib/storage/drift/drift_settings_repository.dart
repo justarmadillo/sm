@@ -17,7 +17,7 @@ final class DriftSettingsRepository implements SettingsRepository {
   final AppDatabase _database;
 
   @override
-  Future<String?> read(String key) async {
+  Future<String?> findValue(String key) async {
     final row = await (_database.select(
       _database.settings,
     )..where(($SettingsTable t) => t.key.equals(key))).getSingleOrNull();
@@ -25,18 +25,18 @@ final class DriftSettingsRepository implements SettingsRepository {
   }
 
   @override
-  Future<void> write(String key, String value) => _database
+  Future<void> saveValue(String key, String value) => _database
       .into(_database.settings)
       .insertOnConflictUpdate(SettingsCompanion.insert(key: key, value: value));
 
   @override
-  Future<Map<String, String>> readAll() async {
+  Future<Map<String, String>> listAllValues() async {
     final rows = await _database.select(_database.settings).get();
     return <String, String>{for (final row in rows) row.key: row.value};
   }
 
   @override
-  Future<void> writeAll(Map<String, String> values) async {
+  Future<void> saveAllValues(Map<String, String> values) async {
     if (values.isEmpty) return;
     await _database.batch((Batch batch) {
       batch.insertAllOnConflictUpdate(_database.settings, <SettingsCompanion>[

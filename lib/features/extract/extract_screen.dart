@@ -124,6 +124,8 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
     );
   }
 
+  /// The Extract screen, top to bottom: status bar, the extract's text with
+  /// the selection toolbar over it, then the action bar.
   Widget _buildExtract(
     BuildContext context,
     ExtractUiState state,
@@ -131,6 +133,9 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
   ) {
     final selection = _selectionFor(state.document);
     final typography = ref.watch(readerTypographyProvider);
+
+    // Opening at the anchor happens once per screen, not on every rebuild:
+    // otherwise scrolling away would keep snapping back.
     final initialAnchor = widget.request.initialAnchor;
     if (!_hasOpenedAtAnchor &&
         initialAnchor != null &&
@@ -140,100 +145,23 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
         _readerKey.currentState?.jumpToAnchor(initialAnchor);
       });
     }
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Process extract'),
-        actions: <Widget>[
-          if (!state.canMutate)
-            TextButton(
-              onPressed: model.continueScheduled,
-              child: const Text('Process now'),
-            ),
-          IconButton(
-            onPressed: () => _openParent(context, state),
-            icon: const Icon(Icons.account_tree_outlined),
-            tooltip: 'Open parent',
-          ),
-          IconButton(
-            // Editing the words is allowed while browsing; processing the
-            // element is not.
-            onPressed: state.isBusy
-                ? null
-                : () => _edit(context, state, model),
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: state.canEdit
-                ? 'Edit extract'
-                : 'Nested extracts depend on this text',
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
+      appBar: _appBar(context, state, model),
       body: CallbackShortcuts(
-        bindings: <ShortcutActivator, VoidCallback>{
-          const SingleActivator(LogicalKeyboardKey.enter, control: true):
-              model.done,
-          const SingleActivator(LogicalKeyboardKey.keyL, control: true): () =>
-              model.later(),
-          const SingleActivator(LogicalKeyboardKey.keyE, control: true): () =>
-              _extractSelection(model),
-          kPriorityShortcut: () => unawaited(
-            showPriorityDialog(context, ref, elementRef: state.topic.ref),
-          ),
-        },
+        bindings: _keyboardShortcuts(context, state, model),
         child: Focus(
           autofocus: true,
           child: Column(
             children: <Widget>[
               _ExtractStatusBar(state: state),
               Expanded(
-                child: Stack(
-                  key: _surfaceKey,
-                  children: <Widget>[
-                    ReaderView(
-                      key: _readerKey,
-                      document: state.document,
-                      controller: selection,
-                      typography: typography,
-                      extractMarks: extractMarksByCoveredBlock(
-                        state.document,
-                        state.children,
-                      ),
-                      extractHighlights: buildExtractHighlights(
-                        state.document,
-                        state.children,
-                      ),
-                      onExtractMarksTap: (Block block) =>
-                          _openChildContext(context, state, block),
-                    ),
-                    // Selecting inside an extract is how a further extract is
-                    // cut, so the same toolbar belongs here. There is no
-                    // marker: an extract is processed whole rather than
-                    // resumed part-way through.
-                    SelectionToolbarLayer(
-                      controller: selection,
-                      canExtract: state.canMutate,
-                      extractHint: !state.canMutate
-                          ? 'Choose Process now to extract from this extract'
-                          : 'Extraction spanning several blocks is not '
-                                'supported yet',
-                      toSurfaceSpace: _toSurfaceSpace,
-                      surfaceSize: () => _surfaceSize,
-                      onExtract: () => _extractSelection(model),
-                      onCopy: () {
-                        final resolved = selection.resolveSelection();
-                        if (resolved == null) return;
-                        unawaited(
-                          Clipboard.setData(
-                            ClipboardData(text: resolved.markdown),
-                          ),
-                        );
-                        showToast(context, 'Copied');
-                      },
-                      onEditBlock: state.isBusy
-                          ? null
-                          : () => unawaited(_edit(context, state, model)),
-                    ),
-                  ],
+                child: _extractSurface(
+                  context,
+                  state,
+                  model,
+                  typography,
+                  selection,
                 ),
               ),
               _ExtractActionBar(
@@ -249,6 +177,113 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// The title bar: reaching the parent, and editing the extract's own words.
+  PreferredSizeWidget _appBar(
+    BuildContext context,
+    ExtractUiState state,
+    ExtractViewModel model,
+  ) {
+    return AppBar(
+      title: const Text('Process extract'),
+      actions: <Widget>[
+        if (!state.canMutate)
+          TextButton(
+            onPressed: model.continueScheduled,
+            child: const Text('Process now'),
+          ),
+        IconButton(
+          onPressed: () => _openParent(context, state),
+          icon: const Icon(Icons.account_tree_outlined),
+          tooltip: 'Open parent',
+        ),
+        IconButton(
+          // Editing the words is allowed while browsing; processing the
+          // element is not.
+          onPressed: state.isBusy ? null : () => _edit(context, state, model),
+          icon: const Icon(Icons.edit_outlined),
+          tooltip: state.canEdit
+              ? 'Edit extract'
+              : 'Nested extracts depend on this text',
+        ),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  Map<ShortcutActivator, VoidCallback> _keyboardShortcuts(
+    BuildContext context,
+    ExtractUiState state,
+    ExtractViewModel model,
+  ) {
+    return <ShortcutActivator, VoidCallback>{
+      const SingleActivator(LogicalKeyboardKey.enter, control: true):
+          model.done,
+      const SingleActivator(LogicalKeyboardKey.keyL, control: true): () =>
+          model.later(),
+      const SingleActivator(LogicalKeyboardKey.keyE, control: true): () =>
+          _extractSelection(model),
+      kPriorityShortcut: () => unawaited(
+        showPriorityDialog(context, ref, elementRef: state.topic.ref),
+      ),
+    };
+  }
+
+  /// The extract's text, with the selection toolbar floating over it.
+  ///
+  /// Selecting inside an extract is how a further extract is cut, so the same
+  /// toolbar belongs here. There is no marker: an extract is processed whole
+  /// rather than resumed part-way through.
+  Widget _extractSurface(
+    BuildContext context,
+    ExtractUiState state,
+    ExtractViewModel model,
+    ReaderTypography typography,
+    ReaderSelectionController selection,
+  ) {
+    return Stack(
+      key: _surfaceKey,
+      children: <Widget>[
+        ReaderView(
+          key: _readerKey,
+          document: state.document,
+          controller: selection,
+          typography: typography,
+          extractMarks: extractMarksByCoveredBlock(
+            state.document,
+            state.children,
+          ),
+          extractHighlights: buildExtractHighlights(
+            state.document,
+            state.children,
+          ),
+          onExtractMarksTap: (Block block) =>
+              _openChildContext(context, state, block),
+        ),
+        SelectionToolbarLayer(
+          controller: selection,
+          canExtract: state.canMutate,
+          extractHint: !state.canMutate
+              ? 'Choose Process now to extract from this extract'
+              : 'Extraction spanning several blocks is not supported yet',
+          toSurfaceSpace: _toSurfaceSpace,
+          surfaceSize: () => _surfaceSize,
+          onExtract: () => _extractSelection(model),
+          onCopy: () {
+            final resolved = selection.resolveSelection();
+            if (resolved == null) return;
+            unawaited(
+              Clipboard.setData(ClipboardData(text: resolved.markdown)),
+            );
+            showToast(context, 'Copied');
+          },
+          onEditBlock: state.isBusy
+              ? null
+              : () => unawaited(_edit(context, state, model)),
+        ),
+      ],
     );
   }
 

@@ -17,7 +17,7 @@ import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/features/extract/extract_commands.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduling_journal.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
@@ -188,7 +188,7 @@ final class ExtractCommandRunner {
         ref: ref,
         today: day,
         initialAFactor: extraction.childAFactor,
-        memorized: true,
+        isMemorized: true,
         buildSchedule: (StudyDay due) => ElementSchedule(
           ref: ref,
           priority: firstChildRank,
@@ -221,7 +221,7 @@ final class ExtractCommandRunner {
         );
       }
       await _learning.insertTopic(topic);
-      await _context.savePrngState(extraction.prngState);
+      await _context.saveRandomNumberState(extraction.randomNumberState);
       await _search.saveDocument(
         SearchDocument(
           ref: ref,
@@ -236,7 +236,7 @@ final class ExtractCommandRunner {
       await _journal.append(
         operationId: command.operationId.value,
         ref: ref,
-        eventType: RevlogEventType.created,
+        eventType: ReviewLogEventType.created,
         atUtc: command.timestampUtc,
         after: _journal.topicSnapshot(
           topic,
@@ -377,7 +377,10 @@ final class ExtractCommandRunner {
   /// An extract's own text is parsed on demand rather than stored as blocks:
   /// extracts are short, and deriving them keeps one coordinate system for
   /// every level of the chain.
-  Future<_ResolvedParent?> _resolveParent(String parentId, bool hasSourceAsParent) async {
+  Future<_ResolvedParent?> _resolveParent(
+    String parentId,
+    bool hasSourceAsParent,
+  ) async {
     if (hasSourceAsParent) {
       final document = await _content.findDocument(parentId);
       if (document == null) return null;

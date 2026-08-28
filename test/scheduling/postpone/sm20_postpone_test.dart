@@ -17,7 +17,9 @@ void main() {
         interval: 10,
         forgettingIndex: 6,
       );
-      final Sm20Prng prng = Sm20Prng(seed: 0x12345678);
+      final Sm20RandomNumberGenerator randomNumbers = Sm20RandomNumberGenerator(
+        seed: 0x12345678,
+      );
       final SmartPostponeResult result = const SmartPostponeEngine().run(
         source: <Sm20PostponeCandidate>[candidate],
         profile: const SmartPostponeSettings(
@@ -34,11 +36,11 @@ void main() {
           const PriorityRank('C'),
         ]),
         today: _day(100),
-        prng: prng,
+        randomNumbers: randomNumbers,
       );
 
       expect(result.randomDraws, 0);
-      expect(prng.drawCount, 0);
+      expect(randomNumbers.drawCount, 0);
       expect(result.decisions, hasLength(1));
       final SmartPostponeDecision decision = result.decisions.single;
       expect(decision.priorityPercent, 50);
@@ -61,11 +63,15 @@ void main() {
         interval: 20,
         aFactor: 2,
       );
-      final Sm20Prng expectedPrng = Sm20Prng(seed: 77);
-      final int expectedDelay = sm20RoundEven(
-        sm20Spread(center: 14, width: 7, prng: expectedPrng),
+      final Sm20RandomNumberGenerator expectedPrng = Sm20RandomNumberGenerator(
+        seed: 77,
       );
-      final Sm20Prng actualPrng = Sm20Prng(seed: 77);
+      final int expectedDelay = sm20RoundEven(
+        sm20Spread(center: 14, width: 7, randomNumbers: expectedPrng),
+      );
+      final Sm20RandomNumberGenerator actualPrng = Sm20RandomNumberGenerator(
+        seed: 77,
+      );
       final SmartPostponeResult result = const SmartPostponeEngine().run(
         source: <Sm20PostponeCandidate>[candidate],
         profile: const SmartPostponeSettings(
@@ -82,7 +88,7 @@ void main() {
           const PriorityRank('C'),
         ]),
         today: _day(100),
-        prng: actualPrng,
+        randomNumbers: actualPrng,
       );
 
       // raw=10; round_even(20*sqrt(.5))=14 before dispersion.
@@ -102,11 +108,15 @@ void main() {
         isMemorized: true,
         typeCode: 5,
       );
-      final Sm20Prng expectedPrng = Sm20Prng(seed: 91);
-      final int expectedDelay = sm20RoundEven(
-        sm20Spread(center: 1, width: 0.5, prng: expectedPrng),
+      final Sm20RandomNumberGenerator expectedPrng = Sm20RandomNumberGenerator(
+        seed: 91,
       );
-      final Sm20Prng actualPrng = Sm20Prng(seed: 91);
+      final int expectedDelay = sm20RoundEven(
+        sm20Spread(center: 1, width: 0.5, randomNumbers: expectedPrng),
+      );
+      final Sm20RandomNumberGenerator actualPrng = Sm20RandomNumberGenerator(
+        seed: 91,
+      );
       final SmartPostponeResult result = const SmartPostponeEngine().run(
         source: <Sm20PostponeCandidate>[candidate],
         profile: const SmartPostponeSettings(
@@ -120,7 +130,7 @@ void main() {
           const PriorityRank('C'),
         ]),
         today: _day(100),
-        prng: actualPrng,
+        randomNumbers: actualPrng,
       );
 
       // round_even(100*1.01)-100 = 1; priority scaling also rounds to 1.
@@ -131,15 +141,17 @@ void main() {
     });
 
     test('dispersion is not clamped back to the configured delay bounds', () {
-      Sm20Prng? selected;
+      Sm20RandomNumberGenerator? selected;
       int? dispersed;
       for (var seed = 0; seed < 1000; seed += 1) {
-        final Sm20Prng probe = Sm20Prng(seed: seed);
+        final Sm20RandomNumberGenerator probe = Sm20RandomNumberGenerator(
+          seed: seed,
+        );
         final int value = sm20RoundEven(
-          sm20Spread(center: 10, width: 5, prng: probe),
+          sm20Spread(center: 10, width: 5, randomNumbers: probe),
         );
         if (value > 10) {
-          selected = Sm20Prng(seed: seed);
+          selected = Sm20RandomNumberGenerator(seed: seed);
           dispersed = value;
           break;
         }
@@ -168,7 +180,7 @@ void main() {
           const PriorityRank('C'),
         ]),
         today: _day(100),
-        prng: selected!,
+        randomNumbers: selected!,
       );
 
       expect(result.decisions.single.delayDays, dispersed);
@@ -185,7 +197,7 @@ void main() {
             lastReview: 100,
             interval: 0,
             outstanding: false,
-            memorized: false,
+            isMemorized: false,
             aFactor: 2,
           ),
         ],
@@ -200,7 +212,7 @@ void main() {
           const PriorityRank('B'),
         ]),
         today: _day(100),
-        prng: Sm20Prng(seed: 0),
+        randomNumbers: Sm20RandomNumberGenerator(seed: 0),
       );
 
       expect(result.decisions.single.ageDays, 1);
@@ -222,7 +234,7 @@ void main() {
         profile: profile,
         priorityScale: scale,
         today: _day(100),
-        prng: Sm20Prng(seed: 1),
+        randomNumbers: Sm20RandomNumberGenerator(seed: 1),
       );
 
       const SmartPostponeSettings item = SmartPostponeSettings(
@@ -346,7 +358,7 @@ void main() {
             candidates.map((Sm20PostponeCandidate value) => value.priority),
           ),
           today: _day(100),
-          prng: Sm20Prng(seed: 3),
+          randomNumbers: Sm20RandomNumberGenerator(seed: 3),
         );
 
         expect(result.sourceOrder.map((ElementRef value) => value.id), [
@@ -396,7 +408,7 @@ void main() {
           candidates.map((Sm20PostponeCandidate value) => value.priority),
         ),
         today: _day(100),
-        prng: Sm20Prng(seed: 8),
+        randomNumbers: Sm20RandomNumberGenerator(seed: 8),
       );
 
       expect(result.didForcedPassRun, isTrue);
@@ -448,7 +460,7 @@ void main() {
             candidates.map((Sm20PostponeCandidate value) => value.priority),
           ),
           today: _day(100),
-          prng: Sm20Prng(seed: 8),
+          randomNumbers: Sm20RandomNumberGenerator(seed: 8),
         );
 
         expect(result.postponed.map((ElementRef value) => value.id), <String>[
@@ -468,24 +480,25 @@ void main() {
         type: ElementType.source,
         rank: 'B',
         outstanding: false,
-        memorized: false,
+        isMemorized: false,
         aFactor: 2,
       );
-      SmartPostponeResult run(bool shouldInclude) => const SmartPostponeEngine().run(
-        source: <Sm20PostponeCandidate>[candidate],
-        profile: SmartPostponeSettings(
-          method: SmartPostponeMethod.parameters,
-          shouldIncludeNonOutstanding: shouldInclude,
-          isSimulationOnly: true,
-          topicPriorityThreshold: 0.0001,
-        ),
-        priorityScale: PriorityScale(<PriorityRank>[
-          const PriorityRank('A'),
-          candidate.priority,
-        ]),
-        today: _day(100),
-        prng: Sm20Prng(seed: 0),
-      );
+      SmartPostponeResult run(bool shouldInclude) =>
+          const SmartPostponeEngine().run(
+            source: <Sm20PostponeCandidate>[candidate],
+            profile: SmartPostponeSettings(
+              method: SmartPostponeMethod.parameters,
+              shouldIncludeNonOutstanding: shouldInclude,
+              isSimulationOnly: true,
+              topicPriorityThreshold: 0.0001,
+            ),
+            priorityScale: PriorityScale(<PriorityRank>[
+              const PriorityRank('A'),
+              candidate.priority,
+            ]),
+            today: _day(100),
+            randomNumbers: Sm20RandomNumberGenerator(seed: 0),
+          );
 
       expect(run(false).decisions, isEmpty);
       expect(run(true).decisions, hasLength(1));
@@ -608,7 +621,7 @@ void main() {
 
       final AutoPostponeResult exactTen = const AutoPostponeEngine().run(
         request(idle: const Duration(days: 10)),
-        Sm20Prng(seed: 0),
+        Sm20RandomNumberGenerator(seed: 0),
       );
       expect(exactTen.outcome, AutoPostponeOutcome.outstandingGate);
       expect(exactTen.lastAutoRunDay, _day(100));
@@ -616,7 +629,7 @@ void main() {
 
       final AutoPostponeResult stale = const AutoPostponeEngine().run(
         request(idle: const Duration(days: 10, microseconds: 1)),
-        Sm20Prng(seed: 0),
+        Sm20RandomNumberGenerator(seed: 0),
       );
       expect(stale.outcome, AutoPostponeOutcome.staleCollectionDisabled);
       expect(stale.lastAutoRunDay, isNull);
@@ -654,14 +667,17 @@ void main() {
             ...candidates.map((Sm20PostponeCandidate value) => value.priority),
           ]),
         ),
-        Sm20Prng(seed: 5),
+        Sm20RandomNumberGenerator(seed: 5),
       );
 
       expect(result.outcome, AutoPostponeOutcome.ran);
       expect(result.overdueCount, 11);
       expect(result.lastAutoRunDay, _day(100));
       expect(result.smartPostpone!.profile.profileName, isEmpty);
-      expect(result.smartPostpone!.profile.shouldIncludeNonOutstanding, isFalse);
+      expect(
+        result.smartPostpone!.profile.shouldIncludeNonOutstanding,
+        isFalse,
+      );
       expect(result.smartPostpone!.decisions, hasLength(11));
       expect(result.smartPostpone!.randomDraws, 22);
     });
@@ -678,7 +694,7 @@ Sm20PostponeCandidate _candidate(
   double aFactor = 2,
   double forgettingIndex = 10,
   bool outstanding = true,
-  bool memorized = true,
+  bool isMemorized = true,
   int? scheduled,
 }) => Sm20PostponeCandidate(
   ref: ElementRef(id: id, type: type),
@@ -687,7 +703,7 @@ Sm20PostponeCandidate _candidate(
   lastReviewDay: _day(lastReview),
   totalPostponements: postponements,
   isOutstanding: outstanding,
-  isMemorized: memorized,
+  isMemorized: isMemorized,
   scheduledDay: scheduled == null ? null : _day(scheduled),
   aFactor: aFactor,
   forgettingIndex: forgettingIndex,

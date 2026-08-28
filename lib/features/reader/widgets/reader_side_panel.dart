@@ -259,66 +259,74 @@ class _ExtractList extends StatelessWidget {
       itemCount: extracts.length,
       itemBuilder: (BuildContext context, int index) {
         final extract = extracts[index];
-        final focused = extract.id == focusedExtractId;
-        return InkWell(
-          onTap: () => onGoToExtract(extract),
-          borderRadius: BorderRadius.circular(6),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 6),
-            padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
-            decoration: BoxDecoration(
-              color: AppColors.extractInk.withValues(
-                alpha: focused ? 0.12 : 0.04,
-              ),
-              border: Border.all(
-                color: AppColors.extractInk.withValues(
-                  alpha: focused ? 0.55 : 0.18,
-                ),
-              ),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  extract.markdown,
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.45,
-                    color: AppColors.text,
-                    fontWeight: focused ? FontWeight.w500 : FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Row(
-                  children: <Widget>[
-                    Text(
-                      extract.isVerbatim ? 'as selected' : 'edited',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppColors.muted,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      focused ? 'shown in text' : 'show in text',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: focused
-                            ? AppColors.extractInk
-                            : AppColors.muted.withValues(alpha: 0.8),
-                        fontWeight: focused ? FontWeight.w600 : FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+        return _extractTile(extract, isFocused: extract.id == focusedExtractId);
+      },
+    );
+  }
+
+  /// One extract, tinted more strongly while it is the one painted in the
+  /// document, so the list and the text agree on what is selected.
+  Widget _extractTile(Extract extract, {required bool isFocused}) {
+    return InkWell(
+      onTap: () => onGoToExtract(extract),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
+        decoration: BoxDecoration(
+          color: AppColors.extractInk.withValues(
+            alpha: isFocused ? 0.12 : 0.04,
+          ),
+          border: Border.all(
+            color: AppColors.extractInk.withValues(
+              alpha: isFocused ? 0.55 : 0.18,
             ),
           ),
-        );
-      },
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              extract.markdown,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: AppColors.text,
+                fontWeight: isFocused ? FontWeight.w500 : FontWeight.w400,
+              ),
+            ),
+            const SizedBox(height: 5),
+            _tileFooter(extract, isFocused: isFocused),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Says whether the extract still matches the source words, and whether
+  /// tapping will paint it or clear it.
+  Widget _tileFooter(Extract extract, {required bool isFocused}) {
+    return Row(
+      children: <Widget>[
+        Text(
+          extract.isVerbatim ? 'as selected' : 'edited',
+          style: const TextStyle(fontSize: 10, color: AppColors.muted),
+        ),
+        const Spacer(),
+        Text(
+          isFocused ? 'shown in text' : 'show in text',
+          style: TextStyle(
+            fontSize: 10,
+            color: isFocused
+                ? AppColors.extractInk
+                : AppColors.muted.withValues(alpha: 0.8),
+            fontWeight: isFocused ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ],
     );
   }
 }

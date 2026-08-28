@@ -132,61 +132,73 @@ class _BlockEditorState extends State<BlockEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Focus(
-            onKeyEvent: _onKeyPressed,
-            child: TextField(
-              controller: _controller,
-              focusNode: _focus,
-              maxLines: null,
-              autocorrect: false,
-              enableSuggestions: false,
-              enabled: !widget.isBusy,
-              style: typography.code.copyWith(height: 1.45),
-              decoration: const InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
+          _markdownField(typography),
+          const SizedBox(height: 6),
+          _actionRow(typography),
+        ],
+      ),
+    );
+  }
+
+  /// The raw markdown of the block, in the reader's code face so what is
+  /// typed lines up with what was parsed.
+  Widget _markdownField(ReaderTypography typography) {
+    return Focus(
+      onKeyEvent: _onKeyPressed,
+      child: TextField(
+        controller: _controller,
+        focusNode: _focus,
+        maxLines: null,
+        autocorrect: false,
+        enableSuggestions: false,
+        enabled: !widget.isBusy,
+        style: typography.code.copyWith(height: 1.45),
+        decoration: const InputDecoration(
+          isDense: true,
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.zero,
+        ),
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+  }
+
+  /// Wrapped rather than a Row: the reading column is user-adjustable and can
+  /// be narrower than these controls laid out in a line, and an overflowing
+  /// action row would put Save off the edge of the screen.
+  Widget _actionRow(ReaderTypography typography) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Wrap(
+        alignment: WrapAlignment.end,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 4,
+        runSpacing: 4,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(
+              'Editing raw markdown  ·  Ctrl+Enter saves, Esc cancels',
+              style: typography.code.copyWith(
+                fontSize: typography.fontSize * 0.72,
+                color: AppColors.muted,
               ),
-              onChanged: (_) => setState(() {}),
             ),
           ),
-          const SizedBox(height: 6),
-          // Wrapped rather than a Row: the reading column is user-adjustable
-          // and can be narrower than these controls laid out in a line, and an
-          // overflowing action row would put Save off the edge of the screen.
-          Align(
-            alignment: Alignment.centerRight,
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 4,
-              runSpacing: 4,
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Text(
-                    'Editing raw markdown  ·  Ctrl+Enter saves, Esc cancels',
-                    style: typography.code.copyWith(
-                      fontSize: typography.fontSize * 0.72,
-                      color: AppColors.muted,
-                    ),
-                  ),
-                ),
-                if (widget.onDelete != null)
-                  TextButton(
-                    onPressed: widget.isBusy ? null : widget.onDelete,
-                    child: const Text('Delete block'),
-                  ),
-                TextButton(
-                  onPressed: widget.isBusy ? null : widget.onCancel,
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: widget.isBusy || !_isDirty ? null : _commit,
-                  child: const Text('Save'),
-                ),
-              ],
+          if (widget.onDelete != null)
+            TextButton(
+              onPressed: widget.isBusy ? null : widget.onDelete,
+              child: const Text('Delete block'),
             ),
+          TextButton(
+            onPressed: widget.isBusy ? null : widget.onCancel,
+            child: const Text('Cancel'),
+          ),
+          // Saving an unchanged block would append an empty edit to the
+          // journal, so Save stays off until the text actually differs.
+          FilledButton(
+            onPressed: widget.isBusy || !_isDirty ? null : _commit,
+            child: const Text('Save'),
           ),
         ],
       ),

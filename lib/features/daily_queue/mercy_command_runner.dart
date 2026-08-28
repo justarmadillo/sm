@@ -8,7 +8,7 @@ import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduler_event.dart';
 import 'package:incremental_reader/scheduling/history/scheduling_journal.dart';
 import 'package:incremental_reader/scheduling/mercy/mercy.dart';
@@ -161,7 +161,8 @@ final class MercyCommandRunner {
           }
         }
 
-        final Sm20Prng prng = Sm20Prng(seed: runtime.prngSeed);
+        final Sm20RandomNumberGenerator randomNumbers =
+            Sm20RandomNumberGenerator(seed: runtime.randomNumberSeed);
         final Sm20MercyPlan plan = const Sm20MercyEngine().plan(
           candidates: candidates,
           gatherMode: command.subset == null
@@ -175,7 +176,7 @@ final class MercyCommandRunner {
           matrix: matrix,
           weights: Sm20MercyWeights.fromSettings(settings),
           priorityScale: priorityScale,
-          prng: prng,
+          randomNumbers: randomNumbers,
         );
         final MercyPreview preview = MercyPreview.fromPlan(
           plan: plan,
@@ -186,7 +187,7 @@ final class MercyCommandRunner {
           gatherMode: command.subset == null
               ? Sm20MercyGatherMode.collection
               : Sm20MercyGatherMode.subset,
-          prngSeedBefore: runtime.prngSeed,
+          randomNumberSeedBefore: runtime.randomNumberSeed,
           canonicalStates: canonical,
         );
         final StoredMercyBatch batch = StoredMercyBatch(
@@ -199,7 +200,7 @@ final class MercyCommandRunner {
         await _learning.saveMercyBatch(batch);
         await _context.saveRuntimeState(
           runtime.copyWith(
-            prngSeed: plan.prngState.seed,
+            randomNumberSeed: plan.randomNumberState.seed,
             learningStartDay: runtime.learningStartDay ?? command.day,
           ),
         );
@@ -323,9 +324,8 @@ final class MercyCommandRunner {
         final CardScheduler cardScheduler = await _context.cardScheduler();
         final String batchEventId = _ids.newId();
         final List<SchedulerEvent> events = <SchedulerEvent>[];
-        final List<RevlogEntry> revlog = <RevlogEntry>[];
-        final List<MercyAppliedMove> snapshots =
-            <MercyAppliedMove>[];
+        final List<ReviewLogEntry> reviewLog = <ReviewLogEntry>[];
+        final List<MercyAppliedMove> snapshots = <MercyAppliedMove>[];
 
         for (final MercyPlannedMove move in preview.moves) {
           final String itemOperation =
@@ -378,11 +378,11 @@ final class MercyCommandRunner {
                 move: move,
               ),
             );
-            revlog.add(
+            reviewLog.add(
               _journal.build(
                 operationId: itemOperation,
                 ref: move.ref,
-                eventType: RevlogEventType.mercy,
+                eventType: ReviewLogEventType.mercy,
                 atUtc: command.timestampUtc,
                 before: _journal.cardSnapshot(
                   before,
@@ -450,11 +450,11 @@ final class MercyCommandRunner {
                 move: move,
               ),
             );
-            revlog.add(
+            reviewLog.add(
               _journal.build(
                 operationId: itemOperation,
                 ref: move.ref,
-                eventType: RevlogEventType.mercy,
+                eventType: ReviewLogEventType.mercy,
                 atUtc: command.timestampUtc,
                 before: _journal.topicSnapshot(
                   before,
@@ -494,7 +494,7 @@ final class MercyCommandRunner {
           ),
         );
         await _learning.appendSchedulerEvents(events);
-        await _journal.appendAll(revlog);
+        await _journal.appendAll(reviewLog);
 
         final Sm20CollectionState runtime = await _context.runtimeState();
         await _context.saveRuntimeState(
@@ -607,7 +607,7 @@ final class MercyCommandRunner {
         final StudyDayCalendar calendar = await _context.calendar();
         final PriorityScale scale = await _context.priorityScale();
         final List<SchedulerEvent> events = <SchedulerEvent>[];
-        final List<RevlogEntry> revlog = <RevlogEntry>[];
+        final List<ReviewLogEntry> reviewLog = <ReviewLogEntry>[];
         for (final MercyAppliedMove move in applied.moves) {
           final String itemOperation =
               '${command.operationId.value}:item:${move.ref.type.name}:${move.ref.id}';
@@ -654,11 +654,11 @@ final class MercyCommandRunner {
                 batchId: applied.batchId,
               ),
             );
-            revlog.add(
+            reviewLog.add(
               _journal.build(
                 operationId: itemOperation,
                 ref: move.ref,
-                eventType: RevlogEventType.undo,
+                eventType: ReviewLogEventType.undo,
                 atUtc: command.timestampUtc,
                 before: _journal.cardSnapshot(
                   current,
@@ -717,11 +717,11 @@ final class MercyCommandRunner {
                 batchId: applied.batchId,
               ),
             );
-            revlog.add(
+            reviewLog.add(
               _journal.build(
                 operationId: itemOperation,
                 ref: move.ref,
-                eventType: RevlogEventType.undo,
+                eventType: ReviewLogEventType.undo,
                 atUtc: command.timestampUtc,
                 before: _journal.topicSnapshot(
                   current,
@@ -758,7 +758,7 @@ final class MercyCommandRunner {
           ),
         );
         await _learning.appendSchedulerEvents(events);
-        await _journal.appendAll(revlog);
+        await _journal.appendAll(reviewLog);
 
         final Sm20CollectionState runtime = await _context.runtimeState();
         final List<MercyPlannedMove> original = <MercyPlannedMove>[
@@ -831,13 +831,13 @@ final class MercyCommandRunner {
         priority: card.schedule.priority,
         scheduledDay: calendar.dayOf(card.memory.dueAtUtc),
         lastReviewDay: last,
-        repetitionCount: card.memory.reps,
+        repetitionCount: card.memory.repetitionCount,
         lapseCount: card.memory.lapses,
         storedInterval: math.max(
           0,
           sm20RoundEven(card.memory.scheduledDays ?? 0),
         ),
-        isScheduled: card.memory.reps > 0,
+        isScheduled: card.memory.repetitionCount > 0,
         isDeleted: card.schedule.lifecycle == ElementLifecycle.deleted,
         revision: math.max(card.schedule.revision, card.memory.revision),
       );
@@ -877,7 +877,7 @@ final class MercyCommandRunner {
 }
 
 bool _isScheduled(QueueCandidate value) => value.card != null
-    ? value.card!.memory.reps > 0
+    ? value.card!.memory.repetitionCount > 0
     : value.topic!.status == Sm20ElementStatus.memorized;
 
 StudyDay _scheduledDay(QueueCandidate value, StudyDayCalendar calendar) =>
@@ -979,7 +979,7 @@ CardMemory _memoryWithRevision(CardMemory value, int revision) => CardMemory(
   step: value.step,
   stability: value.stability,
   difficulty: value.difficulty,
-  reps: value.reps,
+  repetitionCount: value.repetitionCount,
   lapses: value.lapses,
   lastReviewAtUtc: value.lastReviewAtUtc,
   dueAtUtc: value.dueAtUtc,

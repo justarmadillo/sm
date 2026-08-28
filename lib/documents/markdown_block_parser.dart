@@ -25,16 +25,18 @@ List<Block> parseMarkdownBlocks(String markdown, {required String sourceId}) {
   final lines = _splitLines(markdown);
   final utf8Index = Utf8OffsetIndex(markdown);
   final blocks = <Block>[];
-  var i = 0;
+  var firstLineIndex = 0;
 
-  void add(
+  /// Appends one finished block, converting absolute spans to block-local
+  /// ones so a block never depends on where it sits in the document.
+  void addBlock(
     BlockType type,
     int startUtf16,
     int endUtf16,
     List<Utf16Span> absoluteContentSpans, {
     int? headingLevel,
     String? codeLanguage,
-    bool ordered = false,
+    bool isOrderedListItem = false,
     String? listMarker,
     int listDepth = 0,
     int quoteDepth = 0,
@@ -55,7 +57,7 @@ List<Block> parseMarkdownBlocks(String markdown, {required String sourceId}) {
         ],
         headingLevel: headingLevel,
         codeLanguage: codeLanguage,
-        ordered: ordered,
+        isOrderedListItem: isOrderedListItem,
         listMarker: listMarker,
         listDepth: listDepth,
         quoteDepth: quoteDepth,
@@ -63,171 +65,205 @@ List<Block> parseMarkdownBlocks(String markdown, {required String sourceId}) {
     );
   }
 
-  while (i < lines.length) {
-    final line = lines[i];
+  while (firstLineIndex < lines.length) {
+    final line = lines[firstLineIndex];
     final text = line.text(markdown);
 
     if (text.trim().isEmpty) {
-      i++;
+      firstLineIndex++;
       continue;
     }
 
     final fence = _matchFence(text);
     if (fence != null) {
-      var j = i + 1;
-      while (j < lines.length &&
-          !_closesFence(lines[j].text(markdown), fence)) {
-        j++;
+      var lineAfterBlock = firstLineIndex + 1;
+      while (lineAfterBlock < lines.length &&
+          !_closesFence(lines[lineAfterBlock].text(markdown), fence)) {
+        lineAfterBlock++;
       }
-      final contentStart = i + 1 <= lines.length - 1
-          ? lines[i + 1].start
+      final contentStart = firstLineIndex + 1 <= lines.length - 1
+          ? lines[firstLineIndex + 1].start
           : line.end;
-      final contentEnd = j > i + 1 ? lines[j - 1].end : contentStart;
-      final blockEnd = j < lines.length ? lines[j].end : lines[j - 1].end;
-      add(
+      final contentEnd = lineAfterBlock > firstLineIndex + 1
+          ? lines[lineAfterBlock - 1].end
+          : contentStart;
+      final blockEnd = lineAfterBlock < lines.length
+          ? lines[lineAfterBlock].end
+          : lines[lineAfterBlock - 1].end;
+      addBlock(
         BlockType.codeBlock,
         line.start,
         blockEnd,
-        j > i + 1
+        lineAfterBlock > firstLineIndex + 1
             ? <Utf16Span>[Utf16Span(contentStart, contentEnd)]
             : const <Utf16Span>[],
         codeLanguage: fence.language.isEmpty ? null : fence.language,
       );
-      i = j + 1;
+      firstLineIndex = lineAfterBlock + 1;
       continue;
     }
 
     if (text.trim() == r'$$') {
-      var j = i + 1;
-      while (j < lines.length && lines[j].text(markdown).trim() != r'$$') {
-        j++;
+      var lineAfterBlock = firstLineIndex + 1;
+      while (lineAfterBlock < lines.length &&
+          lines[lineAfterBlock].text(markdown).trim() != r'$$') {
+        lineAfterBlock++;
       }
-      final contentStart = i + 1 < lines.length ? lines[i + 1].start : line.end;
-      final contentEnd = j > i + 1 ? lines[j - 1].end : contentStart;
-      final blockEnd = j < lines.length ? lines[j].end : lines[j - 1].end;
-      add(
+      final contentStart = firstLineIndex + 1 < lines.length
+          ? lines[firstLineIndex + 1].start
+          : line.end;
+      final contentEnd = lineAfterBlock > firstLineIndex + 1
+          ? lines[lineAfterBlock - 1].end
+          : contentStart;
+      final blockEnd = lineAfterBlock < lines.length
+          ? lines[lineAfterBlock].end
+          : lines[lineAfterBlock - 1].end;
+      addBlock(
         BlockType.mathBlock,
         line.start,
         blockEnd,
-        j > i + 1
+        lineAfterBlock > firstLineIndex + 1
             ? <Utf16Span>[Utf16Span(contentStart, contentEnd)]
             : const <Utf16Span>[],
       );
-      i = j + 1;
+      firstLineIndex = lineAfterBlock + 1;
       continue;
     }
 
     final heading = _matchHeading(text);
     if (heading != null) {
-      add(BlockType.heading, line.start, line.end, <Utf16Span>[
+      addBlock(BlockType.heading, line.start, line.end, <Utf16Span>[
         Utf16Span(
           line.start + heading.contentStart,
           line.start + heading.contentEnd,
         ),
       ], headingLevel: heading.level);
-      i++;
+      firstLineIndex++;
       continue;
     }
 
     if (_isThematicBreak(text)) {
-      add(BlockType.thematicBreak, line.start, line.end, const <Utf16Span>[]);
-      i++;
+      addBlock(
+        BlockType.thematicBreak,
+        line.start,
+        line.end,
+        const <Utf16Span>[],
+      );
+      firstLineIndex++;
       continue;
     }
 
     if (_quotePrefixLength(text) != null) {
-      var j = i;
+      var lineAfterBlock = firstLineIndex;
       final spans = <Utf16Span>[];
       var depth = 0;
-      while (j < lines.length) {
-        final lineText = lines[j].text(markdown);
+      while (lineAfterBlock < lines.length) {
+        final lineText = lines[lineAfterBlock].text(markdown);
         final prefix = _quotePrefixLength(lineText);
         if (prefix == null) break;
         depth = depth == 0 ? _quoteDepth(lineText) : depth;
         final isLast =
-            j + 1 >= lines.length ||
-            _quotePrefixLength(lines[j + 1].text(markdown)) == null;
+            lineAfterBlock + 1 >= lines.length ||
+            _quotePrefixLength(lines[lineAfterBlock + 1].text(markdown)) ==
+                null;
         spans.add(
           Utf16Span(
-            lines[j].start + prefix,
-            isLast ? lines[j].end : lines[j].endWithBreak,
+            lines[lineAfterBlock].start + prefix,
+            isLast
+                ? lines[lineAfterBlock].end
+                : lines[lineAfterBlock].endWithBreak,
           ),
         );
-        j++;
+        lineAfterBlock++;
       }
-      add(
+      addBlock(
         BlockType.quote,
         line.start,
-        lines[j - 1].end,
+        lines[lineAfterBlock - 1].end,
         spans,
         quoteDepth: depth,
       );
-      i = j;
+      firstLineIndex = lineAfterBlock;
       continue;
     }
 
     final listItem = _matchListItem(text);
     if (listItem != null) {
-      var j = i;
+      var lineAfterBlock = firstLineIndex;
       final spans = <Utf16Span>[
         Utf16Span(line.start + listItem.contentStart, line.endWithBreak),
       ];
-      j++;
-      while (j < lines.length) {
-        final lineText = lines[j].text(markdown);
+      lineAfterBlock++;
+      while (lineAfterBlock < lines.length) {
+        final lineText = lines[lineAfterBlock].text(markdown);
         if (lineText.trim().isEmpty) break;
         if (_matchListItem(lineText) != null) break;
         if (_startsNewBlock(lineText)) break;
         final indent = _leadingSpaces(lineText);
-        final keep = indent >= listItem.contentStart ? listItem.contentStart : indent;
-        spans.add(Utf16Span(lines[j].start + keep, lines[j].endWithBreak));
-        j++;
+        // A continuation line indented past the marker keeps the marker's
+        // indent; a shallower one keeps its own, so no real text is dropped.
+        final keptIndent = indent >= listItem.contentStart
+            ? listItem.contentStart
+            : indent;
+        spans.add(
+          Utf16Span(
+            lines[lineAfterBlock].start + keptIndent,
+            lines[lineAfterBlock].endWithBreak,
+          ),
+        );
+        lineAfterBlock++;
       }
       // Trim the trailing line break of the final content span.
-      final last = spans.removeLast();
-      spans.add(Utf16Span(last.start, lines[j - 1].end));
-      add(
+      final lastSpan = spans.removeLast();
+      spans.add(Utf16Span(lastSpan.start, lines[lineAfterBlock - 1].end));
+      addBlock(
         BlockType.listItem,
         line.start,
-        lines[j - 1].end,
+        lines[lineAfterBlock - 1].end,
         spans,
-        ordered: listItem.ordered,
+        isOrderedListItem: listItem.isOrdered,
         listMarker: listItem.marker,
         listDepth: listItem.indent ~/ 2,
       );
-      i = j;
+      firstLineIndex = lineAfterBlock;
       continue;
     }
 
     if (text.contains('|') &&
-        i + 1 < lines.length &&
-        _isTableDelimiter(lines[i + 1].text(markdown))) {
-      var j = i;
-      while (j < lines.length &&
-          lines[j].text(markdown).trim().isNotEmpty &&
-          lines[j].text(markdown).contains('|')) {
-        j++;
+        firstLineIndex + 1 < lines.length &&
+        _isTableDelimiter(lines[firstLineIndex + 1].text(markdown))) {
+      var lineAfterBlock = firstLineIndex;
+      while (lineAfterBlock < lines.length &&
+          lines[lineAfterBlock].text(markdown).trim().isNotEmpty &&
+          lines[lineAfterBlock].text(markdown).contains('|')) {
+        lineAfterBlock++;
       }
-      add(BlockType.table, line.start, lines[j - 1].end, <Utf16Span>[
-        Utf16Span(line.start, lines[j - 1].end),
-      ]);
-      i = j;
+      addBlock(
+        BlockType.table,
+        line.start,
+        lines[lineAfterBlock - 1].end,
+        <Utf16Span>[Utf16Span(line.start, lines[lineAfterBlock - 1].end)],
+      );
+      firstLineIndex = lineAfterBlock;
       continue;
     }
 
     // Paragraph: runs until a blank line or the start of another block.
-    var j = i + 1;
-    while (j < lines.length) {
-      final lineText = lines[j].text(markdown);
+    var lineAfterBlock = firstLineIndex + 1;
+    while (lineAfterBlock < lines.length) {
+      final lineText = lines[lineAfterBlock].text(markdown);
       if (lineText.trim().isEmpty) break;
       if (_startsNewBlock(lineText)) break;
       if (_matchListItem(lineText) != null) break;
-      j++;
+      lineAfterBlock++;
     }
-    add(BlockType.paragraph, line.start, lines[j - 1].end, <Utf16Span>[
-      Utf16Span(line.start, lines[j - 1].end),
-    ]);
-    i = j;
+    addBlock(
+      BlockType.paragraph,
+      line.start,
+      lines[lineAfterBlock - 1].end,
+      <Utf16Span>[Utf16Span(line.start, lines[lineAfterBlock - 1].end)],
+    );
+    firstLineIndex = lineAfterBlock;
   }
 
   return List<Block>.unmodifiable(blocks);
@@ -236,6 +272,7 @@ List<Block> parseMarkdownBlocks(String markdown, {required String sourceId}) {
 /// Deterministic block identifier for block [index] of [sourceId].
 String blockId(String sourceId, int index) => '$sourceId:$index';
 
+/// One line of the source markdown, addressed by UTF-16 index.
 final class _SourceLine {
   const _SourceLine(this.start, this.end, this.endWithBreak);
 
@@ -251,13 +288,16 @@ final class _SourceLine {
   String text(String source) => source.substring(start, end);
 }
 
+/// Splits [source] into lines, keeping both the break-excluded and
+/// break-included ends so a block can decide whether its last line's newline
+/// belongs to it.
 List<_SourceLine> _splitLines(String source) {
   final lines = <_SourceLine>[];
   var start = 0;
-  for (var i = 0; i < source.length; i++) {
-    if (source.codeUnitAt(i) == 0x0A) {
-      lines.add(_SourceLine(start, i, i + 1));
-      start = i + 1;
+  for (var cursor = 0; cursor < source.length; cursor++) {
+    if (source.codeUnitAt(cursor) == 0x0A) {
+      lines.add(_SourceLine(start, cursor, cursor + 1));
+      start = cursor + 1;
     }
   }
   if (start <= source.length - 1 || source.isEmpty) {
@@ -266,14 +306,21 @@ List<_SourceLine> _splitLines(String source) {
   return lines;
 }
 
+/// An opening ``` or ~~~ code fence.
 final class _Fence {
   const _Fence(this.marker, this.length, this.language);
 
+  /// The single fence character, ` or ~.
   final String marker;
+
+  /// How many times [marker] repeats. A closing fence must be at least as long.
   final int length;
+
+  /// The info string after the fence, for example `dart`.
   final String language;
 }
 
+/// The code fence [text] opens, or null when it opens none.
 _Fence? _matchFence(String text) {
   final trimmed = text.trimLeft();
   for (final marker in const <String>['```', '~~~']) {
@@ -287,6 +334,7 @@ _Fence? _matchFence(String text) {
   return null;
 }
 
+/// Whether [text] is a closing fence for [fence].
 bool _closesFence(String text, _Fence fence) {
   final trimmed = text.trim();
   if (trimmed.isEmpty) return false;
@@ -297,6 +345,7 @@ bool _closesFence(String text, _Fence fence) {
   return length >= fence.length && trimmed.substring(length).trim().isEmpty;
 }
 
+/// A heading's level, and the span of its text without the `#` syntax.
 final class _Heading {
   const _Heading(this.level, this.contentStart, this.contentEnd);
 
@@ -305,17 +354,18 @@ final class _Heading {
   final int contentEnd;
 }
 
+/// The ATX heading [text] is, or null when it is not a heading.
 _Heading? _matchHeading(String text) {
-  var i = 0;
-  while (i < text.length && text[i] == ' ' && i < 4) {
-    i++;
+  var cursor = 0;
+  while (cursor < text.length && text[cursor] == ' ' && cursor < 4) {
+    cursor++;
   }
   var level = 0;
-  while (i + level < text.length && text[i + level] == '#') {
+  while (cursor + level < text.length && text[cursor + level] == '#') {
     level++;
   }
   if (level == 0 || level > 6) return null;
-  var contentStart = i + level;
+  var contentStart = cursor + level;
   if (contentStart < text.length && text[contentStart] != ' ') return null;
   while (contentStart < text.length && text[contentStart] == ' ') {
     contentStart++;
@@ -339,12 +389,18 @@ _Heading? _matchHeading(String text) {
   return _Heading(level, contentStart, contentEnd);
 }
 
+/// Whether [text] is a horizontal rule such as `---` or `***`.
 bool _isThematicBreak(String text) {
   final trimmed = text.trim();
   if (trimmed.length < 3) return false;
   for (final marker in const <String>['-', '*', '_']) {
-    if (trimmed.split('').every((String character) => character == marker || character == ' ')) {
-      final count = trimmed.split('').where((String character) => character == marker).length;
+    if (trimmed
+        .split('')
+        .every((String character) => character == marker || character == ' ')) {
+      final count = trimmed
+          .split('')
+          .where((String character) => character == marker)
+          .length;
       if (count >= 3) return true;
     }
   }
@@ -353,71 +409,76 @@ bool _isThematicBreak(String text) {
 
 /// Length of the `>` prefix, including one optional following space.
 int? _quotePrefixLength(String text) {
-  var i = 0;
-  while (i < text.length && text[i] == ' ' && i < 4) {
-    i++;
+  var cursor = 0;
+  while (cursor < text.length && text[cursor] == ' ' && cursor < 4) {
+    cursor++;
   }
-  if (i >= text.length || text[i] != '>') return null;
-  while (i < text.length && text[i] == '>') {
-    i++;
+  if (cursor >= text.length || text[cursor] != '>') return null;
+  while (cursor < text.length && text[cursor] == '>') {
+    cursor++;
   }
-  if (i < text.length && text[i] == ' ') i++;
-  return i;
+  if (cursor < text.length && text[cursor] == ' ') cursor++;
+  return cursor;
 }
 
+/// How many `>` characters [text] opens with, so nested quotes keep their
+/// nesting level.
 int _quoteDepth(String text) {
   var depth = 0;
-  for (var i = 0; i < text.length; i++) {
-    if (text[i] == '>') {
+  for (var cursor = 0; cursor < text.length; cursor++) {
+    if (text[cursor] == '>') {
       depth++;
-    } else if (text[i] != ' ') {
+    } else if (text[cursor] != ' ') {
       break;
     }
   }
   return depth;
 }
 
+/// The marker of a list item line, and where its content begins.
 final class _ListItem {
   const _ListItem({
-    required this.ordered,
+    required this.isOrdered,
     required this.marker,
     required this.indent,
     required this.contentStart,
   });
 
-  final bool ordered;
+  final bool isOrdered;
   final String marker;
   final int indent;
   final int contentStart;
 }
 
+/// The list item [text] opens, or null when it opens none.
 _ListItem? _matchListItem(String text) {
-  var i = 0;
-  while (i < text.length && text[i] == ' ') {
-    i++;
+  var cursor = 0;
+  while (cursor < text.length && text[cursor] == ' ') {
+    cursor++;
   }
-  if (i >= text.length) return null;
-  final indent = i;
-  final ch = text[i];
+  if (cursor >= text.length) return null;
+  final indent = cursor;
+  final ch = text[cursor];
   if (ch == '-' || ch == '*' || ch == '+') {
-    if (i + 1 >= text.length || text[i + 1] != ' ') return null;
-    var contentStart = i + 1;
+    if (cursor + 1 >= text.length || text[cursor + 1] != ' ') return null;
+    var contentStart = cursor + 1;
     while (contentStart < text.length && text[contentStart] == ' ') {
       contentStart++;
     }
     return _ListItem(
-      ordered: false,
+      isOrdered: false,
       marker: ch,
       indent: indent,
       contentStart: contentStart,
     );
   }
   var digits = 0;
-  while (i + digits < text.length && _isDigit(text.codeUnitAt(i + digits))) {
+  while (cursor + digits < text.length &&
+      _isDigit(text.codeUnitAt(cursor + digits))) {
     digits++;
   }
   if (digits == 0 || digits > 9) return null;
-  final delimiterIndex = i + digits;
+  final delimiterIndex = cursor + digits;
   if (delimiterIndex >= text.length) return null;
   final delimiter = text[delimiterIndex];
   if (delimiter != '.' && delimiter != ')') return null;
@@ -429,21 +490,31 @@ _ListItem? _matchListItem(String text) {
     contentStart++;
   }
   return _ListItem(
-    ordered: true,
+    isOrdered: true,
     marker: text.substring(indent, delimiterIndex + 1),
     indent: indent,
     contentStart: contentStart,
   );
 }
 
+/// Whether [text] is a table's `|---|---|` separator row, which is what marks
+/// the line above it as a table header rather than a paragraph.
 bool _isTableDelimiter(String text) {
   final trimmed = text.trim();
   if (!trimmed.contains('-')) return false;
   return trimmed
       .split('')
-      .every((String character) => character == '|' || character == '-' || character == ':' || character == ' ');
+      .every(
+        (String character) =>
+            character == '|' ||
+            character == '-' ||
+            character == ':' ||
+            character == ' ',
+      );
 }
 
+/// Whether [text] would begin a new block, which is how a paragraph or a list
+/// item knows to stop consuming lines.
 bool _startsNewBlock(String text) =>
     _matchFence(text) != null ||
     _matchHeading(text) != null ||
@@ -451,12 +522,14 @@ bool _startsNewBlock(String text) =>
     _quotePrefixLength(text) != null ||
     text.trim() == r'$$';
 
+/// How many spaces [text] begins with.
 int _leadingSpaces(String text) {
-  var i = 0;
-  while (i < text.length && text[i] == ' ') {
-    i++;
+  var cursor = 0;
+  while (cursor < text.length && text[cursor] == ' ') {
+    cursor++;
   }
-  return i;
+  return cursor;
 }
 
-bool _isDigit(int unit) => unit >= 0x30 && unit <= 0x39;
+/// Whether [codeUnit] is an ASCII `0`-`9`.
+bool _isDigit(int codeUnit) => codeUnit >= 0x30 && codeUnit <= 0x39;

@@ -64,26 +64,10 @@ class SelectionToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Prefer sitting above the selection so the toolbar never covers the text
-    // the user just chose; flip below only when there is no room.
-    final fitsAbove = anchorRect.top - _kToolbarHeight - 10 > 0;
-    final top = fitsAbove
-        ? anchorRect.top - _kToolbarHeight - 8
-        : anchorRect.bottom + 8;
-
     final double width = onSetMarker == null ? 290.0 : 380.0;
-    final maxLeft = (viewportSize.width - width - 12).clamp(
-      12.0,
-      viewportSize.width,
-    );
-    final left = (anchorRect.center.dx - width / 2).clamp(12.0, maxLeft);
-
     return Positioned(
-      left: left,
-      top: top.clamp(
-        8.0,
-        (viewportSize.height - _kToolbarHeight - 8).clamp(8.0, double.infinity),
-      ),
+      left: _leftEdge(width),
+      top: _topEdge(),
       child: Material(
         color: Colors.transparent,
         child: Container(
@@ -101,46 +85,71 @@ class SelectionToolbar extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              _ToolbarButton(
-                icon: Icons.content_cut,
-                label: 'Extract',
-                shortcut: 'Ctrl+E',
-                onPressed: canExtract ? onExtract : null,
-                disabledHint: extractHint,
-                emphasized: true,
-              ),
-              if (onSetMarker != null) ...<Widget>[
-                const _ToolbarDivider(),
-                _ToolbarButton(
-                  icon: Icons.place_outlined,
-                  label: 'Marker',
-                  shortcut: 'Ctrl+M',
-                  onPressed: canSetMarker ? onSetMarker : null,
-                  disabledHint: 'Browsing cannot move the marker',
-                ),
-              ],
-              const _ToolbarDivider(),
-              _ToolbarButton(
-                icon: Icons.copy_all_outlined,
-                label: 'Copy',
-                onPressed: onCopy,
-              ),
-              const _ToolbarDivider(),
-              _ToolbarButton(
-                icon: Icons.edit_outlined,
-                label: 'Edit',
-                onPressed: onEditBlock,
-                disabledHint: 'Wait for the current change to finish',
-              ),
-            ],
-          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: _buttons()),
         ),
       ),
     );
   }
+
+  /// Prefers sitting above the selection so the toolbar never covers the text
+  /// the user just chose; flips below only when there is no room, and stays
+  /// inside the viewport either way.
+  double _topEdge() {
+    final bool fitsAbove = anchorRect.top - _kToolbarHeight - 10 > 0;
+    final double top = fitsAbove
+        ? anchorRect.top - _kToolbarHeight - 8
+        : anchorRect.bottom + 8;
+    return top.clamp(
+      8.0,
+      (viewportSize.height - _kToolbarHeight - 8).clamp(8.0, double.infinity),
+    );
+  }
+
+  /// Centres the toolbar on the selection, then pulls it back inside the
+  /// viewport when the selection is near an edge.
+  double _leftEdge(double width) {
+    final double maxLeft = (viewportSize.width - width - 12).clamp(
+      12.0,
+      viewportSize.width,
+    );
+    return (anchorRect.center.dx - width / 2).clamp(12.0, maxLeft);
+  }
+
+  /// Extract first and emphasized: it is the action the reader is here for.
+  /// Marker is absent on screens that have no reading position to move.
+  List<Widget> _buttons() => <Widget>[
+    _ToolbarButton(
+      icon: Icons.content_cut,
+      label: 'Extract',
+      shortcut: 'Ctrl+E',
+      onPressed: canExtract ? onExtract : null,
+      disabledHint: extractHint,
+      emphasized: true,
+    ),
+    if (onSetMarker != null) ...<Widget>[
+      const _ToolbarDivider(),
+      _ToolbarButton(
+        icon: Icons.place_outlined,
+        label: 'Marker',
+        shortcut: 'Ctrl+M',
+        onPressed: canSetMarker ? onSetMarker : null,
+        disabledHint: 'Browsing cannot move the marker',
+      ),
+    ],
+    const _ToolbarDivider(),
+    _ToolbarButton(
+      icon: Icons.copy_all_outlined,
+      label: 'Copy',
+      onPressed: onCopy,
+    ),
+    const _ToolbarDivider(),
+    _ToolbarButton(
+      icon: Icons.edit_outlined,
+      label: 'Edit',
+      onPressed: onEditBlock,
+      disabledHint: 'Wait for the current change to finish',
+    ),
+  ];
 }
 
 class _ToolbarButton extends StatelessWidget {
@@ -204,7 +213,6 @@ class _ToolbarDivider extends StatelessWidget {
   Widget build(BuildContext context) =>
       Container(width: 1, height: 18, color: AppColors.border);
 }
-
 
 /// Shows the selection toolbar while a selection exists on screen.
 ///

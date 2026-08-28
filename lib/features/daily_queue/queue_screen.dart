@@ -79,65 +79,7 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
     QueueViewModel model,
   ) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Study'),
-        actions: <Widget>[
-          // This screen is now the home, so the collection-wide destinations
-          // live here rather than on the screen that used to hold them.
-          TextButton.icon(
-            onPressed: _isOpeningRoutes
-                ? null
-                : () async {
-                    await openContents(context, ref);
-                    await model.refresh();
-                  },
-            icon: const Icon(Icons.account_tree_outlined, size: 18),
-            label: const Text('Contents'),
-          ),
-          const SizedBox(width: 4),
-          IconButton(
-            // Undo lives here rather than on the review screen: that screen
-            // closes the moment a grade commits, and the session is what the
-            // user is actually in the middle of.
-            onPressed: _isOpeningRoutes ? null : model.undoLastGrade,
-            icon: const Icon(Icons.undo),
-            tooltip: 'Undo last grade (Ctrl+Z)',
-          ),
-          IconButton(
-            onPressed: _isOpeningRoutes ? null : model.refresh,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh queue',
-          ),
-          IconButton(
-            onPressed: _isOpeningRoutes
-                ? null
-                : () async {
-                    await openPriorityBrowser(context, ref);
-                    await model.refresh();
-                  },
-            icon: const Icon(Icons.low_priority),
-            tooltip: 'Priority queue',
-          ),
-          IconButton(
-            onPressed: _isOpeningRoutes
-                ? null
-                : () => openDiagnostics(context, ref),
-            icon: const Icon(Icons.insights_outlined),
-            tooltip: 'Diagnostics',
-          ),
-          IconButton(
-            onPressed: _isOpeningRoutes
-                ? null
-                : () async {
-                    await openSettings(context, ref);
-                    await model.refresh();
-                  },
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings',
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
+      appBar: _appBar(context, model),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
@@ -152,6 +94,75 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
               ),
       ),
     );
+  }
+
+  /// This screen is the home, so the collection-wide destinations live here
+  /// rather than on the screen that used to hold them.
+  ///
+  /// Everything is disabled while a route is opening, so a second tap cannot
+  /// push the same screen twice.
+  PreferredSizeWidget _appBar(BuildContext context, QueueViewModel model) {
+    return AppBar(
+      title: const Text('Study'),
+      actions: <Widget>[
+        TextButton.icon(
+          onPressed: _isOpeningRoutes
+              ? null
+              : () => _openThenRefresh(model, () => openContents(context, ref)),
+          icon: const Icon(Icons.account_tree_outlined, size: 18),
+          label: const Text('Contents'),
+        ),
+        const SizedBox(width: 4),
+        IconButton(
+          // Undo lives here rather than on the review screen: that screen
+          // closes the moment a grade commits, and the session is what the
+          // user is actually in the middle of.
+          onPressed: _isOpeningRoutes ? null : model.undoLastGrade,
+          icon: const Icon(Icons.undo),
+          tooltip: 'Undo last grade (Ctrl+Z)',
+        ),
+        IconButton(
+          onPressed: _isOpeningRoutes ? null : model.refresh,
+          icon: const Icon(Icons.refresh),
+          tooltip: 'Refresh queue',
+        ),
+        IconButton(
+          onPressed: _isOpeningRoutes
+              ? null
+              : () => _openThenRefresh(
+                  model,
+                  () => openPriorityBrowser(context, ref),
+                ),
+          icon: const Icon(Icons.low_priority),
+          tooltip: 'Priority queue',
+        ),
+        IconButton(
+          onPressed: _isOpeningRoutes
+              ? null
+              : () => openDiagnostics(context, ref),
+          icon: const Icon(Icons.insights_outlined),
+          tooltip: 'Diagnostics',
+        ),
+        IconButton(
+          onPressed: _isOpeningRoutes
+              ? null
+              : () => _openThenRefresh(model, () => openSettings(context, ref)),
+          icon: const Icon(Icons.settings_outlined),
+          tooltip: 'Settings',
+        ),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  /// Reloads the queue after a screen that can change it closes, so coming
+  /// back never shows a stale day.
+  Future<void> _openThenRefresh(
+    QueueViewModel model,
+    Future<void> Function() open,
+  ) async {
+    await open();
+    await model.refresh();
   }
 
   Future<void> _runQueue() async {
@@ -340,110 +351,133 @@ class _LoadPanel extends StatelessWidget {
   /// cannot inspect first is indistinguishable from data loss. What it shows
   /// is the plan that will be applied, not an estimate of one.
   Future<void> _confirmMercy(BuildContext context) async {
-    final bool wanted =
-        await showDialog<bool>(
-          context: context,
-          builder: (BuildContext context) => AlertDialog(
-            title: const Text('Spread the backlog?'),
-            content: const Text(
-              'Mercy gathers scheduled work and redistributes it across its '
-              'configured target horizon. It performs no repetitions and '
-              'does not change priority or repetition history; it applies '
-              'canonical low-level reschedules. You will see the exact plan '
-              'before anything is written, and it can be undone as one batch.',
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Preview'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-    if (!wanted) return;
+    if (!await _askToPreviewMercy(context)) return;
 
     final StoredMercyBatch? batch = await model.previewMercy();
     if (batch == null || !context.mounted) return;
 
     final MercyPreview preview = batch.preview;
     if (preview.selectedCount == 0) {
-      await showDialog<void>(
-        context: context,
-        builder: (BuildContext context) => AlertDialog(
-          title: const Text('Nothing to spread'),
-          content: Text(_planSummary(preview)),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
+      await _showNothingToSpread(context, preview);
       return;
     }
 
-    final bool shouldApply =
-        await showDialog<bool>(
-          context: context,
-          builder: (BuildContext context) => AlertDialog(
-            title: const Text('Apply this plan?'),
-            content: SizedBox(
-              width: 420,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    '${preview.selectedCount} element'
-                    '${preview.selectedCount == 1 ? '' : 's'} move: '
-                    '${preview.selectedCardCount} card'
-                    '${preview.selectedCardCount == 1 ? '' : 's'} and '
-                    '${preview.selectedTopicCount} topic'
-                    '${preview.selectedTopicCount == 1 ? '' : 's'}.',
+    if (await _askToApplyMercy(context, preview)) {
+      await model.applyMercy(batch);
+    }
+  }
+
+  /// Step one: explain what Mercy does before computing anything.
+  Future<bool> _askToPreviewMercy(BuildContext context) async {
+    final bool? answer = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Spread the backlog?'),
+        content: const Text(
+          'Mercy gathers scheduled work and redistributes it across its '
+          'configured target horizon. It performs no repetitions and does '
+          'not change priority or repetition history; it applies canonical '
+          'low-level reschedules. You will see the exact plan before '
+          'anything is written, and it can be undone as one batch.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Preview'),
+          ),
+        ],
+      ),
+    );
+    return answer ?? false;
+  }
+
+  /// Says why the plan is empty rather than closing silently, which would
+  /// look like the command had failed.
+  Future<void> _showNothingToSpread(
+    BuildContext context,
+    MercyPreview preview,
+  ) {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Nothing to spread'),
+        content: Text(_planSummary(preview)),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Step two: the exact plan, with the resulting load for every day it
+  /// touches, so the user approves what will actually be written.
+  Future<bool> _askToApplyMercy(
+    BuildContext context,
+    MercyPreview preview,
+  ) async {
+    final bool? answer = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Apply this plan?'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(_moveCountLine(preview)),
+              const SizedBox(height: 8),
+              Text(_planSummary(preview)),
+              const SizedBox(height: 12),
+              const Text('Proposed load per day:'),
+              const SizedBox(height: 4),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      for (final MercyDailyLoad load in preview.afterLoad)
+                        Text(
+                          '${load.day}  —  ${load.cards} cards, '
+                          '${load.topics} topics',
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(_planSummary(preview)),
-                  const SizedBox(height: 12),
-                  const Text('Proposed load per day:'),
-                  const SizedBox(height: 4),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          for (final MercyDailyLoad load in preview.afterLoad)
-                            Text(
-                              '${load.day}  —  ${load.cards} cards, '
-                              '${load.topics} topics',
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Discard'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Apply'),
+                ),
               ),
             ],
           ),
-        ) ??
-        false;
-    if (shouldApply) await model.applyMercy(batch);
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Discard'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+    return answer ?? false;
   }
+
+  /// How many elements move, split by kind.
+  String _moveCountLine(MercyPreview preview) =>
+      '${preview.selectedCount} element'
+      '${preview.selectedCount == 1 ? '' : 's'} move: '
+      '${preview.selectedCardCount} card'
+      '${preview.selectedCardCount == 1 ? '' : 's'} and '
+      '${preview.selectedTopicCount} topic'
+      '${preview.selectedTopicCount == 1 ? '' : 's'}.';
 
   String _planSummary(MercyPreview preview) {
     if (preview.selectedCount == 0) {
@@ -531,8 +565,6 @@ class _QueueTile extends ConsumerWidget {
     final ({IconData icon, Color color, String label}) style = elementTypeStyle(
       entry.ref.type,
     );
-    final IconData icon = style.icon;
-    final Color color = style.color;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
@@ -543,88 +575,13 @@ class _QueueTile extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, size: 18, color: color),
-              ),
+              _typeIcon(style.icon, style.color),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        // The action says what to do; the badge says what the
-                        // element is. A mixed queue needs both, because Read
-                        // means something different for a topic than Review
-                        // does for a card.
-                        ElementTypeBadge(type: entry.ref.type),
-                        const SizedBox(width: 6),
-                        Text(
-                          entry.actionLabel.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: color,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            entry.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        if (entry.isLeech) ...<Widget>[
-                          const Tooltip(
-                            message:
-                                'This card keeps failing. It is usually the '
-                                'card that is wrong, not your memory — open '
-                                'its source passage and rewrite it.',
-                            child: Icon(
-                              Icons.warning_amber_rounded,
-                              size: 15,
-                              color: AppColors.softMarker,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        if (entry.priorityPercent
-                            case final percent?) ...<Widget>[
-                          PriorityBadge(
-                            percent: percent,
-                            onTap: () async {
-                              final bool hasChanged = await showPriorityDialog(
-                                context,
-                                ref,
-                                elementRef: entry.ref,
-                              );
-                              if (hasChanged) {
-                                await ref
-                                    .read(queueViewModelProvider.notifier)
-                                    .refresh();
-                              }
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        if (isNext)
-                          const Text(
-                            'UP NEXT',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: AppColors.muted,
-                            ),
-                          ),
-                      ],
-                    ),
+                    _titleRow(context, ref, style.color),
                     const SizedBox(height: 5),
                     Text(
                       entry.preview,
@@ -641,6 +598,94 @@ class _QueueTile extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _typeIcon(IconData icon, Color color) {
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, size: 18, color: color),
+    );
+  }
+
+  /// The action to take, what the element is, its title, and the flags that
+  /// change how the user should treat it.
+  ///
+  /// The action says what to do; the badge says what the element is. A mixed
+  /// queue needs both, because Read means something different for a topic
+  /// than Review does for a card.
+  Widget _titleRow(BuildContext context, WidgetRef ref, Color color) {
+    return Row(
+      children: <Widget>[
+        ElementTypeBadge(type: entry.ref.type),
+        const SizedBox(width: 6),
+        Text(
+          entry.actionLabel.toUpperCase(),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            entry.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+        if (entry.isLeech) ...<Widget>[
+          const _LeechWarning(),
+          const SizedBox(width: 8),
+        ],
+        if (entry.priorityPercent case final percent?) ...<Widget>[
+          PriorityBadge(
+            percent: percent,
+            onTap: () async {
+              final bool hasChanged = await showPriorityDialog(
+                context,
+                ref,
+                elementRef: entry.ref,
+              );
+              if (hasChanged) {
+                await ref.read(queueViewModelProvider.notifier).refresh();
+              }
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
+        if (isNext)
+          const Text(
+            'UP NEXT',
+            style: TextStyle(fontSize: 10, color: AppColors.muted),
+          ),
+      ],
+    );
+  }
+}
+
+/// Marks a card that keeps failing, and says what to do about it.
+class _LeechWarning extends StatelessWidget {
+  const _LeechWarning();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Tooltip(
+      message:
+          'This card keeps failing. It is usually the card that is wrong, '
+          'not your memory — open its source passage and rewrite it.',
+      child: Icon(
+        Icons.warning_amber_rounded,
+        size: 15,
+        color: AppColors.softMarker,
       ),
     );
   }
@@ -758,7 +803,7 @@ class _LearnMenu extends StatelessWidget {
           if (!context.mounted) return;
           // Cutting the drill throws away a selection the user built by
           // hand, and nothing else restores it, so it is confirmed.
-          final bool wanted =
+          final bool didConfirm =
               await showDialog<bool>(
                 context: context,
                 builder: (BuildContext context) => AlertDialog(
@@ -781,7 +826,7 @@ class _LearnMenu extends StatelessWidget {
                 ),
               ) ??
               false;
-          if (wanted) await model.cutDrills();
+          if (didConfirm) await model.cutDrills();
         case 'randomize_outstanding':
           await model.randomizeQueue(Sm20RandomizableQueue.outstanding);
         case 'randomize_drill':

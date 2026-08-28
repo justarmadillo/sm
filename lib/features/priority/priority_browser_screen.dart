@@ -24,7 +24,7 @@ import 'package:incremental_reader/shared/ui/toast_message.dart';
 
 /// Opens the browser.
 Future<void> openPriorityBrowser(BuildContext context, WidgetRef ref) async {
-  ref.invalidate(priorityBrowserProvider);
+  ref.invalidate(priorityBrowserViewModelProvider);
   await Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (BuildContext context) => const PriorityBrowserScreen(),
@@ -38,21 +38,24 @@ class PriorityBrowserScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<PriorityBrowserState> state = ref.watch(
-      priorityBrowserProvider,
+      priorityBrowserViewModelProvider,
     );
     final PriorityBrowserViewModel model = ref.read(
-      priorityBrowserProvider.notifier,
+      priorityBrowserViewModelProvider.notifier,
     );
 
-    ref.listen<AsyncValue<PriorityBrowserState>>(priorityBrowserProvider, (
-      AsyncValue<PriorityBrowserState>? previous,
-      AsyncValue<PriorityBrowserState> next,
-    ) {
-      final message = next.valueOrNull?.message;
-      if (message == null) return;
-      showToast(context, message.text, isError: message.isError);
-      model.shouldClearMessage();
-    });
+    ref.listen<AsyncValue<PriorityBrowserState>>(
+      priorityBrowserViewModelProvider,
+      (
+        AsyncValue<PriorityBrowserState>? previous,
+        AsyncValue<PriorityBrowserState> next,
+      ) {
+        final message = next.valueOrNull?.message;
+        if (message == null) return;
+        showToast(context, message.text, isError: message.isError);
+        model.shouldClearMessage();
+      },
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -73,7 +76,8 @@ class PriorityBrowserScreen extends ConsumerWidget {
         // The empty state is rendered inside the body, never instead of it:
         // replacing the whole body would take the filter bar with it, and a
         // filter that returns nothing would then have no way back.
-        data: (PriorityBrowserState browser) => _BrowserBody(state: browser, model: model),
+        data: (PriorityBrowserState browser) =>
+            _BrowserBody(state: browser, model: model),
       ),
     );
   }
@@ -108,27 +112,30 @@ class _BrowserBody extends ConsumerWidget {
                   ? ListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
                       itemCount: state.entries.length,
-                      itemBuilder: (BuildContext context, int index) => _ElementRow(
-                        key: ValueKey<String>('${state.entries[index].ref}'),
-                        entry: state.entries[index],
-                        index: index,
-                        isDraggable: false,
-                        onBatchPriority: () => _promptBatchPriority(
-                          context,
-                          ref,
-                          state.entries[index],
-                        ),
-                        onSmartPostpone: () => _confirmSmartPostpone(
-                          context,
-                          state.entries[index],
-                        ),
-                        onLearningCommand: (_LearningCommand command) =>
-                            _runLearningCommand(
+                      itemBuilder: (BuildContext context, int index) =>
+                          _ElementRow(
+                            key: ValueKey<String>(
+                              '${state.entries[index].ref}',
+                            ),
+                            entry: state.entries[index],
+                            index: index,
+                            isDraggable: false,
+                            onBatchPriority: () => _promptBatchPriority(
+                              context,
+                              ref,
+                              state.entries[index],
+                            ),
+                            onSmartPostpone: () => _confirmSmartPostpone(
                               context,
                               state.entries[index],
-                              command,
                             ),
-                      ),
+                            onLearningCommand: (_LearningCommand command) =>
+                                _runLearningCommand(
+                                  context,
+                                  state.entries[index],
+                                  command,
+                                ),
+                          ),
                     )
                   : ReorderableListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
@@ -137,26 +144,29 @@ class _BrowserBody extends ConsumerWidget {
                       // onReorderItem already accounts for the dragged row having
                       // been removed, so the index needs no adjustment here.
                       onReorderItem: model.reorder,
-                      itemBuilder: (BuildContext context, int index) => _ElementRow(
-                        key: ValueKey<String>('${state.entries[index].ref}'),
-                        entry: state.entries[index],
-                        index: index,
-                        onBatchPriority: () => _promptBatchPriority(
-                          context,
-                          ref,
-                          state.entries[index],
-                        ),
-                        onSmartPostpone: () => _confirmSmartPostpone(
-                          context,
-                          state.entries[index],
-                        ),
-                        onLearningCommand: (_LearningCommand command) =>
-                            _runLearningCommand(
+                      itemBuilder: (BuildContext context, int index) =>
+                          _ElementRow(
+                            key: ValueKey<String>(
+                              '${state.entries[index].ref}',
+                            ),
+                            entry: state.entries[index],
+                            index: index,
+                            onBatchPriority: () => _promptBatchPriority(
+                              context,
+                              ref,
+                              state.entries[index],
+                            ),
+                            onSmartPostpone: () => _confirmSmartPostpone(
                               context,
                               state.entries[index],
-                              command,
                             ),
-                      ),
+                            onLearningCommand: (_LearningCommand command) =>
+                                _runLearningCommand(
+                                  context,
+                                  state.entries[index],
+                                  command,
+                                ),
+                          ),
                     ),
             ),
         ],
@@ -169,6 +179,8 @@ class _BrowserBody extends ConsumerWidget {
   /// The three commands that destroy scheduling state confirm first, and the
   /// prompt says exactly what is cleared — Undismiss does not bring a schedule
   /// back, so a user who expected it to would otherwise lose one silently.
+  /// Runs one learning command on one element, confirming first when the
+  /// command throws work away.
   Future<void> _runLearningCommand(
     BuildContext context,
     PriorityEntry entry,
@@ -176,26 +188,8 @@ class _BrowserBody extends ConsumerWidget {
   ) async {
     final List<ElementRef> refs = <ElementRef>[entry.ref];
     if (command.isDestructive) {
-      final bool wasConfirmed =
-          await showDialog<bool>(
-            context: context,
-            builder: (BuildContext context) => AlertDialog(
-              title: Text('${command.label}?'),
-              content: Text(command.warning),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: Text(command.label),
-                ),
-              ],
-            ),
-          ) ??
-          false;
-      if (!wasConfirmed || !context.mounted) return;
+      if (!await _confirmDestructive(context, command)) return;
+      if (!context.mounted) return;
     }
 
     switch (command) {
@@ -258,6 +252,32 @@ class _BrowserBody extends ConsumerWidget {
     }
   }
 
+  /// Each destructive command carries its own warning, so the dialog can say
+  /// what this particular one discards rather than a generic "are you sure".
+  Future<bool> _confirmDestructive(
+    BuildContext context,
+    _LearningCommand command,
+  ) async {
+    final bool? answer = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: Text('${command.label}?'),
+        content: Text(command.warning),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(command.label),
+          ),
+        ],
+      ),
+    );
+    return answer ?? false;
+  }
+
   /// Simulates Smart Postpone over one branch, then applies what was shown.
   ///
   /// A branch run reaches elements the Outstanding queue never offers, so it
@@ -277,7 +297,10 @@ class _BrowserBody extends ConsumerWidget {
     );
     if (simulated == null || !context.mounted) return;
     if (!await confirmSmartPostpone(context, simulated.result)) return;
-    await model.smartPostpone(isSimulationOnly: false, branchSourceId: sourceId);
+    await model.smartPostpone(
+      isSimulationOnly: false,
+      branchSourceId: sourceId,
+    );
   }
 
   Future<void> _promptBatchPriority(
@@ -419,65 +442,11 @@ class _ElementRow extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
         child: Row(
           children: <Widget>[
-            if (!isDraggable)
-              const SizedBox(width: _kHandleWidth)
-            else
-              ReorderableDragStartListener(
-                index: index,
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 6),
-                  child: Icon(
-                    Icons.drag_indicator,
-                    size: 18,
-                    color: AppColors.muted,
-                  ),
-                ),
-              ),
-            SizedBox(
-              width: _kPercentWidth,
-              child: Text(
-                '${entry.percent.toStringAsFixed(1)}%',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.accent,
-                ),
-              ),
-            ),
-            SizedBox(
-              width: _kBadgeWidth,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: ElementTypeBadge(type: entry.ref.type),
-              ),
-            ),
+            _dragHandle(),
+            _percentCell(),
+            _typeBadgeCell(),
             const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    entry.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (entry.preview.isNotEmpty)
-                    Text(
-                      entry.preview,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.muted,
-                      ),
-                    ),
-                ],
-              ),
-            ),
+            Expanded(child: _titleAndPreview()),
             _Cell(width: _kIntervalWidth, text: '${entry.intervalDays}'),
             _Cell(width: _kCountWidth, text: '${entry.repetitions}'),
             _Cell(width: _kCountWidth, text: '${entry.lapses}'),
@@ -488,70 +457,136 @@ class _ElementRow extends ConsumerWidget {
             _Cell(width: _kDateWidth, text: entry.nextRepetition.toString()),
             SizedBox(
               width: _kActionsWidth,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: <Widget>[
-                  IconButton(
-                    tooltip: 'Set priority (Alt+P)',
-                    onPressed: () async {
-                      final bool hasChanged = await showPriorityDialog(
-                        context,
-                        ref,
-                        elementRef: entry.ref,
-                      );
-                      if (hasChanged) {
-                        await ref
-                            .read(priorityBrowserProvider.notifier)
-                            .refresh();
-                      }
-                    },
-                    constraints: _kActionConstraints,
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.tune, size: 17),
-                  ),
-                  IconButton(
-                    tooltip: 'Batch priority for this article',
-                    onPressed: onBatchPriority,
-                    constraints: _kActionConstraints,
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.tune_outlined, size: 17),
-                  ),
-                  IconButton(
-                    tooltip: 'Smart Postpone this article',
-                    onPressed: onSmartPostpone,
-                    constraints: _kActionConstraints,
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.schedule_send_outlined, size: 17),
-                  ),
-                  SizedBox(
-                    width: _kActionConstraints.maxWidth,
-                    height: _kActionConstraints.maxHeight,
-                    child: PopupMenuButton<_LearningCommand>(
-                      tooltip: 'Learning commands',
-                      onSelected: onLearningCommand,
-                      itemBuilder: (BuildContext context) =>
-                          <PopupMenuEntry<_LearningCommand>>[
-                            for (final _LearningCommand command
-                                in _LearningCommand.values)
-                              PopupMenuItem<_LearningCommand>(
-                                value: command,
-                                child: Text(command.label),
-                              ),
-                          ],
-                      // No `constraints` here. On PopupMenuButton that property
-                      // sizes the *menu*, not the button, so the 33x33 box used
-                      // for the icon buttons would shrink the menu itself. The
-                      // button is sized by the SizedBox around it instead.
-                      padding: EdgeInsets.zero,
-                      icon: const Icon(Icons.more_vert, size: 17),
-                    ),
-                  ),
-                ],
-              ),
+              child: _actionButtons(context, ref),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// A blank of the same width when the row cannot be dragged, so every row
+  /// stays aligned whichever sort is active.
+  Widget _dragHandle() {
+    if (!isDraggable) return const SizedBox(width: _kHandleWidth);
+    return ReorderableDragStartListener(
+      index: index,
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 6),
+        child: Icon(Icons.drag_indicator, size: 18, color: AppColors.muted),
+      ),
+    );
+  }
+
+  Widget _percentCell() {
+    return SizedBox(
+      width: _kPercentWidth,
+      child: Text(
+        '${entry.percent.toStringAsFixed(1)}%',
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: AppColors.accent,
+        ),
+      ),
+    );
+  }
+
+  Widget _typeBadgeCell() {
+    return SizedBox(
+      width: _kBadgeWidth,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ElementTypeBadge(type: entry.ref.type),
+      ),
+    );
+  }
+
+  /// The element's title, with the first line of its text beneath when there
+  /// is one: two elements can share a title but rarely a first line.
+  Widget _titleAndPreview() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          entry.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        if (entry.preview.isNotEmpty)
+          Text(
+            entry.preview,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+          ),
+      ],
+    );
+  }
+
+  /// The four per-row commands: set priority, batch priority, smart postpone,
+  /// and the learning menu.
+  Widget _actionButtons(BuildContext context, WidgetRef ref) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: <Widget>[
+        IconButton(
+          tooltip: 'Set priority (Alt+P)',
+          onPressed: () async {
+            final bool hasChanged = await showPriorityDialog(
+              context,
+              ref,
+              elementRef: entry.ref,
+            );
+            if (hasChanged) {
+              await ref
+                  .read(priorityBrowserViewModelProvider.notifier)
+                  .refresh();
+            }
+          },
+          constraints: _kActionConstraints,
+          padding: EdgeInsets.zero,
+          icon: const Icon(Icons.tune, size: 17),
+        ),
+        IconButton(
+          tooltip: 'Batch priority for this article',
+          onPressed: onBatchPriority,
+          constraints: _kActionConstraints,
+          padding: EdgeInsets.zero,
+          icon: const Icon(Icons.tune_outlined, size: 17),
+        ),
+        IconButton(
+          tooltip: 'Smart Postpone this article',
+          onPressed: onSmartPostpone,
+          constraints: _kActionConstraints,
+          padding: EdgeInsets.zero,
+          icon: const Icon(Icons.schedule_send_outlined, size: 17),
+        ),
+        SizedBox(
+          width: _kActionConstraints.maxWidth,
+          height: _kActionConstraints.maxHeight,
+          child: PopupMenuButton<_LearningCommand>(
+            tooltip: 'Learning commands',
+            onSelected: onLearningCommand,
+            itemBuilder: (BuildContext context) =>
+                <PopupMenuEntry<_LearningCommand>>[
+                  for (final _LearningCommand command
+                      in _LearningCommand.values)
+                    PopupMenuItem<_LearningCommand>(
+                      value: command,
+                      child: Text(command.label),
+                    ),
+                ],
+            // No `constraints` here. On PopupMenuButton that property sizes
+            // the *menu*, not the button, so the 33x33 box used for the icon
+            // buttons would shrink the menu itself. The button is sized by
+            // the SizedBox around it instead.
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.more_vert, size: 17),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -682,7 +717,8 @@ class _PriorityBatchDialogState extends State<_PriorityBatchDialog> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Limit changes to the selected range'),
               value: _shouldLimitChanges,
-              onChanged: (bool value) => setState(() => _shouldLimitChanges = value),
+              onChanged: (bool value) =>
+                  setState(() => _shouldLimitChanges = value),
             ),
           ],
           if (_error != null)

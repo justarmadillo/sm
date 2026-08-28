@@ -195,8 +195,7 @@ class Extracts extends Table {
   IntColumn get endUtf8 => integer()();
 
   /// Parent revision the range was recorded against.
-  IntColumn get anchorRevision =>
-      integer().withDefault(const Constant(1))();
+  IntColumn get anchorRevision => integer().withDefault(const Constant(1))();
 
   /// How much of the link back still holds: 0 verbatim, 1 stale, 2 orphaned.
   ///
@@ -568,6 +567,12 @@ class ReviewEvents extends Table {
 /// operation id — and is what undo and a future optimizer replay from. This
 /// one is the flat, queryable, all-element-types view that makes "what
 /// happened to this element, in order" a single indexed query.
+/// The class name spells "revlog" — the SuperMemo/Anki word for a review
+/// log — because Drift derives the SQL table name `revlog_entries` from it,
+/// and every shipped collection already has that table. The Dart side of
+/// this data is spelled out: see `ReviewLogEntry` in
+/// `scheduling/history/review_log.dart`, and `reviewLogFromRow` in
+/// `row_converters.dart` for the bridge between the two.
 @DataClassName('RevlogRow')
 class RevlogEntries extends Table {
   TextColumn get id => text()();
@@ -579,7 +584,7 @@ class RevlogEntries extends Table {
   IntColumn get elementType =>
       integer().check(elementType.isBetweenValues(0, 2))();
 
-  /// Stable `RevlogEventType` value. Never the enum index.
+  /// Stable `ReviewLogEventType` value. Never the enum index.
   IntColumn get eventType =>
       integer().check(eventType.isBetweenValues(1, 15))();
 

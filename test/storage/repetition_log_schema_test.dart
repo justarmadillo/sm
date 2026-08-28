@@ -6,7 +6,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
 import 'package:incremental_reader/storage/database/row_converters.dart';
@@ -128,12 +128,12 @@ void main() {
         <Object?>['r$eventType$grade', 'op', 'e1', 2, eventType, 1000, grade],
       );
 
-      await insert(RevlogEventType.review.value, 3);
-      await insert(RevlogEventType.practice.value, 1);
-      await insert(RevlogEventType.postpone.value, null);
+      await insert(ReviewLogEventType.review.value, 3);
+      await insert(ReviewLogEventType.practice.value, 1);
+      await insert(ReviewLogEventType.postpone.value, null);
 
       await expectLater(
-        insert(RevlogEventType.postpone.value, 3),
+        insert(ReviewLogEventType.postpone.value, 3),
         throwsA(isA<Object>()),
         reason:
             'a grade on a postpone would poison an optimizer’s training '
@@ -147,11 +147,11 @@ void main() {
       final DriftLearningRepository learning = DriftLearningRepository(db);
 
       const ElementRef ref = ElementRef(id: 'c1', type: ElementType.card);
-      final RevlogEntry entry = RevlogEntry(
+      final ReviewLogEntry entry = ReviewLogEntry(
         id: 'r1',
         operationId: 'op-1',
         ref: ref,
-        eventType: RevlogEventType.review,
+        eventType: ReviewLogEventType.review,
         atUtc: DateTime.utc(2026, 3, 5, 10),
         grade: 3,
         elapsedDays: 12.5,
@@ -160,18 +160,18 @@ void main() {
         postponeCount: 2,
         schedulerVersion: 'v',
         parametersVersion: 'p',
-        before: RevlogSnapshot(
+        before: ReviewLogSnapshot(
           dueAtUtc: DateTime.utc(2026, 3, 1),
           stability: 9.5,
           difficulty: 5.25,
           learningState: 2,
-          reps: 3,
+          repetitionCount: 3,
           lapses: 1,
           priorityKey: 'M',
           pressure: 0.25,
           lifecycle: 0,
         ),
-        after: RevlogSnapshot(
+        after: ReviewLogSnapshot(
           dueAtUtc: DateTime.utc(2026, 3, 20),
           stability: 18.75,
           difficulty: 5.1,
@@ -183,8 +183,10 @@ void main() {
         metadata: const <String, Object?>{'a_factor': 2.1},
       );
 
-      await learning.appendRevlog(entry);
-      final RevlogEntry restored = (await learning.listRevlogFor(ref)).single;
+      await learning.appendReviewLog(entry);
+      final ReviewLogEntry restored = (await learning.listReviewLogForElement(
+        ref,
+      )).single;
 
       expect(restored.id, entry.id);
       expect(restored.operationId, entry.operationId);
@@ -210,9 +212,9 @@ void main() {
 
         const ElementRef ref = ElementRef(id: 'c1', type: ElementType.card);
         var counter = 0;
-        Future<void> log(RevlogEventType type, {int? grade}) =>
-            learning.appendRevlog(
-              RevlogEntry(
+        Future<void> log(ReviewLogEventType type, {int? grade}) =>
+            learning.appendReviewLog(
+              ReviewLogEntry(
                 id: 'r${counter++}',
                 operationId: 'op-$counter',
                 ref: ref,
@@ -222,17 +224,19 @@ void main() {
               ),
             );
 
-        await log(RevlogEventType.review, grade: 3);
-        await log(RevlogEventType.practice, grade: 4);
-        await log(RevlogEventType.postpone);
-        await log(RevlogEventType.autoPostpone);
-        await log(RevlogEventType.bury);
+        await log(ReviewLogEventType.review, grade: 3);
+        await log(ReviewLogEventType.practice, grade: 4);
+        await log(ReviewLogEventType.postpone);
+        await log(ReviewLogEventType.autoPostpone);
+        await log(ReviewLogEventType.bury);
 
-        final List<RevlogEntry> all = await learning.listRevlogFor(ref);
+        final List<ReviewLogEntry> all = await learning.listReviewLogForElement(
+          ref,
+        );
         expect(all, hasLength(5));
-        expect(all.where((RevlogEntry e) => e.feedsOptimizer), hasLength(1));
+        expect(all.where((ReviewLogEntry e) => e.feedsOptimizer), hasLength(1));
         expect(
-          all.where((RevlogEntry e) => e.eventType.isDeferral),
+          all.where((ReviewLogEntry e) => e.eventType.isDeferral),
           hasLength(3),
         );
       },
@@ -246,21 +250,21 @@ void main() {
       const ElementRef ref = ElementRef(id: 'c1', type: ElementType.card);
       final DateTime day = DateTime.utc(2026, 3, 5, 10);
       for (var i = 0; i < 3; i++) {
-        await learning.appendRevlog(
-          RevlogEntry(
+        await learning.appendReviewLog(
+          ReviewLogEntry(
             id: 'r$i',
             operationId: 'op-$i',
             ref: ref,
-            eventType: RevlogEventType.autoPostpone,
+            eventType: ReviewLogEventType.autoPostpone,
             atUtc: day,
           ),
         );
       }
 
-      final counts = await learning.countRevlogOn(
+      final counts = await learning.countReviewLogEventsOn(
         studyDayFromEpochDay(day.millisecondsSinceEpoch ~/ 86400000, 'UTC'),
       );
-      expect(counts[RevlogEventType.autoPostpone], 3);
+      expect(counts[ReviewLogEventType.autoPostpone], 3);
     });
   });
 

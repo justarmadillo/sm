@@ -264,7 +264,7 @@ void main() {
           extractRef,
         ))!.priority;
         final List<ElementSchedule> ordered = await harness.learning
-            .listByPriority();
+            .listSchedulesByPriority();
         expect(ordered.map((ElementSchedule s) => s.ref), contains(extractRef));
 
         // Re-ranking the parent afterwards must not cascade.
@@ -491,9 +491,7 @@ void main() {
           hasSourceAsParent: false,
           range: SelectionRange.of(
             startAnchor: const ReaderAnchor(utf8Offset: 0),
-            endAnchor: ReaderAnchor(
-              utf8Offset: utf8Length(created.markdown),
-            ),
+            endAnchor: ReaderAnchor(utf8Offset: utf8Length(created.markdown)),
             markdown: created.markdown,
           ),
         ),
@@ -618,7 +616,7 @@ void main() {
         END
       ''');
       final generationBefore =
-          (await harness.transfer.findIdentity()).generation;
+          (await harness.transfer.findDatasetIdentity()).generation;
 
       final result = await extract(
         selectRendered(blockOf(BlockType.paragraph), 'capacity'),
@@ -627,7 +625,7 @@ void main() {
       expect(result.failureOrNull, isA<UnexpectedFailure>());
       expect(await harness.content.listExtractsOfParent(source.id), isEmpty);
       expect(
-        (await harness.transfer.findIdentity()).generation,
+        (await harness.transfer.findDatasetIdentity()).generation,
         generationBefore,
       );
     });

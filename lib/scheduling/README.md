@@ -12,7 +12,7 @@ in a unit test instead of by clicking through the app.
 | `mercy/mercy_workflow.dart` | the preview you confirm, and the snapshot that undoes it |
 | `postpone/sm20_postpone.dart` | how an overloaded day is pushed out |
 | `postpone/sm20_advance.dart` | how future work is pulled closer to today |
-| `history/revlog.dart` | one row for every scheduling event, of any kind |
+| `history/review_log.dart` | one row for every scheduling event, of any kind |
 | `history/scheduler_event.dart` | the append-only audit trail |
 | `history/scheduling_journal.dart` | writes that trail, inside the caller's transaction |
 | `metrics/scheduler_metrics.dart` | is the schedule healthy? (diagnostics panel) |

@@ -15,14 +15,14 @@ library;
 
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduler_event.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 
-/// Builds and appends [RevlogEntry] rows.
+/// Builds and appends [ReviewLogEntry] rows.
 final class SchedulingJournal {
   const SchedulingJournal({
     required LearningRepository learning,
@@ -34,12 +34,12 @@ final class SchedulingJournal {
   final IdGenerator _ids;
 
   /// Snapshot of a topic as it stands now.
-  RevlogSnapshot topicSnapshot(
+  ReviewLogSnapshot topicSnapshot(
     TopicState state, {
     required StudyDayCalendar calendar,
     double? pressure,
     double? readFraction,
-  }) => RevlogSnapshot(
+  }) => ReviewLogSnapshot(
     dueAtUtc: calendar.startOfDayUtc(state.schedule.algorithmicDueDay),
     intervalDays: state.intervalDays,
     aFactor: state.aFactor,
@@ -50,13 +50,13 @@ final class SchedulingJournal {
   );
 
   /// Snapshot of a card as it stands now.
-  RevlogSnapshot cardSnapshot(CardState state, {double? pressure}) =>
-      RevlogSnapshot(
+  ReviewLogSnapshot cardSnapshot(CardState state, {double? pressure}) =>
+      ReviewLogSnapshot(
         dueAtUtc: state.memory.dueAtUtc,
         stability: state.memory.stability,
         difficulty: state.memory.difficulty,
         learningState: state.memory.state.value,
-        reps: state.memory.reps,
+        repetitionCount: state.memory.repetitionCount,
         lapses: state.memory.lapses,
         priorityKey: state.schedule.priority.orderKey,
         pressure: pressure,
@@ -64,13 +64,13 @@ final class SchedulingJournal {
       );
 
   /// Appends one entry.
-  Future<RevlogEntry> append({
+  Future<ReviewLogEntry> append({
     required String operationId,
     required ElementRef ref,
-    required RevlogEventType eventType,
+    required ReviewLogEventType eventType,
     required DateTime atUtc,
-    RevlogSnapshot before = RevlogSnapshot.none,
-    RevlogSnapshot after = RevlogSnapshot.none,
+    ReviewLogSnapshot before = ReviewLogSnapshot.none,
+    ReviewLogSnapshot after = ReviewLogSnapshot.none,
     int? grade,
     double? elapsedDays,
     double? scheduledDays,
@@ -80,7 +80,7 @@ final class SchedulingJournal {
     String? parametersVersion,
     Map<String, Object?>? metadata,
   }) async {
-    final RevlogEntry entry = RevlogEntry(
+    final ReviewLogEntry entry = ReviewLogEntry(
       id: _ids.newId(),
       operationId: operationId,
       ref: ref,
@@ -97,13 +97,13 @@ final class SchedulingJournal {
       parametersVersion: parametersVersion,
       metadata: metadata,
     );
-    await _learning.appendRevlog(entry);
+    await _learning.appendReviewLog(entry);
     return entry;
   }
 
   /// Appends many entries, for the daily valve and Mercy.
-  Future<void> appendAll(List<RevlogEntry> entries) =>
-      _learning.appendRevlogBatch(entries);
+  Future<void> appendAll(List<ReviewLogEntry> entries) =>
+      _learning.appendReviewLogBatch(entries);
 
   /// Appends the full scheduler audit envelope. The caller supplies the
   /// calendar-derived [studyDay] at operation time; it is persisted and never
@@ -148,13 +148,13 @@ final class SchedulingJournal {
   }
 
   /// Builds an entry without appending it, for batched callers.
-  RevlogEntry build({
+  ReviewLogEntry build({
     required String operationId,
     required ElementRef ref,
-    required RevlogEventType eventType,
+    required ReviewLogEventType eventType,
     required DateTime atUtc,
-    RevlogSnapshot before = RevlogSnapshot.none,
-    RevlogSnapshot after = RevlogSnapshot.none,
+    ReviewLogSnapshot before = ReviewLogSnapshot.none,
+    ReviewLogSnapshot after = ReviewLogSnapshot.none,
     int? grade,
     double? elapsedDays,
     double? scheduledDays,
@@ -163,7 +163,7 @@ final class SchedulingJournal {
     String? schedulerVersion,
     String? parametersVersion,
     Map<String, Object?>? metadata,
-  }) => RevlogEntry(
+  }) => ReviewLogEntry(
     id: _ids.newId(),
     operationId: operationId,
     ref: ref,

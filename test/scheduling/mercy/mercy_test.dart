@@ -151,15 +151,21 @@ void main() {
       );
 
       expect(
-        run(MercyMode.highScoreFirst).ordered.map((value) => value!.ref.id),
+        run(
+          MercyMode.highScoreFirst,
+        ).orderedCandidates.map((value) => value!.ref.id),
         <String>['most', 'middle', 'least'],
       );
       expect(
-        run(MercyMode.lowScoreFirst).ordered.map((value) => value!.ref.id),
+        run(
+          MercyMode.lowScoreFirst,
+        ).orderedCandidates.map((value) => value!.ref.id),
         <String>['least', 'middle', 'most'],
       );
       expect(
-        run(MercyMode.sourceOrder).ordered.map((value) => value!.ref.id),
+        run(
+          MercyMode.sourceOrder,
+        ).orderedCandidates.map((value) => value!.ref.id),
         <String>['middle', 'least', 'most'],
       );
     });
@@ -174,24 +180,29 @@ void main() {
           _candidate('c'),
         ];
         final List<String?> expected = <String?>['a', null, 'b', 'c'];
-        final Sm20Prng expectedPrng = Sm20Prng(seed: 0x12345678);
+        final Sm20RandomNumberGenerator expectedPrng =
+            Sm20RandomNumberGenerator(seed: 0x12345678);
         for (var index = 0; index < expected.length; index += 1) {
           final int other = expectedPrng.nextInt(expected.length);
           final String? value = expected[index];
           expected[index] = expected[other];
           expected[other] = value;
         }
-        final Sm20Prng actualPrng = Sm20Prng(seed: 0x12345678);
+        final Sm20RandomNumberGenerator actualPrng = Sm20RandomNumberGenerator(
+          seed: 0x12345678,
+        );
         final Sm20MercyPlan plan = _plan(
           candidates: source,
           mode: MercyMode.random,
-          prng: actualPrng,
+          randomNumbers: actualPrng,
         );
 
         expect(plan.randomDraws, 4);
         expect(actualPrng.state, expectedPrng.state);
         expect(
-          plan.ordered.map((Sm20MercyCandidate? value) => value?.ref.id),
+          plan.orderedCandidates.map(
+            (Sm20MercyCandidate? value) => value?.ref.id,
+          ),
           expected,
         );
         expect(plan.deletedPlaceholderCount, 1);
@@ -354,7 +365,7 @@ Sm20MercyPlan _plan({
   int learningStart = 0,
   PriorityScale? scale,
   Sm20MercyWeights weights = const Sm20MercyWeights(),
-  Sm20Prng? prng,
+  Sm20RandomNumberGenerator? randomNumbers,
 }) => const Sm20MercyEngine().plan(
   candidates: candidates,
   gatherMode: gatherMode,
@@ -370,7 +381,7 @@ Sm20MercyPlan _plan({
       PriorityScale(
         candidates.map((Sm20MercyCandidate value) => value.priority),
       ),
-  prng: prng ?? Sm20Prng(seed: 0),
+  randomNumbers: randomNumbers ?? Sm20RandomNumberGenerator(seed: 0),
 );
 
 Sm20MercyCandidate _candidate(

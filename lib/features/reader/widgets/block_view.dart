@@ -169,6 +169,8 @@ class _BlockViewState extends State<BlockView> {
     return inset + (line - _kMarkerDotSize) / 2;
   }
 
+  /// The block's own presentation: an editor while it is being edited,
+  /// otherwise the rendered text wrapped in whatever its type calls for.
   Widget _buildBody(Block block, ReaderTypography typography) {
     if (widget.isEditing && widget.onEditCommit != null) {
       // The paragraph is gone while editing, so its render object must not
@@ -193,88 +195,101 @@ class _BlockViewState extends State<BlockView> {
       textAlign: TextAlign.start,
     );
 
-    switch (block.type) {
-      case BlockType.thematicBreak:
-        // A rule has no content. The empty paragraph still renders so the
-        // block keeps a registered render object and a zero-length range.
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Divider(color: AppColors.border, height: 1),
+    return switch (block.type) {
+      BlockType.thematicBreak => _thematicBreak(paragraph),
+      BlockType.codeBlock => _codeBlock(paragraph),
+      BlockType.mathBlock => _mathBlock(paragraph),
+      BlockType.quote => _quote(paragraph),
+      BlockType.listItem => _listItem(block, typography, paragraph),
+      BlockType.table => _table(typography, paragraph),
+      BlockType.heading || BlockType.paragraph => paragraph,
+    };
+  }
+
+  /// A rule has no content. The empty paragraph still renders so the block
+  /// keeps a registered render object and a zero-length range.
+  Widget _thematicBreak(Widget paragraph) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Divider(color: AppColors.border, height: 1),
+        ),
+        paragraph,
+      ],
+    );
+  }
+
+  /// Scrolls sideways rather than wrapping: a wrapped line of code is a
+  /// different line of code.
+  Widget _codeBlock(Widget paragraph) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.codeBackground,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: paragraph,
+      ),
+    );
+  }
+
+  Widget _mathBlock(Widget paragraph) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.codeBackground,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: paragraph,
+    );
+  }
+
+  Widget _quote(Widget paragraph) {
+    return Container(
+      padding: const EdgeInsets.only(left: 14),
+      decoration: const BoxDecoration(
+        border: Border(left: BorderSide(color: AppColors.border, width: 3)),
+      ),
+      child: paragraph,
+    );
+  }
+
+  /// Indented by nesting depth, with the source's own marker for a numbered
+  /// list so `3.` stays `3.` rather than being renumbered.
+  Widget _listItem(Block block, ReaderTypography typography, Widget paragraph) {
+    return Padding(
+      padding: EdgeInsets.only(left: 16.0 * block.listDepth),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 26,
+            child: Text(
+              block.isOrderedListItem ? '${block.listMarker}' : '•',
+              style: typography.body.copyWith(color: AppColors.muted),
             ),
-            paragraph,
-          ],
-        );
-
-      case BlockType.codeBlock:
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.codeBackground,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: AppColors.border),
           ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: paragraph,
-          ),
-        );
+          Expanded(child: paragraph),
+        ],
+      ),
+    );
+  }
 
-      case BlockType.mathBlock:
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.codeBackground,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: paragraph,
-        );
-
-      case BlockType.quote:
-        return Container(
-          padding: const EdgeInsets.only(left: 14),
-          decoration: const BoxDecoration(
-            border: Border(left: BorderSide(color: AppColors.border, width: 3)),
-          ),
-          child: paragraph,
-        );
-
-      case BlockType.listItem:
-        return Padding(
-          padding: EdgeInsets.only(left: 16.0 * block.listDepth),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              SizedBox(
-                width: 26,
-                child: Text(
-                  block.ordered ? '${block.listMarker}' : '•',
-                  style: typography.body.copyWith(color: AppColors.muted),
-                ),
-              ),
-              Expanded(child: paragraph),
-            ],
-          ),
-        );
-
-      case BlockType.table:
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DefaultTextStyle.merge(
-            style: typography.code,
-            child: paragraph,
-          ),
-        );
-
-      case BlockType.heading:
-      case BlockType.paragraph:
-        return paragraph;
-    }
+  /// Monospaced and horizontally scrollable: the table is rendered as its
+  /// pipe-and-dash source, so its columns only line up in a fixed-width font.
+  Widget _table(ReaderTypography typography, Widget paragraph) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DefaultTextStyle.merge(style: typography.code, child: paragraph),
+    );
   }
 }
 

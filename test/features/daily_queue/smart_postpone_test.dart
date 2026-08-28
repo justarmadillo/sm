@@ -14,7 +14,7 @@ import 'package:incremental_reader/features/review/review_command_runner.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/postpone/sm20_postpone.dart';
 import 'package:incremental_reader/scheduling/sm20_collection_state.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
@@ -190,16 +190,16 @@ void main() {
       );
 
       final Sm20CollectionState after = await harness.context.runtimeState();
-      expect(after.prngSeed, before.prngSeed);
+      expect(after.randomNumberSeed, before.randomNumberSeed);
       expect(after.outstanding, before.outstanding);
       for (final Source source in sources) {
         final ElementRef ref = harness.refOf(source);
         expect(await harness.topicFingerprint(ref), topicsBefore[ref]);
         expect(
-          (await harness.learning.listRevlogFor(
+          (await harness.learning.listReviewLogForElement(
             ref,
-          )).map((RevlogEntry entry) => entry.eventType),
-          isNot(contains(RevlogEventType.postpone)),
+          )).map((ReviewLogEntry entry) => entry.eventType),
+          isNot(contains(ReviewLogEventType.postpone)),
           reason: 'only the memorizing encounter should be logged',
         );
       }
@@ -255,8 +255,9 @@ void main() {
         expect(after.schedule.priority, prior.schedule.priority);
         expect(after.status, Sm20ElementStatus.memorized);
 
-        final List<RevlogEntry> log = await harness.learning.listRevlogFor(ref);
-        expect(log.last.eventType, RevlogEventType.postpone);
+        final List<ReviewLogEntry> log = await harness.learning
+            .listReviewLogForElement(ref);
+        expect(log.last.eventType, ReviewLogEventType.postpone);
         expect(log.last.grade, isNull);
       }
 
@@ -267,8 +268,8 @@ void main() {
 
       final Sm20CollectionState after = await harness.context.runtimeState();
       expect(
-        after.prngSeed,
-        isNot(before.prngSeed),
+        after.randomNumberSeed,
+        isNot(before.randomNumberSeed),
         reason: 'the dispersion draws advance the one persisted stream',
       );
       for (final ElementRef ref in applied.result.postponed) {
@@ -313,7 +314,7 @@ void main() {
       expect(after.memory.dueAtUtc.isAfter(before.memory.dueAtUtc), isTrue);
       expect(after.memory.stability, before.memory.stability);
       expect(after.memory.difficulty, before.memory.difficulty);
-      expect(after.memory.reps, before.memory.reps);
+      expect(after.memory.repetitionCount, before.memory.repetitionCount);
       expect(after.memory.lapses, before.memory.lapses);
       expect(after.memory.state, before.memory.state);
       expect(
@@ -322,8 +323,9 @@ void main() {
       );
       expect(after.schedule.priority, before.schedule.priority);
 
-      final List<RevlogEntry> log = await harness.learning.listRevlogFor(ref);
-      expect(log.last.eventType, RevlogEventType.postpone);
+      final List<ReviewLogEntry> log = await harness.learning
+          .listReviewLogForElement(ref);
+      expect(log.last.eventType, ReviewLogEventType.postpone);
       expect(log.last.grade, isNull);
     });
 
@@ -381,10 +383,10 @@ void main() {
         expect(applied.result.sourceOrder.toSet(), subset.toSet());
         for (final Source source in sources.sublist(3)) {
           expect(
-            (await harness.learning.listRevlogFor(
+            (await harness.learning.listReviewLogForElement(
               harness.refOf(source),
-            )).map((RevlogEntry entry) => entry.eventType),
-            isNot(contains(RevlogEventType.postpone)),
+            )).map((ReviewLogEntry entry) => entry.eventType),
+            isNot(contains(ReviewLogEventType.postpone)),
           );
         }
       },

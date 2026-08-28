@@ -46,8 +46,8 @@ final FutureProvider<List<LibraryTreeNode>> contentTreeProvider =
 
 /// The body of one element, for the detail pane.
 final AutoDisposeFutureProviderFamily<ElementContent?, ElementRef>
-elementContentProvider =
-    FutureProvider.autoDispose.family<ElementContent?, ElementRef>(
+elementContentProvider = FutureProvider.autoDispose
+    .family<ElementContent?, ElementRef>(
       (Ref ref, ElementRef elementRef) =>
           ref.watch(elementContentQueryProvider).load(elementRef),
     );
@@ -99,7 +99,9 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<List<LibraryTreeNode>> tree = ref.watch(contentTreeProvider);
+    final AsyncValue<List<LibraryTreeNode>> tree = ref.watch(
+      contentTreeProvider,
+    );
     _seedExpansion(tree.valueOrNull);
 
     // Element commands report through the shared ViewModel, so this is where
@@ -122,72 +124,95 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
     );
   }
 
-  Widget _scaffold(BuildContext context, AsyncValue<List<LibraryTreeNode>> tree) {
+  Widget _scaffold(
+    BuildContext context,
+    AsyncValue<List<LibraryTreeNode>> tree,
+  ) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Contents'),
-        actions: <Widget>[
-          TextButton.icon(
-            onPressed: () => _import(context),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Import markdown'),
-          ),
-          IconButton(
-            tooltip: 'Search (Ctrl+F)',
-            onPressed: () => openSearch(context, ref),
-            icon: const Icon(Icons.search),
-          ),
-          IconButton(
-            tooltip: 'Expand everything',
-            onPressed: () => setState(() {
-              _expanded
-                ..clear()
-                ..addAll(_allRefs(tree.valueOrNull ?? const <LibraryTreeNode>[]));
-            }),
-            icon: const Icon(Icons.unfold_more),
-          ),
-          IconButton(
-            tooltip: 'Collapse everything',
-            onPressed: () => setState(_expanded.clear),
-            icon: const Icon(Icons.unfold_less),
-          ),
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: () => ref.invalidate(contentTreeProvider),
-            icon: const Icon(Icons.refresh),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
+      appBar: _appBar(context, tree),
       body: tree.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
             Center(child: Text('Could not load the tree.\n$error')),
-        data: (List<LibraryTreeNode> roots) => Column(
-          children: <Widget>[
-            _TypeFilter(
-              selected: _types,
-              onChanged: (Set<ElementType> types) =>
-                  setState(() => _types = types),
-            ),
-            Expanded(
-              child: Row(
-                children: <Widget>[
-                  Expanded(child: _buildBody(roots)),
-                  if (_selected != null)
-                    _ElementDetailPane(
-                      elementRef: _selected!,
-                      onClose: () => setState(() => _selected = null),
-                      onOpen: _selected!.type == ElementType.card
-                          ? null
-                          : () => unawaited(_openElement(_selected!)),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        data: _treeAndDetail,
       ),
+    );
+  }
+
+  /// Import, search, and the two whole-tree expand controls.
+  PreferredSizeWidget _appBar(
+    BuildContext context,
+    AsyncValue<List<LibraryTreeNode>> tree,
+  ) {
+    return AppBar(
+      title: const Text('Contents'),
+      actions: <Widget>[
+        TextButton.icon(
+          onPressed: () => _import(context),
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('Import markdown'),
+        ),
+        IconButton(
+          tooltip: 'Search (Ctrl+F)',
+          onPressed: () => openSearch(context, ref),
+          icon: const Icon(Icons.search),
+        ),
+        IconButton(
+          tooltip: 'Expand everything',
+          onPressed: () => _expandAll(tree),
+          icon: const Icon(Icons.unfold_more),
+        ),
+        IconButton(
+          tooltip: 'Collapse everything',
+          onPressed: () => setState(_expanded.clear),
+          icon: const Icon(Icons.unfold_less),
+        ),
+        IconButton(
+          tooltip: 'Refresh',
+          onPressed: () => ref.invalidate(contentTreeProvider),
+          icon: const Icon(Icons.refresh),
+        ),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  void _expandAll(AsyncValue<List<LibraryTreeNode>> tree) {
+    setState(() {
+      _expanded
+        ..clear()
+        ..addAll(_allRefs(tree.valueOrNull ?? const <LibraryTreeNode>[]));
+    });
+  }
+
+  /// The tree, with the detail pane beside it once something is selected.
+  Widget _treeAndDetail(List<LibraryTreeNode> roots) {
+    return Column(
+      children: <Widget>[
+        _TypeFilter(
+          selected: _types,
+          onChanged: (Set<ElementType> types) => setState(() => _types = types),
+        ),
+        Expanded(
+          child: Row(
+            children: <Widget>[
+              Expanded(child: _buildBody(roots)),
+              if (_selected != null) _detailPane(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// A card has no screen of its own to open; it is reviewed, not read.
+  Widget _detailPane() {
+    return _ElementDetailPane(
+      elementRef: _selected!,
+      onClose: () => setState(() => _selected = null),
+      onOpen: _selected!.type == ElementType.card
+          ? null
+          : () => unawaited(_openElement(_selected!)),
     );
   }
 
@@ -286,8 +311,7 @@ class _ContentsScreenState extends ConsumerState<ContentsScreen> {
         row: rows[index],
         isExpanded: _expanded.contains(rows[index].node.ref),
         isSelected: _selected == rows[index].node.ref,
-        onSelect: () =>
-            setState(() => _selected = rows[index].node.ref),
+        onSelect: () => setState(() => _selected = rows[index].node.ref),
         onToggle: () => setState(() {
           final ElementRef ref_ = rows[index].node.ref;
           if (!_expanded.remove(ref_)) _expanded.add(ref_);
@@ -421,6 +445,8 @@ class _NodeRow extends StatelessWidget {
     );
   }
 
+  /// One row of the tree: the expand arrow, the type badge, the title and
+  /// preview, then the counts and the per-element commands.
   Widget _card(LibraryTreeNode node, bool hasChildren, bool isDismissed) {
     return Material(
       color: isSelected
@@ -430,118 +456,108 @@ class _NodeRow extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
         onTap: onSelect,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-            child: Row(
-              children: <Widget>[
-                SizedBox(
-                  width: 22,
-                  child: hasChildren
-                      ? InkResponse(
-                          onTap: onToggle,
-                          radius: 14,
-                          child: Icon(
-                            isExpanded
-                                ? Icons.expand_more
-                                : Icons.chevron_right,
-                            size: 18,
-                            color: AppColors.muted,
-                          ),
-                        )
-                      : null,
-                ),
-                ElementTypeBadge(type: node.ref.type),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          child: Row(
+            children: <Widget>[
+              _expandArrow(hasChildren),
+              ElementTypeBadge(type: node.ref.type),
+              const SizedBox(width: 8),
+              Expanded(child: _titleAndPreview(node, isDismissed)),
+              if (hasChildren) ...<Widget>[
+                // How many elements this branch holds, itself excluded.
+                _mutedLabel('${node.subtreeSize - 1}'),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        node.title.isEmpty ? '(untitled)' : node.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: isDismissed ? AppColors.muted : null,
-                          decoration: isDismissed
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
-                      ),
-                      if (node.preview.isNotEmpty)
-                        Text(
-                          node.preview,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.muted,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                if (hasChildren) ...<Widget>[
-                  Text(
-                    '${node.subtreeSize - 1}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.muted,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                if (node.dueDay != null)
-                  Text(
-                    node.dueDay.toString(),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.muted,
-                    ),
-                  ),
-                IconButton(
-                  tooltip: 'Priority',
-                  onPressed: onPriority,
-                  icon: const Icon(Icons.low_priority, size: 17),
-                ),
-                PopupMenuButton<String>(
-                  tooltip: 'Element actions',
-                  icon: const Icon(Icons.more_vert, size: 17),
-                  onSelected: onAction,
-                  itemBuilder: (BuildContext context) =>
-                      <PopupMenuEntry<String>>[
-                        if (node.ref.type == ElementType.source)
-                          const PopupMenuItem<String>(
-                            value: 'open',
-                            child: Text('Open'),
-                          ),
-                        if (node.ref.type == ElementType.source)
-                          const PopupMenuItem<String>(
-                            value: 'rename',
-                            child: Text('Rename'),
-                          ),
-                        if (isDismissed)
-                          const PopupMenuItem<String>(
-                            value: 'undismiss',
-                            child: Text('Undismiss'),
-                          )
-                        else
-                          const PopupMenuItem<String>(
-                            value: 'dismiss',
-                            child: Text('Dismiss (keep content)'),
-                          ),
-                        if (node.ref.type == ElementType.source)
-                          const PopupMenuItem<String>(
-                            value: 'delete',
-                            child: Text('Delete'),
-                          ),
-                      ],
-                ),
               ],
-            ),
+              if (node.dueDay != null) _mutedLabel(node.dueDay.toString()),
+              IconButton(
+                tooltip: 'Priority',
+                onPressed: onPriority,
+                icon: const Icon(Icons.low_priority, size: 17),
+              ),
+              _actionMenu(node, isDismissed),
+            ],
           ),
+        ),
       ),
+    );
+  }
+
+  /// A fixed-width slot, so childless rows still line up with their siblings.
+  Widget _expandArrow(bool hasChildren) {
+    return SizedBox(
+      width: 22,
+      child: hasChildren
+          ? InkResponse(
+              onTap: onToggle,
+              radius: 14,
+              child: Icon(
+                isExpanded ? Icons.expand_more : Icons.chevron_right,
+                size: 18,
+                color: AppColors.muted,
+              ),
+            )
+          : null,
+    );
+  }
+
+  /// A dismissed element keeps its place in the tree but is struck through:
+  /// its content is still there, it is only out of the queue.
+  Widget _titleAndPreview(LibraryTreeNode node, bool isDismissed) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          node.title.isEmpty ? '(untitled)' : node.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isDismissed ? AppColors.muted : null,
+            decoration: isDismissed ? TextDecoration.lineThrough : null,
+          ),
+        ),
+        if (node.preview.isNotEmpty)
+          Text(
+            node.preview,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11, color: AppColors.muted),
+          ),
+      ],
+    );
+  }
+
+  Widget _mutedLabel(String text) =>
+      Text(text, style: const TextStyle(fontSize: 11, color: AppColors.muted));
+
+  /// Only a source can be opened, renamed, or deleted; an extract is reached
+  /// through its parent and removed with it.
+  Widget _actionMenu(LibraryTreeNode node, bool isDismissed) {
+    final bool isSource = node.ref.type == ElementType.source;
+    return PopupMenuButton<String>(
+      tooltip: 'Element actions',
+      icon: const Icon(Icons.more_vert, size: 17),
+      onSelected: onAction,
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+        if (isSource)
+          const PopupMenuItem<String>(value: 'open', child: Text('Open')),
+        if (isSource)
+          const PopupMenuItem<String>(value: 'rename', child: Text('Rename')),
+        if (isDismissed)
+          const PopupMenuItem<String>(
+            value: 'undismiss',
+            child: Text('Undismiss'),
+          )
+        else
+          const PopupMenuItem<String>(
+            value: 'dismiss',
+            child: Text('Dismiss (keep content)'),
+          ),
+        if (isSource)
+          const PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
+      ],
     );
   }
 }
@@ -662,113 +678,124 @@ class _ElementDetailPaneState extends ConsumerState<_ElementDetailPane> {
     );
   }
 
+  /// The detail pane: a header, the element's text, then the save row.
   Widget _content(ElementContent content) {
     _fill(content);
+    // A card carries a question and an answer; everything else is one body.
     final bool isCard = content.ref.type == ElementType.card;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
-          child: Row(
-            children: <Widget>[
-              ElementTypeBadge(type: content.ref.type),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  content.title.isEmpty ? '(untitled)' : content.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (widget.onOpen != null)
-                IconButton(
-                  tooltip: 'Open',
-                  onPressed: widget.onOpen,
-                  icon: const Icon(Icons.open_in_new, size: 17),
-                ),
-              IconButton(
-                tooltip: 'Close',
-                onPressed: widget.onClose,
-                icon: const Icon(Icons.close, size: 17),
-              ),
-            ],
-          ),
-        ),
+        _header(content),
         const Divider(height: 1, color: AppColors.border),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                if (isCard)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      'Question',
-                      style: TextStyle(fontSize: 11, color: AppColors.muted),
-                    ),
-                  ),
-                TextField(
-                  controller: _body,
-                  readOnly: !content.isEditable,
-                  minLines: 6,
-                  maxLines: null,
-                  style: const TextStyle(fontSize: 13, height: 1.45),
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                if (isCard && content.back != null) ...<Widget>[
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(0, 12, 0, 4),
-                    child: Text(
-                      'Answer',
-                      style: TextStyle(fontSize: 11, color: AppColors.muted),
-                    ),
-                  ),
-                  TextField(
-                    controller: _back,
-                    readOnly: !content.isEditable,
-                    minLines: 3,
-                    maxLines: null,
-                    style: const TextStyle(fontSize: 13, height: 1.45),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-              ],
+        Expanded(child: _editableFields(content, isCard)),
+        const Divider(height: 1, color: AppColors.border),
+        _saveRow(content),
+      ],
+    );
+  }
+
+  /// Type badge, title, and the ways out of the pane.
+  Widget _header(ElementContent content) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
+      child: Row(
+        children: <Widget>[
+          ElementTypeBadge(type: content.ref.type),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              content.title.isEmpty ? '(untitled)' : content.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),
-        ),
-        const Divider(height: 1, color: AppColors.border),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  content.notEditableReason ?? 'Edits never reschedule.',
-                  style: const TextStyle(fontSize: 11, color: AppColors.muted),
-                ),
-              ),
-              if (content.isEditable)
-                FilledButton(
-                  onPressed: () => unawaited(_save(content)),
-                  child: const Text('Save'),
-                ),
-            ],
+          if (widget.onOpen != null)
+            IconButton(
+              tooltip: 'Open',
+              onPressed: widget.onOpen,
+              icon: const Icon(Icons.open_in_new, size: 17),
+            ),
+          IconButton(
+            tooltip: 'Close',
+            onPressed: widget.onClose,
+            icon: const Icon(Icons.close, size: 17),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  /// The body field, plus an answer field for a card.
+  ///
+  /// Read-only rather than hidden when the element cannot be edited, so the
+  /// text is still there to read and copy.
+  Widget _editableFields(ElementContent content, bool isCard) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (isCard) _fieldLabel('Question', topPadding: 0),
+          TextField(
+            controller: _body,
+            readOnly: !content.isEditable,
+            minLines: 6,
+            maxLines: null,
+            style: const TextStyle(fontSize: 13, height: 1.45),
+            decoration: const InputDecoration(
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+          ),
+          if (isCard && content.back != null) ...<Widget>[
+            _fieldLabel('Answer', topPadding: 12),
+            TextField(
+              controller: _back,
+              readOnly: !content.isEditable,
+              minLines: 3,
+              maxLines: null,
+              style: const TextStyle(fontSize: 13, height: 1.45),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _fieldLabel(String text, {required double topPadding}) => Padding(
+    padding: EdgeInsets.fromLTRB(0, topPadding, 0, 4),
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 11, color: AppColors.muted),
+    ),
+  );
+
+  /// Says why the element cannot be edited when it cannot, and reassures that
+  /// editing is not a repetition when it can.
+  Widget _saveRow(ElementContent content) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              content.notEditableReason ?? 'Edits never reschedule.',
+              style: const TextStyle(fontSize: 11, color: AppColors.muted),
+            ),
+          ),
+          if (content.isEditable)
+            FilledButton(
+              onPressed: () => unawaited(_save(content)),
+              child: const Text('Save'),
+            ),
+        ],
+      ),
     );
   }
 }

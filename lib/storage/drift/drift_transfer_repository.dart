@@ -21,7 +21,7 @@ final class DriftTransferRepository implements TransferRepository {
   final String _deviceId;
 
   @override
-  Future<DatasetIdentity> findIdentity() async {
+  Future<DatasetIdentity> findDatasetIdentity() async {
     final row = await (_database.select(
       _database.datasetMeta,
     )..where(($DatasetMetaTable t) => t.id.equals(1))).getSingleOrNull();
@@ -40,12 +40,12 @@ final class DriftTransferRepository implements TransferRepository {
       writerEpoch: 1,
       ownerDeviceId: _deviceId,
     );
-    await saveIdentity(created);
+    await saveDatasetIdentity(created);
     return created;
   }
 
   @override
-  Future<void> saveIdentity(DatasetIdentity identity) => _database
+  Future<void> saveDatasetIdentity(DatasetIdentity identity) => _database
       .into(_database.datasetMeta)
       .insertOnConflictUpdate(
         DatasetMetaCompanion.insert(
@@ -59,8 +59,8 @@ final class DriftTransferRepository implements TransferRepository {
 
   @override
   Future<DatasetIdentity> advanceGeneration() async {
-    final next = (await findIdentity()).advanced();
-    await saveIdentity(next);
+    final next = (await findDatasetIdentity()).advanced();
+    await saveDatasetIdentity(next);
     return next;
   }
 }

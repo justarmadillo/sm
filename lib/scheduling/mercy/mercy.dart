@@ -263,13 +263,13 @@ final class Sm20MercyAssignment {
 final class Sm20MercyPlan {
   const Sm20MercyPlan({
     required this.gathered,
-    required this.ordered,
+    required this.orderedCandidates,
     required this.assignments,
     required this.scores,
     required this.reschedulingDays,
     required this.blockSize,
     required this.randomDraws,
-    required this.prngState,
+    required this.randomNumberState,
     required this.deletedPlaceholderCount,
   });
 
@@ -277,13 +277,13 @@ final class Sm20MercyPlan {
 
   /// Candidate order after scoring/sorting/randomization. Deleted subset rows
   /// are represented by null, exactly like executable element-zero slots.
-  final List<Sm20MercyCandidate?> ordered;
+  final List<Sm20MercyCandidate?> orderedCandidates;
   final List<Sm20MercyAssignment> assignments;
   final Map<ElementRef, Sm20MercyScore> scores;
   final int reschedulingDays;
   final int blockSize;
   final int randomDraws;
-  final Sm20PrngState prngState;
+  final Sm20RandomNumberGeneratorState randomNumberState;
   final int deletedPlaceholderCount;
 }
 
@@ -314,7 +314,7 @@ final class Sm20MercyEngine {
     required Sm20MercyMatrix matrix,
     required Sm20MercyWeights weights,
     required PriorityScale priorityScale,
-    required Sm20Prng prng,
+    required Sm20RandomNumberGenerator randomNumbers,
   }) {
     _validateHorizon(gatheringDays, 'gatheringDays');
     _validateHorizon(reschedulingDays, 'reschedulingDays');
@@ -362,7 +362,7 @@ final class Sm20MercyEngine {
       );
     }
 
-    final int drawsBefore = prng.drawCount;
+    final int drawsBefore = randomNumbers.drawCount;
     switch (mode) {
       case MercyMode.highScoreFirst:
         sm20HeapSortDescendingInPlace<_MercySlot>(
@@ -379,7 +379,7 @@ final class Sm20MercyEngine {
       case MercyMode.sourceOrder:
         break;
       case MercyMode.random:
-        _fixedSizeRandomize(slots, prng);
+        _fixedSizeRandomize(slots, randomNumbers);
     }
 
     final int count = slots.length;
@@ -410,15 +410,17 @@ final class Sm20MercyEngine {
 
     return Sm20MercyPlan(
       gathered: List<Sm20MercyCandidate>.unmodifiable(gathered),
-      ordered: List<Sm20MercyCandidate?>.unmodifiable(<Sm20MercyCandidate?>[
-        for (final _MercySlot slot in slots) slot.candidate,
-      ]),
+      orderedCandidates: List<Sm20MercyCandidate?>.unmodifiable(
+        <Sm20MercyCandidate?>[
+          for (final _MercySlot slot in slots) slot.candidate,
+        ],
+      ),
       assignments: List<Sm20MercyAssignment>.unmodifiable(assignments),
       scores: Map<ElementRef, Sm20MercyScore>.unmodifiable(scores),
       reschedulingDays: reschedulingDays,
       blockSize: blockSize,
-      randomDraws: prng.drawCount - drawsBefore,
-      prngState: prng.state,
+      randomDraws: randomNumbers.drawCount - drawsBefore,
+      randomNumberState: randomNumbers.state,
       deletedPlaceholderCount: slots
           .where((_MercySlot value) => value.candidate == null)
           .length,
@@ -512,10 +514,13 @@ final class Sm20MercyEngine {
     ];
   }
 
-  void _fixedSizeRandomize(List<_MercySlot> slots, Sm20Prng prng) {
+  void _fixedSizeRandomize(
+    List<_MercySlot> slots,
+    Sm20RandomNumberGenerator randomNumbers,
+  ) {
     final int count = slots.length;
     for (var index = 0; index < count; index += 1) {
-      final int other = prng.nextInt(count);
+      final int other = randomNumbers.nextInt(count);
       final _MercySlot value = slots[index];
       slots[index] = slots[other];
       slots[other] = value;

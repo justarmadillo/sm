@@ -11,7 +11,7 @@
 ///
 /// Two rules the log exists to keep straight:
 ///
-/// * **A postpone is not a review.** Only [RevlogEventType.review] carries a
+/// * **A postpone is not a review.** Only [ReviewLogEventType.review] carries a
 ///   grade and only it may ever feed a parameter optimizer. Training on
 ///   postponements teaches the optimizer that the user's memory is worse than
 ///   it is, because the elapsed time was never a retention test.
@@ -24,7 +24,7 @@ import 'package:incremental_reader/scheduling/element.dart';
 import 'package:meta/meta.dart';
 
 /// What happened to an element.
-enum RevlogEventType {
+enum ReviewLogEventType {
   /// A scheduled recall was graded and FSRS advanced the card.
   review(1, 'review'),
 
@@ -70,7 +70,7 @@ enum RevlogEventType {
   /// An element was created and given its first schedule.
   created(15, 'created');
 
-  const RevlogEventType(this.value, this.storageName);
+  const ReviewLogEventType(this.value, this.storageName);
 
   /// Stable on-disk value. Never persist [index].
   final int value;
@@ -80,37 +80,37 @@ enum RevlogEventType {
 
   /// Decodes the stored value, throwing on an unknown one rather than
   /// guessing: a log row that cannot be interpreted must be loud.
-  static RevlogEventType fromValue(int value) => switch (value) {
-    1 => RevlogEventType.review,
-    2 => RevlogEventType.topicRead,
-    3 => RevlogEventType.postpone,
-    4 => RevlogEventType.autoPostpone,
-    5 => RevlogEventType.manualReschedule,
-    6 => RevlogEventType.dismiss,
-    7 => RevlogEventType.finish,
-    8 => RevlogEventType.suspend,
-    9 => RevlogEventType.resume,
-    10 => RevlogEventType.priorityChange,
-    11 => RevlogEventType.bury,
-    12 => RevlogEventType.mercy,
-    13 => RevlogEventType.undo,
-    14 => RevlogEventType.practice,
-    15 => RevlogEventType.created,
-    _ => throw ArgumentError.value(value, 'value', 'unknown revlog event'),
+  static ReviewLogEventType fromValue(int value) => switch (value) {
+    1 => ReviewLogEventType.review,
+    2 => ReviewLogEventType.topicRead,
+    3 => ReviewLogEventType.postpone,
+    4 => ReviewLogEventType.autoPostpone,
+    5 => ReviewLogEventType.manualReschedule,
+    6 => ReviewLogEventType.dismiss,
+    7 => ReviewLogEventType.finish,
+    8 => ReviewLogEventType.suspend,
+    9 => ReviewLogEventType.resume,
+    10 => ReviewLogEventType.priorityChange,
+    11 => ReviewLogEventType.bury,
+    12 => ReviewLogEventType.mercy,
+    13 => ReviewLogEventType.undo,
+    14 => ReviewLogEventType.practice,
+    15 => ReviewLogEventType.created,
+    _ => throw ArgumentError.value(value, 'value', 'unknown review log event'),
   };
 
   /// Whether an FSRS parameter optimizer may learn from this event.
   ///
   /// Exactly one event type qualifies. Everything else either has no grade or
   /// has a grade that was never a scheduled retention test.
-  bool get feedsOptimizer => this == RevlogEventType.review;
+  bool get feedsOptimizer => this == ReviewLogEventType.review;
 
   /// Whether this event moved a due date without advancing any interval.
   bool get isDeferral =>
-      this == RevlogEventType.postpone ||
-      this == RevlogEventType.autoPostpone ||
-      this == RevlogEventType.bury ||
-      this == RevlogEventType.mercy;
+      this == ReviewLogEventType.postpone ||
+      this == ReviewLogEventType.autoPostpone ||
+      this == ReviewLogEventType.bury ||
+      this == ReviewLogEventType.mercy;
 }
 
 /// The memory and pacing facts on either side of one event.
@@ -120,15 +120,15 @@ enum RevlogEventType {
 /// "everything that happened, in order" a single query rather than a union,
 /// which is what makes the log usable for diagnosis at all.
 @immutable
-final class RevlogSnapshot {
-  const RevlogSnapshot({
+final class ReviewLogSnapshot {
+  const ReviewLogSnapshot({
     this.dueAtUtc,
     this.intervalDays,
     this.aFactor,
     this.stability,
     this.difficulty,
     this.learningState,
-    this.reps,
+    this.repetitionCount,
     this.lapses,
     this.priorityKey,
     this.pressure,
@@ -137,7 +137,7 @@ final class RevlogSnapshot {
   });
 
   /// An empty snapshot, for events that have no meaningful "before".
-  static const RevlogSnapshot none = RevlogSnapshot();
+  static const ReviewLogSnapshot none = ReviewLogSnapshot();
 
   /// The instant the element was due.
   final DateTime? dueAtUtc;
@@ -160,7 +160,7 @@ final class RevlogSnapshot {
   final int? learningState;
 
   /// Total repetitions so far.
-  final int? reps;
+  final int? repetitionCount;
 
   /// Total lapses so far.
   final int? lapses;
@@ -180,27 +180,27 @@ final class RevlogSnapshot {
   /// Stable [ElementLifecycle] index.
   final int? lifecycle;
 
-  RevlogSnapshot copyWith({
+  ReviewLogSnapshot copyWith({
     DateTime? dueAtUtc,
     double? intervalDays,
     double? aFactor,
     double? stability,
     double? difficulty,
     int? learningState,
-    int? reps,
+    int? repetitionCount,
     int? lapses,
     String? priorityKey,
     double? pressure,
     double? readFraction,
     int? lifecycle,
-  }) => RevlogSnapshot(
+  }) => ReviewLogSnapshot(
     dueAtUtc: dueAtUtc ?? this.dueAtUtc,
     intervalDays: intervalDays ?? this.intervalDays,
     aFactor: aFactor ?? this.aFactor,
     stability: stability ?? this.stability,
     difficulty: difficulty ?? this.difficulty,
     learningState: learningState ?? this.learningState,
-    reps: reps ?? this.reps,
+    repetitionCount: repetitionCount ?? this.repetitionCount,
     lapses: lapses ?? this.lapses,
     priorityKey: priorityKey ?? this.priorityKey,
     pressure: pressure ?? this.pressure,
@@ -210,14 +210,14 @@ final class RevlogSnapshot {
 
   @override
   bool operator ==(Object other) =>
-      other is RevlogSnapshot &&
+      other is ReviewLogSnapshot &&
       other.dueAtUtc == dueAtUtc &&
       other.intervalDays == intervalDays &&
       other.aFactor == aFactor &&
       other.stability == stability &&
       other.difficulty == difficulty &&
       other.learningState == learningState &&
-      other.reps == reps &&
+      other.repetitionCount == repetitionCount &&
       other.lapses == lapses &&
       other.priorityKey == priorityKey &&
       other.pressure == pressure &&
@@ -232,7 +232,7 @@ final class RevlogSnapshot {
     stability,
     difficulty,
     learningState,
-    reps,
+    repetitionCount,
     lapses,
     priorityKey,
     pressure,
@@ -243,16 +243,16 @@ final class RevlogSnapshot {
 
 /// One append-only row of the repetition log.
 @immutable
-final class RevlogEntry {
+final class ReviewLogEntry {
   /// Builds an entry, validating the invariants the log's usefulness rests on.
-  factory RevlogEntry({
+  factory ReviewLogEntry({
     required String id,
     required String operationId,
     required ElementRef ref,
-    required RevlogEventType eventType,
+    required ReviewLogEventType eventType,
     required DateTime atUtc,
-    RevlogSnapshot before = RevlogSnapshot.none,
-    RevlogSnapshot after = RevlogSnapshot.none,
+    ReviewLogSnapshot before = ReviewLogSnapshot.none,
+    ReviewLogSnapshot after = ReviewLogSnapshot.none,
     int? grade,
     double? elapsedDays,
     double? scheduledDays,
@@ -263,14 +263,14 @@ final class RevlogEntry {
     Map<String, Object?>? metadata,
   }) {
     if (id.isEmpty || operationId.isEmpty) {
-      throw ArgumentError('a revlog entry needs an id and an operation id');
+      throw ArgumentError('a review log entry needs an id and an operation id');
     }
     if (!atUtc.isUtc) {
       throw ArgumentError.value(atUtc, 'atUtc', 'must be UTC');
     }
     final bool wasGraded =
-        eventType == RevlogEventType.review ||
-        eventType == RevlogEventType.practice;
+        eventType == ReviewLogEventType.review ||
+        eventType == ReviewLogEventType.practice;
     if (grade != null && !wasGraded) {
       throw ArgumentError('only review and practice events carry a grade');
     }
@@ -280,7 +280,7 @@ final class RevlogEntry {
     if (durationMs != null && durationMs < 0) {
       throw ArgumentError.value(durationMs, 'durationMs', 'must not be < 0');
     }
-    return RevlogEntry._(
+    return ReviewLogEntry._(
       id: id,
       operationId: operationId,
       ref: ref,
@@ -299,7 +299,7 @@ final class RevlogEntry {
     );
   }
 
-  const RevlogEntry._({
+  const ReviewLogEntry._({
     required this.id,
     required this.operationId,
     required this.ref,
@@ -323,14 +323,14 @@ final class RevlogEntry {
   final String operationId;
 
   final ElementRef ref;
-  final RevlogEventType eventType;
+  final ReviewLogEventType eventType;
   final DateTime atUtc;
 
   /// State before the event.
-  final RevlogSnapshot before;
+  final ReviewLogSnapshot before;
 
   /// State after the event.
-  final RevlogSnapshot after;
+  final ReviewLogSnapshot after;
 
   /// 1–4, on review and practice events only.
   final int? grade;
@@ -366,5 +366,5 @@ final class RevlogEntry {
 
   @override
   String toString() =>
-      'RevlogEntry(${eventType.storageName} $ref at $atUtc grade=$grade)';
+      'ReviewLogEntry(${eventType.storageName} $ref at $atUtc grade=$grade)';
 }

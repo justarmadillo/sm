@@ -80,7 +80,9 @@ final class SchedulingContext {
   /// The topic state machine bound to the persisted global Delphi PRNG.
   Future<TopicScheduler> topicScheduler() async {
     final Sm20CollectionState state = await runtimeState();
-    return TopicScheduler(prng: Sm20Prng(seed: state.prngSeed));
+    return TopicScheduler(
+      randomNumbers: Sm20RandomNumberGenerator(seed: state.randomNumberSeed),
+    );
   }
 
   Future<Sm20CollectionState> runtimeState() async {
@@ -92,9 +94,11 @@ final class SchedulingContext {
       _runtime.save(state);
 
   /// Persists the one global random stream after a stochastic transaction.
-  Future<void> savePrngState(Sm20PrngState state) async {
+  Future<void> saveRandomNumberState(
+    Sm20RandomNumberGeneratorState state,
+  ) async {
     final Sm20CollectionState runtime = await runtimeState();
-    await saveRuntimeState(runtime.copyWith(prngSeed: state.seed));
+    await saveRuntimeState(runtime.copyWith(randomNumberSeed: state.seed));
   }
 
   /// The FSRS adapter, configured.

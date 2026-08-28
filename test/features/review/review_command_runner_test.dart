@@ -13,7 +13,7 @@ import 'package:incremental_reader/features/review/review_command_runner.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
-import 'package:incremental_reader/scheduling/history/revlog.dart';
+import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduler_event.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/shared/clock.dart';
@@ -60,8 +60,8 @@ extension _Fixtures on AppHarness {
   Future<CardState> stateOf(String cardId) async =>
       (await learning.findCardState(cardId))!;
 
-  Future<List<RevlogEntry>> revlogOf(String cardId) =>
-      learning.listRevlogFor(ElementRef(id: cardId, type: ElementType.card));
+  Future<List<ReviewLogEntry>> reviewLogOf(String cardId) => learning
+      .listReviewLogForElement(ElementRef(id: cardId, type: ElementType.card));
 
   Future<ReviewOutcome> grade(String cardId, CardRating rating) async {
     final Result<ReviewOutcome> result = await review.review(
@@ -101,7 +101,7 @@ void main() {
           card.id,
           CardRating.good,
         );
-        expect(graded.state.memory.reps, 1);
+        expect(graded.state.memory.repetitionCount, 1);
         expect(graded.state.memory, isNot(before.memory));
 
         final Result<CardState> undone = await harness.review.undoLastReview(
@@ -143,14 +143,16 @@ void main() {
         UndoLastReview(harness.operation(), timestampUtc: clock.nowUtc()),
       );
 
-      final List<RevlogEntry> log = await harness.revlogOf(card.id);
+      final List<ReviewLogEntry> log = await harness.reviewLogOf(card.id);
       expect(
-        log.where((RevlogEntry e) => e.eventType == RevlogEventType.review),
+        log.where(
+          (ReviewLogEntry e) => e.eventType == ReviewLogEventType.review,
+        ),
         hasLength(1),
         reason: 'the grade is a fact; undo describes what happened next',
       );
-      final RevlogEntry undo = log.firstWhere(
-        (RevlogEntry e) => e.eventType == RevlogEventType.undo,
+      final ReviewLogEntry undo = log.firstWhere(
+        (ReviewLogEntry e) => e.eventType == ReviewLogEventType.undo,
       );
       expect(undo.metadata!['undone_grade'], CardRating.good.value);
       expect(undo.feedsOptimizer, isFalse);
@@ -185,7 +187,7 @@ void main() {
         card.id,
         CardRating.again,
       );
-      expect(regraded.state.memory.reps, 1);
+      expect(regraded.state.memory.repetitionCount, 1);
       expect(
         await harness.learning.listOptimizerReviews(),
         hasLength(1),
@@ -325,7 +327,11 @@ void main() {
 
         for (final Card sibling in cards.skip(1)) {
           final CardState state = await harness.stateOf(sibling.id);
-          expect(state.memory.reps, 0, reason: 'burying is not a review');
+          expect(
+            state.memory.repetitionCount,
+            0,
+            reason: 'burying is not a review',
+          );
           final ElementRef ref = ElementRef(
             id: sibling.id,
             type: ElementType.card,
@@ -341,9 +347,10 @@ void main() {
           );
           expect(ref.type, ElementType.card);
 
-          final RevlogEntry entry = (await harness.revlogOf(
-            sibling.id,
-          )).firstWhere((RevlogEntry e) => e.eventType == RevlogEventType.bury);
+          final ReviewLogEntry entry = (await harness.reviewLogOf(sibling.id))
+              .firstWhere(
+                (ReviewLogEntry e) => e.eventType == ReviewLogEventType.bury,
+              );
           expect(entry.grade, isNull);
           expect(entry.feedsOptimizer, isFalse);
           expect(entry.metadata!['sibling_of'], cards.first.id);
@@ -441,7 +448,7 @@ void main() {
       final CardState after = await harness.stateOf(card.id);
       expect(after.memory.stability, before.memory.stability);
       expect(after.memory.difficulty, before.memory.difficulty);
-      expect(after.memory.reps, before.memory.reps);
+      expect(after.memory.repetitionCount, before.memory.repetitionCount);
       expect(
         after.memory.lastReviewAtUtc,
         before.memory.lastReviewAtUtc,
@@ -457,9 +464,10 @@ void main() {
         reason: 'the same-day branch warns and leaves the schedule alone',
       );
 
-      final RevlogEntry entry = (await harness.revlogOf(
-        card.id,
-      )).firstWhere((RevlogEntry e) => e.eventType == RevlogEventType.postpone);
+      final ReviewLogEntry entry = (await harness.reviewLogOf(card.id))
+          .firstWhere(
+            (ReviewLogEntry e) => e.eventType == ReviewLogEventType.postpone,
+          );
       expect(entry.grade, isNull);
       expect(entry.feedsOptimizer, isFalse);
     });
@@ -491,9 +499,10 @@ void main() {
       expect(record.isPractice, isTrue);
       expect(record.preState, record.postState);
 
-      final RevlogEntry entry = (await harness.revlogOf(
-        card.id,
-      )).firstWhere((RevlogEntry e) => e.eventType == RevlogEventType.practice);
+      final ReviewLogEntry entry = (await harness.reviewLogOf(card.id))
+          .firstWhere(
+            (ReviewLogEntry e) => e.eventType == ReviewLogEventType.practice,
+          );
       expect(entry.grade, CardRating.again.value);
       expect(
         entry.feedsOptimizer,
@@ -516,7 +525,7 @@ void main() {
         ),
       );
       final ReviewOutcome real = await harness.grade(card.id, CardRating.good);
-      expect(real.state.memory.reps, 1);
+      expect(real.state.memory.repetitionCount, 1);
     });
   });
 }

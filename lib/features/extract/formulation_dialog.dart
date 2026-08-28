@@ -63,23 +63,11 @@ class _FormulationDialogState extends State<_FormulationDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final currentClozeCount = clozeOrdinals(_cloze.text).length;
-    final pendingCount = _queued.fold<int>(0, (int total, CardDraft draft) {
-      return total +
-          switch (draft) {
-            QaCardDraft() => 1,
-            ClozeCardDraft(:final text) => clozeOrdinals(text).length,
-          };
-    });
-    final currentPotential = switch (_kind) {
-      _DraftKind.qa
-          when _question.text.trim().isNotEmpty &&
-              _answer.text.trim().isNotEmpty =>
-        1,
-      _DraftKind.cloze => currentClozeCount,
-      _ => 0,
-    };
-    final totalPotential = pendingCount + currentPotential;
+    final clozeCountInEditor = clozeOrdinals(_cloze.text).length;
+    final stagedCardCount = _stagedCardCount();
+    final totalCardCount =
+        stagedCardCount + _cardCountInEditor(clozeCountInEditor);
+
     return AlertDialog(
       title: const Text('Formulate cards'),
       content: SizedBox(
@@ -89,135 +77,18 @@ class _FormulationDialogState extends State<_FormulationDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(
-                widget.existingCardCount == 0
-                    ? 'Create one or more cards. The ${widget.parentNoun} '
-                          'stays scheduled.'
-                    : '${widget.existingCardCount} linked card'
-                          '${widget.existingCardCount == 1 ? '' : 's'} already '
-                          'exist. New cards are added independently.',
-              ),
+              Text(_introLine()),
               const SizedBox(height: 16),
-              SegmentedButton<_DraftKind>(
-                segments: const <ButtonSegment<_DraftKind>>[
-                  ButtonSegment<_DraftKind>(
-                    value: _DraftKind.qa,
-                    label: Text('Question & answer'),
-                    icon: Icon(Icons.quiz_outlined),
-                  ),
-                  ButtonSegment<_DraftKind>(
-                    value: _DraftKind.cloze,
-                    label: Text('Cloze'),
-                    icon: Icon(Icons.short_text),
-                  ),
-                ],
-                selected: <_DraftKind>{_kind},
-                onSelectionChanged: (Set<_DraftKind> value) => setState(() {
-                  _kind = value.single;
-                  _error = null;
-                }),
-              ),
+              _cardKindSelector(),
               const SizedBox(height: 16),
-              if (_kind == _DraftKind.qa) ...<Widget>[
-                TextField(
-                  key: const ValueKey<String>('formulation-question'),
-                  controller: _question,
-                  autofocus: true,
-                  minLines: 2,
-                  maxLines: 5,
-                  decoration: const InputDecoration(labelText: 'Question'),
-                  onChanged: (_) => _clearError(),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  key: const ValueKey<String>('formulation-answer'),
-                  controller: _answer,
-                  minLines: 3,
-                  maxLines: 8,
-                  decoration: const InputDecoration(labelText: 'Answer'),
-                  onChanged: (_) => _clearError(),
-                ),
-              ] else ...<Widget>[
-                TextField(
-                  key: const ValueKey<String>('formulation-cloze'),
-                  controller: _cloze,
-                  autofocus: true,
-                  minLines: 7,
-                  maxLines: 14,
-                  decoration: const InputDecoration(
-                    labelText: 'Canonical cloze text',
-                    helperText: 'Example: The capital is {{c1::Paris}}.',
-                    alignLabelWithHint: true,
-                  ),
-                  onChanged: (_) => setState(() => _error = null),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: <Widget>[
-                    OutlinedButton.icon(
-                      onPressed: _wrapSelectionAsCloze,
-                      icon: const Icon(Icons.data_object, size: 16),
-                      label: const Text('Make selection a cloze'),
-                    ),
-                    Text(
-                      currentClozeCount == 0
-                          ? 'No valid deletions yet'
-                          : '$currentClozeCount review card'
-                                '${currentClozeCount == 1 ? '' : 's'}',
-                    ),
-                  ],
-                ),
-                if (currentClozeCount > 0) ...<Widget>[
-                  const SizedBox(height: 10),
-                  for (final ordinal in clozeOrdinals(_cloze.text))
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Text(
-                        'c$ordinal  ${renderClozeQuestion(_cloze.text, ordinal)}',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                ],
-              ],
-              if (_error != null) ...<Widget>[
-                const SizedBox(height: 10),
-                Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
+              if (_kind == _DraftKind.qa)
+                ..._questionAndAnswerFields()
+              else
+                ..._clozeFields(context, clozeCountInEditor),
+              if (_error != null) ..._errorLine(context),
               const SizedBox(height: 14),
-              Row(
-                children: <Widget>[
-                  OutlinedButton.icon(
-                    onPressed: _queueCurrent,
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add another'),
-                  ),
-                  const Spacer(),
-                  if (_queued.isNotEmpty) Text('$pendingCount cards staged'),
-                ],
-              ),
-              if (_queued.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: <Widget>[
-                    for (var index = 0; index < _queued.length; index++)
-                      InputChip(
-                        label: Text(_draftLabel(_queued[index], index)),
-                        onDeleted: () =>
-                            setState(() => _queued.removeAt(index)),
-                      ),
-                  ],
-                ),
-              ],
+              _stagingRow(stagedCardCount),
+              if (_queued.isNotEmpty) ..._stagedCardChips(),
             ],
           ),
         ),
@@ -230,15 +101,178 @@ class _FormulationDialogState extends State<_FormulationDialog> {
         FilledButton(
           onPressed: _submit,
           child: Text(
-            totalPotential == 0
+            totalCardCount == 0
                 ? 'Create cards'
-                : 'Create $totalPotential '
-                      'card${totalPotential == 1 ? '' : 's'}',
+                : 'Create $totalCardCount '
+                      'card${totalCardCount == 1 ? '' : 's'}',
           ),
         ),
       ],
     );
   }
+
+  /// How many review cards the already-staged drafts will produce.
+  ///
+  /// One per Q&A draft, but one per deletion in a cloze draft: `{{c1}}` and
+  /// `{{c2}}` in the same text are two separate cards.
+  int _stagedCardCount() => _queued.fold<int>(0, (int total, CardDraft draft) {
+    return total +
+        switch (draft) {
+          QaCardDraft() => 1,
+          ClozeCardDraft(:final text) => clozeOrdinals(text).length,
+        };
+  });
+
+  /// How many cards the fields as currently filled in would add, counting an
+  /// incomplete Q&A pair as none.
+  int _cardCountInEditor(int clozeCountInEditor) => switch (_kind) {
+    _DraftKind.qa
+        when _question.text.trim().isNotEmpty &&
+            _answer.text.trim().isNotEmpty =>
+      1,
+    _DraftKind.cloze => clozeCountInEditor,
+    _ => 0,
+  };
+
+  /// Says whether this element already has cards, so adding more is clearly
+  /// additive rather than a replacement.
+  String _introLine() => widget.existingCardCount == 0
+      ? 'Create one or more cards. The ${widget.parentNoun} stays scheduled.'
+      : '${widget.existingCardCount} linked card'
+            '${widget.existingCardCount == 1 ? '' : 's'} already exist. '
+            'New cards are added independently.';
+
+  /// Question-and-answer, or cloze.
+  Widget _cardKindSelector() {
+    return SegmentedButton<_DraftKind>(
+      segments: const <ButtonSegment<_DraftKind>>[
+        ButtonSegment<_DraftKind>(
+          value: _DraftKind.qa,
+          label: Text('Question & answer'),
+          icon: Icon(Icons.quiz_outlined),
+        ),
+        ButtonSegment<_DraftKind>(
+          value: _DraftKind.cloze,
+          label: Text('Cloze'),
+          icon: Icon(Icons.short_text),
+        ),
+      ],
+      selected: <_DraftKind>{_kind},
+      onSelectionChanged: (Set<_DraftKind> value) => setState(() {
+        _kind = value.single;
+        _error = null;
+      }),
+    );
+  }
+
+  List<Widget> _questionAndAnswerFields() => <Widget>[
+    TextField(
+      key: const ValueKey<String>('formulation-question'),
+      controller: _question,
+      autofocus: true,
+      minLines: 2,
+      maxLines: 5,
+      decoration: const InputDecoration(labelText: 'Question'),
+      onChanged: (_) => _clearError(),
+    ),
+    const SizedBox(height: 10),
+    TextField(
+      key: const ValueKey<String>('formulation-answer'),
+      controller: _answer,
+      minLines: 3,
+      maxLines: 8,
+      decoration: const InputDecoration(labelText: 'Answer'),
+      onChanged: (_) => _clearError(),
+    ),
+  ];
+
+  /// The cloze text field, the button that wraps a selection, and a preview
+  /// line per deletion so the user sees each card before creating it.
+  List<Widget> _clozeFields(BuildContext context, int clozeCountInEditor) =>
+      <Widget>[
+        TextField(
+          key: const ValueKey<String>('formulation-cloze'),
+          controller: _cloze,
+          autofocus: true,
+          minLines: 7,
+          maxLines: 14,
+          decoration: const InputDecoration(
+            labelText: 'Canonical cloze text',
+            helperText: 'Example: The capital is {{c1::Paris}}.',
+            alignLabelWithHint: true,
+          ),
+          onChanged: (_) => setState(() => _error = null),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            OutlinedButton.icon(
+              onPressed: _wrapSelectionAsCloze,
+              icon: const Icon(Icons.data_object, size: 16),
+              label: const Text('Make selection a cloze'),
+            ),
+            Text(
+              clozeCountInEditor == 0
+                  ? 'No valid deletions yet'
+                  : '$clozeCountInEditor review card'
+                        '${clozeCountInEditor == 1 ? '' : 's'}',
+            ),
+          ],
+        ),
+        if (clozeCountInEditor > 0) ...<Widget>[
+          const SizedBox(height: 10),
+          for (final ordinal in clozeOrdinals(_cloze.text))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'c$ordinal  ${renderClozeQuestion(_cloze.text, ordinal)}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+        ],
+      ];
+
+  List<Widget> _errorLine(BuildContext context) => <Widget>[
+    const SizedBox(height: 10),
+    Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+  ];
+
+  /// "Add another" puts the current fields aside and clears them, so several
+  /// cards can be written before anything is saved.
+  Widget _stagingRow(int stagedCardCount) {
+    return Row(
+      children: <Widget>[
+        OutlinedButton.icon(
+          onPressed: _queueCurrent,
+          icon: const Icon(Icons.add, size: 16),
+          label: const Text('Add another'),
+        ),
+        const Spacer(),
+        if (_queued.isNotEmpty) Text('$stagedCardCount cards staged'),
+      ],
+    );
+  }
+
+  /// One removable chip per staged draft.
+  List<Widget> _stagedCardChips() => <Widget>[
+    const SizedBox(height: 10),
+    Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: <Widget>[
+        for (var index = 0; index < _queued.length; index++)
+          InputChip(
+            label: Text(_draftLabel(_queued[index], index)),
+            onDeleted: () => setState(() => _queued.removeAt(index)),
+          ),
+      ],
+    ),
+  ];
 
   void _clearError() {
     if (_error == null) return;

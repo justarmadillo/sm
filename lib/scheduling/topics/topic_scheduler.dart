@@ -289,14 +289,20 @@ final class TopicLifecycleChanged extends TopicEvent {
 
 @immutable
 final class TopicTransition {
-  const TopicTransition(this.state, this.events, {required this.prngState});
+  const TopicTransition(
+    this.state,
+    this.events, {
+    required this.randomNumberState,
+  });
 
-  const TopicTransition.unchanged(TopicState state, Sm20PrngState prngState)
-    : this(state, const <TopicEvent>[], prngState: prngState);
+  const TopicTransition.unchanged(
+    TopicState state,
+    Sm20RandomNumberGeneratorState randomNumberState,
+  ) : this(state, const <TopicEvent>[], randomNumberState: randomNumberState);
 
   final TopicState state;
   final List<TopicEvent> events;
-  final Sm20PrngState prngState;
+  final Sm20RandomNumberGeneratorState randomNumberState;
   bool get isChange => events.isNotEmpty;
 }
 
@@ -308,14 +314,14 @@ final class Sm20TextExtraction {
     required this.childAFactor,
     required this.sourcePriorityTarget,
     required this.childPriorityTarget,
-    required this.prngState,
+    required this.randomNumberState,
   });
 
   final TopicState source;
   final DelphiReal48 childAFactor;
   final double sourcePriorityTarget;
   final double childPriorityTarget;
-  final Sm20PrngState prngState;
+  final Sm20RandomNumberGeneratorState randomNumberState;
 }
 
 /// A media-extraction transaction before the child content row is stored.
@@ -325,24 +331,26 @@ final class Sm20MediaExtraction {
     required this.sourcePriorityTarget,
     required this.childPriorityTarget,
     required this.childAFactor,
-    required this.prngState,
+    required this.randomNumberState,
   });
 
   final double sourcePriorityTarget;
   final double childPriorityTarget;
   final DelphiReal48 childAFactor;
-  final Sm20PrngState prngState;
+  final Sm20RandomNumberGeneratorState randomNumberState;
 }
 
 /// The executable-derived topic scheduler and reschedule primitives.
 final class TopicScheduler {
-  TopicScheduler({Sm20Prng? prng, this.extractFinishPromptAfter = 3})
-    : prng = prng ?? Sm20Prng();
+  TopicScheduler({
+    Sm20RandomNumberGenerator? randomNumbers,
+    this.extractFinishPromptAfter = 3,
+  }) : randomNumbers = randomNumbers ?? Sm20RandomNumberGenerator();
 
-  final Sm20Prng prng;
+  final Sm20RandomNumberGenerator randomNumbers;
   final int extractFinishPromptAfter;
 
-  Sm20PrngState get prngState => prng.state;
+  Sm20RandomNumberGeneratorState get randomNumberState => randomNumbers.state;
 
   /// Ordinary allocation: a pending source/extract with raw Real48 A=1.2.
   TopicState createFor({
@@ -350,22 +358,22 @@ final class TopicScheduler {
     required StudyDay today,
     required ElementSchedule Function(StudyDay due) buildSchedule,
     DelphiReal48? initialAFactor,
-    bool memorized = false,
+    bool isMemorized = false,
   }) {
-    final DelphiReal48 a =
+    final DelphiReal48 aFactor =
         initialAFactor ??
         DelphiReal48.fromBytes(<int>[0x81, 0x9A, 0x99, 0x99, 0x99, 0x19]);
-    final StudyDay due = memorized ? today.addDays(1) : today;
+    final StudyDay due = isMemorized ? today.addDays(1) : today;
     return TopicState(
       schedule: buildSchedule(due),
-      status: memorized
+      status: isMemorized
           ? Sm20ElementStatus.memorized
           : Sm20ElementStatus.pending,
-      repetitionCount: memorized ? 1 : 0,
-      storedInterval: memorized ? 1 : 0,
-      lastReviewDay: memorized ? today : null,
-      aFactorRaw: a,
-      lastIntervalRatioRaw: DelphiReal48.fromDouble(memorized ? 1 : 0),
+      repetitionCount: isMemorized ? 1 : 0,
+      storedInterval: isMemorized ? 1 : 0,
+      lastReviewDay: isMemorized ? today : null,
+      aFactorRaw: aFactor,
+      lastIntervalRatioRaw: DelphiReal48.fromDouble(isMemorized ? 1 : 0),
     );
   }
 
@@ -406,7 +414,7 @@ final class TopicScheduler {
       width = center - old;
     }
     var candidate = sm20RoundEven(
-      sm20Spread(center: center, width: width, prng: prng),
+      sm20Spread(center: center, width: width, randomNumbers: randomNumbers),
     );
     if (candidate <= old) candidate = old + 1;
     return candidate;
@@ -474,9 +482,9 @@ final class TopicScheduler {
   }) {
     if (state.status == Sm20ElementStatus.dismissed ||
         state.status == Sm20ElementStatus.deleted) {
-      return TopicTransition.unchanged(state, prng.state);
+      return TopicTransition.unchanged(state, randomNumbers.state);
     }
-    final int beforeDraws = prng.drawCount;
+    final int beforeDraws = randomNumbers.drawCount;
     final int selected = state.status == Sm20ElementStatus.pending
         ? 1
         : nextAutomaticInterval(state, mode: mode);
@@ -486,7 +494,7 @@ final class TopicScheduler {
       selectedInterval: selected,
       isBulkOperation: false,
       priorityScale: priorityScale,
-      randomDraws: prng.drawCount - beforeDraws,
+      randomDraws: randomNumbers.drawCount - beforeDraws,
     );
   }
 
@@ -500,9 +508,9 @@ final class TopicScheduler {
   }) {
     if (state.status == Sm20ElementStatus.memorized ||
         state.status == Sm20ElementStatus.deleted) {
-      return TopicTransition.unchanged(state, prng.state);
+      return TopicTransition.unchanged(state, randomNumbers.state);
     }
-    final int beforeDraws = prng.drawCount;
+    final int beforeDraws = randomNumbers.drawCount;
     final int selected;
     if (firstIntervalHigh == 0) {
       selected = nextAutomaticInterval(state);
@@ -511,7 +519,7 @@ final class TopicScheduler {
     } else {
       selected = sm20RoundEven(
         firstIntervalLow +
-            prng.nextDouble() * (firstIntervalHigh - firstIntervalLow),
+            randomNumbers.nextDouble() * (firstIntervalHigh - firstIntervalLow),
       ).clamp(1, 365);
     }
     return _commitRepetition(
@@ -520,7 +528,7 @@ final class TopicScheduler {
       selectedInterval: selected.clamp(1, kSm20Uint16Maximum),
       isBulkOperation: false,
       priorityScale: priorityScale,
-      randomDraws: prng.drawCount - beforeDraws,
+      randomDraws: randomNumbers.drawCount - beforeDraws,
     );
   }
 
@@ -534,7 +542,7 @@ final class TopicScheduler {
   }) {
     final StudyDay? last = state.lastReviewDay;
     if (last != null && last >= today) {
-      return TopicTransition.unchanged(state, prng.state);
+      return TopicTransition.unchanged(state, randomNumbers.state);
     }
     if (interval < 0 || interval > kSm20Uint16Maximum) {
       throw RangeError.range(interval, 0, kSm20Uint16Maximum, 'interval');
@@ -617,7 +625,7 @@ final class TopicScheduler {
         isBulkOperation: isBulkOperation,
         randomDraws: randomDraws,
       ),
-    ], prngState: prng.state);
+    ], randomNumberState: randomNumbers.state);
   }
 
   /// Low-level reschedule. It never adapts A or priority.
@@ -656,7 +664,7 @@ final class TopicScheduler {
           newInterval: selected,
           targetDay: due,
         ),
-      ], prngState: prng.state);
+      ], randomNumberState: randomNumbers.state);
     }
 
     final int oldInterval = math.max(state.storedInterval, 1);
@@ -675,13 +683,15 @@ final class TopicScheduler {
       newRatio = 1;
       lastReview = targetDay.addDays(-1);
     }
-    final bool grew = actualNewInterval > oldInterval;
+    final bool didIntervalGrow = actualNewInterval > oldInterval;
     final TopicState next = state.copyWith(
       storedInterval: actualNewInterval.clamp(1, kSm20Uint16Maximum),
       lastReviewDay: lastReview,
       lastIntervalRatioRaw: DelphiReal48.fromDouble(newRatio),
-      recentPostponementCount: state.recentPostponementCount + (grew ? 1 : 0),
-      totalPostponementCount: state.totalPostponementCount + (grew ? 1 : 0),
+      recentPostponementCount:
+          state.recentPostponementCount + (didIntervalGrow ? 1 : 0),
+      totalPostponementCount:
+          state.totalPostponementCount + (didIntervalGrow ? 1 : 0),
       revision: state.revision + 1,
       schedule: state.schedule.copyWith(
         dueDay: targetDay,
@@ -696,7 +706,7 @@ final class TopicScheduler {
         newInterval: actualNewInterval,
         targetDay: targetDay,
       ),
-    ], prngState: prng.state);
+    ], randomNumberState: randomNumbers.state);
   }
 
   /// Delay Element: derive a factor-scaled interval, then low-level reschedule.
@@ -753,7 +763,11 @@ final class TopicScheduler {
       revision: moved.state.revision,
       schedule: moved.state.schedule.copyWith(priority: rank),
     );
-    return TopicTransition(next, moved.events, prngState: prng.state);
+    return TopicTransition(
+      next,
+      moved.events,
+      randomNumberState: randomNumbers.state,
+    );
   }
 
   /// Later Today. The already-Outstanding branch is queue-only.
@@ -764,7 +778,7 @@ final class TopicScheduler {
     required PriorityScale priorityScale,
   }) {
     if (isAlreadyOutstanding || state.lastReviewDay == today) {
-      return TopicTransition.unchanged(state, prng.state);
+      return TopicTransition.unchanged(state, randomNumbers.state);
     }
     return jumpInterval(
       state,
@@ -803,7 +817,10 @@ final class TopicScheduler {
     }
     high = high.clamp(0, 100);
     final double span = (high - low) * utf16CodeUnits / (utf16CodeUnits + 100);
-    final double childTarget = (low + prng.nextDouble() * span).clamp(0, 100);
+    final double childTarget = (low + randomNumbers.nextDouble() * span).clamp(
+      0,
+      100,
+    );
     return Sm20TextExtraction(
       source: source.copyWith(
         aFactorRaw: nextSourceA,
@@ -812,7 +829,7 @@ final class TopicScheduler {
       childAFactor: childA,
       sourcePriorityTarget: sourceTarget,
       childPriorityTarget: childTarget,
-      prngState: prng.state,
+      randomNumberState: randomNumbers.state,
     );
   }
 
@@ -821,9 +838,10 @@ final class TopicScheduler {
     final double sourceTarget = sourcePriorityPercent * 0.995;
     return Sm20MediaExtraction(
       sourcePriorityTarget: sourceTarget,
-      childPriorityTarget: 3 + sourceTarget * (0.5 + 0.3 * prng.nextDouble()),
+      childPriorityTarget:
+          3 + sourceTarget * (0.5 + 0.3 * randomNumbers.nextDouble()),
       childAFactor: DelphiReal48.fromDouble(3),
-      prngState: prng.state,
+      randomNumberState: randomNumbers.state,
     );
   }
 
@@ -840,10 +858,10 @@ final class TopicScheduler {
   TopicTransition forget(TopicState state, StudyDay today) {
     if (state.status == Sm20ElementStatus.dismissed ||
         state.status == Sm20ElementStatus.deleted) {
-      return TopicTransition.unchanged(state, prng.state);
+      return TopicTransition.unchanged(state, randomNumbers.state);
     }
     if (state.status == Sm20ElementStatus.pending) {
-      return TopicTransition.unchanged(state, prng.state);
+      return TopicTransition.unchanged(state, randomNumbers.state);
     }
     return _clearedStatus(
       state,
@@ -861,7 +879,7 @@ final class TopicScheduler {
   }) {
     if (state.status == Sm20ElementStatus.dismissed ||
         state.status == Sm20ElementStatus.deleted) {
-      return TopicTransition.unchanged(state, prng.state);
+      return TopicTransition.unchanged(state, randomNumbers.state);
     }
     final TopicTransition cleared = _clearedStatus(
       state,
@@ -881,7 +899,7 @@ final class TopicScheduler {
         ),
       ),
       cleared.events,
-      prngState: prng.state,
+      randomNumberState: randomNumbers.state,
     );
   }
 
@@ -917,13 +935,13 @@ final class TopicScheduler {
     );
     return TopicTransition(next, <TopicEvent>[
       TopicLifecycleChanged(state.ref, from: state.status, to: status),
-    ], prngState: prng.state);
+    ], randomNumberState: randomNumbers.state);
   }
 
   /// Undismiss restores pending status only; cleared schedule/priority remain.
   TopicTransition undismiss(TopicState state) {
     if (state.status != Sm20ElementStatus.dismissed) {
-      return TopicTransition.unchanged(state, prng.state);
+      return TopicTransition.unchanged(state, randomNumbers.state);
     }
     final TopicState next = state.copyWith(
       status: Sm20ElementStatus.pending,
@@ -939,13 +957,13 @@ final class TopicScheduler {
         from: Sm20ElementStatus.dismissed,
         to: Sm20ElementStatus.pending,
       ),
-    ], prngState: prng.state);
+    ], randomNumberState: randomNumbers.state);
   }
 
   /// Scheduler-visible part of Done/deletion.
   TopicTransition delete(TopicState state, StudyDay today) {
     if (state.status == Sm20ElementStatus.deleted) {
-      return TopicTransition.unchanged(state, prng.state);
+      return TopicTransition.unchanged(state, randomNumbers.state);
     }
     return _clearedStatus(
       state,

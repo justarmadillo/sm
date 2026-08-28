@@ -39,9 +39,11 @@ const String _kEscapable =
     "'";
 
 final class _InlineParser {
-  _InlineParser(this.s);
+  _InlineParser(this.content);
 
-  final String s;
+  /// The block content text being parsed. Every offset this parser reports is
+  /// an index into this string.
+  final String content;
   final List<InlineSegment> _segments = <InlineSegment>[];
   final StringBuffer _rendered = StringBuffer();
   int _renderedLength = 0;
@@ -79,51 +81,53 @@ final class _InlineParser {
 
   /// Parses `[start, end)` under the inherited [styles] and link [href].
   void parseRange(int start, int end, Set<InlineStyle> styles, String? href) {
-    var i = start;
+    var cursor = start;
     var plainStart = start;
 
     void flushPlain(int upTo) {
       if (upTo <= plainStart) return;
       // A soft line break inside a paragraph renders as a space. Length is
       // unchanged, so the run stays a one-to-one mapping onto its source.
-      final raw = s.substring(plainStart, upTo);
+      final raw = content.substring(plainStart, upTo);
       final text = raw.contains('\n') ? raw.replaceAll('\n', ' ') : raw;
       _emit(text, plainStart, upTo, styles, href: href);
     }
 
-    while (i < end) {
-      final unit = s.codeUnitAt(i);
+    while (cursor < end) {
+      final codeUnit = content.codeUnitAt(cursor);
 
-      if (unit == _kBackslash && i + 1 < end && _isEscapable(s[i + 1])) {
-        flushPlain(i);
-        _emit(s[i + 1], i, i + 2, styles, href: href);
-        i += 2;
-        plainStart = i;
+      if (codeUnit == _kBackslash &&
+          cursor + 1 < end &&
+          _isEscapable(content[cursor + 1])) {
+        flushPlain(cursor);
+        _emit(content[cursor + 1], cursor, cursor + 2, styles, href: href);
+        cursor += 2;
+        plainStart = cursor;
         continue;
       }
 
-      if (unit == _kBacktick) {
-        final span = _scanCodeSpan(i, end);
+      if (codeUnit == _kBacktick) {
+        final span = _scanCodeSpan(cursor, end);
         if (span != null) {
-          flushPlain(i);
+          flushPlain(cursor);
           _emit(
-            s.substring(span.innerStart, span.innerEnd),
+            content.substring(span.innerStart, span.innerEnd),
             span.innerStart,
             span.innerEnd,
             <InlineStyle>{...styles, InlineStyle.code},
             href: href,
           );
-          i = span.end;
-          plainStart = i;
+          cursor = span.end;
+          plainStart = cursor;
           continue;
         }
       }
 
-      if (unit == _kDollar) {
-        final span = _scanMath(i, end);
+      if (codeUnit == _kDollar) {
+        final span = _scanMath(cursor, end);
         if (span != null) {
-          flushPlain(i);
-          final tex = s.substring(span.innerStart, span.innerEnd);
+          flushPlain(cursor);
+          final tex = content.substring(span.innerStart, span.innerEnd);
           _emit(
             tex,
             span.innerStart,
@@ -132,254 +136,277 @@ final class _InlineParser {
             href: href,
             math: tex,
           );
-          i = span.end;
-          plainStart = i;
+          cursor = span.end;
+          plainStart = cursor;
           continue;
         }
       }
 
-      if (unit == _kBang &&
-          i + 1 < end &&
-          s.codeUnitAt(i + 1) == _kOpenBracket) {
-        final link = _scanLink(i + 1, end);
+      if (codeUnit == _kBang &&
+          cursor + 1 < end &&
+          content.codeUnitAt(cursor + 1) == _kOpenBracket) {
+        final link = _scanLink(cursor + 1, end);
         if (link != null) {
-          flushPlain(i);
-          final alt = s.substring(link.textStart, link.textEnd);
+          flushPlain(cursor);
+          final alt = content.substring(link.textStart, link.textEnd);
           _emit(
             alt.isEmpty ? kObjectReplacement : alt,
-            i,
+            cursor,
             link.end,
             <InlineStyle>{...styles, InlineStyle.image},
             href: href,
             imageUrl: link.destination,
           );
-          i = link.end;
-          plainStart = i;
+          cursor = link.end;
+          plainStart = cursor;
           continue;
         }
       }
 
-      if (unit == _kOpenBracket) {
-        final link = _scanLink(i, end);
+      if (codeUnit == _kOpenBracket) {
+        final link = _scanLink(cursor, end);
         if (link != null) {
-          flushPlain(i);
+          flushPlain(cursor);
           parseRange(link.textStart, link.textEnd, <InlineStyle>{
             ...styles,
             InlineStyle.link,
           }, link.destination);
-          i = link.end;
-          plainStart = i;
+          cursor = link.end;
+          plainStart = cursor;
           continue;
         }
       }
 
-      if (unit == _kTilde && i + 1 < end && s.codeUnitAt(i + 1) == _kTilde) {
-        final close = _findCloser(i + 2, end, '~~');
+      if (codeUnit == _kTilde &&
+          cursor + 1 < end &&
+          content.codeUnitAt(cursor + 1) == _kTilde) {
+        final close = _findClosingDelimiter(cursor + 2, end, '~~');
         if (close != null) {
-          flushPlain(i);
-          parseRange(i + 2, close, <InlineStyle>{
+          flushPlain(cursor);
+          parseRange(cursor + 2, close, <InlineStyle>{
             ...styles,
             InlineStyle.strikethrough,
           }, href);
-          i = close + 2;
-          plainStart = i;
+          cursor = close + 2;
+          plainStart = cursor;
           continue;
         }
       }
 
-      if (unit == _kAsterisk || unit == _kUnderscore) {
-        final marker = s[i];
-        final isDouble = i + 1 < end && s.codeUnitAt(i + 1) == unit;
+      if (codeUnit == _kAsterisk || codeUnit == _kUnderscore) {
+        final marker = content[cursor];
+        final isDouble =
+            cursor + 1 < end && content.codeUnitAt(cursor + 1) == codeUnit;
         final delimiter = isDouble ? marker * 2 : marker;
-        if (_canOpen(i, delimiter, end)) {
+        if (_canOpenEmphasis(cursor, delimiter, end)) {
           final close = _findEmphasisCloser(
-            i + delimiter.length,
+            cursor + delimiter.length,
             end,
             delimiter,
           );
           if (close != null) {
-            flushPlain(i);
-            parseRange(i + delimiter.length, close, <InlineStyle>{
+            flushPlain(cursor);
+            parseRange(cursor + delimiter.length, close, <InlineStyle>{
               ...styles,
               isDouble ? InlineStyle.strong : InlineStyle.emphasis,
             }, href);
-            i = close + delimiter.length;
-            plainStart = i;
+            cursor = close + delimiter.length;
+            plainStart = cursor;
             continue;
           }
         }
       }
 
-      i++;
+      cursor++;
     }
     flushPlain(end);
   }
 
-  bool _isEscapable(String ch) => _kEscapable.contains(ch);
+  /// Whether a `\` before [character] escapes it into literal text.
+  bool _isEscapable(String character) => _kEscapable.contains(character);
 
-  /// True when a delimiter at [i] is left-flanking: it is followed by a
-  /// non-whitespace character, and for `_` also not intraword.
-  bool _canOpen(int i, String delimiter, int end) {
-    final after = i + delimiter.length;
+  /// Whether the delimiter at [delimiterStart] can open emphasis: it is
+  /// followed by a non-whitespace character, and for `_` also not mid-word.
+  bool _canOpenEmphasis(int delimiterStart, String delimiter, int end) {
+    final after = delimiterStart + delimiter.length;
     if (after >= end) return false;
-    if (_isWhitespace(s.codeUnitAt(after))) return false;
-    if (delimiter.codeUnitAt(0) == _kUnderscore && i > 0) {
+    if (_isWhitespace(content.codeUnitAt(after))) return false;
+    if (delimiter.codeUnitAt(0) == _kUnderscore && delimiterStart > 0) {
       // `snake_case` must not become emphasis.
-      if (_isWordCharacter(s.codeUnitAt(i - 1))) return false;
+      if (_isWordCharacter(content.codeUnitAt(delimiterStart - 1))) {
+        return false;
+      }
     }
     return true;
   }
 
   /// Index of the closing emphasis [delimiter] in `[from, end)`, or null.
   int? _findEmphasisCloser(int from, int end, String delimiter) {
-    final close = _findCloser(from, end, delimiter);
-    if (close == null) return null;
-    if (close == from) return null; // empty emphasis is literal text
-    if (_isWhitespace(s.codeUnitAt(close - 1))) return null;
+    final closerIndex = _findClosingDelimiter(from, end, delimiter);
+    if (closerIndex == null) return null;
+    if (closerIndex == from) return null; // empty emphasis is literal text
+    if (_isWhitespace(content.codeUnitAt(closerIndex - 1))) return null;
     if (delimiter.codeUnitAt(0) == _kUnderscore &&
-        close + delimiter.length < end) {
-      if (_isWordCharacter(s.codeUnitAt(close + delimiter.length))) return null;
+        closerIndex + delimiter.length < end) {
+      if (_isWordCharacter(
+        content.codeUnitAt(closerIndex + delimiter.length),
+      )) {
+        return null;
+      }
     }
-    return close;
+    return closerIndex;
   }
 
   /// Index of [delimiter] in `[from, end)`, skipping escapes and code spans.
-  int? _findCloser(int from, int end, String delimiter) {
-    final first = delimiter.codeUnitAt(0);
-    var i = from;
-    while (i < end) {
-      final unit = s.codeUnitAt(i);
-      if (unit == _kBackslash && i + 1 < end) {
-        i += 2;
+  int? _findClosingDelimiter(int from, int end, String delimiter) {
+    final firstCharacter = delimiter.codeUnitAt(0);
+    var cursor = from;
+    while (cursor < end) {
+      final codeUnit = content.codeUnitAt(cursor);
+      if (codeUnit == _kBackslash && cursor + 1 < end) {
+        cursor += 2;
         continue;
       }
-      if (unit == _kBacktick) {
-        final span = _scanCodeSpan(i, end);
+      if (codeUnit == _kBacktick) {
+        final span = _scanCodeSpan(cursor, end);
         if (span != null) {
-          i = span.end;
+          cursor = span.end;
           continue;
         }
       }
-      if (unit == first && s.startsWith(delimiter, i)) {
+      if (codeUnit == firstCharacter && content.startsWith(delimiter, cursor)) {
         // A longer run of the same character is not this delimiter's closer
         // unless the delimiter itself is the longer form.
         if (delimiter.length == 1 &&
-            i + 1 < end &&
-            s.codeUnitAt(i + 1) == first) {
-          i += 2;
+            cursor + 1 < end &&
+            content.codeUnitAt(cursor + 1) == firstCharacter) {
+          cursor += 2;
           continue;
         }
-        return i;
+        return cursor;
       }
-      i++;
+      cursor++;
     }
     return null;
   }
 
-  /// Scans a backtick code span starting at [i].
-  _DelimitedSpan? _scanCodeSpan(int i, int end) {
-    var runEnd = i;
-    while (runEnd < end && s.codeUnitAt(runEnd) == _kBacktick) {
+  /// Scans a backtick code span starting at [start].
+  _DelimitedSpan? _scanCodeSpan(int start, int end) {
+    var runEnd = start;
+    while (runEnd < end && content.codeUnitAt(runEnd) == _kBacktick) {
       runEnd++;
     }
-    final runLength = runEnd - i;
-    var j = runEnd;
-    while (j < end) {
-      if (s.codeUnitAt(j) != _kBacktick) {
-        j++;
+    final runLength = runEnd - start;
+    var scan = runEnd;
+    while (scan < end) {
+      if (content.codeUnitAt(scan) != _kBacktick) {
+        scan++;
         continue;
       }
-      var closeEnd = j;
-      while (closeEnd < end && s.codeUnitAt(closeEnd) == _kBacktick) {
+      var closeEnd = scan;
+      while (closeEnd < end && content.codeUnitAt(closeEnd) == _kBacktick) {
         closeEnd++;
       }
-      if (closeEnd - j == runLength) {
-        return _DelimitedSpan(innerStart: runEnd, innerEnd: j, end: closeEnd);
+      if (closeEnd - scan == runLength) {
+        return _DelimitedSpan(
+          innerStart: runEnd,
+          innerEnd: scan,
+          end: closeEnd,
+        );
       }
-      j = closeEnd;
+      scan = closeEnd;
     }
     return null;
   }
 
-  /// Scans an inline `$...$` math span starting at [i].
-  _DelimitedSpan? _scanMath(int i, int end) {
-    if (i + 1 >= end) return null;
-    if (s.codeUnitAt(i + 1) == _kDollar) {
+  /// Scans an inline `$...$` math span starting at [start], or null when this
+  /// `$` opens display math, a spaced-out price, or nothing that closes.
+  _DelimitedSpan? _scanMath(int start, int end) {
+    if (start + 1 >= end) return null;
+    if (content.codeUnitAt(start + 1) == _kDollar) {
       return null; // display math, not inline
     }
-    if (_isWhitespace(s.codeUnitAt(i + 1))) return null;
-    var j = i + 1;
-    while (j < end) {
-      final unit = s.codeUnitAt(j);
-      if (unit == _kBackslash && j + 1 < end) {
-        j += 2;
+    if (_isWhitespace(content.codeUnitAt(start + 1))) return null;
+    var scan = start + 1;
+    while (scan < end) {
+      final codeUnit = content.codeUnitAt(scan);
+      if (codeUnit == _kBackslash && scan + 1 < end) {
+        scan += 2;
         continue;
       }
-      if (unit == _kNewline) return null;
-      if (unit == _kDollar && !_isWhitespace(s.codeUnitAt(j - 1))) {
-        return _DelimitedSpan(innerStart: i + 1, innerEnd: j, end: j + 1);
+      if (codeUnit == _kNewline) return null;
+      if (codeUnit == _kDollar &&
+          !_isWhitespace(content.codeUnitAt(scan - 1))) {
+        return _DelimitedSpan(
+          innerStart: start + 1,
+          innerEnd: scan,
+          end: scan + 1,
+        );
       }
-      j++;
+      scan++;
     }
     return null;
   }
 
-  /// Scans `[text](destination)` starting at the `[` at [i].
-  _Link? _scanLink(int i, int end) {
-    var depth = 0;
-    var j = i;
+  /// Scans `[text](destination)` starting at the `[` at [start], or null when
+  /// the brackets or parentheses never balance.
+  _Link? _scanLink(int start, int end) {
+    var bracketDepth = 0;
+    var scan = start;
     var textEnd = -1;
-    while (j < end) {
-      final unit = s.codeUnitAt(j);
-      if (unit == _kBackslash && j + 1 < end) {
-        j += 2;
+    while (scan < end) {
+      final codeUnit = content.codeUnitAt(scan);
+      if (codeUnit == _kBackslash && scan + 1 < end) {
+        scan += 2;
         continue;
       }
-      if (unit == _kBacktick) {
-        final span = _scanCodeSpan(j, end);
+      if (codeUnit == _kBacktick) {
+        final span = _scanCodeSpan(scan, end);
         if (span != null) {
-          j = span.end;
+          scan = span.end;
           continue;
         }
       }
-      if (unit == _kOpenBracket) {
-        depth++;
-      } else if (unit == _kCloseBracket) {
-        depth--;
-        if (depth == 0) {
-          textEnd = j;
+      if (codeUnit == _kOpenBracket) {
+        bracketDepth++;
+      } else if (codeUnit == _kCloseBracket) {
+        bracketDepth--;
+        if (bracketDepth == 0) {
+          textEnd = scan;
           break;
         }
       }
-      j++;
+      scan++;
     }
     if (textEnd < 0) return null;
-    if (textEnd + 1 >= end || s.codeUnitAt(textEnd + 1) != _kOpenParen) {
+    if (textEnd + 1 >= end || content.codeUnitAt(textEnd + 1) != _kOpenParen) {
       return null;
     }
 
-    var k = textEnd + 2;
+    var destinationScan = textEnd + 2;
     var parenDepth = 1;
-    while (k < end) {
-      final unit = s.codeUnitAt(k);
-      if (unit == _kBackslash && k + 1 < end) {
-        k += 2;
+    while (destinationScan < end) {
+      final codeUnit = content.codeUnitAt(destinationScan);
+      if (codeUnit == _kBackslash && destinationScan + 1 < end) {
+        destinationScan += 2;
         continue;
       }
-      if (unit == _kOpenParen) {
+      if (codeUnit == _kOpenParen) {
         parenDepth++;
-      } else if (unit == _kCloseParen) {
+      } else if (codeUnit == _kCloseParen) {
         parenDepth--;
         if (parenDepth == 0) {
           return _Link(
-            textStart: i + 1,
+            textStart: start + 1,
             textEnd: textEnd,
-            destination: _cleanDestination(s.substring(textEnd + 2, k)),
-            end: k + 1,
+            destination: _cleanDestination(
+              content.substring(textEnd + 2, destinationScan),
+            ),
+            end: destinationScan + 1,
           );
         }
       }
-      k++;
+      destinationScan++;
     }
     return null;
   }
@@ -396,14 +423,20 @@ final class _InlineParser {
   }
 }
 
-bool _isWhitespace(int unit) =>
-    unit == 0x20 || unit == 0x09 || unit == _kNewline || unit == 0x0D;
+/// Whether [codeUnit] is a space, tab, newline, or carriage return.
+bool _isWhitespace(int codeUnit) =>
+    codeUnit == 0x20 ||
+    codeUnit == 0x09 ||
+    codeUnit == _kNewline ||
+    codeUnit == 0x0D;
 
-bool _isWordCharacter(int unit) =>
-    (unit >= 0x30 && unit <= 0x39) ||
-    (unit >= 0x41 && unit <= 0x5A) ||
-    (unit >= 0x61 && unit <= 0x7A) ||
-    unit >= 0x80;
+/// Whether [codeUnit] is a digit, an ASCII letter, or any non-ASCII
+/// character. Used to keep `snake_case` from turning into emphasis.
+bool _isWordCharacter(int codeUnit) =>
+    (codeUnit >= 0x30 && codeUnit <= 0x39) ||
+    (codeUnit >= 0x41 && codeUnit <= 0x5A) ||
+    (codeUnit >= 0x61 && codeUnit <= 0x7A) ||
+    codeUnit >= 0x80;
 
 final class _DelimitedSpan {
   const _DelimitedSpan({
