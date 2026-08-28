@@ -74,7 +74,7 @@ class _BlockEditorState extends State<BlockEditor> {
     widget.onCommit(_controller.text);
   }
 
-  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+  KeyEventResult _onKeyPressed(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final pressed = HardwareKeyboard.instance;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
@@ -133,7 +133,7 @@ class _BlockEditorState extends State<BlockEditor> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Focus(
-            onKeyEvent: _handleKey,
+            onKeyEvent: _onKeyPressed,
             child: TextField(
               controller: _controller,
               focusNode: _focus,

@@ -44,7 +44,7 @@ final class AppSettings {
     return AppSettings(
       studyDay: StudyDaySettings(
         zoneId: stored['study.zone_id'] ?? fallback.studyDay.zoneId,
-        rolloverMinutes: _int(
+        rolloverMinutes: _readInt(
           stored['study.rollover_minutes'],
           fallback.studyDay.rolloverMinutes,
           min: 0,
@@ -52,42 +52,42 @@ final class AppSettings {
         ),
       ),
       queue: QueueSettings(
-        topicPercent: _int(
+        topicPercent: _readInt(
           stored['queue.topic_percent'],
           fallback.queue.topicPercent,
           min: 0,
           max: 100,
         ),
-        itemRandomization: _int(
+        itemRandomization: _readInt(
           stored['queue.item_randomization'],
           fallback.queue.itemRandomization,
           min: 0,
           max: 100,
         ),
-        topicRandomization: _int(
+        topicRandomization: _readInt(
           stored['queue.topic_randomization'],
           fallback.queue.topicRandomization,
           min: 0,
           max: 100,
         ),
-        shouldSortAutomatically: _bool(stored['queue.auto_sort'], fallback.queue.shouldSortAutomatically),
-        shouldRandomizeFinalDrill: _bool(
+        shouldSortAutomatically: _readBool(stored['queue.auto_sort'], fallback.queue.shouldSortAutomatically),
+        shouldRandomizeFinalDrill: _readBool(
           stored['queue.randomize_final_drill'],
           fallback.queue.shouldRandomizeFinalDrill,
         ),
-        shouldConfirmStageTransitions: _bool(
+        shouldConfirmStageTransitions: _readBool(
           stored['queue.confirm_stage_transitions'],
           fallback.queue.shouldConfirmStageTransitions,
         ),
       ),
       remember: RememberSettings(
-        firstIntervalLowDays: _int(
+        firstIntervalLowDays: _readInt(
           stored['remember.first_interval_low_days'],
           fallback.remember.firstIntervalLowDays,
           min: 1,
           max: 365,
         ),
-        firstIntervalHighDays: _int(
+        firstIntervalHighDays: _readInt(
           stored['remember.first_interval_high_days'],
           fallback.remember.firstIntervalHighDays,
           min: 0,
@@ -95,67 +95,67 @@ final class AppSettings {
         ),
       ),
       cards: CardSettings(
-        desiredRetention: _double(
+        desiredRetention: _readDouble(
           stored['card.desired_retention'],
           fallback.cards.desiredRetention,
           min: 0.7,
           max: 0.99,
         ),
-        learningStepMinutes: _positiveIntListOr(
+        learningStepMinutes: _readPositiveIntList(
           stored['card.learning_steps'],
           fallback.cards.learningStepMinutes,
         ),
-        relearningStepMinutes: _positiveIntListOr(
+        relearningStepMinutes: _readPositiveIntList(
           stored['card.relearning_steps'],
           fallback.cards.relearningStepMinutes,
         ),
-        maximumIntervalDays: _int(
+        maximumIntervalDays: _readInt(
           stored['card.maximum_interval_days'],
           fallback.cards.maximumIntervalDays,
           min: 1,
           max: 36500,
         ),
-        isFuzzingEnabled: _bool(
+        isFuzzingEnabled: _readBool(
           stored['card.enable_fuzzing'],
           fallback.cards.isFuzzingEnabled,
         ),
-        leechLapses: _int(
+        leechLapses: _readInt(
           stored['card.leech_lapses'],
           fallback.cards.leechLapses,
           min: 1,
           max: 999,
         ),
-        shouldBurySiblings: _bool(
+        shouldBurySiblings: _readBool(
           stored['card.bury_siblings'],
           fallback.cards.shouldBurySiblings,
         ),
       ),
       postpone: PostponeSettings(
-        isAutomaticPostponeEnabled: _bool(
+        isAutomaticPostponeEnabled: _readBool(
           stored['postpone.auto_enabled'],
           fallback.postpone.isAutomaticPostponeEnabled,
         ),
-        namedProfiles: _namedProfilesOr(
+        namedProfiles: _readNamedProfiles(
           stored['postpone.named_profiles'],
           fallback.postpone.namedProfiles,
         ),
-        branchProfileAssignments: _branchAssignmentsOr(
+        branchProfileAssignments: _readBranchAssignments(
           stored['postpone.branch_profiles'],
           fallback.postpone.branchProfileAssignments,
         ),
         defaultProfile: SmartPostponeSettings(
-          rootElementId: _int(
+          rootElementId: _readInt(
             stored['postpone.default.root_element_id'],
             smartFallback.rootElementId,
             min: 0,
             max: 0xFFFFFFFF,
           ),
-          scope: _enumValue(
+          scope: _readEnum(
             stored['postpone.default.scope'],
             SmartPostponeScope.values,
             smartFallback.scope,
           ),
-          method: _enumValue(
+          method: _readEnum(
             stored['postpone.default.method'],
             SmartPostponeMethod.values,
             smartFallback.method,
@@ -163,182 +163,182 @@ final class AppSettings {
           profileName:
               stored['postpone.default.profile_name'] ??
               smartFallback.profileName,
-          subbranchMode: _enumValue(
+          subbranchMode: _readEnum(
             stored['postpone.default.subbranch_mode'],
             SmartPostponeSubbranchMode.values,
             smartFallback.subbranchMode,
           ),
-          protectedCount: _int(
+          protectedCount: _readInt(
             stored['postpone.default.protected_count'],
             smartFallback.protectedCount,
             min: 1,
             max: 20000,
           ),
-          shouldIncludeNonOutstanding: _bool(
+          shouldIncludeNonOutstanding: _readBool(
             stored['postpone.default.include_non_outstanding'],
             smartFallback.shouldIncludeNonOutstanding,
           ),
-          isSimulationOnly: _bool(
+          isSimulationOnly: _readBool(
             stored['postpone.default.simulate'],
             smartFallback.isSimulationOnly,
           ),
-          itemDelayPercent: _int(
+          itemDelayPercent: _readInt(
             stored['postpone.default.item_delay_percent'],
             smartFallback.itemDelayPercent,
             min: 1,
             max: 400,
           ),
-          topicDelayPercent: _int(
+          topicDelayPercent: _readInt(
             stored['postpone.default.topic_delay_percent'],
             smartFallback.topicDelayPercent,
             min: 1,
             max: 1900,
           ),
-          itemMaximumDelayDays: _int(
+          itemMaximumDelayDays: _readInt(
             stored['postpone.default.item_maximum_delay_days'],
             smartFallback.itemMaximumDelayDays,
             min: 1,
             max: 300,
           ),
-          topicMaximumDelayDays: _int(
+          topicMaximumDelayDays: _readInt(
             stored['postpone.default.topic_maximum_delay_days'],
             smartFallback.topicMaximumDelayDays,
             min: 1,
             max: 500,
           ),
-          itemMinimumDelayDays: _int(
+          itemMinimumDelayDays: _readInt(
             stored['postpone.default.item_minimum_delay_days'],
             smartFallback.itemMinimumDelayDays,
             min: 1,
             max: 30,
           ),
-          topicMinimumDelayDays: _int(
+          topicMinimumDelayDays: _readInt(
             stored['postpone.default.topic_minimum_delay_days'],
             smartFallback.topicMinimumDelayDays,
             min: 1,
             max: 100,
           ),
-          shouldSkipItems: _bool(
+          shouldSkipItems: _readBool(
             stored['postpone.default.skip_items'],
             smartFallback.shouldSkipItems,
           ),
-          shouldSkipTopics: _bool(
+          shouldSkipTopics: _readBool(
             stored['postpone.default.skip_topics'],
             smartFallback.shouldSkipTopics,
           ),
-          itemAgeCutoffDays: _int(
+          itemAgeCutoffDays: _readInt(
             stored['postpone.default.item_age_cutoff_days'],
             smartFallback.itemAgeCutoffDays,
             min: 2,
             max: 4000,
           ),
-          topicAgeCutoffDays: _int(
+          topicAgeCutoffDays: _readInt(
             stored['postpone.default.topic_age_cutoff_days'],
             smartFallback.topicAgeCutoffDays,
             min: 2,
             max: 4000,
           ),
-          itemForgettingIndexCutoff: _int(
+          itemForgettingIndexCutoff: _readInt(
             stored['postpone.default.item_forgetting_index_cutoff'],
             smartFallback.itemForgettingIndexCutoff,
             min: 3,
             max: 20,
           ),
-          topicAFactorCutoff: _double(
+          topicAFactorCutoff: _readDouble(
             stored['postpone.default.topic_a_factor_cutoff'],
             smartFallback.topicAFactorCutoff,
             min: 1.01,
             max: 6,
           ),
-          itemPostponeCountCutoff: _int(
+          itemPostponeCountCutoff: _readInt(
             stored['postpone.default.item_postpone_count_cutoff'],
             smartFallback.itemPostponeCountCutoff,
             min: 1,
             max: 255,
           ),
-          topicPostponeCountCutoff: _int(
+          topicPostponeCountCutoff: _readInt(
             stored['postpone.default.topic_postpone_count_cutoff'],
             smartFallback.topicPostponeCountCutoff,
             min: 1,
             max: 255,
           ),
-          itemPriorityThreshold: _double(
+          itemPriorityThreshold: _readDouble(
             stored['postpone.default.item_priority_threshold'],
             smartFallback.itemPriorityThreshold,
             min: 0.01,
             max: 100,
           ),
-          topicPriorityThreshold: _double(
+          topicPriorityThreshold: _readDouble(
             stored['postpone.default.topic_priority_threshold'],
             smartFallback.topicPriorityThreshold,
             min: 0.0001,
             max: 100,
           ),
-          shouldModifyItemByForgettingIndex: _bool(
+          shouldModifyItemByForgettingIndex: _readBool(
             stored['postpone.default.modify_item_by_forgetting_index'],
             smartFallback.shouldModifyItemByForgettingIndex,
           ),
-          shouldModifyTopicByAFactor: _bool(
+          shouldModifyTopicByAFactor: _readBool(
             stored['postpone.default.modify_topic_by_a_factor'],
             smartFallback.shouldModifyTopicByAFactor,
           ),
         ),
       ),
       mercy: MercySettings(
-        mode: _enumValue(
+        mode: _readEnum(
           stored['mercy.mode'],
           MercyMode.values,
           fallback.mercy.mode,
         ),
-        reschedulingDays: _int(
+        reschedulingDays: _readInt(
           stored['mercy.rescheduling_days'],
           fallback.mercy.reschedulingDays,
           min: 1,
           max: 3650,
         ),
-        gatheringDays: _int(
+        gatheringDays: _readInt(
           stored['mercy.gathering_days'],
           fallback.mercy.gatheringDays,
           min: 1,
           max: 3650,
         ),
-        dailyCap: _int(
+        dailyCap: _readInt(
           stored['mercy.daily_cap'],
           fallback.mercy.dailyCap,
           min: 1,
           max: 5000,
         ),
-        shouldIncludeFuture: _bool(
+        shouldIncludeFuture: _readBool(
           stored['mercy.include_future'],
           fallback.mercy.shouldIncludeFuture,
         ),
-        importanceWeight: _weight(
+        importanceWeight: _readFsrsWeight(
           stored['mercy.importance_weight'],
           fallback.mercy.importanceWeight,
         ),
-        latenessWeight: _weight(
+        latenessWeight: _readFsrsWeight(
           stored['mercy.lateness_weight'],
           fallback.mercy.latenessWeight,
         ),
-        investmentWeight: _weight(
+        investmentWeight: _readFsrsWeight(
           stored['mercy.investment_weight'],
           fallback.mercy.investmentWeight,
         ),
-        easinessWeight: _weight(
+        easinessWeight: _readFsrsWeight(
           stored['mercy.easiness_weight'],
           fallback.mercy.easinessWeight,
         ),
-        recencyWeight: _weight(
+        recencyWeight: _readFsrsWeight(
           stored['mercy.recency_weight'],
           fallback.mercy.recencyWeight,
         ),
-        intervalFactorMatrix: _matrixOr(
+        intervalFactorMatrix: _readIntMatrix(
           stored['mercy.interval_factor_matrix'],
           fallback.mercy.intervalFactorMatrix,
         ),
       ),
       reader: ReaderSettings(
-        reminderWords: _int(
+        reminderWords: _readInt(
           stored['reader.reminder_words'],
           fallback.reader.reminderWords,
           min: 0,
@@ -346,23 +346,23 @@ final class AppSettings {
         ),
       ),
       diagnostics: DiagnosticsSettings(
-        isLogEnabled: _bool(
+        isLogEnabled: _readBool(
           stored['diagnostics.log_enabled'],
           fallback.diagnostics.isLogEnabled,
         ),
-        logMaxBytes: _int(
+        logMaxBytes: _readInt(
           stored['diagnostics.log_max_bytes'],
           fallback.diagnostics.logMaxBytes,
           min: 4096,
           max: 536870912,
         ),
-        logRetainedFiles: _int(
+        logRetainedFiles: _readInt(
           stored['diagnostics.log_retained_files'],
           fallback.diagnostics.logRetainedFiles,
           min: 1,
           max: 100,
         ),
-        shouldShowContentInPanel: _bool(
+        shouldShowContentInPanel: _readBool(
           stored['diagnostics.show_content'],
           fallback.diagnostics.shouldShowContentInPanel,
         ),
@@ -509,13 +509,13 @@ final class AppSettings {
   );
 }
 
-int _int(String? raw, int fallback, {required int min, required int max}) {
+int _readInt(String? raw, int fallback, {required int min, required int max}) {
   final int? parsed = raw == null ? null : int.tryParse(raw.trim());
   if (parsed == null) return fallback;
   return parsed.clamp(min, max);
 }
 
-double _double(
+double _readDouble(
   String? raw,
   double fallback, {
   required double min,
@@ -526,16 +526,16 @@ double _double(
   return parsed.clamp(min, max);
 }
 
-double _weight(String? raw, double fallback) =>
-    _double(raw, fallback, min: 0, max: 1000000);
+double _readFsrsWeight(String? raw, double fallback) =>
+    _readDouble(raw, fallback, min: 0, max: 1000000);
 
-bool _bool(String? raw, bool fallback) => switch (raw?.trim().toLowerCase()) {
+bool _readBool(String? raw, bool fallback) => switch (raw?.trim().toLowerCase()) {
   'true' || '1' || 'yes' => true,
   'false' || '0' || 'no' => false,
   _ => fallback,
 };
 
-T _enumValue<T extends Enum>(String? raw, List<T> values, T fallback) {
+T _readEnum<T extends Enum>(String? raw, List<T> values, T fallback) {
   final String? normalized = raw?.trim();
   if (normalized == null) return fallback;
   for (final T value in values) {
@@ -544,7 +544,7 @@ T _enumValue<T extends Enum>(String? raw, List<T> values, T fallback) {
   return fallback;
 }
 
-List<int> _positiveIntListOr(String? raw, List<int> fallback) {
+List<int> _readPositiveIntList(String? raw, List<int> fallback) {
   if (raw == null) return fallback;
   final List<String> parts = raw.split(',');
   if (parts.isEmpty) return fallback;
@@ -557,7 +557,7 @@ List<int> _positiveIntListOr(String? raw, List<int> fallback) {
   return values.isEmpty ? fallback : List<int>.unmodifiable(values);
 }
 
-List<int>? _matrixOr(String? raw, List<int>? fallback) {
+List<int>? _readIntMatrix(String? raw, List<int>? fallback) {
   if (raw == null) return fallback;
   if (raw.trim().isEmpty) return null;
   final List<String> parts = raw.split(',');
@@ -584,7 +584,7 @@ String _encodeNamedProfiles(Map<String, SmartPostponeSettings> profiles) {
   });
 }
 
-Map<String, SmartPostponeSettings> _namedProfilesOr(
+Map<String, SmartPostponeSettings> _readNamedProfiles(
   String? raw,
   Map<String, SmartPostponeSettings> fallback,
 ) {
@@ -616,7 +616,7 @@ String _encodeBranchAssignments(Map<int, String> assignments) {
   });
 }
 
-Map<int, String> _branchAssignmentsOr(String? raw, Map<int, String> fallback) {
+Map<int, String> _readBranchAssignments(String? raw, Map<int, String> fallback) {
   if (raw == null) return fallback;
   if (raw.trim().isEmpty) return const <int, String>{};
   final Object? decoded = _tryDecodeJson(raw);

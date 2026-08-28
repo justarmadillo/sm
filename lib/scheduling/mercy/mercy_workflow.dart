@@ -122,7 +122,7 @@ final class MercyPreview {
   );
 
   factory MercyPreview.fromJson(String source) {
-    final Map<String, Object?> map = _object(jsonDecode(source), 'preview');
+    final Map<String, Object?> map = _asJsonMap(jsonDecode(source), 'preview');
     final String zoneId = map['zone_id']! as String;
     return MercyPreview(
       today: _day(map['today']! as int, zoneId),
@@ -143,7 +143,7 @@ final class MercyPreview {
       moves: List<MercyPlannedMove>.unmodifiable(<MercyPlannedMove>[
         for (final Object? raw in map['items']! as List<Object?>)
           (() {
-            final Map<String, Object?> value = _object(raw, 'preview item');
+            final Map<String, Object?> value = _asJsonMap(raw, 'preview item');
             return MercyPlannedMove(
               ref: _ref(value),
               fromDay: _day(value['from_day']! as int, zoneId),
@@ -354,7 +354,7 @@ String encodeMercyAppliedBatch(MercyAppliedBatchSnapshot snapshot) =>
     });
 
 MercyAppliedBatchSnapshot decodeMercyAppliedBatch(String source) {
-  final Map<String, Object?> map = _object(jsonDecode(source), 'Mercy batch');
+  final Map<String, Object?> map = _asJsonMap(jsonDecode(source), 'Mercy batch');
   final String zoneId = map['zone_id']! as String;
   return MercyAppliedBatchSnapshot(
     batchId: map['batch_id']! as String,
@@ -365,7 +365,7 @@ MercyAppliedBatchSnapshot decodeMercyAppliedBatch(String source) {
         List<MercyAppliedMove>.unmodifiable(<MercyAppliedMove>[
           for (final Object? raw in map['items']! as List<Object?>)
             (() {
-              final Map<String, Object?> value = _object(raw, 'Mercy item');
+              final Map<String, Object?> value = _asJsonMap(raw, 'Mercy item');
               return MercyAppliedMove(
                 ref: _ref(value),
                 beforeState: value['before_state']! as String,
@@ -399,9 +399,9 @@ String encodeMercyTopicState(TopicState state) => jsonEncode(<String, Object?>{
 });
 
 TopicState decodeMercyTopicState(String source) {
-  final Map<String, Object?> map = _object(jsonDecode(source), 'topic state');
+  final Map<String, Object?> map = _asJsonMap(jsonDecode(source), 'topic state');
   final ElementSchedule schedule = _schedule(
-    _object(map['schedule'], 'topic schedule'),
+    _asJsonMap(map['schedule'], 'topic schedule'),
   );
   final int? lastReview = map['last_review_day'] as int?;
   return TopicState(
@@ -432,10 +432,10 @@ String encodeMercyCardState(CardState state) => jsonEncode(<String, Object?>{
 });
 
 CardState decodeMercyCardState(String source) {
-  final Map<String, Object?> map = _object(jsonDecode(source), 'card state');
+  final Map<String, Object?> map = _asJsonMap(jsonDecode(source), 'card state');
   return CardState(
-    schedule: _schedule(_object(map['schedule'], 'card schedule')),
-    memory: CardMemory.fromMap(_object(map['memory'], 'card memory')),
+    schedule: _schedule(_asJsonMap(map['schedule'], 'card schedule')),
+    memory: CardMemory.fromMap(_asJsonMap(map['memory'], 'card memory')),
   );
 }
 
@@ -490,7 +490,7 @@ ElementRef _ref(Map<String, Object?> map) => ElementRef(
   type: ElementType.values[map['element_type']! as int],
 );
 
-Map<String, Object?> _object(Object? value, String name) {
+Map<String, Object?> _asJsonMap(Object? value, String name) {
   if (value is! Map<Object?, Object?>) {
     throw FormatException('$name must be an object');
   }

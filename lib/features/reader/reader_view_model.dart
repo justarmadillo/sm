@@ -827,13 +827,13 @@ final class ReaderViewModel
   static UiMessage _editMessage(SourceEditOutcome outcome) {
     final int orphaned = outcome.provenanceUpdates
         .where(
-          (ProvenanceUpdate u) =>
-              u.provenance.state == ProvenanceState.orphaned,
+          (ProvenanceUpdate update) =>
+              update.provenance.state == ProvenanceState.orphaned,
         )
         .length;
     final int stale = outcome.provenanceUpdates
         .where(
-          (ProvenanceUpdate u) => u.provenance.state == ProvenanceState.stale,
+          (ProvenanceUpdate update) => update.provenance.state == ProvenanceState.stale,
         )
         .length;
     if (orphaned == 0 && stale == 0) return const UiMessage('Saved');

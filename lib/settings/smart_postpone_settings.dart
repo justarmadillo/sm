@@ -119,14 +119,14 @@ final class SmartPostponeSettings {
     Map<String, Object?> json, {
     SmartPostponeSettings fallback = const SmartPostponeSettings(),
   }) => SmartPostponeSettings(
-    rootElementId: _jsonInt(
+    rootElementId: _readJsonInt(
       json['root_element_id'],
       fallback.rootElementId,
       min: 0,
       max: 0xFFFFFFFF,
     ),
-    scope: _jsonEnum(json['scope'], SmartPostponeScope.values, fallback.scope),
-    method: _jsonEnum(
+    scope: _readJsonEnum(json['scope'], SmartPostponeScope.values, fallback.scope),
+    method: _readJsonEnum(
       json['method'],
       SmartPostponeMethod.values,
       fallback.method,
@@ -134,113 +134,113 @@ final class SmartPostponeSettings {
     profileName: json['profile_name'] is String
         ? json['profile_name']! as String
         : fallback.profileName,
-    subbranchMode: _jsonEnum(
+    subbranchMode: _readJsonEnum(
       json['subbranch_mode'],
       SmartPostponeSubbranchMode.values,
       fallback.subbranchMode,
     ),
-    protectedCount: _jsonInt(
+    protectedCount: _readJsonInt(
       json['protected_count'],
       fallback.protectedCount,
       min: 0,
       max: 10000,
     ),
-    shouldIncludeNonOutstanding: _jsonBool(
+    shouldIncludeNonOutstanding: _readJsonBool(
       json['include_non_outstanding'],
       fallback.shouldIncludeNonOutstanding,
     ),
-    isSimulationOnly: _jsonBool(json['simulate'], fallback.isSimulationOnly),
-    itemDelayPercent: _jsonInt(
+    isSimulationOnly: _readJsonBool(json['simulate'], fallback.isSimulationOnly),
+    itemDelayPercent: _readJsonInt(
       json['item_delay_percent'],
       fallback.itemDelayPercent,
       min: 1,
       max: 1000,
     ),
-    topicDelayPercent: _jsonInt(
+    topicDelayPercent: _readJsonInt(
       json['topic_delay_percent'],
       fallback.topicDelayPercent,
       min: 1,
       max: 1000,
     ),
-    itemMaximumDelayDays: _jsonInt(
+    itemMaximumDelayDays: _readJsonInt(
       json['item_maximum_delay_days'],
       fallback.itemMaximumDelayDays,
       min: 1,
       max: 10000,
     ),
-    topicMaximumDelayDays: _jsonInt(
+    topicMaximumDelayDays: _readJsonInt(
       json['topic_maximum_delay_days'],
       fallback.topicMaximumDelayDays,
       min: 1,
       max: 10000,
     ),
-    itemMinimumDelayDays: _jsonInt(
+    itemMinimumDelayDays: _readJsonInt(
       json['item_minimum_delay_days'],
       fallback.itemMinimumDelayDays,
       min: 1,
       max: 10000,
     ),
-    topicMinimumDelayDays: _jsonInt(
+    topicMinimumDelayDays: _readJsonInt(
       json['topic_minimum_delay_days'],
       fallback.topicMinimumDelayDays,
       min: 1,
       max: 10000,
     ),
-    shouldSkipItems: _jsonBool(json['skip_items'], fallback.shouldSkipItems),
-    shouldSkipTopics: _jsonBool(json['skip_topics'], fallback.shouldSkipTopics),
-    itemAgeCutoffDays: _jsonInt(
+    shouldSkipItems: _readJsonBool(json['skip_items'], fallback.shouldSkipItems),
+    shouldSkipTopics: _readJsonBool(json['skip_topics'], fallback.shouldSkipTopics),
+    itemAgeCutoffDays: _readJsonInt(
       json['item_age_cutoff_days'],
       fallback.itemAgeCutoffDays,
       min: 2,
       max: 4000,
     ),
-    topicAgeCutoffDays: _jsonInt(
+    topicAgeCutoffDays: _readJsonInt(
       json['topic_age_cutoff_days'],
       fallback.topicAgeCutoffDays,
       min: 2,
       max: 4000,
     ),
-    itemForgettingIndexCutoff: _jsonInt(
+    itemForgettingIndexCutoff: _readJsonInt(
       json['item_forgetting_index_cutoff'],
       fallback.itemForgettingIndexCutoff,
       min: 3,
       max: 20,
     ),
-    topicAFactorCutoff: _jsonDouble(
+    topicAFactorCutoff: _readJsonDouble(
       json['topic_a_factor_cutoff'],
       fallback.topicAFactorCutoff,
       min: 1.01,
       max: 6,
     ),
-    itemPostponeCountCutoff: _jsonInt(
+    itemPostponeCountCutoff: _readJsonInt(
       json['item_postpone_count_cutoff'],
       fallback.itemPostponeCountCutoff,
       min: 1,
       max: 255,
     ),
-    topicPostponeCountCutoff: _jsonInt(
+    topicPostponeCountCutoff: _readJsonInt(
       json['topic_postpone_count_cutoff'],
       fallback.topicPostponeCountCutoff,
       min: 1,
       max: 255,
     ),
-    itemPriorityThreshold: _jsonDouble(
+    itemPriorityThreshold: _readJsonDouble(
       json['item_priority_threshold'],
       fallback.itemPriorityThreshold,
       min: 0.01,
       max: 100,
     ),
-    topicPriorityThreshold: _jsonDouble(
+    topicPriorityThreshold: _readJsonDouble(
       json['topic_priority_threshold'],
       fallback.topicPriorityThreshold,
       min: 0.0001,
       max: 100,
     ),
-    shouldModifyItemByForgettingIndex: _jsonBool(
+    shouldModifyItemByForgettingIndex: _readJsonBool(
       json['modify_item_by_forgetting_index'],
       fallback.shouldModifyItemByForgettingIndex,
     ),
-    shouldModifyTopicByAFactor: _jsonBool(
+    shouldModifyTopicByAFactor: _readJsonBool(
       json['modify_topic_by_a_factor'],
       fallback.shouldModifyTopicByAFactor,
     ),
@@ -368,7 +368,7 @@ final class SmartPostponeSettings {
   ]);
 }
 
-int _jsonInt(Object? raw, int fallback, {required int min, required int max}) {
+int _readJsonInt(Object? raw, int fallback, {required int min, required int max}) {
   final int? value = raw is int
       ? raw
       : raw is num
@@ -378,7 +378,7 @@ int _jsonInt(Object? raw, int fallback, {required int min, required int max}) {
   return value;
 }
 
-double _jsonDouble(
+double _readJsonDouble(
   Object? raw,
   double fallback, {
   required double min,
@@ -390,9 +390,9 @@ double _jsonDouble(
   return value;
 }
 
-bool _jsonBool(Object? raw, bool fallback) => raw is bool ? raw : fallback;
+bool _readJsonBool(Object? raw, bool fallback) => raw is bool ? raw : fallback;
 
-T _jsonEnum<T extends Enum>(Object? raw, List<T> values, T fallback) {
+T _readJsonEnum<T extends Enum>(Object? raw, List<T> values, T fallback) {
   if (raw is! String) return fallback;
   for (final T value in values) {
     if (value.name == raw) return value;

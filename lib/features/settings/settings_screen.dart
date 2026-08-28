@@ -110,7 +110,7 @@ class _SettingsBody extends StatelessWidget {
     ),
   );
 
-  void _editSmart(
+  void _editSmartPostpone(
     SmartPostponeSettings Function(SmartPostponeSettings current) change,
   ) {
     model.edit(
@@ -450,8 +450,8 @@ class _SettingsBody extends StatelessWidget {
         hint: 'Managed profile name. The automatic path loads “Default”.',
         control: StringField(
           value: smart.profileName,
-          onChanged: (String value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(profileName: value),
+          onChanged: (String value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(profileName: value),
           ),
         ),
       ),
@@ -468,7 +468,7 @@ class _SettingsBody extends StatelessWidget {
             SmartPostponeScope.browser: 'Current browser',
           },
           onChanged: (SmartPostponeScope value) =>
-              _editSmart((SmartPostponeSettings s) => s.copyWith(scope: value)),
+              _editSmartPostpone((SmartPostponeSettings settings) => settings.copyWith(scope: value)),
         ),
       ),
       SettingsRow(
@@ -478,8 +478,8 @@ class _SettingsBody extends StatelessWidget {
           value: smart.rootElementId,
           min: 0,
           max: 0xFFFFFFFF,
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(rootElementId: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(rootElementId: value),
           ),
         ),
       ),
@@ -494,8 +494,8 @@ class _SettingsBody extends StatelessWidget {
             SmartPostponeMethod.topCount: 'Protect top count',
             SmartPostponeMethod.parameters: 'Parameters only',
           },
-          onChanged: (SmartPostponeMethod value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(method: value),
+          onChanged: (SmartPostponeMethod value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(method: value),
           ),
         ),
       ),
@@ -508,8 +508,8 @@ class _SettingsBody extends StatelessWidget {
           value: smart.protectedCount,
           min: 1,
           max: 20000,
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(protectedCount: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(protectedCount: value),
           ),
         ),
       ),
@@ -520,8 +520,8 @@ class _SettingsBody extends StatelessWidget {
             'writes, or PRNG consumption.',
         control: SwitchField(
           value: smart.isSimulationOnly,
-          onChanged: (bool value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(isSimulationOnly: value),
+          onChanged: (bool value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(isSimulationOnly: value),
           ),
         ),
       ),
@@ -543,8 +543,8 @@ class _SettingsBody extends StatelessWidget {
           min: 1,
           max: 400,
           suffix: '%',
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(itemDelayPercent: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(itemDelayPercent: value),
           ),
         ),
       ),
@@ -556,8 +556,8 @@ class _SettingsBody extends StatelessWidget {
           min: 1,
           max: 1900,
           suffix: '%',
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(topicDelayPercent: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(topicDelayPercent: value),
           ),
         ),
       ),
@@ -569,9 +569,9 @@ class _SettingsBody extends StatelessWidget {
           min: 1,
           max: 300,
           suffix: 'd',
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) =>
-                s.copyWith(itemMaximumDelayDays: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(itemMaximumDelayDays: value),
           ),
         ),
       ),
@@ -583,9 +583,9 @@ class _SettingsBody extends StatelessWidget {
           min: 1,
           max: 500,
           suffix: 'd',
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) =>
-                s.copyWith(topicMaximumDelayDays: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(topicMaximumDelayDays: value),
           ),
         ),
       ),
@@ -597,9 +597,9 @@ class _SettingsBody extends StatelessWidget {
           min: 1,
           max: 30,
           suffix: 'd',
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) =>
-                s.copyWith(itemMinimumDelayDays: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(itemMinimumDelayDays: value),
           ),
         ),
       ),
@@ -611,9 +611,9 @@ class _SettingsBody extends StatelessWidget {
           min: 1,
           max: 100,
           suffix: 'd',
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) =>
-                s.copyWith(topicMinimumDelayDays: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(topicMinimumDelayDays: value),
           ),
         ),
       ),
@@ -622,8 +622,8 @@ class _SettingsBody extends StatelessWidget {
         hint: 'Reject the item family in a normal parameter pass.',
         control: SwitchField(
           value: smart.shouldSkipItems,
-          onChanged: (bool value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(shouldSkipItems: value),
+          onChanged: (bool value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(shouldSkipItems: value),
           ),
         ),
       ),
@@ -632,8 +632,8 @@ class _SettingsBody extends StatelessWidget {
         hint: 'Reject topics and extracts in a normal parameter pass.',
         control: SwitchField(
           value: smart.shouldSkipTopics,
-          onChanged: (bool value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(shouldSkipTopics: value),
+          onChanged: (bool value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(shouldSkipTopics: value),
           ),
         ),
       ),
@@ -645,8 +645,8 @@ class _SettingsBody extends StatelessWidget {
           min: 2,
           max: 4000,
           suffix: 'd',
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(itemAgeCutoffDays: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(itemAgeCutoffDays: value),
           ),
         ),
       ),
@@ -658,8 +658,8 @@ class _SettingsBody extends StatelessWidget {
           min: 2,
           max: 4000,
           suffix: 'd',
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(topicAgeCutoffDays: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(topicAgeCutoffDays: value),
           ),
         ),
       ),
@@ -674,9 +674,9 @@ class _SettingsBody extends StatelessWidget {
           value: smart.itemForgettingIndexCutoff,
           min: 3,
           max: 20,
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) =>
-                s.copyWith(itemForgettingIndexCutoff: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(itemForgettingIndexCutoff: value),
           ),
         ),
       ),
@@ -687,8 +687,8 @@ class _SettingsBody extends StatelessWidget {
           value: smart.topicAFactorCutoff,
           min: 1.01,
           max: 6,
-          onChanged: (double value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(topicAFactorCutoff: value),
+          onChanged: (double value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(topicAFactorCutoff: value),
           ),
         ),
       ),
@@ -699,9 +699,9 @@ class _SettingsBody extends StatelessWidget {
           value: smart.itemPostponeCountCutoff,
           min: 1,
           max: 255,
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) =>
-                s.copyWith(itemPostponeCountCutoff: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(itemPostponeCountCutoff: value),
           ),
         ),
       ),
@@ -712,9 +712,9 @@ class _SettingsBody extends StatelessWidget {
           value: smart.topicPostponeCountCutoff,
           min: 1,
           max: 255,
-          onChanged: (int value) => _editSmart(
-            (SmartPostponeSettings s) =>
-                s.copyWith(topicPostponeCountCutoff: value),
+          onChanged: (int value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(topicPostponeCountCutoff: value),
           ),
         ),
       ),
@@ -726,9 +726,9 @@ class _SettingsBody extends StatelessWidget {
           min: 0.01,
           max: 100,
           suffix: '%',
-          onChanged: (double value) => _editSmart(
-            (SmartPostponeSettings s) =>
-                s.copyWith(itemPriorityThreshold: value),
+          onChanged: (double value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(itemPriorityThreshold: value),
           ),
         ),
       ),
@@ -740,9 +740,9 @@ class _SettingsBody extends StatelessWidget {
           min: 0.0001,
           max: 100,
           suffix: '%',
-          onChanged: (double value) => _editSmart(
-            (SmartPostponeSettings s) =>
-                s.copyWith(topicPriorityThreshold: value),
+          onChanged: (double value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(topicPriorityThreshold: value),
           ),
         ),
       ),
@@ -769,8 +769,8 @@ class _SettingsBody extends StatelessWidget {
             SmartPostponeSubbranchMode.conservative: 'Most conservative',
             SmartPostponeSubbranchMode.liberal: 'Most liberal',
           },
-          onChanged: (SmartPostponeSubbranchMode value) => _editSmart(
-            (SmartPostponeSettings s) => s.copyWith(subbranchMode: value),
+          onChanged: (SmartPostponeSubbranchMode value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) => settings.copyWith(subbranchMode: value),
           ),
         ),
       ),
@@ -781,9 +781,9 @@ class _SettingsBody extends StatelessWidget {
             'elements can consequently be admitted by a manual run.',
         control: SwitchField(
           value: smart.shouldIncludeNonOutstanding,
-          onChanged: (bool value) => _editSmart(
-            (SmartPostponeSettings s) =>
-                s.copyWith(shouldIncludeNonOutstanding: value),
+          onChanged: (bool value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(shouldIncludeNonOutstanding: value),
           ),
         ),
       ),
@@ -794,9 +794,9 @@ class _SettingsBody extends StatelessWidget {
             'evaluator’s delay calculation.',
         control: SwitchField(
           value: smart.shouldModifyItemByForgettingIndex,
-          onChanged: (bool value) => _editSmart(
-            (SmartPostponeSettings s) =>
-                s.copyWith(shouldModifyItemByForgettingIndex: value),
+          onChanged: (bool value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(shouldModifyItemByForgettingIndex: value),
           ),
         ),
       ),
@@ -805,9 +805,9 @@ class _SettingsBody extends StatelessWidget {
         hint: 'Preserved inert SM20 checkbox. The evaluator does not read it.',
         control: SwitchField(
           value: smart.shouldModifyTopicByAFactor,
-          onChanged: (bool value) => _editSmart(
-            (SmartPostponeSettings s) =>
-                s.copyWith(shouldModifyTopicByAFactor: value),
+          onChanged: (bool value) => _editSmartPostpone(
+            (SmartPostponeSettings settings) =>
+                settings.copyWith(shouldModifyTopicByAFactor: value),
           ),
         ),
       ),

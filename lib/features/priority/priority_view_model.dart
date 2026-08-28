@@ -289,11 +289,11 @@ List<PriorityEntry> sortPriorityEntries(
     // reversing the column cannot pull them to the front: an absent
     // repetition is not an early one, and it is not a late one either.
     if (sort == PriorityBrowserSort.lastRepetition) {
-      final bool aMissing = a.lastRepetition == null;
-      final bool bMissing = b.lastRepetition == null;
-      if (aMissing || bMissing) {
-        if (aMissing && bMissing) return byPriority(a, b);
-        return aMissing ? 1 : -1;
+      final bool firstIsMissing = a.lastRepetition == null;
+      final bool secondIsMissing = b.lastRepetition == null;
+      if (firstIsMissing || secondIsMissing) {
+        if (firstIsMissing && secondIsMissing) return byPriority(a, b);
+        return firstIsMissing ? 1 : -1;
       }
     }
     final int primary = switch (sort) {

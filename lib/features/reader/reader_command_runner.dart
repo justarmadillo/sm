@@ -1004,14 +1004,14 @@ final class ReaderCommandRunner {
                 'provenance_changed': outcome.changedProvenance.length,
                 'stale': outcome.provenanceUpdates
                     .where(
-                      (ProvenanceUpdate u) =>
-                          u.provenance.state == ProvenanceState.stale,
+                      (ProvenanceUpdate update) =>
+                          update.provenance.state == ProvenanceState.stale,
                     )
                     .length,
                 'orphaned': outcome.provenanceUpdates
                     .where(
-                      (ProvenanceUpdate u) =>
-                          u.provenance.state == ProvenanceState.orphaned,
+                      (ProvenanceUpdate update) =>
+                          update.provenance.state == ProvenanceState.orphaned,
                     )
                     .length,
               },

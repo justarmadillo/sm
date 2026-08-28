@@ -95,7 +95,7 @@ final class InlineSegment {
   @override
   String toString() =>
       'InlineSegment("$text" rendered=$renderedStart..$renderedEnd '
-      'content=$contentStart..$contentEnd styles=${styles.map((InlineStyle s) => s.name).toList()})';
+      'content=$contentStart..$contentEnd styles=${styles.map((InlineStyle style) => style.name).toList()})';
 }
 
 /// The full rendered text of one block plus every run that produced it.

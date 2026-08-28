@@ -338,9 +338,9 @@ final class QueuePolicy {
     for (var i = 1; i <= count; i++) {
       final double x = (i - 1) / count;
       final double gate = math.pow(x, 1 / curve).toDouble();
-      final double u = prng.nextDouble();
+      final double update = prng.nextDouble();
       var index = 0;
-      if (gate > u) {
+      if (gate > update) {
         final double depth = math.pow(prng.nextDouble(), 1 / curve).toDouble();
         index = (prng.nextDouble() * depth * remaining.length).truncate();
       }

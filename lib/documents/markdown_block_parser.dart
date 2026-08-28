@@ -343,8 +343,8 @@ bool _isThematicBreak(String text) {
   final trimmed = text.trim();
   if (trimmed.length < 3) return false;
   for (final marker in const <String>['-', '*', '_']) {
-    if (trimmed.split('').every((String c) => c == marker || c == ' ')) {
-      final count = trimmed.split('').where((String c) => c == marker).length;
+    if (trimmed.split('').every((String character) => character == marker || character == ' ')) {
+      final count = trimmed.split('').where((String character) => character == marker).length;
       if (count >= 3) return true;
     }
   }
@@ -441,7 +441,7 @@ bool _isTableDelimiter(String text) {
   if (!trimmed.contains('-')) return false;
   return trimmed
       .split('')
-      .every((String c) => c == '|' || c == '-' || c == ':' || c == ' ');
+      .every((String character) => character == '|' || character == '-' || character == ':' || character == ' ');
 }
 
 bool _startsNewBlock(String text) =>

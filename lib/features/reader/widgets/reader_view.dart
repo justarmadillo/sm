@@ -114,7 +114,7 @@ class ReaderViewState extends State<ReaderView> {
   @override
   void initState() {
     super.initState();
-    _positions.itemPositions.addListener(_handlePositionsChanged);
+    _positions.itemPositions.addListener(_onVisibleBlocksChanged);
     final anchor = widget.initialAnchor;
     if (anchor != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => jumpToAnchor(anchor));
@@ -137,7 +137,7 @@ class ReaderViewState extends State<ReaderView> {
 
   @override
   void dispose() {
-    _positions.itemPositions.removeListener(_handlePositionsChanged);
+    _positions.itemPositions.removeListener(_onVisibleBlocksChanged);
     _keyboardFocus.dispose();
     super.dispose();
   }
@@ -180,12 +180,12 @@ class ReaderViewState extends State<ReaderView> {
     final positions = _positions.itemPositions.value;
     if (positions.isEmpty) return null;
     final top = positions
-        .where((ItemPosition p) => p.itemTrailingEdge > 0)
+        .where((ItemPosition position) => position.itemTrailingEdge > 0)
         .fold<ItemPosition?>(
           null,
-          (ItemPosition? best, ItemPosition p) =>
-              best == null || p.itemLeadingEdge < best.itemLeadingEdge
-              ? p
+          (ItemPosition? best, ItemPosition position) =>
+              best == null || position.itemLeadingEdge < best.itemLeadingEdge
+              ? position
               : best,
         );
     if (top == null) return null;
@@ -202,7 +202,7 @@ class ReaderViewState extends State<ReaderView> {
     return widget.controller.anchorAtGlobalPosition(probe);
   }
 
-  void _handlePositionsChanged() {
+  void _onVisibleBlocksChanged() {
     final callback = widget.onVisiblePositionChanged;
     if (callback == null) return;
     final anchor = topVisibleAnchor;
@@ -274,7 +274,7 @@ class ReaderViewState extends State<ReaderView> {
   /// Intercepted at the focus node rather than registered as shortcuts so the
   /// arrow keys never reach focus traversal, which would jump between buttons
   /// instead of scrolling the text.
-  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (event is KeyUpEvent) return KeyEventResult.ignored;
     // Reading shortcuts belong to the reading surface, and only while it is
     // the thing the keyboard is pointed at. A key event travels up from
@@ -329,17 +329,17 @@ class ReaderViewState extends State<ReaderView> {
       // Autofocus would take the caret away from the editor the moment a
       // rebuild put this widget back in the tree.
       autofocus: !editing,
-      onKeyEvent: editing ? null : _handleKeyEvent,
+      onKeyEvent: editing ? null : _onKeyEvent,
       // While a block is open in the editor the reading surface's own gestures
       // are off. They are not merely unnecessary — the double-tap recognizer
       // holds the gesture arena for its timeout, so every click inside the
       // editor waits on it, and the tap handler would pull keyboard focus back
       // out of the field the user is typing in.
       child: Listener(
-        onPointerDown: editing ? null : _handlePointerDown,
-        onPointerMove: editing ? null : _handlePointerMove,
-        onPointerUp: editing ? null : _handlePointerUp,
-        onPointerCancel: editing ? null : _handlePointerCancel,
+        onPointerDown: editing ? null : _onPointerDown,
+        onPointerMove: editing ? null : _onPointerMove,
+        onPointerUp: editing ? null : _onPointerUp,
+        onPointerCancel: editing ? null : _onPointerCancel,
         child: GestureDetector(
           behavior: HitTestBehavior.translucent,
           onTap: editing
@@ -460,7 +460,7 @@ class ReaderViewState extends State<ReaderView> {
     return widget.controller.isInsideTextColumn(global);
   }
 
-  void _handlePointerDown(PointerDownEvent event) {
+  void _onPointerDown(PointerDownEvent event) {
     if (event.kind != PointerDeviceKind.mouse) return;
     if (event.buttons & kPrimaryMouseButton == 0) return;
     // Only presses that land in the reading column can begin a selection.
@@ -474,7 +474,7 @@ class ReaderViewState extends State<ReaderView> {
     _isDragging = false;
   }
 
-  void _handlePointerMove(PointerMoveEvent event) {
+  void _onPointerMove(PointerMoveEvent event) {
     final origin = _pressOrigin;
     if (origin == null) return;
     if (!_isDragging) {
@@ -485,9 +485,9 @@ class ReaderViewState extends State<ReaderView> {
     widget.controller.extendTo(event.position);
   }
 
-  void _handlePointerUp(PointerUpEvent event) => _endDrag();
+  void _onPointerUp(PointerUpEvent event) => _endDrag();
 
-  void _handlePointerCancel(PointerCancelEvent event) => _endDrag();
+  void _onPointerCancel(PointerCancelEvent event) => _endDrag();
 
   void _endDrag() {
     _pressOrigin = null;

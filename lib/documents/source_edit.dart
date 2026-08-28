@@ -188,7 +188,7 @@ final class SourceEditJournal {
 
   /// Edits that produced a revision after [contentRevision].
   Iterable<SourceEdit> after(int contentRevision) =>
-      _edits.where((SourceEdit e) => e.contentRevision > contentRevision);
+      _edits.where((SourceEdit edit) => edit.contentRevision > contentRevision);
 
   /// Brings [anchor] forward to [currentRevision].
   ///

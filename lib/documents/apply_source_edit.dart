@@ -90,7 +90,7 @@ final class SourceEditOutcome {
 
   /// Children whose provenance actually moved or changed state.
   Iterable<ProvenanceUpdate> get changedProvenance =>
-      provenanceUpdates.where((ProvenanceUpdate u) => u.hasChanged);
+      provenanceUpdates.where((ProvenanceUpdate update) => update.hasChanged);
 }
 
 /// Applies [splice] to [markdown] and migrates everything that points into it.
