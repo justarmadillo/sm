@@ -20,11 +20,15 @@ import 'package:incremental_reader/features/browser/browser_providers.dart';
 import 'package:incremental_reader/features/extract/extract_commands.dart';
 import 'package:incremental_reader/features/extract/extract_providers.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
+import 'package:incremental_reader/features/priority/learning_commands.dart';
+import 'package:incremental_reader/features/priority/priority_browser_commands.dart';
+import 'package:incremental_reader/features/priority/priority_providers.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/reader_providers.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
 import 'package:incremental_reader/features/review/review_providers.dart';
 import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 
@@ -134,6 +138,36 @@ final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
         .dismiss(DismissElement(operation, ref: ref_)),
     success: (_) => 'Dismissed. The content is still here.',
   );
+
+  /// Runs one Learning command on a single row of the tree.
+  ///
+  /// The Priority queue offers the same menu over a whole selection. Only the
+  /// busy flag and the toast differ between the two, so which command object
+  /// each entry builds lives in `learning_commands.dart` rather than twice.
+  Future<void> applyLearningCommand(
+    LearningCommand command,
+    ElementRef ref_, {
+    LearningCommandAnswers answers = const LearningCommandAnswers(),
+  }) async {
+    final StudyDay day = await ref.read(schedulingContextProvider).today();
+    await _command<PriorityBrowserCommandOutcome>(
+      (OperationId operation) => runLearningCommand(
+        command,
+        commandRunner: ref.read(priorityBrowserCommandRunnerProvider),
+        operation: operation,
+        refs: <ElementRef>[ref_],
+        day: day,
+        timestampUtc: ref.read(clockProvider).nowUtc(),
+        answers: answers,
+      ),
+      // These commands are filters as much as actions, so a row the command's
+      // own rules refuse has to say so: silence would read as a failure.
+      success: (PriorityBrowserCommandOutcome outcome) =>
+          outcome.changedRefCount == 0
+          ? 'Nothing was eligible'
+          : '${command.successVerb} 1 element',
+    );
+  }
 
   /// Erases an element and everything below it. There is no undo.
   ///

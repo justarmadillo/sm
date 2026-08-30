@@ -14,13 +14,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/features/browser/open_element.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/features/daily_queue/smart_postpone_dialog.dart';
+import 'package:incremental_reader/features/priority/learning_command_menu.dart';
+import 'package:incremental_reader/features/priority/learning_commands.dart';
 import 'package:incremental_reader/features/priority/priority_commands.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/priority/priority_query.dart';
 import 'package:incremental_reader/features/priority/priority_view_model.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/postpone/sm20_advance.dart';
-import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/element_type_badge.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
@@ -133,7 +134,7 @@ class _BrowserBody extends ConsumerWidget {
                               context,
                               state.entries[index],
                             ),
-                            onLearningCommand: (_LearningCommand command) =>
+                            onLearningCommand: (LearningCommand command) =>
                                 _runLearningCommand(
                                   context,
                                   state.entries[index],
@@ -164,7 +165,7 @@ class _BrowserBody extends ConsumerWidget {
                               context,
                               state.entries[index],
                             ),
-                            onLearningCommand: (_LearningCommand command) =>
+                            onLearningCommand: (LearningCommand command) =>
                                 _runLearningCommand(
                                   context,
                                   state.entries[index],
@@ -178,108 +179,24 @@ class _BrowserBody extends ConsumerWidget {
     ),
   );
 
-  /// Runs one browser Learning command against a single element.
+  /// Runs one Learning command against a single element.
   ///
-  /// The three commands that destroy scheduling state confirm first, and the
-  /// prompt says exactly what is cleared — Undismiss does not bring a schedule
-  /// back, so a user who expected it to would otherwise lose one silently.
-  /// Runs one learning command on one element, confirming first when the
-  /// command throws work away.
+  /// The confirmation and the follow-up questions are the shared ones the
+  /// Browser rows use too: a command that discards work must say the same
+  /// thing wherever the user reached it from.
   Future<void> _runLearningCommand(
     BuildContext context,
     PriorityEntry entry,
-    _LearningCommand command,
+    LearningCommand command,
   ) async {
-    final List<ElementRef> refs = <ElementRef>[entry.ref];
-    if (command.isDestructive) {
-      if (!await _confirmDestructive(context, command)) return;
-      if (!context.mounted) return;
-    }
-
-    switch (command) {
-      case _LearningCommand.learn:
-        await model.startReview(refs, Sm20ReviewMode.learn);
-      case _LearningCommand.reviewAll:
-        await model.startReview(refs, Sm20ReviewMode.reviewAll);
-      case _LearningCommand.reviewTopics:
-        await model.startReview(refs, Sm20ReviewMode.reviewTopics);
-      case _LearningCommand.remember:
-        await model.remember(refs);
-      case _LearningCommand.forget:
-        await model.forget(refs);
-      case _LearningCommand.dismiss:
-        await model.dismiss(refs);
-      case _LearningCommand.undismiss:
-        await model.undismiss(refs);
-      case _LearningCommand.done:
-        await model.done(refs);
-      case _LearningCommand.addToFinalDrill:
-        await model.addToFinalDrill(refs);
-      case _LearningCommand.addToOutstanding:
-        final int? every = await _promptForSpacing(context);
-        if (every != null) {
-          await model.addToOutstanding(refs, everyWhich: every);
-        }
-      case _LearningCommand.addAll:
-        final int? everyAll = await _promptForSpacing(context);
-        if (everyAll != null) {
-          await model.addToOutstanding(
-            refs,
-            everyWhich: everyAll,
-            shouldRescheduleSameDay: true,
-          );
-        }
-      case _LearningCommand.resetHistory:
-        await model.resetHistory(refs);
-      case _LearningCommand.setAFactor:
-        final double? value = await _promptForDouble(
-          context,
-          title: 'Set A',
-          hint:
-              'Stores the A-factor directly. It changes no interval, due '
-              'date, priority, or repetition count.',
-          initial: 1.10,
-          min: 1.01,
-          max: 3,
-        );
-        if (value != null) await model.setAFactor(refs, value);
-      case _LearningCommand.modifyAFactor:
-        final double? multiplier = await _promptForDouble(
-          context,
-          title: 'Modify A',
-          hint: 'Rescales A around 1.01: A = 1.01 + m × (A − 1.01).',
-          initial: 1,
-          min: 0.20,
-          max: 2,
-        );
-        if (multiplier != null) await model.modifyAFactor(refs, multiplier);
-    }
-  }
-
-  /// Each destructive command carries its own warning, so the dialog can say
-  /// what this particular one discards rather than a generic "are you sure".
-  Future<bool> _confirmDestructive(
-    BuildContext context,
-    _LearningCommand command,
-  ) async {
-    final bool? answer = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: Text('${command.label}?'),
-        content: Text(command.warning),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(command.label),
-          ),
-        ],
-      ),
+    final LearningCommandAnswers? answers = await askForLearningCommand(
+      context,
+      command,
     );
-    return answer ?? false;
+    if (answers == null) return;
+    await model.applyLearningCommand(command, <ElementRef>[
+      entry.ref,
+    ], answers: answers);
   }
 
   /// Simulates Smart Postpone over one branch, then applies what was shown.
@@ -461,7 +378,7 @@ class _ElementRow extends ConsumerWidget {
   final bool isDraggable;
   final VoidCallback onBatchPriority;
   final VoidCallback onSmartPostpone;
-  final ValueChanged<_LearningCommand> onLearningCommand;
+  final ValueChanged<LearningCommand> onLearningCommand;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -654,27 +571,9 @@ class _ElementRow extends ConsumerWidget {
         padding: EdgeInsets.zero,
         icon: const Icon(Icons.update, size: 17),
       ),
-      SizedBox(
-        width: _kActionConstraints.maxWidth,
-        height: _kActionConstraints.maxHeight,
-        child: PopupMenuButton<_LearningCommand>(
-          tooltip: 'Learning commands',
-          onSelected: onLearningCommand,
-          itemBuilder: (BuildContext context) =>
-              <PopupMenuEntry<_LearningCommand>>[
-                for (final _LearningCommand command in _LearningCommand.values)
-                  PopupMenuItem<_LearningCommand>(
-                    value: command,
-                    child: Text(command.label),
-                  ),
-              ],
-          // No `constraints` here. On PopupMenuButton that property sizes
-          // the *menu*, not the button, so the 33x33 box used for the icon
-          // buttons would shrink the menu itself. The button is sized by
-          // the SizedBox around it instead.
-          padding: EdgeInsets.zero,
-          icon: const Icon(Icons.more_vert, size: 17),
-        ),
+      LearningCommandMenu(
+        onSelected: onLearningCommand,
+        size: _kActionConstraints.maxWidth,
       ),
     ];
   }
@@ -913,49 +812,6 @@ class _PriorityBatchDialogState extends State<_PriorityBatchDialog> {
   }
 }
 
-/// SM20's browser Learning commands for one element.
-enum _LearningCommand {
-  learn('Learn'),
-  reviewAll('Review all'),
-  reviewTopics('Review topics'),
-  remember('Remember'),
-  forget('Forget'),
-  dismiss('Dismiss'),
-  undismiss('Undismiss'),
-  done('Done'),
-  addToFinalDrill('Add to drill'),
-  addToOutstanding('Add to outstanding'),
-  addAll('Add all'),
-  resetHistory('Reset history'),
-  setAFactor('Set A…'),
-  modifyAFactor('Modify A…');
-
-  const _LearningCommand(this.label);
-
-  final String label;
-
-  /// Whether the command destroys scheduling state and deserves a prompt.
-  bool get isDestructive =>
-      this == _LearningCommand.forget ||
-      this == _LearningCommand.dismiss ||
-      this == _LearningCommand.done;
-
-  String get warning => switch (this) {
-    _LearningCommand.forget =>
-      'Forget clears the repetition count, interval, and postponement '
-          'counters and returns the element to the pending store. The '
-          'A-factor and priority survive; the schedule does not.',
-    _LearningCommand.dismiss =>
-      'Dismiss stops scheduling, clears the repetition state, and sets '
-          'priority to 100%. Undismiss later restores the status only — not '
-          'the schedule or the priority.',
-    _LearningCommand.done =>
-      'Done removes the element from scheduling, every queue, and the '
-          'priority population.',
-    _ => '',
-  };
-}
-
 /// The Advance dialog: scope plus a horizon in days.
 class _AdvanceDialog extends StatefulWidget {
   const _AdvanceDialog();
@@ -1066,143 +922,6 @@ class _AdvanceDialogState extends State<_AdvanceDialog> {
       ),
     ],
   );
-}
-
-/// A single numeric prompt, used by Set A and Modify A.
-Future<double?> _promptForDouble(
-  BuildContext context, {
-  required String title,
-  required String hint,
-  required double initial,
-  required double min,
-  required double max,
-}) async {
-  final TextEditingController controller = TextEditingController(
-    text: '$initial',
-  );
-  try {
-    return await showDialog<double>(
-      context: context,
-      builder: (BuildContext context) => StatefulBuilder(
-        builder: (BuildContext context, StateSetter setState) {
-          final double? value = double.tryParse(controller.text.trim());
-          final bool isValid = value != null && value >= min && value <= max;
-          return AlertDialog(
-            title: Text(title),
-            content: SizedBox(
-              width: dialogContentWidth(context, preferred: 340),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    hint,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.muted,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: controller,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      helperText: '$min–$max',
-                      isDense: true,
-                      border: const OutlineInputBorder(),
-                    ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ],
-              ),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: isValid
-                    ? () => Navigator.of(context).pop(value)
-                    : null,
-                child: const Text('Apply'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  } finally {
-    controller.dispose();
-  }
-}
-
-/// SM20's `Every which element?` prompt for batch Add to Outstanding.
-///
-/// The spacing is not cosmetic: section 9.7 seeds the first insertion at
-/// `min(3, s)` and advances the target by `s` after each success, so it
-/// decides where in the queue the selection lands. Defaulting it silently
-/// would hide a choice the executable always asks for.
-Future<int?> _promptForSpacing(BuildContext context) async {
-  final TextEditingController controller = TextEditingController(text: '5');
-  try {
-    return await showDialog<int>(
-      context: context,
-      builder: (BuildContext context) => StatefulBuilder(
-        builder: (BuildContext context, StateSetter setState) {
-          final int? value = int.tryParse(controller.text.trim());
-          final bool isValid = value != null && value >= 1 && value <= 100;
-          return AlertDialog(
-            title: const Text('Every which element?'),
-            content: SizedBox(
-              width: dialogContentWidth(context, preferred: 340),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const Text(
-                    'Spacing between insertions in the Outstanding queue. '
-                    'The first lands at position min(3, s), and each further '
-                    'element is placed s positions later. Every successful '
-                    'insertion also multiplies that priority target by 0.9.',
-                    style: TextStyle(fontSize: 12, color: AppColors.muted),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      helperText: '1–100',
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ],
-              ),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: isValid
-                    ? () => Navigator.of(context).pop(value)
-                    : null,
-                child: const Text('OK'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  } finally {
-    controller.dispose();
-  }
 }
 
 /// Column widths shared by the header and every row.

@@ -27,6 +27,8 @@ import 'package:incremental_reader/features/browser/import_sheet.dart';
 import 'package:incremental_reader/features/browser/open_element.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
+import 'package:incremental_reader/features/priority/learning_command_menu.dart';
+import 'package:incremental_reader/features/priority/learning_commands.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
@@ -370,6 +372,27 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     ref.invalidate(browserTreeProvider);
   }
 
+  /// Runs one Learning command against a single row.
+  ///
+  /// The same confirmation and the same follow-up questions the Priority
+  /// queue asks: a command that discards work must say the same thing
+  /// wherever the user reached it from.
+  Future<void> _runLearningCommand(
+    BuildContext context,
+    LearningCommand command,
+    BrowserTreeNode node,
+  ) async {
+    final LearningCommandAnswers? answers = await askForLearningCommand(
+      context,
+      command,
+    );
+    if (answers == null) return;
+    await ref
+        .read(browserViewModelProvider.notifier)
+        .applyLearningCommand(command, node.ref, answers: answers);
+    ref.invalidate(browserTreeProvider);
+  }
+
   /// Files [moved] under [target], which is what a drop on a row means.
   Future<void> _dropOnto(ElementRef moved, BrowserTreeNode target) async {
     await ref
@@ -426,6 +449,8 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
           ref.invalidate(browserTreeProvider);
         },
         onAction: (String action) => _runAction(action, rows[index].node),
+        onLearningCommand: (LearningCommand command) =>
+            _runLearningCommand(context, command, rows[index].node),
         onCreate: (_NewElement choice) =>
             _create(context, choice, rows[index].node),
         onDropOnto: (ElementRef moved) =>
@@ -508,6 +533,7 @@ class _NodeRow extends StatelessWidget {
     required this.onToggle,
     required this.onPriority,
     required this.onAction,
+    required this.onLearningCommand,
     required this.onCreate,
     required this.onDropOnto,
     required this.onDropAbove,
@@ -525,6 +551,9 @@ class _NodeRow extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onPriority;
   final ValueChanged<String> onAction;
+
+  /// One of SM20's Learning commands, run against this row alone.
+  final ValueChanged<LearningCommand> onLearningCommand;
 
   /// Makes a new element and files it under this row.
   final ValueChanged<_NewElement> onCreate;
@@ -684,7 +713,7 @@ class _NodeRow extends StatelessWidget {
     if (node.dueDay != null) 'due ${node.dueDay}',
   ].join('  ·  ');
 
-  /// The three per-row commands, the same in both shapes.
+  /// The four per-row commands, the same in both shapes.
   List<Widget> _rowButtons(BrowserTreeNode node, bool isDismissed) => <Widget>[
     IconButton(
       tooltip: 'Priority',
@@ -694,6 +723,10 @@ class _NodeRow extends StatelessWidget {
       padding: EdgeInsets.zero,
     ),
     _NewElementMenu(isRowMenu: true, onSelected: onCreate),
+    LearningCommandMenu(
+      onSelected: onLearningCommand,
+      size: _kRowButtonConstraints.maxWidth,
+    ),
     _actionMenu(node, isDismissed),
   ];
 
@@ -794,10 +827,7 @@ class _NodeRow extends StatelessWidget {
               value: 'dismiss',
               child: Text('Dismiss (keep content)'),
             ),
-          const PopupMenuItem<String>(
-            value: 'delete',
-            child: Text('Delete for good'),
-          ),
+          const PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
         ],
       ),
     );
@@ -1023,7 +1053,7 @@ Future<bool> _confirmDelete(BuildContext context, BrowserTreeNode node) async {
   return await showDialog<bool>(
         context: context,
         builder: (BuildContext context) => AlertDialog(
-          title: const Text('Delete for good?'),
+          title: const Text('Delete?'),
           content: Text(
             below == 0
                 ? 'This erases it. There is no undo.\n\n$title'

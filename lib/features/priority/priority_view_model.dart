@@ -14,6 +14,7 @@ import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/features/daily_queue/queue_providers.dart';
+import 'package:incremental_reader/features/priority/learning_commands.dart';
 import 'package:incremental_reader/features/priority/priority_browser_command_runner.dart';
 import 'package:incremental_reader/features/priority/priority_browser_commands.dart';
 import 'package:incremental_reader/features/priority/priority_commands.dart';
@@ -22,7 +23,6 @@ import 'package:incremental_reader/features/priority/priority_query.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/postpone/sm20_advance.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
-import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/settings/postpone_settings.dart';
 import 'package:incremental_reader/settings/smart_postpone_settings.dart';
@@ -626,211 +626,31 @@ final class PriorityBrowserViewModel
     return profiles;
   }
 
-  /// Remember: memorize pending or dismissed topics.
-  /// Learn, Review all, Review topics: section 9.7's review modes 4, 5, 6.
+  /// Runs one Learning command over an ordered selection.
   ///
-  /// Opening a review sets the learning mode and stores the subset queue; it
-  /// does not touch A, because merely opening a review is not a repetition.
-  Future<void> startReview(List<ElementRef> refs, Sm20ReviewMode mode) =>
-      _browserCommand(
-        switch (mode) {
-          Sm20ReviewMode.learn => 'Learning',
-          Sm20ReviewMode.reviewAll => 'Reviewing all',
-          Sm20ReviewMode.reviewTopics => 'Reviewing topics',
-        },
-        (
-          PriorityBrowserCommandRunner commandRunner,
-          OperationId operation,
-          StudyDay day,
-        ) => commandRunner.startReview(
-          StartBrowserReview(
-            operation,
-            refs: refs,
-            day: day,
-            mode: mode,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        ),
-      );
-
-  Future<void> remember(List<ElementRef> refs) => _browserCommand(
-    'Remembered',
-    (
-      PriorityBrowserCommandRunner commandRunner,
-      OperationId operation,
-      StudyDay day,
-    ) => commandRunner.remember(
-      RememberElements(
-        operation,
-        refs: refs,
-        day: day,
-        timestampUtc: ref.read(clockProvider).nowUtc(),
-      ),
-    ),
-  );
-
-  /// Forget: return memorized records to the pending store.
-  Future<void> forget(List<ElementRef> refs) => _browserCommand(
-    'Forgotten',
-    (
-      PriorityBrowserCommandRunner commandRunner,
-      OperationId operation,
-      StudyDay day,
-    ) => commandRunner.forget(
-      ForgetElements(
-        operation,
-        refs: refs,
-        day: day,
-        timestampUtc: ref.read(clockProvider).nowUtc(),
-      ),
-    ),
-  );
-
-  /// Dismiss: stop scheduling and send priority to the bottom.
-  Future<void> dismiss(List<ElementRef> refs) => _browserCommand(
-    'Dismissed',
-    (
-      PriorityBrowserCommandRunner commandRunner,
-      OperationId operation,
-      StudyDay day,
-    ) => commandRunner.dismiss(
-      DismissElements(
-        operation,
-        refs: refs,
-        day: day,
-        timestampUtc: ref.read(clockProvider).nowUtc(),
-      ),
-    ),
-  );
-
-  /// Undismiss: restore the status only.
-  Future<void> undismiss(List<ElementRef> refs) => _browserCommand(
-    'Undismissed',
-    (
-      PriorityBrowserCommandRunner commandRunner,
-      OperationId operation,
-      StudyDay day,
-    ) => commandRunner.undismiss(
-      UndismissElements(
-        operation,
-        refs: refs,
-        day: day,
-        timestampUtc: ref.read(clockProvider).nowUtc(),
-      ),
-    ),
-  );
-
-  /// Done: remove from scheduling entirely.
-  Future<void> done(List<ElementRef> refs) => _browserCommand(
-    'Done',
-    (
-      PriorityBrowserCommandRunner commandRunner,
-      OperationId operation,
-      StudyDay day,
-    ) => commandRunner.done(
-      DoneElements(
-        operation,
-        refs: refs,
-        day: day,
-        timestampUtc: ref.read(clockProvider).nowUtc(),
-      ),
-    ),
-  );
-
-  /// Add to drill: Final Drill membership only.
-  Future<void> addToFinalDrill(List<ElementRef> refs) => _browserCommand(
-    'Added to Final Drill',
-    (
-      PriorityBrowserCommandRunner commandRunner,
-      OperationId operation,
-      StudyDay day,
-    ) => commandRunner.addToFinalDrill(
-      AddToFinalDrill(
-        operation,
-        refs: refs,
-        day: day,
-        timestampUtc: ref.read(clockProvider).nowUtc(),
-      ),
-    ),
-  );
-
-  /// Add to outstanding, or Add all.
-  Future<void> addToOutstanding(
+  /// The Browser offers the same menu on its own rows, so which command
+  /// object each entry builds lives in `learning_commands.dart` and not here:
+  /// all this adds is the busy flag, the reload, and the toast.
+  Future<void> applyLearningCommand(
+    LearningCommand command,
     List<ElementRef> refs, {
-    int everyWhich = 5,
-    bool shouldRescheduleSameDay = false,
+    LearningCommandAnswers answers = const LearningCommandAnswers(),
   }) => _browserCommand(
-    'Added to Outstanding',
+    command.successVerb,
     (
       PriorityBrowserCommandRunner commandRunner,
       OperationId operation,
       StudyDay day,
-    ) => commandRunner.addToOutstanding(
-      AddToOutstanding(
-        operation,
-        refs: refs,
-        day: day,
-        everyWhich: everyWhich,
-        shouldRescheduleSameDay: shouldRescheduleSameDay,
-        timestampUtc: ref.read(clockProvider).nowUtc(),
-      ),
+    ) => runLearningCommand(
+      command,
+      commandRunner: commandRunner,
+      operation: operation,
+      refs: refs,
+      day: day,
+      timestampUtc: ref.read(clockProvider).nowUtc(),
+      answers: answers,
     ),
   );
-
-  /// Reset history: drop the external history block and nothing else.
-  Future<void> resetHistory(List<ElementRef> refs) => _browserCommand(
-    'History reset',
-    (
-      PriorityBrowserCommandRunner commandRunner,
-      OperationId operation,
-      StudyDay day,
-    ) => commandRunner.resetHistory(
-      ResetElementHistory(
-        operation,
-        refs: refs,
-        day: day,
-        timestampUtc: ref.read(clockProvider).nowUtc(),
-      ),
-    ),
-  );
-
-  /// Set A directly, for normal topics.
-  Future<void> setAFactor(List<ElementRef> refs, double value) =>
-      _browserCommand(
-        'A-factor set',
-        (
-          PriorityBrowserCommandRunner commandRunner,
-          OperationId operation,
-          StudyDay day,
-        ) => commandRunner.setAFactor(
-          SetTopicAFactor(
-            operation,
-            refs: refs,
-            day: day,
-            value: value,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        ),
-      );
-
-  /// Modify A by a multiplier, for normal topics.
-  Future<void> modifyAFactor(List<ElementRef> refs, double multiplier) =>
-      _browserCommand(
-        'A-factor modified',
-        (
-          PriorityBrowserCommandRunner commandRunner,
-          OperationId operation,
-          StudyDay day,
-        ) => commandRunner.modifyAFactor(
-          ModifyTopicAFactor(
-            operation,
-            refs: refs,
-            day: day,
-            multiplier: multiplier,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        ),
-      );
 
   /// Advance: pull future work closer to today across a horizon.
   Future<void> advance(

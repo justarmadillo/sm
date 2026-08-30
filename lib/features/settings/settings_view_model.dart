@@ -180,7 +180,7 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
         ? ', search index rebuilt'
         : '';
     return report.bytesReclaimed == 0
-        ? 'Database optimized. Nothing left to reclaim$repaired.'
+        ? 'Database optimized. There was no space left to reclaim$repaired.'
         : 'Database optimized. ${_formatBytes(report.bytesReclaimed)} '
               'reclaimed$repaired.';
   }

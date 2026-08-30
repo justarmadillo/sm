@@ -10,6 +10,13 @@
 /// it, or moving it is an ordinary edit to the source markdown. Nothing here
 /// is stored beside the text, which is why it survives without anything
 /// having to be saved.
+///
+/// An entry does not have to name something the article already says. It is
+/// the reader's own map of the ideas in the source: a heading can label a
+/// passage that exists, or hold an idea the text never states outright, and
+/// the hierarchy between entries is the reader's, not the author's. That is
+/// why every entry can be renamed, indented, and moved — the outline is
+/// written *against* the article rather than extracted from it.
 library;
 
 import 'package:flutter/material.dart';
@@ -136,12 +143,8 @@ class ReaderSidePanel extends StatelessWidget {
           Expanded(
             child: switch (tab) {
               ReaderPanelTab.outline => _OutlineList(
-                // Keyed on the revision so the row being renamed, and any
-                // half-typed new heading, are dropped the moment an edit
-                // lands: the block ids they name belong to the parse before
-                // it and no longer exist.
-                key: ValueKey<int>(document.contentRevision),
                 outline: outline,
+                contentRevision: document.contentRevision,
                 currentBlockId: currentBlockId,
                 onGoToBlock: onGoToBlock,
                 editing: outlineEditing,
@@ -248,14 +251,11 @@ class _TabChip extends StatelessWidget {
 /// Horizontal step per outline level.
 const double _kOutlineIndentStep = 11;
 
-/// The menu button's slot, tighter than Material's 48-pixel tap target.
-///
-/// At the default size one button would be taller than the two lines of
-/// heading beside it, and the panel is 280 pixels wide: the outline would
-/// scroll twice as far for the same document.
-const double _kOutlineMenuSize = 30;
+/// One toolbar button's slot, tighter than Material's 48-pixel tap target:
+/// seven of those are wider than the 280-pixel panel they have to fit in.
+const double _kOutlineToolbarButtonSize = 32;
 
-/// What one outline row's menu can do.
+/// What the outline toolbar can do to the selected entry.
 enum _OutlineAction {
   rename,
   addAfter,
@@ -268,20 +268,26 @@ enum _OutlineAction {
 
 /// The headings, as a list that can be rewritten in place.
 ///
-/// Stateful only for the two things the user is in the middle of typing: which
-/// row is being renamed, and which row a new heading is being added under. The
+/// Stateful for three things: which row the toolbar is aimed at, which row is
+/// being renamed, and which row a new heading is being added under. The
 /// structure itself is never held here — it is re-derived from the document
 /// after every edit, so what is on screen is always what is in the text.
 class _OutlineList extends StatefulWidget {
   const _OutlineList({
     required this.outline,
+    required this.contentRevision,
     required this.currentBlockId,
     required this.onGoToBlock,
     required this.editing,
-    super.key,
   });
 
   final List<OutlineEntry> outline;
+
+  /// Which parse of the document [outline] was read from. A new number means
+  /// every block id in the list is new as well, because a block is addressed
+  /// by its position in the parse.
+  final int contentRevision;
+
   final String? currentBlockId;
   final void Function(String blockId) onGoToBlock;
   final OutlineEditing editing;
@@ -291,145 +297,176 @@ class _OutlineList extends StatefulWidget {
 }
 
 class _OutlineListState extends State<_OutlineList> {
+  /// Where the selected heading sat, top to bottom. Null until a row is
+  /// tapped.
+  ///
+  /// The selection is deliberately not a block id. A block is addressed by
+  /// its position in the parse, so moving a section renumbers every id after
+  /// it — and the toolbar exists precisely so that moves can be made one
+  /// after another without reselecting between them.
+  int? _selectedPosition;
+
+  /// What the selected heading said, which is how it is found again after an
+  /// edit has moved it.
+  String _selectedText = '';
+
   String? _renamingBlockId;
   String? _addingAfterBlockId;
+
+  /// The entry the toolbar acts on.
+  ///
+  /// The words come first and the position second: after a move the heading
+  /// still says the same thing somewhere else, and after a removal there are
+  /// no matching words left, which is exactly when landing on whatever now
+  /// occupies that position is the useful answer.
+  OutlineEntry? get _selectedEntry {
+    final int? position = _selectedPosition;
+    if (position == null || widget.outline.isEmpty) return null;
+    OutlineEntry? nearest;
+    for (final OutlineEntry entry in widget.outline) {
+      if (entry.text != _selectedText) continue;
+      if (nearest == null ||
+          (entry.position - position).abs() <
+              (nearest.position - position).abs()) {
+        nearest = entry;
+      }
+    }
+    return nearest ??
+        widget.outline[position.clamp(0, widget.outline.length - 1)];
+  }
+
+  /// An edit has landed and the document has been parsed again.
+  ///
+  /// Both half-typed fields name block ids from the parse before it, so they
+  /// are dropped. The selection is kept, but re-pinned to where its heading
+  /// actually ended up, so the next button press acts on the same heading.
+  @override
+  void didUpdateWidget(_OutlineList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.contentRevision == widget.contentRevision) return;
+    final OutlineEntry? kept = _selectedEntry;
+    _renamingBlockId = null;
+    _addingAfterBlockId = null;
+    _selectedPosition = kept?.position;
+    _selectedText = kept?.text ?? '';
+  }
 
   @override
   Widget build(BuildContext context) {
     if (widget.outline.isEmpty) {
       return const _EmptyPanel(
-        'This source has no headings yet. Select a line in the text and '
-        'choose Edit to make it one — "# Title" — and it appears here, '
-        'ready to be renamed, indented and moved.',
+        'No headings yet. The outline is your own map of the ideas in this '
+        'source rather than a summary of it: an entry can name a passage '
+        'that is already here, or hold a thought the text never states. '
+        'Select a line and choose Edit to make it a heading — "# Title" — '
+        'and it appears here, ready to be renamed, indented and moved.',
       );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      itemCount: widget.outline.length,
-      itemBuilder: (BuildContext context, int index) {
-        final OutlineEntry entry = widget.outline[index];
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            if (entry.blockId == _renamingBlockId)
-              _OutlineField(
-                level: entry.level,
-                initialText: entry.text,
-                onCancel: () => setState(() => _renamingBlockId = null),
-                onSubmit: (String text) {
-                  setState(() => _renamingBlockId = null);
-                  widget.editing.onRename(entry, text);
-                },
-              )
-            else
-              _row(entry),
-            if (entry.blockId == _addingAfterBlockId)
-              _OutlineField(
-                level: entry.level,
-                initialText: '',
-                onCancel: () => setState(() => _addingAfterBlockId = null),
-                onSubmit: (String text) {
-                  setState(() => _addingAfterBlockId = null);
-                  widget.editing.onAddAfter(entry, text);
-                },
-              ),
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _OutlineToolbar(
+          selectedEntry: _selectedEntry,
+          outline: widget.outline,
+          isBusy: widget.editing.isBusy,
+          onAction: _run,
+        ),
+        Expanded(child: _list()),
+      ],
     );
   }
 
+  Widget _list() => ListView.builder(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    itemCount: widget.outline.length,
+    itemBuilder: (BuildContext context, int index) {
+      final OutlineEntry entry = widget.outline[index];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (entry.blockId == _renamingBlockId)
+            _OutlineField(
+              level: entry.level,
+              initialText: entry.text,
+              onCancel: () => setState(() => _renamingBlockId = null),
+              onSubmit: (String text) {
+                setState(() {
+                  _renamingBlockId = null;
+                  // The selection follows the heading by its words, so the
+                  // new words have to be recorded before the edit lands.
+                  if (entry.position == _selectedPosition) {
+                    _selectedText = text;
+                  }
+                });
+                widget.editing.onRename(entry, text);
+              },
+            )
+          else
+            _row(entry),
+          if (entry.blockId == _addingAfterBlockId)
+            _OutlineField(
+              level: entry.level,
+              initialText: '',
+              onCancel: () => setState(() => _addingAfterBlockId = null),
+              onSubmit: (String text) {
+                setState(() => _addingAfterBlockId = null);
+                widget.editing.onAddAfter(entry, text);
+              },
+            ),
+        ],
+      );
+    },
+  );
+
+  /// One heading. Tapping it scrolls the reader to it and aims the toolbar at
+  /// it: the row the user is looking at is the row they mean.
   Widget _row(OutlineEntry entry) {
     final bool isCurrent = entry.blockId == widget.currentBlockId;
+    final bool isSelected = entry.blockId == _selectedEntry?.blockId;
     return Container(
-      color: isCurrent
-          ? AppColors.accent.withValues(alpha: 0.08)
-          : Colors.transparent,
-      padding: EdgeInsets.only(
-        left: 10 + (entry.level - 1) * _kOutlineIndentStep,
+      decoration: BoxDecoration(
+        color: isSelected
+            ? AppColors.accent.withValues(alpha: 0.16)
+            : isCurrent
+            ? AppColors.accent.withValues(alpha: 0.08)
+            : Colors.transparent,
+        // The bar down the left says which row the toolbar will act on, which
+        // the tint alone cannot: the reading position is tinted too.
+        border: Border(
+          left: BorderSide(
+            width: 2,
+            color: isSelected ? AppColors.accent : Colors.transparent,
+          ),
+        ),
       ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: InkWell(
-              onTap: () => widget.onGoToBlock(entry.blockId),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Text(
-                  entry.text.isEmpty ? '(untitled heading)' : entry.text,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: entry.level <= 2 ? 12.5 : 12,
-                    height: 1.35,
-                    fontWeight: entry.level <= 2
-                        ? FontWeight.w600
-                        : FontWeight.w400,
-                    color: isCurrent ? AppColors.accent : AppColors.text,
-                  ),
-                ),
-              ),
+      padding: EdgeInsets.only(
+        left: 8 + (entry.level - 1) * _kOutlineIndentStep,
+      ),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _selectedPosition = entry.position;
+            _selectedText = entry.text;
+          });
+          widget.onGoToBlock(entry.blockId);
+        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+          child: Text(
+            entry.text.isEmpty ? '(untitled heading)' : entry.text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: entry.level <= 2 ? 12.5 : 12,
+              height: 1.35,
+              fontWeight: entry.level <= 2 ? FontWeight.w600 : FontWeight.w400,
+              color: isCurrent || isSelected
+                  ? AppColors.accent
+                  : AppColors.text,
             ),
           ),
-          SizedBox(
-            width: _kOutlineMenuSize,
-            height: _kOutlineMenuSize,
-            child: _menu(entry),
-          ),
-        ],
+        ),
       ),
-    );
-  }
-
-  /// Everything one entry can become, in one menu.
-  ///
-  /// A menu rather than a row of icons: seven controls beside a title in a
-  /// 280-pixel panel would leave the title no width at all, and the title is
-  /// the only part that says which heading this is.
-  Widget _menu(OutlineEntry entry) {
-    final OutlineEntry? above = previousSiblingOf(widget.outline, entry);
-    final OutlineEntry? below = nextSiblingOf(widget.outline, entry);
-    return PopupMenuButton<_OutlineAction>(
-      enabled: !widget.editing.isBusy,
-      tooltip: 'Heading actions',
-      icon: const Icon(Icons.more_vert, size: 16, color: AppColors.muted),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 180),
-      onSelected: (_OutlineAction action) => _run(action, entry),
-      itemBuilder: (BuildContext context) => <PopupMenuEntry<_OutlineAction>>[
-        const PopupMenuItem<_OutlineAction>(
-          value: _OutlineAction.rename,
-          child: Text('Rename'),
-        ),
-        const PopupMenuItem<_OutlineAction>(
-          value: _OutlineAction.addAfter,
-          child: Text('Add heading below'),
-        ),
-        PopupMenuItem<_OutlineAction>(
-          value: _OutlineAction.indent,
-          enabled: entry.level < 6,
-          child: const Text('Indent'),
-        ),
-        PopupMenuItem<_OutlineAction>(
-          value: _OutlineAction.outdent,
-          enabled: entry.level > 1,
-          child: const Text('Outdent'),
-        ),
-        PopupMenuItem<_OutlineAction>(
-          value: _OutlineAction.moveUp,
-          enabled: above != null,
-          child: const Text('Move section up'),
-        ),
-        PopupMenuItem<_OutlineAction>(
-          value: _OutlineAction.moveDown,
-          enabled: below != null,
-          child: const Text('Move section down'),
-        ),
-        const PopupMenuItem<_OutlineAction>(
-          value: _OutlineAction.remove,
-          child: Text('Remove heading'),
-        ),
-      ],
     );
   }
 
@@ -456,6 +493,126 @@ class _OutlineListState extends State<_OutlineList> {
       case _OutlineAction.remove:
         widget.editing.onRemove(entry);
     }
+  }
+}
+
+/// The outline's commands, on a bar above the headings.
+///
+/// A bar rather than a menu on every row: reorganising an outline is a run of
+/// small moves — indent, indent, move up — and a menu that has to be reopened
+/// between each one turns a minute of thinking into a minute of tapping. What
+/// it costs is a selection, which is what the highlighted row is.
+class _OutlineToolbar extends StatelessWidget {
+  const _OutlineToolbar({
+    required this.selectedEntry,
+    required this.outline,
+    required this.isBusy,
+    required this.onAction,
+  });
+
+  /// The entry every button acts on, or null when no row has been tapped.
+  final OutlineEntry? selectedEntry;
+
+  final List<OutlineEntry> outline;
+
+  /// Whether an edit is already in flight, in which case nothing may start a
+  /// second one.
+  final bool isBusy;
+
+  final void Function(_OutlineAction action, OutlineEntry entry) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final OutlineEntry? entry = selectedEntry;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: <Widget>[
+          _button(
+            entry,
+            _OutlineAction.outdent,
+            Icons.format_indent_decrease,
+            'Outdent',
+            isAllowed: entry != null && entry.level > 1,
+          ),
+          _button(
+            entry,
+            _OutlineAction.indent,
+            Icons.format_indent_increase,
+            'Indent',
+            isAllowed: entry != null && entry.level < 6,
+          ),
+          _button(
+            entry,
+            _OutlineAction.moveUp,
+            Icons.arrow_upward,
+            'Move section up',
+            isAllowed:
+                entry != null && previousSiblingOf(outline, entry) != null,
+          ),
+          _button(
+            entry,
+            _OutlineAction.moveDown,
+            Icons.arrow_downward,
+            'Move section down',
+            isAllowed: entry != null && nextSiblingOf(outline, entry) != null,
+          ),
+          const Spacer(),
+          _button(
+            entry,
+            _OutlineAction.rename,
+            Icons.edit_outlined,
+            'Rename',
+            isAllowed: entry != null,
+          ),
+          _button(
+            entry,
+            _OutlineAction.addAfter,
+            Icons.add,
+            'Add heading below',
+            isAllowed: entry != null,
+          ),
+          _button(
+            entry,
+            _OutlineAction.remove,
+            Icons.remove_circle_outline,
+            'Remove heading',
+            isAllowed: entry != null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One command. Every button keeps its slot when it cannot run, so the bar
+  /// does not reshuffle itself as the selection moves down the outline.
+  Widget _button(
+    OutlineEntry? entry,
+    _OutlineAction action,
+    IconData icon,
+    String tooltip, {
+    required bool isAllowed,
+  }) {
+    final bool isEnabled = isAllowed && !isBusy && entry != null;
+    return SizedBox(
+      width: _kOutlineToolbarButtonSize,
+      height: _kOutlineToolbarButtonSize,
+      child: IconButton(
+        tooltip: entry == null ? '$tooltip — tap a heading first' : tooltip,
+        onPressed: isEnabled ? () => onAction(action, entry) : null,
+        icon: Icon(icon, size: 16),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(
+          width: _kOutlineToolbarButtonSize,
+          height: _kOutlineToolbarButtonSize,
+        ),
+        color: AppColors.muted,
+        disabledColor: AppColors.muted.withValues(alpha: 0.3),
+      ),
+    );
   }
 }
 

@@ -369,7 +369,7 @@ class _UInt16MatrixFieldState extends State<UInt16MatrixField> {
     for (final String part in parts) {
       final int? value = int.tryParse(part);
       if (value == null || value < 0 || value > 0xFFFF) {
-        setState(() => _error = 'Use unsigned 16-bit values (0–65535).');
+        setState(() => _error = 'Every number has to be between 0 and 65535.');
         return;
       }
       values.add(value);
@@ -390,7 +390,7 @@ class _UInt16MatrixFieldState extends State<UInt16MatrixField> {
     decoration: InputDecoration(
       isDense: true,
       border: const OutlineInputBorder(),
-      hintText: '400 comma- or space-separated UInt16 values',
+      hintText: '400 numbers, separated by commas or spaces',
       errorText: _error,
     ),
     style: const TextStyle(fontSize: 12),
