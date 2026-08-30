@@ -11,7 +11,6 @@ import 'package:incremental_reader/settings/diagnostics_settings.dart';
 import 'package:incremental_reader/settings/mercy_settings.dart';
 import 'package:incremental_reader/settings/postpone_settings.dart';
 import 'package:incremental_reader/settings/queue_settings.dart';
-import 'package:incremental_reader/settings/reader_settings.dart';
 import 'package:incremental_reader/settings/remember_settings.dart';
 import 'package:incremental_reader/settings/smart_postpone_settings.dart';
 import 'package:incremental_reader/settings/study_day_settings.dart';
@@ -27,7 +26,6 @@ final class AppSettings {
     this.cards = const CardSettings(),
     this.postpone = const PostponeSettings(),
     this.mercy = const MercySettings(),
-    this.reader = const ReaderSettings(),
     this.diagnostics = const DiagnosticsSettings(),
   });
 
@@ -70,7 +68,10 @@ final class AppSettings {
           min: 0,
           max: 100,
         ),
-        shouldSortAutomatically: _readBool(stored['queue.auto_sort'], fallback.queue.shouldSortAutomatically),
+        shouldSortAutomatically: _readBool(
+          stored['queue.auto_sort'],
+          fallback.queue.shouldSortAutomatically,
+        ),
         shouldRandomizeFinalDrill: _readBool(
           stored['queue.randomize_final_drill'],
           fallback.queue.shouldRandomizeFinalDrill,
@@ -337,14 +338,6 @@ final class AppSettings {
           fallback.mercy.intervalFactorMatrix,
         ),
       ),
-      reader: ReaderSettings(
-        reminderWords: _readInt(
-          stored['reader.reminder_words'],
-          fallback.reader.reminderWords,
-          min: 0,
-          max: 100000,
-        ),
-      ),
       diagnostics: DiagnosticsSettings(
         isLogEnabled: _readBool(
           stored['diagnostics.log_enabled'],
@@ -376,7 +369,6 @@ final class AppSettings {
   final CardSettings cards;
   final PostponeSettings postpone;
   final MercySettings mercy;
-  final ReaderSettings reader;
   final DiagnosticsSettings diagnostics;
 
   /// Flat storage form. It contains no keys from the replaced scheduler.
@@ -390,7 +382,8 @@ final class AppSettings {
       'queue.topic_randomization': '${queue.topicRandomization}',
       'queue.auto_sort': '${queue.shouldSortAutomatically}',
       'queue.randomize_final_drill': '${queue.shouldRandomizeFinalDrill}',
-      'queue.confirm_stage_transitions': '${queue.shouldConfirmStageTransitions}',
+      'queue.confirm_stage_transitions':
+          '${queue.shouldConfirmStageTransitions}',
       'remember.first_interval_low_days': '${remember.firstIntervalLowDays}',
       'remember.first_interval_high_days': '${remember.firstIntervalHighDays}',
       'card.desired_retention': '${cards.desiredRetention}',
@@ -456,7 +449,6 @@ final class AppSettings {
       // Empty explicitly clears a previously imported optional matrix.
       'mercy.interval_factor_matrix':
           mercy.intervalFactorMatrix?.join(',') ?? '',
-      'reader.reminder_words': '${reader.reminderWords}',
       'diagnostics.log_enabled': '${diagnostics.isLogEnabled}',
       'diagnostics.log_max_bytes': '${diagnostics.logMaxBytes}',
       'diagnostics.log_retained_files': '${diagnostics.logRetainedFiles}',
@@ -471,7 +463,6 @@ final class AppSettings {
     CardSettings? cards,
     PostponeSettings? postpone,
     MercySettings? mercy,
-    ReaderSettings? reader,
     DiagnosticsSettings? diagnostics,
   }) => AppSettings(
     studyDay: studyDay ?? this.studyDay,
@@ -480,7 +471,6 @@ final class AppSettings {
     cards: cards ?? this.cards,
     postpone: postpone ?? this.postpone,
     mercy: mercy ?? this.mercy,
-    reader: reader ?? this.reader,
     diagnostics: diagnostics ?? this.diagnostics,
   );
 
@@ -493,7 +483,6 @@ final class AppSettings {
       other.cards == cards &&
       other.postpone == postpone &&
       other.mercy == mercy &&
-      other.reader == reader &&
       other.diagnostics == diagnostics;
 
   @override
@@ -504,7 +493,6 @@ final class AppSettings {
     cards,
     postpone,
     mercy,
-    reader,
     diagnostics,
   );
 }
@@ -529,11 +517,12 @@ double _readDouble(
 double _readFsrsWeight(String? raw, double fallback) =>
     _readDouble(raw, fallback, min: 0, max: 1000000);
 
-bool _readBool(String? raw, bool fallback) => switch (raw?.trim().toLowerCase()) {
-  'true' || '1' || 'yes' => true,
-  'false' || '0' || 'no' => false,
-  _ => fallback,
-};
+bool _readBool(String? raw, bool fallback) =>
+    switch (raw?.trim().toLowerCase()) {
+      'true' || '1' || 'yes' => true,
+      'false' || '0' || 'no' => false,
+      _ => fallback,
+    };
 
 T _readEnum<T extends Enum>(String? raw, List<T> values, T fallback) {
   final String? normalized = raw?.trim();
@@ -616,7 +605,10 @@ String _encodeBranchAssignments(Map<int, String> assignments) {
   });
 }
 
-Map<int, String> _readBranchAssignments(String? raw, Map<int, String> fallback) {
+Map<int, String> _readBranchAssignments(
+  String? raw,
+  Map<int, String> fallback,
+) {
   if (raw == null) return fallback;
   if (raw.trim().isEmpty) return const <int, String>{};
   final Object? decoded = _tryDecodeJson(raw);

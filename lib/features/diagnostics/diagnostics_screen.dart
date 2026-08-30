@@ -399,8 +399,8 @@ class _CommandsPanel extends ConsumerWidget {
         ),
       ),
     );
-    final Widget kind = Text(
-      record.kind,
+    final Widget type = Text(
+      record.type,
       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
     );
     final Widget detail = Text(
@@ -425,7 +425,7 @@ class _CommandsPanel extends ConsumerWidget {
                   Row(
                     children: <Widget>[
                       timestamp,
-                      Expanded(child: kind),
+                      Expanded(child: type),
                     ],
                   ),
                   detail,
@@ -434,7 +434,7 @@ class _CommandsPanel extends ConsumerWidget {
             : Row(
                 children: <Widget>[
                   timestamp,
-                  SizedBox(width: 210, child: kind),
+                  SizedBox(width: 210, child: type),
                   Expanded(child: detail),
                 ],
               ),

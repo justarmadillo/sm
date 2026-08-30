@@ -135,13 +135,21 @@ final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
     success: (_) => 'Dismissed. The content is still here.',
   );
 
-  /// Soft-deletes a source while retaining it and every descendant.
-  Future<void> deleteSource(String sourceId) => _command<Object>(
-    (OperationId operation) => ref
-        .read(readerCommandRunnerProvider)
-        .deleteSource(DeleteSource(operation, sourceId: sourceId)),
-    success: (_) => 'Deleted. You can restore it from the Browser.',
-  );
+  /// Erases an element and everything below it. There is no undo.
+  ///
+  /// The message counts what went rather than naming the row: a delete that
+  /// took a branch of forty elements and a delete that took one look
+  /// identical in a tree that has just redrawn itself without them.
+  Future<void> deleteElement(ElementRef ref_) =>
+      _command<BrowserDeletionOutcome>(
+        (OperationId operation) => ref
+            .read(browserCommandRunnerProvider)
+            .deleteElement(DeleteElement(operation, ref: ref_)),
+        success: (BrowserDeletionOutcome outcome) {
+          final int removed = outcome.deletedRefs.length;
+          return removed == 1 ? 'Deleted.' : 'Deleted $removed elements.';
+        },
+      );
 
   /// Writes cards from the Browser, under [parent] or standalone.
   ///

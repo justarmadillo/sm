@@ -207,7 +207,7 @@ void main() {
       );
       expect(
         (await harness.learning.listRecentActivity()).where(
-          (r) => r.kind == 'topic.rescheduled',
+          (r) => r.type == 'topic.rescheduled',
         ),
         isEmpty,
       );

@@ -227,6 +227,13 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
+  Future<void> deleteReviewsForCard(String cardId) async {
+    await (_database.delete(
+      _database.reviewEvents,
+    )..where(($ReviewEventsTable table) => table.cardId.equals(cardId))).go();
+  }
+
+  @override
   Future<List<ReviewRecord>> listOptimizerReviews() async {
     final rows = await _database
         .customSelect(
@@ -346,6 +353,13 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
+  Future<void> deleteCardState(String cardId) async {
+    await (_database.delete(
+      _database.cardMemories,
+    )..where(($CardMemoriesTable table) => table.cardId.equals(cardId))).go();
+  }
+
+  @override
   Future<void> deleteSchedule(ElementRef ref) async {
     await (_database.delete(_database.topicStates)..where(
           ($TopicStatesTable t) =>
@@ -400,7 +414,7 @@ final class DriftLearningRepository implements LearningRepository {
           operationId: record.operationId,
           elementId: Value<String?>(record.ref?.id),
           elementType: Value<int?>(record.ref?.type.index),
-          kind: record.kind,
+          type: record.type,
           atUtc: toEpochMs(record.atUtc),
           durationMs: Value<int?>(record.durationMs),
           metadataJson: Value<String?>(
@@ -410,14 +424,14 @@ final class DriftLearningRepository implements LearningRepository {
       );
 
   @override
-  Future<bool> hasActivity(String operationId, String kind) async {
+  Future<bool> hasActivity(String operationId, String type) async {
     final row = await _database
         .customSelect(
           'SELECT 1 AS present FROM activity_events '
-          'WHERE operation_id = ? AND kind = ? LIMIT 1',
+          'WHERE operation_id = ? AND type = ? LIMIT 1',
           variables: <Variable<Object>>[
             Variable<String>(operationId),
-            Variable<String>(kind),
+            Variable<String>(type),
           ],
         )
         .getSingleOrNull();
@@ -789,7 +803,7 @@ final class DriftLearningRepository implements LearningRepository {
         ActivityRecord(
           id: row.id,
           operationId: row.operationId,
-          kind: row.kind,
+          type: row.type,
           atUtc: fromEpochMs(row.atUtc),
           ref: row.elementId == null || row.elementType == null
               ? null

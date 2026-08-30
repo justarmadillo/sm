@@ -235,14 +235,32 @@ class _NeighbourLine extends StatelessWidget {
             ),
           ),
         ),
+        // Animated because the neighbour is what the slider is *for*: a name
+        // that swaps silently reads as part of the same static caption, while
+        // one that slides in says the drag moved the element past something.
         Expanded(
-          child: Text(
-            entry == null
-                ? '—'
-                : '${entry!.percent.toStringAsFixed(1)}%  ${entry!.preview}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, color: AppColors.text),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            transitionBuilder: (Widget child, Animation<double> animation) =>
+                FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.35),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+            child: Text(
+              entry == null
+                  ? '—'
+                  : '${entry!.percent.toStringAsFixed(1)}%  ${entry!.preview}',
+              key: ValueKey<String>('${entry?.ref}'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: AppColors.text),
+            ),
           ),
         ),
       ],

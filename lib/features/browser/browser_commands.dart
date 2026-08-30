@@ -1,8 +1,11 @@
-/// What the Browser can change about where an element is kept.
+/// What the Browser can change about the collection's shape.
 ///
-/// Filing only. None of these commands touches a due date, an interval, a
-/// priority, or an extract's provenance: moving a row in the Browser is
-/// housekeeping, and housekeeping must never look like a repetition.
+/// Two unrelated things. The filing commands only answer "where is this
+/// kept": none of them touches a due date, an interval, a priority, or an
+/// extract's provenance, because moving a row in the Browser is housekeeping
+/// and housekeeping must never look like a repetition. [DeleteElement] is the
+/// other kind entirely, and the only command in the app that destroys
+/// anything.
 library;
 
 import 'package:incremental_reader/scheduling/element.dart';
@@ -86,4 +89,29 @@ final class BrowserFilingOutcome {
   /// included. Siblings are renumbered as a block, so this is normally more
   /// than one.
   final int rewritten;
+}
+
+/// Removes an element and everything below it, for good.
+///
+/// Not Dismiss, which stops scheduling and keeps the text, and not
+/// the SM20 `deleted` status either: this erases the rows. What goes with it
+/// is everything the Browser draws underneath the row — the extracts cut from
+/// it, the cards formulated from those, and any element filed under it by
+/// hand — together with every extract that still names a deleted source as
+/// its own, wherever in the tree it has since been moved to.
+///
+/// There is no undo. The confirmation in front of it is the safeguard.
+final class DeleteElement extends AppCommand {
+  DeleteElement(super.operationId, {required this.ref, super.timestampUtc});
+
+  /// The element at the top of what is about to go.
+  final ElementRef ref;
+}
+
+/// What one deletion removed.
+final class BrowserDeletionOutcome {
+  const BrowserDeletionOutcome({required this.deletedRefs});
+
+  /// Everything erased, the named element included.
+  final List<ElementRef> deletedRefs;
 }

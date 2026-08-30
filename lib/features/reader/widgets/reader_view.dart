@@ -119,7 +119,7 @@ class ReaderViewState extends State<ReaderView> {
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onVisibleBlocksChanged);
+    _scrollController.addListener(_onScroll);
     final anchor = widget.initialAnchor;
     if (anchor != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => jumpToAnchor(anchor));
@@ -143,7 +143,7 @@ class ReaderViewState extends State<ReaderView> {
   @override
   void dispose() {
     _scrollController
-      ..removeListener(_onVisibleBlocksChanged)
+      ..removeListener(_onScroll)
       ..dispose();
     _keyboardFocus.dispose();
     super.dispose();
@@ -205,7 +205,13 @@ class ReaderViewState extends State<ReaderView> {
     return widget.controller.anchorAtGlobalPosition(probe);
   }
 
-  void _onVisibleBlocksChanged() {
+  void _onScroll() {
+    // Anything anchored to the selection — the toolbar, the handles — is
+    // positioned from where the text is on screen, and scrolling moves the
+    // text without touching the selection. Reported first, and for every
+    // surface, because a screen that passes no position callback still shows
+    // a toolbar.
+    widget.controller.reportViewportMoved();
     final callback = widget.onVisiblePositionChanged;
     if (callback == null) return;
     final anchor = topVisibleAnchor;

@@ -82,6 +82,21 @@ final class ReaderSelectionController extends ChangeNotifier {
   String? _anchorBlockId;
   int _anchorRendered = 0;
 
+  final _ViewportMoves _viewportMoves = _ViewportMoves();
+  bool _isViewportMoveQueued = false;
+  bool _isDisposed = false;
+
+  /// Fires when the selection changes *or* the text scrolls under it.
+  ///
+  /// Anything anchored to where the selection sits on screen — the floating
+  /// toolbar, the drag handles — has to follow both. The document itself
+  /// listens to this controller directly instead, because repainting every
+  /// mounted paragraph on each scroll tick would cost far more than it buys.
+  late final Listenable selectionOnScreen = Listenable.merge(<Listenable>[
+    this,
+    _viewportMoves,
+  ]);
+
   /// The document being read.
   Document get document => _document;
 
@@ -128,6 +143,29 @@ final class ReaderSelectionController extends ChangeNotifier {
       return;
     }
     SchedulerBinding.instance.addPostFrameCallback((_) => notifyListeners());
+  }
+
+  /// Says the text may have moved under the selection.
+  ///
+  /// Reported after the frame rather than during it: a scroll callback runs
+  /// before layout, so a listener reading a paragraph's position now would
+  /// place itself against where the text used to be. One pending report at a
+  /// time, because a fling produces a callback per pixel.
+  void reportViewportMoved() {
+    if (_isViewportMoveQueued || _isDisposed) return;
+    _isViewportMoveQueued = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _isViewportMoveQueued = false;
+      if (_isDisposed) return;
+      _viewportMoves.notifyMoved();
+    });
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _viewportMoves.dispose();
+    super.dispose();
   }
 
   /// Registers a laid-out paragraph so it can be hit-tested.
@@ -223,6 +261,22 @@ final class ReaderSelectionController extends ChangeNotifier {
     if (next == _selection) return;
     _selection = next;
     notifyListeners();
+  }
+
+  /// Pins the end the user is *not* dragging, before a handle moves.
+  ///
+  /// The handle then travels through [extendTo], the same path a
+  /// press-and-sweep takes, so dragging one handle past the other flips the
+  /// two ends rather than collapsing the selection to nothing.
+  void beginEdgeDrag({required bool isStartEdge}) {
+    final selection = _selection;
+    if (selection == null) return;
+    _anchorBlockId = isStartEdge
+        ? selection.endBlockId
+        : selection.startBlockId;
+    _anchorRendered = isStartEdge
+        ? selection.endRendered
+        : selection.startRendered;
   }
 
   /// Selects the word under [globalPosition].
@@ -365,6 +419,46 @@ final class ReaderSelectionController extends ChangeNotifier {
     );
   }
 
+  /// Screen rectangles of the first and last selected characters.
+  ///
+  /// What a drag handle needs: where each end of the selection actually is,
+  /// rather than the one rectangle around the whole of it. A side whose block
+  /// has scrolled away comes back null, because a handle placed for text that
+  /// is not laid out would point at nothing.
+  ({Rect? start, Rect? end}) selectionEdgeBoxesGlobal() {
+    final selection = _selection;
+    if (selection == null || selection.isCollapsed) {
+      return (start: null, end: null);
+    }
+    return (
+      start: _edgeBoxGlobal(selection.startBlockId, isStartEdge: true),
+      end: _edgeBoxGlobal(selection.endBlockId, isStartEdge: false),
+    );
+  }
+
+  /// The first or last painted box of the selection within one block.
+  Rect? _edgeBoxGlobal(String blockId, {required bool isStartEdge}) {
+    final block = _document.blockById(blockId);
+    final key = _paragraphs[blockId];
+    final renderObject = key?.currentContext?.findRenderObject();
+    if (block == null ||
+        renderObject is! RenderParagraph ||
+        !renderObject.hasSize) {
+      return null;
+    }
+    final highlights = highlightsFor(block);
+    if (highlights.isEmpty) return null;
+    final boxes = renderObject.getBoxesForSelection(
+      TextSelection(
+        baseOffset: highlights.first.start,
+        extentOffset: highlights.first.end,
+      ),
+    );
+    if (boxes.isEmpty) return null;
+    final box = isStartEdge ? boxes.first : boxes.last;
+    return box.toRect().shift(renderObject.localToGlobal(Offset.zero));
+  }
+
   /// Exact source anchor under [globalPosition], optionally constrained to a
   /// specific block (used by its gutter).
   ReaderAnchor? anchorAtGlobalPosition(
@@ -438,6 +532,14 @@ final class ReaderSelectionController extends ChangeNotifier {
 
   static bool _isBreak(int unit) =>
       unit == 0x20 || unit == 0x09 || unit == 0x0A || unit == 0x0D;
+}
+
+/// The "the text scrolled" half of [ReaderSelectionController.selectionOnScreen].
+///
+/// A notifier of its own rather than a flag on the controller: the block list
+/// listens to the controller, and it must not be rebuilt by scrolling.
+final class _ViewportMoves extends ChangeNotifier {
+  void notifyMoved() => notifyListeners();
 }
 
 final class _BlockPosition {

@@ -11,17 +11,14 @@ library;
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/markdown_block_parser.dart';
+import 'package:incremental_reader/documents/outline.dart';
 import 'package:incremental_reader/documents/text_splice.dart';
 
 /// The splice that replaces [block]'s markdown with [markdown].
 ///
 /// Text that is blank after normalizing removes the block outright, via
 /// [spliceForBlockRemoval], rather than leaving an empty paragraph behind.
-TextSplice spliceForBlockEdit(
-  Document document,
-  Block block,
-  String markdown,
-) {
+TextSplice spliceForBlockEdit(Document document, Block block, String markdown) {
   final normalized = normalizeMarkdown(markdown);
   if (normalized.trim().isEmpty) return spliceForBlockRemoval(document, block);
   return TextSplice(
@@ -80,4 +77,40 @@ TextSplice spliceForBlockInsertion(
     );
   }
   return TextSplice.insert(block.sourceEndUtf8, '\n\n$normalized');
+}
+
+/// The splice that swaps a heading's whole section with the sibling section
+/// above or below it.
+///
+/// Both sections are contiguous and adjacent — a sibling is by definition the
+/// next heading of the same level, with nothing shallower between them — so
+/// the two of them plus the separator between are one unbroken range, and the
+/// move is a single replacement of that range by the same text in the other
+/// order. That matters: one splice is what every position and every extract
+/// range already knows how to be migrated across.
+///
+/// Null when [blockId] is not a heading, or when there is no sibling that way.
+TextSplice? spliceForSectionSwap(
+  Document document,
+  String blockId, {
+  required bool shouldMoveUp,
+}) {
+  final outline = outlineOf(document);
+  final entry = outlineEntryOf(outline, blockId);
+  if (entry == null) return null;
+  final neighbour = shouldMoveUp
+      ? previousSiblingOf(outline, entry)
+      : nextSiblingOf(outline, entry);
+  if (neighbour == null) return null;
+
+  final first = shouldMoveUp ? neighbour : entry;
+  final second = shouldMoveUp ? entry : neighbour;
+  return TextSplice(
+    startUtf8: first.sectionStartUtf8,
+    endUtf8: second.sectionEndUtf8,
+    inserted:
+        document.markdownSlice(second.sectionStartUtf8, second.sectionEndUtf8) +
+        document.markdownSlice(first.sectionEndUtf8, second.sectionStartUtf8) +
+        document.markdownSlice(first.sectionStartUtf8, first.sectionEndUtf8),
+  );
 }

@@ -115,7 +115,7 @@ final class Source {
   /// Lowercase hex SHA-256 of [markdown].
   final String contentHash;
 
-  /// Approximate word count, used for the reminder line and progress.
+  /// Approximate word count, used for the words-read count and progress.
   final int wordCount;
 
   final DateTime importedAtUtc;

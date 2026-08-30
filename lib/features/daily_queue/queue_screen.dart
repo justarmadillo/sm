@@ -105,7 +105,7 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
   /// Everything is disabled while a route is opening, so a second tap cannot
   /// push the same screen twice.
   PreferredSizeWidget _appBar(BuildContext context, QueueViewModel model) {
-    // Six destinations do not fit beside a title on a phone. The two the
+    // Six destinations do not fit beside a title on a phone. The three the
     // session itself needs stay on the bar; the rest move into a menu, in the
     // same order they had, so the wide layout is still the readable one.
     final bool isNarrow = isCompactWidth(context);
@@ -140,14 +140,23 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
           icon: const Icon(Icons.undo),
           tooltip: 'Undo last grade (Ctrl+Z)',
         ),
+        // Deciding what matters is part of studying, not housekeeping, so
+        // this one keeps its place on the bar at every width rather than
+        // costing a menu tap on the screen it is used from most.
+        IconButton(
+          onPressed: _isOpeningRoutes
+              ? null
+              : () => _openThenRefresh(
+                  model,
+                  () => openPriorityBrowser(context, ref),
+                ),
+          icon: const Icon(Icons.low_priority),
+          tooltip: 'Priority queue',
+        ),
         if (isNarrow)
           _MoreDestinationsMenu(
             enabled: !_isOpeningRoutes,
             onRefresh: model.refresh,
-            onPriorityQueue: () => _openThenRefresh(
-              model,
-              () => openPriorityBrowser(context, ref),
-            ),
             onDiagnostics: () => openDiagnostics(context, ref),
             onSettings: () =>
                 _openThenRefresh(model, () => openSettings(context, ref)),
@@ -157,16 +166,6 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
             onPressed: _isOpeningRoutes ? null : model.refresh,
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh queue',
-          ),
-          IconButton(
-            onPressed: _isOpeningRoutes
-                ? null
-                : () => _openThenRefresh(
-                    model,
-                    () => openPriorityBrowser(context, ref),
-                  ),
-            icon: const Icon(Icons.low_priority),
-            tooltip: 'Priority queue',
           ),
           IconButton(
             onPressed: _isOpeningRoutes
@@ -329,14 +328,12 @@ class _MoreDestinationsMenu extends StatelessWidget {
   const _MoreDestinationsMenu({
     required this.enabled,
     required this.onRefresh,
-    required this.onPriorityQueue,
     required this.onDiagnostics,
     required this.onSettings,
   });
 
   final bool enabled;
   final Future<void> Function() onRefresh;
-  final Future<void> Function() onPriorityQueue;
   final Future<void> Function() onDiagnostics;
   final Future<void> Function() onSettings;
 
@@ -349,8 +346,6 @@ class _MoreDestinationsMenu extends StatelessWidget {
       switch (destination) {
         case 'refresh':
           unawaited(onRefresh());
-        case 'priority':
-          unawaited(onPriorityQueue());
         case 'diagnostics':
           unawaited(onDiagnostics());
         case 'settings':
@@ -363,13 +358,6 @@ class _MoreDestinationsMenu extends StatelessWidget {
         child: ListTile(
           leading: Icon(Icons.refresh),
           title: Text('Refresh queue'),
-        ),
-      ),
-      PopupMenuItem<String>(
-        value: 'priority',
-        child: ListTile(
-          leading: Icon(Icons.low_priority),
-          title: Text('Priority queue'),
         ),
       ),
       PopupMenuItem<String>(
@@ -455,7 +443,7 @@ class _LoadPanel extends StatelessWidget {
         onPressed: isRunning || state.isBusy
             ? null
             : () => _confirmSmartPostpone(context),
-        icon: const Icon(Icons.schedule_send, size: 16),
+        icon: const Icon(Icons.update, size: 16),
         label: const Text('Smart Postpone'),
       ),
       TextButton.icon(

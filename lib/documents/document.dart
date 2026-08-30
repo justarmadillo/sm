@@ -227,7 +227,7 @@ final class Document {
   /// Words of rendered text between [start] and [end].
   ///
   /// Counted over what the reader sees, not over the markdown, so syntax does
-  /// not inflate the reminder line's sense of how far the session has gone.
+  /// not inflate the session's sense of how far the reading has gone.
   int wordsBetween(ReaderAnchor start, ReaderAnchor end) =>
       wordsInRange(start.utf8Offset, end.utf8Offset);
 
@@ -320,8 +320,8 @@ final class Document {
 
   /// The anchor roughly [words] of rendered text after [from].
   ///
-  /// Resolves to a block boundary, which is close enough for a reminder line
-  /// and avoids implying a precision the count does not have.
+  /// Resolves to a block boundary, which is close enough for a words-read
+  /// count and avoids implying a precision the count does not have.
   ReaderAnchor? anchorAfterWords(ReaderAnchor from, int words) {
     final startIndex = blockIndexAtOffset(from.utf8Offset);
     if (startIndex == null) return null;

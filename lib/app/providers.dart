@@ -25,6 +25,7 @@ import 'package:incremental_reader/shared/fan_out_diagnostic_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/in_memory_diagnostic_sink.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
+import 'package:incremental_reader/storage/contracts/database_maintenance.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/search_repository.dart';
 import 'package:incremental_reader/storage/contracts/settings_repository.dart';
@@ -32,6 +33,7 @@ import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/drift/drift_content_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_database_maintenance.dart';
 import 'package:incremental_reader/storage/drift/drift_learning_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_search_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_settings_repository.dart';
@@ -41,6 +43,7 @@ import 'package:incremental_reader/storage/files/backup_service.dart';
 import 'package:incremental_reader/storage/files/rotating_log_sink.dart';
 import 'package:incremental_reader/storage/platform/app_paths.dart';
 import 'package:incremental_reader/storage/platform/time_zones.dart';
+
 /// Version reported in the diagnostic log alongside the schema version.
 const String kAppVersion = '1.0.0-m4';
 
@@ -176,6 +179,12 @@ final Provider<SettingsRepository> settingsRepositoryProvider =
 final Provider<SearchRepository> searchRepositoryProvider =
     Provider<SearchRepository>(
       (Ref ref) => DriftSearchRepository(ref.watch(databaseProvider)),
+    );
+
+/// Whole-file housekeeping: integrity, the search index, and compaction.
+final Provider<DatabaseMaintenance> databaseMaintenanceProvider =
+    Provider<DatabaseMaintenance>(
+      (Ref ref) => DriftDatabaseMaintenance(ref.watch(databaseProvider)),
     );
 
 /// Transfer aggregate.

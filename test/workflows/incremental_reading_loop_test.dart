@@ -260,15 +260,15 @@ void main() {
 
     final cards = result.unwrap();
     expect(cards, hasLength(4));
-    expect(cards.map((Card card) => card.kind), <CardKind>[
-      CardKind.qa,
-      CardKind.qa,
-      CardKind.cloze,
-      CardKind.cloze,
+    expect(cards.map((Card card) => card.type), <CardType>[
+      CardType.qa,
+      CardType.qa,
+      CardType.cloze,
+      CardType.cloze,
     ]);
     expect(
       cards
-          .where((Card card) => card.kind == CardKind.cloze)
+          .where((Card card) => card.type == CardType.cloze)
           .map((Card card) => card.clozeOrdinal),
       <int?>[1, 2],
     );
@@ -500,7 +500,7 @@ void main() {
       final cloze = entries.firstWhere(
         (QueueEntry entry) =>
             entry.ref.id ==
-            cards.firstWhere((Card card) => card.kind == CardKind.cloze).id,
+            cards.firstWhere((Card card) => card.type == CardType.cloze).id,
       );
       expect(cloze.preview, contains('[...]'));
       expect(cloze.preview, isNot(contains('four items')));

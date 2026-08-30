@@ -31,6 +31,15 @@ abstract interface class ContentRepository {
   /// Replaces mutable source fields: title, pace, resume position, folder.
   Future<void> updateSource(Source source);
 
+  /// Removes a source outright, with the blocks and edit journal that belong
+  /// to it.
+  ///
+  /// Refused by the database while any extract still names this source, so
+  /// the caller deletes the extracts first. That refusal is the backstop
+  /// against a delete that would leave an extract pointing into text that no
+  /// longer exists.
+  Future<void> deleteSource(String id);
+
   /// Updates only the authoritative marker and returns the stored source.
   Future<Source?> saveResumeMarker(String sourceId, ReaderAnchor anchor);
 
@@ -114,6 +123,12 @@ abstract interface class ContentRepository {
 
   /// Replaces a card's text, including edits made during review.
   Future<void> updateCard(Card card);
+
+  /// Removes a card outright.
+  ///
+  /// Refused by the database while the card still has FSRS memory or review
+  /// history, so the caller clears those first.
+  Future<void> deleteCard(String id);
 
   /// Cards formulated from the same parent as [cardId], excluding it.
   ///

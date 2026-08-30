@@ -51,19 +51,19 @@ import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 import 'package:meta/meta.dart';
 
 /// Activity kind recorded when a source is imported.
-const String kSourceImportedKind = 'source.imported';
+const String kSourceImportedType = 'source.imported';
 
 /// Activity kind recorded when the resume marker moves.
-const String kMarkerMovedKind = 'reader.marker_moved';
+const String kMarkerMovedType = 'reader.marker_moved';
 
 /// Activity kind recorded when a source's text is edited.
-const String kSourceEditedKind = 'source.edited';
+const String kSourceEditedType = 'source.edited';
 
 /// Activity kind recorded when an edit is reversed.
-const String kSourceEditUndoneKind = 'source.edit_undone';
+const String kSourceEditUndoneType = 'source.edit_undone';
 
 /// Activity kind recorded when a topic's interval is set by hand.
-const String kTopicRescheduledKind = 'topic.rescheduled';
+const String kTopicRescheduledType = 'topic.rescheduled';
 
 /// Activity kind for a completed topic encounter.
 ///
@@ -71,7 +71,7 @@ const String kTopicRescheduledKind = 'topic.rescheduled';
 /// so the row written on success has to carry it. Logging the domain event's
 /// own name here instead would leave the guard permanently unsatisfied and
 /// let a retried Done commit a second repetition.
-const String kTopicEncounterCompletedKind = 'topic.encounter_completed';
+const String kTopicEncounterCompletedType = 'topic.encounter_completed';
 
 /// What one text edit produced, for the caller that has to redraw.
 ///
@@ -137,7 +137,7 @@ final class ReaderCommandRunner {
   /// Imports markdown as a new source, due today.
   Future<Result<Source>> importSource(
     ImportSource command,
-  ) => _run<Source>(command, kSourceImportedKind, () async {
+  ) => _run<Source>(command, kSourceImportedType, () async {
     final String markdown = command.markdown.trim();
     if (markdown.isEmpty) {
       return const Err<Source>(
@@ -227,7 +227,7 @@ final class ReaderCommandRunner {
     await _journalCreation(command, topic, pressure);
     await _log(
       command,
-      kSourceImportedKind,
+      kSourceImportedType,
       ref: ref,
       metadata: <String, Object?>{
         'words': source.wordCount,
@@ -240,7 +240,7 @@ final class ReaderCommandRunner {
 
   /// Places the authoritative resume marker. Never advances the schedule.
   Future<Result<Source>> moveResumeMarker(MoveResumeMarker command) =>
-      _run<Source>(command, kMarkerMovedKind, () async {
+      _run<Source>(command, kMarkerMovedType, () async {
         final Source? source = await _content.findSource(command.sourceId);
         if (source == null) return _missingSource<Source>(command.sourceId);
 
@@ -260,7 +260,7 @@ final class ReaderCommandRunner {
         if (updated == null) return _missingSource<Source>(command.sourceId);
         await _log(
           command,
-          kMarkerMovedKind,
+          kMarkerMovedType,
           ref: ElementRef(id: source.id, type: ElementType.source),
           metadata: <String, Object?>{'offset': command.anchor.utf8Offset},
         );
@@ -293,7 +293,7 @@ final class ReaderCommandRunner {
 
   /// Promotes the soft position to the authoritative marker.
   Future<Result<Source>> confirmSoftPosition(ConfirmSoftPosition command) =>
-      _run<Source>(command, kMarkerMovedKind, () async {
+      _run<Source>(command, kMarkerMovedType, () async {
         final Source? source = await _content.findSource(command.sourceId);
         if (source == null) return _missingSource<Source>(command.sourceId);
         if (source.resume.softPosition == null) {
@@ -305,7 +305,7 @@ final class ReaderCommandRunner {
         if (updated == null) return _missingSource<Source>(command.sourceId);
         await _log(
           command,
-          kMarkerMovedKind,
+          kMarkerMovedType,
           ref: ElementRef(id: source.id, type: ElementType.source),
           metadata: <String, Object?>{'from': 'soft_position'},
         );
@@ -315,7 +315,7 @@ final class ReaderCommandRunner {
   /// Done: grows the topic's interval exactly once.
   Future<Result<TopicState>> completeEncounter(
     CompleteTopicEncounter command,
-  ) => _run<TopicState>(command, kTopicEncounterCompletedKind, () async {
+  ) => _run<TopicState>(command, kTopicEncounterCompletedType, () async {
     final TopicState? topic = await _learning.findTopic(command.ref);
     if (topic == null) return _missingSchedule<TopicState>(command.ref.id);
 
@@ -413,14 +413,14 @@ final class ReaderCommandRunner {
       );
       await _log(
         command,
-        kTopicEncounterCompletedKind,
+        kTopicEncounterCompletedType,
         ref: command.ref,
         durationMs: command.foregroundMs,
         // The specific domain event stays in the row, it just no longer
         // decides the kind the retry guard searches for.
         metadata: <String, Object?>{
           ...?_metadataFor(event),
-          'event': event.kind,
+          'event': event.type,
         },
       );
     }
@@ -550,7 +550,7 @@ final class ReaderCommandRunner {
   /// The standard SM20 UI adapts A and priority against the entered remaining
   /// interval after the low-level due rewrite.
   Future<Result<TopicState>> reschedule(RescheduleTopic command) =>
-      _run<TopicState>(command, kTopicRescheduledKind, () async {
+      _run<TopicState>(command, kTopicRescheduledType, () async {
         if (command.intervalDays < 0) {
           return const Err<TopicState>(
             ValidationFailure('an interval cannot be negative'),
@@ -591,7 +591,7 @@ final class ReaderCommandRunner {
         );
         await _log(
           command,
-          kTopicRescheduledKind,
+          kTopicRescheduledType,
           ref: command.ref,
           metadata: <String, Object?>{'scheduled_for': destination.toString()},
         );
@@ -728,10 +728,10 @@ final class ReaderCommandRunner {
   Future<Result<TopicState>> _lifecycle(
     AppCommand command,
     ElementRef ref,
-    String kind,
+    String type,
     ReviewLogEventType eventType,
     Sm20ElementStatus target,
-  ) => _run<TopicState>(command, kind, () async {
+  ) => _run<TopicState>(command, type, () async {
     final TopicState? topic = await _learning.findTopic(ref);
     if (topic == null) return _missingSchedule<TopicState>(ref.id);
 
@@ -826,7 +826,7 @@ final class ReaderCommandRunner {
       },
     );
     for (final TopicEvent event in result.events) {
-      await _log(command, event.kind, ref: ref, metadata: _metadataFor(event));
+      await _log(command, event.type, ref: ref, metadata: _metadataFor(event));
     }
     return Ok<TopicState>(result.state);
   });
@@ -864,7 +864,7 @@ final class ReaderCommandRunner {
   Future<Result<SourceEdited>> editSourceBlock(EditSourceBlock command) =>
       _runEdit(
         command,
-        kSourceEditedKind,
+        kSourceEditedType,
         (Document document) {
           final Block? block = document.blockById(command.blockId);
           if (block == null) return null;
@@ -878,7 +878,7 @@ final class ReaderCommandRunner {
   Future<Result<SourceEdited>> deleteSourceBlock(DeleteSourceBlock command) =>
       _runEdit(
         command,
-        kSourceEditedKind,
+        kSourceEditedType,
         (Document document) {
           final Block? block = document.blockById(command.blockId);
           if (block == null) return null;
@@ -892,12 +892,26 @@ final class ReaderCommandRunner {
   Future<Result<SourceEdited>> insertSourceBlock(InsertSourceBlock command) =>
       _runEdit(
         command,
-        kSourceEditedKind,
+        kSourceEditedType,
         (Document document) {
           final Block? block = document.blockById(command.afterBlockId);
           if (block == null) return null;
           return spliceForBlockInsertion(document, block, command.markdown);
         },
+        sourceId: command.sourceId,
+        base: command.baseContentRevision,
+      );
+
+  /// Moves a heading and everything under it past its neighbouring section.
+  Future<Result<SourceEdited>> moveSourceSection(MoveSourceSection command) =>
+      _runEdit(
+        command,
+        kSourceEditedType,
+        (Document document) => spliceForSectionSwap(
+          document,
+          command.blockId,
+          shouldMoveUp: command.shouldMoveUp,
+        ),
         sourceId: command.sourceId,
         base: command.baseContentRevision,
       );
@@ -914,7 +928,7 @@ final class ReaderCommandRunner {
     }
     return _runEdit(
       command,
-      kSourceEditUndoneKind,
+      kSourceEditUndoneType,
       (Document _) => last.inverseSplice,
       sourceId: command.sourceId,
       base: last.contentRevision,
@@ -932,7 +946,7 @@ final class ReaderCommandRunner {
   /// transaction, so a crash leaves the previous revision wholly intact.
   Future<Result<SourceEdited>> _runEdit(
     AppCommand command,
-    String kind,
+    String type,
     TextSplice? Function(Document document) buildSplice, {
     required String sourceId,
     required int base,
@@ -1012,7 +1026,7 @@ final class ReaderCommandRunner {
             await _transfer.advanceGeneration();
             await _log(
               command,
-              kind,
+              type,
               ref: ElementRef(id: sourceId, type: ElementType.source),
               metadata: <String, Object?>{
                 'revision': outcome.contentRevision,
@@ -1051,14 +1065,14 @@ final class ReaderCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       final UnexpectedFailure failure = UnexpectedFailure(
-        'command $kind failed',
+        'command $type failed',
         cause: error,
         stackTrace: stackTrace,
       );
       _diagnostics.record(
         DiagnosticEvent(
           level: DiagnosticLevel.error,
-          name: kind,
+          name: type,
           timestampUtc: _clock.nowUtc(),
           operationId: command.operationId,
           failure: failure,
@@ -1078,12 +1092,12 @@ final class ReaderCommandRunner {
 
   Future<Result<T>> _run<T>(
     AppCommand command,
-    String kind,
+    String type,
     Future<Result<T>> Function() body,
   ) async {
     try {
       return await _transactions.run<Result<T>>(() async {
-        if (await _learning.hasActivity(command.operationId.value, kind)) {
+        if (await _learning.hasActivity(command.operationId.value, type)) {
           final ElementRef? topicRef = switch (command) {
             CompleteTopicEncounter(:final ref) ||
             PostponeElement(:final ref) ||
@@ -1110,19 +1124,19 @@ final class ReaderCommandRunner {
           // of the dataset can always be placed relative to another.
           await _transfer.advanceGeneration();
         }
-        _record(command, kind, result);
+        _record(command, type, result);
         return result;
       });
     } on Object catch (error, stackTrace) {
       final UnexpectedFailure failure = UnexpectedFailure(
-        'command $kind failed',
+        'command $type failed',
         cause: error,
         stackTrace: stackTrace,
       );
       _diagnostics.record(
         DiagnosticEvent(
           level: DiagnosticLevel.error,
-          name: kind,
+          name: type,
           timestampUtc: _clock.nowUtc(),
           operationId: command.operationId,
           failure: failure,
@@ -1164,7 +1178,7 @@ final class ReaderCommandRunner {
 
   Future<void> _log(
     AppCommand command,
-    String kind, {
+    String type, {
     ElementRef? ref,
     int? durationMs,
     Map<String, Object?>? metadata,
@@ -1172,7 +1186,7 @@ final class ReaderCommandRunner {
     ActivityRecord(
       id: _ids.newId(),
       operationId: command.operationId.value,
-      kind: kind,
+      type: type,
       atUtc: command.timestampUtc,
       ref: ref,
       durationMs: durationMs,
@@ -1180,11 +1194,11 @@ final class ReaderCommandRunner {
     ),
   );
 
-  void _record<T>(AppCommand command, String kind, Result<T> result) {
+  void _record<T>(AppCommand command, String type, Result<T> result) {
     _diagnostics.record(
       DiagnosticEvent(
         level: result.isOk ? DiagnosticLevel.info : DiagnosticLevel.warning,
-        name: kind,
+        name: type,
         timestampUtc: _clock.nowUtc(),
         operationId: command.operationId,
         fields: <String, Object?>{'ok': result.isOk},

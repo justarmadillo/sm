@@ -14,6 +14,7 @@ import 'package:incremental_reader/features/daily_queue/queue_view_model.dart';
 import 'package:incremental_reader/features/priority/priority_view_model.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/shared/result.dart';
+import 'package:incremental_reader/storage/contracts/database_maintenance.dart';
 
 @immutable
 final class SettingsUiState {
@@ -121,6 +122,77 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
         message: const UiMessage('Settings saved'),
       ),
     );
+  }
+
+  /// Compacts and checks the database, then says what it found.
+  ///
+  /// Not part of the draft, so it does not wait for Save: this changes how the
+  /// collection is stored, never what it contains, and there is nothing here
+  /// to back out of.
+  ///
+  /// No backup is taken first. Every step is either transactional (SQLite
+  /// rolls a half-finished VACUUM back) or derived (the search index is
+  /// rebuilt from rows that are still there), so an interrupted pass leaves
+  /// the collection exactly as it was.
+  Future<void> optimizeDatabase() async {
+    final SettingsUiState? current = state.valueOrNull;
+    if (current == null || current.isBusy) return;
+    state = AsyncValue<SettingsUiState>.data(current.copyWith(isBusy: true));
+
+    try {
+      final DatabaseMaintenanceReport report = await ref
+          .read(databaseMaintenanceProvider)
+          .optimize();
+      state = AsyncValue<SettingsUiState>.data(
+        current.copyWith(
+          isBusy: false,
+          message: UiMessage(
+            _reportMessage(report),
+            isError: !report.isHealthy,
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      state = AsyncValue<SettingsUiState>.data(
+        current.copyWith(
+          isBusy: false,
+          message: UiMessage('Could not optimize: $error', isError: true),
+        ),
+      );
+    }
+  }
+
+  /// The pass in one sentence.
+  ///
+  /// A problem is reported instead of the saving, not alongside it: how much
+  /// space was recovered is irrelevant news next to a collection that has just
+  /// reported itself damaged.
+  String _reportMessage(DatabaseMaintenanceReport report) {
+    if (!report.isHealthy) {
+      final String first = report.problems.first;
+      final int rest = report.problems.length - 1;
+      return rest == 0
+          ? 'The collection reported a problem: $first'
+          : 'The collection reported ${report.problems.length} problems, '
+                'starting with: $first';
+    }
+    final String repaired = report.wasSearchIndexRebuilt
+        ? ', search index rebuilt'
+        : '';
+    return report.bytesReclaimed == 0
+        ? 'Database optimized. Nothing left to reclaim$repaired.'
+        : 'Database optimized. ${_formatBytes(report.bytesReclaimed)} '
+              'reclaimed$repaired.';
+  }
+
+  /// Bytes as something a person reads, since the number is only ever shown to
+  /// answer "was that worth doing".
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes bytes';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    }
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   /// Clears the one-shot message after the view has shown it.

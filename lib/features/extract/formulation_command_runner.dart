@@ -21,7 +21,7 @@ import 'package:incremental_reader/storage/contracts/search_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 
-const String kCardsFormulatedKind = 'formulation.cards_created';
+const String kCardsFormulatedType = 'formulation.cards_created';
 
 final class FormulationCommandRunner {
   FormulationCommandRunner({
@@ -61,7 +61,7 @@ final class FormulationCommandRunner {
       return await _transactions.run<Result<List<Card>>>(() async {
         if (await _learning.hasActivity(
           command.operationId.value,
-          kCardsFormulatedKind,
+          kCardsFormulatedType,
         )) {
           return Err<List<Card>>(
             ConflictFailure('operation ${command.operationId} already applied'),
@@ -221,7 +221,7 @@ final class FormulationCommandRunner {
             atUtc: command.timestampUtc,
             after: _journal.cardSnapshot(state),
             metadata: <String, Object?>{
-              'kind': card.kind.name,
+              'kind': card.type.name,
               if (parent != null) 'parent': parent.id,
             },
           );
@@ -254,7 +254,7 @@ final class FormulationCommandRunner {
           ActivityRecord(
             id: _ids.newId(),
             operationId: command.operationId.value,
-            kind: kCardsFormulatedKind,
+            type: kCardsFormulatedType,
             atUtc: command.timestampUtc,
             ref: parentRef,
             metadata: <String, Object?>{'cards': cards.length},
@@ -264,7 +264,7 @@ final class FormulationCommandRunner {
         _diagnostics.record(
           DiagnosticEvent(
             level: DiagnosticLevel.info,
-            name: kCardsFormulatedKind,
+            name: kCardsFormulatedType,
             timestampUtc: now,
             operationId: command.operationId,
             fields: <String, Object?>{
@@ -277,14 +277,14 @@ final class FormulationCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       final failure = UnexpectedFailure(
-        'command $kCardsFormulatedKind failed',
+        'command $kCardsFormulatedType failed',
         cause: error,
         stackTrace: stackTrace,
       );
       _diagnostics.record(
         DiagnosticEvent(
           level: DiagnosticLevel.error,
-          name: kCardsFormulatedKind,
+          name: kCardsFormulatedType,
           timestampUtc: _clock.nowUtc(),
           operationId: command.operationId,
           failure: failure,

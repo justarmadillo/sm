@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
+import 'package:incremental_reader/documents/outline.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dart';
@@ -27,6 +28,7 @@ import 'package:incremental_reader/features/reader/widgets/extract_highlights.da
 import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_side_panel.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
+import 'package:incremental_reader/features/reader/widgets/selection_knobs.dart';
 import 'package:incremental_reader/features/reader/widgets/selection_toolbar.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
@@ -126,6 +128,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final box = _surfaceKey.currentContext?.findRenderObject();
     if (box is! RenderBox || !box.hasSize) return null;
     return global.shift(-box.localToGlobal(Offset.zero));
+  }
+
+  /// The same conversion for a single point, which the selection knobs need.
+  Offset? _toSurfacePoint(Offset global) {
+    final RenderObject? box = _surfaceKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return null;
+    return global - box.localToGlobal(Offset.zero);
   }
 
   Size? get _surfaceSize {
@@ -272,9 +281,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     return Scaffold(
       key: _scaffoldKey,
       appBar: _appBar(context, state, model),
+      // SafeArea inside the drawer, not around it: without it the panel's own
+      // tab row is drawn underneath Android's status bar and cannot be tapped.
       endDrawer: hasRoomForDockedPanel
           ? null
-          : Drawer(child: _sidePanel(state)),
+          : Drawer(child: SafeArea(child: _sidePanel(state, model))),
       body: CallbackShortcuts(
         bindings: _keyboardShortcuts(context, state, model),
         child: Focus(
@@ -297,12 +308,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                     }
                   },
                 ),
-              if (state.showReminder)
-                _ReminderLine(
-                  words: state.wordsThisSession,
-                  onDismiss: model.dismissReminder,
-                  onDone: model.done,
-                ),
               Expanded(
                 child: Row(
                   children: <Widget>[
@@ -316,7 +321,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       ),
                     ),
                     if (hasRoomForDockedPanel && _isPanelOpen)
-                      _sidePanel(state),
+                      _sidePanel(state, model),
                   ],
                 ),
               ),
@@ -324,7 +329,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 state: state,
                 model: model,
                 controller: controller,
-                onExtract: () => _extractSelection(model),
                 onFormulate: () => unawaited(_formulate(model, state)),
               ),
             ],
@@ -453,6 +457,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           onEditCancel: (Block _) => model.cancelEditing(),
           onEditDelete: (Block block) => unawaited(model.deleteBlock(block)),
         ),
+        // Filled rather than left to size itself: its knobs are positioned,
+        // and a stack of nothing but positioned children collapses to a point
+        // that no finger can reach.
+        Positioned.fill(
+          child: SelectionKnobLayer(
+            controller: controller,
+            toSurfaceSpace: _toSurfacePoint,
+          ),
+        ),
         SelectionToolbarLayer(
           controller: controller,
           canExtract: state.canCommitProgress,
@@ -503,9 +516,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   /// The outline and extract list beside the document, or over it.
-  Widget _sidePanel(ReaderUiState state) {
+  Widget _sidePanel(ReaderUiState state, ReaderViewModel model) {
     final bool isPanelInDrawer = isCompactWidth(context);
     return ReaderSidePanel(
+      outlineEditing: _outlineEditing(state, model),
       // A drawer already gives the panel its width; docked, it has to ask
       // for one or it would take the whole reading column.
       width: isPanelInDrawer ? null : kReaderSidePanelWidth,
@@ -528,6 +542,62 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       onClose: () => isPanelInDrawer
           ? Navigator.of(context).pop()
           : setState(() => _isPanelOpen = false),
+    );
+  }
+
+  /// The outline's own edits, every one of them a rewrite of a heading line.
+  ///
+  /// Nothing is stored beside the text: the outline is the heading lines, so
+  /// an entry that has been renamed or moved is saved the moment the splice
+  /// lands, and reopening the source reads it back from the markdown.
+  OutlineEditing _outlineEditing(ReaderUiState state, ReaderViewModel model) {
+    return OutlineEditing(
+      isBusy: state.isBusy,
+      onRename: (OutlineEntry entry, String text) =>
+          _rewriteHeading(state, model, entry, level: entry.level, text: text),
+      onChangeLevel: (OutlineEntry entry, int level) => _rewriteHeading(
+        state,
+        model,
+        entry,
+        level: level.clamp(1, 6),
+        text: entry.text,
+      ),
+      // After the whole section rather than after the heading line, so a new
+      // entry arrives as the next sibling instead of inside the section it
+      // was added from.
+      onAddAfter: (OutlineEntry entry, String text) => unawaited(
+        model.insertBlockAfter(
+          blockId: entry.sectionLastBlockId,
+          markdown: headingMarkdown(level: entry.level, text: text),
+        ),
+      ),
+      onRemove: (OutlineEntry entry) {
+        final Block? block = state.document.blockById(entry.blockId);
+        if (block != null) unawaited(model.deleteBlock(block));
+      },
+      onMoveSection: (OutlineEntry entry, {required bool shouldMoveUp}) =>
+          unawaited(
+            model.moveSection(
+              blockId: entry.blockId,
+              shouldMoveUp: shouldMoveUp,
+            ),
+          ),
+    );
+  }
+
+  /// Replaces a heading's whole line, which is how both renaming and
+  /// re-levelling reach the text.
+  void _rewriteHeading(
+    ReaderUiState state,
+    ReaderViewModel model,
+    OutlineEntry entry, {
+    required int level,
+    required String text,
+  }) {
+    final Block? block = state.document.blockById(entry.blockId);
+    if (block == null) return;
+    unawaited(
+      model.commitEdit(block, headingMarkdown(level: level, text: text)),
     );
   }
 
@@ -763,83 +833,105 @@ class _SoftPositionBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+    padding: EdgeInsets.symmetric(
+      horizontal: isCompactWidth(context) ? 12 : 20,
+      vertical: isCompactWidth(context) ? 4 : 8,
+    ),
     color: AppColors.softMarker.withValues(alpha: 0.1),
-    child: Row(
-      children: <Widget>[
-        const Icon(Icons.history, size: 15, color: AppColors.softMarker),
-        const SizedBox(width: 8),
-        const Expanded(
-          child: Text(
-            'You were here last time, but no marker was placed.',
-            style: TextStyle(fontSize: 12, color: AppColors.text),
+    child: isCompactWidth(context) ? _stacked() : _oneRow(),
+  );
+
+  /// The wide shape: sentence and both offers on a single line.
+  Widget _oneRow() => Row(
+    children: <Widget>[
+      const Icon(Icons.history, size: 15, color: AppColors.softMarker),
+      const SizedBox(width: 8),
+      const Expanded(
+        child: Text(
+          'You were here last time, but no marker was placed.',
+          style: TextStyle(fontSize: 12, color: AppColors.text),
+        ),
+      ),
+      TextButton(onPressed: onGoTo, child: const Text('Go there')),
+      TextButton(onPressed: onConfirm, child: const Text('Make it the marker')),
+      IconButton(
+        onPressed: onDismiss,
+        icon: const Icon(Icons.close, size: 16),
+        tooltip: 'Dismiss for this session',
+      ),
+    ],
+  );
+
+  /// The phone shape. Two labelled buttons beside the sentence leave it about
+  /// twelve characters of width, so it wraps to four lines and the banner eats
+  /// a third of the page it is interrupting. The sentence keeps one line of
+  /// its own and the offers go underneath it instead.
+  Widget _stacked() => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: <Widget>[
+      Row(
+        children: <Widget>[
+          const Icon(Icons.history, size: 14, color: AppColors.softMarker),
+          const SizedBox(width: 6),
+          const Expanded(
+            child: Text(
+              'You were here last time — no marker was placed.',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: AppColors.text),
+            ),
           ),
-        ),
-        TextButton(onPressed: onGoTo, child: const Text('Go there')),
-        TextButton(
-          onPressed: onConfirm,
-          child: const Text('Make it the marker'),
-        ),
-        IconButton(
-          onPressed: onDismiss,
-          icon: const Icon(Icons.close, size: 16),
-          tooltip: 'Dismiss for this session',
-        ),
-      ],
-    ),
+          IconButton(
+            onPressed: onDismiss,
+            icon: const Icon(Icons.close, size: 15),
+            tooltip: 'Dismiss for this session',
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 28, height: 24),
+          ),
+        ],
+      ),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: <Widget>[
+          TextButton(
+            onPressed: onGoTo,
+            style: _kBannerButtonStyle,
+            child: const Text('Go there'),
+          ),
+          const SizedBox(width: 4),
+          TextButton(
+            onPressed: onConfirm,
+            style: _kBannerButtonStyle,
+            child: const Text('Make it the marker'),
+          ),
+        ],
+      ),
+    ],
   );
 }
 
-/// The nonblocking session reminder.
-class _ReminderLine extends StatelessWidget {
-  const _ReminderLine({
-    required this.words,
-    required this.onDismiss,
-    required this.onDone,
-  });
-
-  final int words;
-  final VoidCallback onDismiss;
-  final VoidCallback onDone;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-    color: AppColors.accent.withValues(alpha: 0.08),
-    child: Row(
-      children: <Widget>[
-        Expanded(
-          child: Text(
-            'About $words words this session. A good place to stop — '
-            'place the marker and press Done.',
-            style: const TextStyle(fontSize: 12, color: AppColors.text),
-          ),
-        ),
-        TextButton(onPressed: onDone, child: const Text('Done')),
-        IconButton(
-          onPressed: onDismiss,
-          icon: const Icon(Icons.close, size: 15),
-          tooltip: 'Keep reading',
-        ),
-      ],
-    ),
-  );
-}
+/// A text button sized for a banner rather than a dialog: the default 48-pixel
+/// tap target would make the two offers taller than the sentence above them.
+final ButtonStyle _kBannerButtonStyle = TextButton.styleFrom(
+  padding: const EdgeInsets.symmetric(horizontal: 8),
+  minimumSize: const Size(0, 30),
+  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+);
 
 class _ActionBar extends StatelessWidget {
   const _ActionBar({
     required this.state,
     required this.model,
     required this.controller,
-    required this.onExtract,
     required this.onFormulate,
   });
 
   final ReaderUiState state;
   final ReaderViewModel model;
   final ReaderSelectionController controller;
-  final VoidCallback onExtract;
   final VoidCallback onFormulate;
 
   @override
@@ -874,7 +966,7 @@ class _ActionBar extends StatelessWidget {
     ],
   );
 
-  /// Narrow window: six buttons and a sentence do not share a line, so the
+  /// Narrow window: five buttons and a sentence do not share a line, so the
   /// sentence goes above and the buttons take as many rows as they need.
   Widget _hintAboveButtons(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -890,19 +982,16 @@ class _ActionBar extends StatelessWidget {
     style: const TextStyle(fontSize: 12, color: AppColors.muted),
   );
 
+  /// Extract is deliberately absent. It belongs to the selection, and the
+  /// toolbar that floats over it is where the reader is already looking; a
+  /// second copy down here was one more button to read past on every screen
+  /// where no text is selected at all.
   Widget _buttons(BuildContext context) => Wrap(
     spacing: 6,
     runSpacing: 6,
     alignment: WrapAlignment.end,
     crossAxisAlignment: WrapCrossAlignment.center,
     children: <Widget>[
-      OutlinedButton(
-        onPressed:
-            state.canCommitProgress && !state.isBusy && controller.canExtract
-            ? onExtract
-            : null,
-        child: const Text('Extract'),
-      ),
       if (state.canUndoEdit) _undoEditButton(),
       if (state.canCommitProgress) ..._progressButtons(context),
     ],
@@ -962,7 +1051,8 @@ class _ActionBar extends StatelessWidget {
       return 'Multi-block extraction arrives in M5. Select within one block.';
     }
     if (selection.canExtract) {
-      return 'Selection ready — Extract (Ctrl+E) keeps your place.';
+      return 'Selection ready — Extract above it, or Ctrl+E. Either keeps '
+          'your place.';
     }
     return 'Select text to extract. Click the left margin to place the marker.';
   }

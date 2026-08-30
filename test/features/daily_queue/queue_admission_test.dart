@@ -394,7 +394,7 @@ void main() {
       // one automatic pass idempotent across refreshes and restarts.
       final String expected = dailyAdmissionOperationId(today);
       expect(
-        harness.diagnostics.named(kDailyAdmissionKind).last.operationId,
+        harness.diagnostics.named(kDailyAdmissionType).last.operationId,
         OperationId(expected),
       );
       // Anything the automatic pass did move carries that same id.
@@ -415,7 +415,7 @@ void main() {
       final Map<String, Object?> metadata =
           (await harness.learning.listRecentActivity(
             limit: 50,
-          )).firstWhere((r) => r.kind == kDailyAdmissionKind).metadata!;
+          )).firstWhere((r) => r.type == kDailyAdmissionType).metadata!;
 
       // SM20 admits everything that is due; there is no cap and so no
       // overflow or protection figure to record. What the panel needs is what

@@ -37,19 +37,19 @@ import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 
 /// Activity kind recorded when a card is graded.
-const String kCardReviewedKind = 'card.reviewed';
+const String kCardReviewedType = 'card.reviewed';
 
 /// Activity kind recorded when a grade is taken back.
-const String kReviewUndoneKind = 'card.review_undone';
+const String kReviewUndoneType = 'card.review_undone';
 
 /// Activity kind recorded when a card's text is edited.
-const String kCardEditedKind = 'card.edited';
+const String kCardEditedType = 'card.edited';
 
 /// Activity kind recorded when a card's eligibility is moved.
-const String kCardPostponedKind = 'card.postponed';
+const String kCardPostponedType = 'card.postponed';
 
 /// Activity kind recorded when siblings are pushed off the day.
-const String kSiblingsBuriedKind = 'card.siblings_buried';
+const String kSiblingsBuriedType = 'card.siblings_buried';
 
 /// The outcome of one grade, including what it triggered.
 final class ReviewOutcome {
@@ -218,7 +218,7 @@ final class ReviewCommandRunner {
           ActivityRecord(
             id: _ids.newId(),
             operationId: command.operationId.value,
-            kind: kCardReviewedKind,
+            type: kCardReviewedType,
             atUtc: reviewedAt,
             ref: ElementRef(id: command.cardId, type: ElementType.card),
             durationMs: command.elapsedMs,
@@ -234,7 +234,7 @@ final class ReviewCommandRunner {
         _diagnostics.record(
           DiagnosticEvent(
             level: DiagnosticLevel.info,
-            name: kCardReviewedKind,
+            name: kCardReviewedType,
             timestampUtc: _clock.nowUtc(),
             operationId: command.operationId,
             fields: <String, Object?>{
@@ -260,7 +260,7 @@ final class ReviewCommandRunner {
       return Err<ReviewOutcome>(ConflictFailure(error.message));
     } on Object catch (error, stackTrace) {
       return Err<ReviewOutcome>(
-        _fail(command, kCardReviewedKind, error, stackTrace),
+        _fail(command, kCardReviewedType, error, stackTrace),
       );
     }
   }
@@ -416,7 +416,7 @@ final class ReviewCommandRunner {
           ActivityRecord(
             id: _ids.newId(),
             operationId: command.operationId.value,
-            kind: kReviewUndoneKind,
+            type: kReviewUndoneType,
             atUtc: command.timestampUtc,
             ref: ElementRef(id: record.cardId, type: ElementType.card),
             metadata: <String, Object?>{'rating': record.rating.value},
@@ -428,7 +428,7 @@ final class ReviewCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<CardState>(
-        _fail(command, kReviewUndoneKind, error, stackTrace),
+        _fail(command, kReviewUndoneType, error, stackTrace),
       );
     }
   }
@@ -439,7 +439,7 @@ final class ReviewCommandRunner {
       return await _transactions.run<Result<Card>>(() async {
         if (await _learning.hasActivity(
           command.operationId.value,
-          kCardEditedKind,
+          kCardEditedType,
         )) {
           return Err<Card>(
             ConflictFailure('operation ${command.operationId} already applied'),
@@ -459,12 +459,12 @@ final class ReviewCommandRunner {
             ValidationFailure('a card needs a question', field: 'front'),
           );
         }
-        if (card.kind == CardKind.qa && back.isEmpty) {
+        if (card.type == CardType.qa && back.isEmpty) {
           return const Err<Card>(
             ValidationFailure('a Q&A card needs an answer', field: 'back'),
           );
         }
-        if (card.kind == CardKind.cloze) {
+        if (card.type == CardType.cloze) {
           final List<int> ordinals = clozeOrdinals(front);
           if (!ordinals.contains(card.clozeOrdinal)) {
             // The deletion this card tests has to survive the edit, or the
@@ -481,7 +481,7 @@ final class ReviewCommandRunner {
 
         final Card updated = card.copyWith(
           front: front,
-          back: card.kind == CardKind.cloze ? front : back,
+          back: card.type == CardType.cloze ? front : back,
           editedAtUtc: command.timestampUtc,
         );
         await _content.updateCard(updated);
@@ -489,18 +489,18 @@ final class ReviewCommandRunner {
           ActivityRecord(
             id: _ids.newId(),
             operationId: command.operationId.value,
-            kind: kCardEditedKind,
+            type: kCardEditedType,
             atUtc: command.timestampUtc,
             ref: ElementRef(id: card.id, type: ElementType.card),
             // Metadata records that an edit happened, never what it said.
-            metadata: <String, Object?>{'kind': card.kind.name},
+            metadata: <String, Object?>{'kind': card.type.name},
           ),
         );
         await _transfer.advanceGeneration();
         return Ok<Card>(updated);
       });
     } on Object catch (error, stackTrace) {
-      return Err<Card>(_fail(command, kCardEditedKind, error, stackTrace));
+      return Err<Card>(_fail(command, kCardEditedType, error, stackTrace));
     }
   }
 
@@ -510,7 +510,7 @@ final class ReviewCommandRunner {
       return await _transactions.run<Result<CardState>>(() async {
         if (await _learning.hasActivity(
           command.operationId.value,
-          kCardPostponedKind,
+          kCardPostponedType,
         )) {
           final CardState? replayed = await _learning.findCardState(
             command.cardId,
@@ -584,7 +584,7 @@ final class ReviewCommandRunner {
           ActivityRecord(
             id: _ids.newId(),
             operationId: command.operationId.value,
-            kind: kCardPostponedKind,
+            type: kCardPostponedType,
             atUtc: command.timestampUtc,
             ref: ElementRef(id: command.cardId, type: ElementType.card),
             metadata: <String, Object?>{
@@ -598,7 +598,7 @@ final class ReviewCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<CardState>(
-        _fail(command, kCardPostponedKind, error, stackTrace),
+        _fail(command, kCardPostponedType, error, stackTrace),
       );
     }
   }
@@ -658,7 +658,7 @@ final class ReviewCommandRunner {
       ActivityRecord(
         id: _ids.newId(),
         operationId: command.operationId.value,
-        kind: kCardReviewedKind,
+        type: kCardReviewedType,
         atUtc: reviewedAt,
         ref: ElementRef(id: command.cardId, type: ElementType.card),
         durationMs: command.elapsedMs,
@@ -732,7 +732,7 @@ final class ReviewCommandRunner {
       ActivityRecord(
         id: _ids.newId(),
         operationId: command.operationId.value,
-        kind: kSiblingsBuriedKind,
+        type: kSiblingsBuriedType,
         atUtc: command.timestampUtc,
         ref: reviewed.ref,
         metadata: <String, Object?>{'buried': entries.length},
@@ -827,19 +827,19 @@ final class ReviewCommandRunner {
 
   UnexpectedFailure _fail(
     AppCommand command,
-    String kind,
+    String type,
     Object error,
     StackTrace stackTrace,
   ) {
     final UnexpectedFailure failure = UnexpectedFailure(
-      'command $kind failed',
+      'command $type failed',
       cause: error,
       stackTrace: stackTrace,
     );
     _diagnostics.record(
       DiagnosticEvent(
         level: DiagnosticLevel.error,
-        name: kind,
+        name: type,
         timestampUtc: _clock.nowUtc(),
         operationId: command.operationId,
         failure: failure,

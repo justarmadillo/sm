@@ -9,7 +9,7 @@ library;
 import 'package:meta/meta.dart';
 
 /// How a card is presented.
-enum CardKind {
+enum CardType {
   /// An explicit question and answer.
   qa,
 
@@ -62,7 +62,7 @@ final class ClozeDeletion {
 }
 
 /// Which kind of element a card was formulated from.
-enum CardParentKind {
+enum CardParentType {
   /// Straight from an imported article, without extracting first.
   source,
 
@@ -78,32 +78,32 @@ enum CardParentKind {
 /// a parent is a reference to another element, or nothing.
 @immutable
 final class CardParent {
-  const CardParent({required this.kind, required this.id});
+  const CardParent({required this.type, required this.id});
 
   /// A card formulated directly from an article.
   const CardParent.source(String id)
-    : this(kind: CardParentKind.source, id: id);
+    : this(type: CardParentType.source, id: id);
 
   /// A card formulated from an extract.
   const CardParent.extract(String id)
-    : this(kind: CardParentKind.extract, id: id);
+    : this(type: CardParentType.extract, id: id);
 
-  final CardParentKind kind;
+  final CardParentType type;
   final String id;
 
-  bool get isSource => kind == CardParentKind.source;
+  bool get isSource => type == CardParentType.source;
 
-  bool get isExtract => kind == CardParentKind.extract;
+  bool get isExtract => type == CardParentType.extract;
 
   @override
   bool operator ==(Object other) =>
-      other is CardParent && other.kind == kind && other.id == id;
+      other is CardParent && other.type == type && other.id == id;
 
   @override
-  int get hashCode => Object.hash(kind, id);
+  int get hashCode => Object.hash(type, id);
 
   @override
-  String toString() => 'CardParent(${kind.name} $id)';
+  String toString() => 'CardParent(${type.name} $id)';
 }
 
 /// A formulated item the user is tested on.
@@ -112,7 +112,7 @@ final class Card {
   const Card({
     required this.id,
     required this.parent,
-    required this.kind,
+    required this.type,
     required this.front,
     required this.back,
     required this.createdAtUtc,
@@ -130,7 +130,7 @@ final class Card {
   }) => Card(
     id: id,
     parent: parent,
-    kind: CardKind.qa,
+    type: CardType.qa,
     front: question,
     back: answer,
     createdAtUtc: createdAtUtc.toUtc(),
@@ -146,7 +146,7 @@ final class Card {
   }) => Card(
     id: id,
     parent: parent,
-    kind: CardKind.cloze,
+    type: CardType.cloze,
     front: text,
     back: '',
     clozeOrdinal: ordinal,
@@ -165,7 +165,12 @@ final class Card {
   /// Parent source id, when the card was formulated straight from an article.
   String? get sourceId => parent?.isSource ?? false ? parent!.id : null;
 
-  final CardKind kind;
+  /// Whether this is a question and answer or a cloze passage.
+  ///
+  /// The field keeps the name of the column it is read from. Renaming it
+  /// would say nothing the type does not already say, and would leave the
+  /// converter mapping `kind` to something else for no reason.
+  final CardType type;
 
   /// Question text, or the full cloze passage.
   final String front;
@@ -182,14 +187,14 @@ final class Card {
   final DateTime? editedAtUtc;
 
   /// Every deletion in [front], for cloze cards.
-  List<ClozeDeletion> get deletions => kind == CardKind.cloze
+  List<ClozeDeletion> get deletions => type == CardType.cloze
       ? parseClozeDeletions(front)
       : const <ClozeDeletion>[];
 
   Card copyWith({String? front, String? back, DateTime? editedAtUtc}) => Card(
     id: id,
     parent: parent,
-    kind: kind,
+    type: type,
     front: front ?? this.front,
     back: back ?? this.back,
     clozeOrdinal: clozeOrdinal,
@@ -204,7 +209,7 @@ final class Card {
   int get hashCode => id.hashCode;
 
   @override
-  String toString() => 'Card($id ${kind.name})';
+  String toString() => 'Card($id ${type.name})';
 }
 
 final RegExp _clozePattern = RegExp(r'\{\{c(\d+)::(.*?)(?:::(.*?))?\}\}');

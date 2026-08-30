@@ -4,7 +4,6 @@ import 'package:incremental_reader/settings/diagnostics_settings.dart';
 import 'package:incremental_reader/settings/mercy_settings.dart';
 import 'package:incremental_reader/settings/postpone_settings.dart';
 import 'package:incremental_reader/settings/queue_settings.dart';
-import 'package:incremental_reader/settings/reader_settings.dart';
 import 'package:incremental_reader/settings/remember_settings.dart';
 import 'package:incremental_reader/settings/smart_postpone_settings.dart';
 import 'package:incremental_reader/settings/study_day_settings.dart';
@@ -89,7 +88,6 @@ void main() {
           recencyWeight: 3,
           intervalFactorMatrix: matrix,
         ),
-        reader: const ReaderSettings(reminderWords: 800),
         diagnostics: const DiagnosticsSettings(
           isLogEnabled: false,
           logMaxBytes: 65536,
@@ -149,7 +147,10 @@ void main() {
 
       const AppSettings defaults = AppSettings();
       expect(settings.queue.topicPercent, defaults.queue.topicPercent);
-      expect(settings.queue.shouldSortAutomatically, defaults.queue.shouldSortAutomatically);
+      expect(
+        settings.queue.shouldSortAutomatically,
+        defaults.queue.shouldSortAutomatically,
+      );
       expect(
         settings.remember.firstIntervalLowDays,
         defaults.remember.firstIntervalLowDays,
@@ -169,7 +170,10 @@ void main() {
       );
       expect(settings.mercy.mode, defaults.mercy.mode);
       expect(settings.mercy.intervalFactorMatrix, isNull);
-      expect(settings.diagnostics.isLogEnabled, defaults.diagnostics.isLogEnabled);
+      expect(
+        settings.diagnostics.isLogEnabled,
+        defaults.diagnostics.isLogEnabled,
+      );
     });
 
     test('out-of-range values use the executable and UI bounds', () {

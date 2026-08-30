@@ -635,7 +635,7 @@ void main() {
     test('records creation metadata without the extracted text', () async {
       await extract(selectRendered(blockOf(BlockType.paragraph), 'capacity'));
       final record = (await harness.learning.listRecentActivity()).firstWhere(
-        (ActivityRecord r) => r.kind == kExtractCreatedKind,
+        (ActivityRecord r) => r.type == kExtractCreatedType,
       );
 
       expect(record.metadata!['parent'], source.id);
@@ -656,7 +656,7 @@ void main() {
       );
 
       final record = (await harness.learning.listRecentActivity()).firstWhere(
-        (ActivityRecord r) => r.kind == kExtractCreatedKind,
+        (ActivityRecord r) => r.type == kExtractCreatedType,
       );
       expect(record.atUtc, timestamp);
     });

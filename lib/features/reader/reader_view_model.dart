@@ -80,8 +80,6 @@ final class ReaderUiState {
     this.cardsFromSource = 0,
     this.lastExtractId,
     this.wordsThisSession = 0,
-    this.reminderTarget = 500,
-    this.isReminderDismissed = false,
     this.isSoftBannerDismissed = false,
     this.hadSoftPositionOnOpen = false,
     this.message,
@@ -102,7 +100,7 @@ final class ReaderUiState {
   /// would report a Later the user just made as if it had not happened.
   final StudyDay? effectiveDueDay;
 
-  /// Where this session started, for the reminder line.
+  /// Where this session started, for the words-read count.
   final ReaderAnchor? openedAt;
 
   /// Extracts already taken from this source, for the gutter marks.
@@ -129,12 +127,6 @@ final class ReaderUiState {
 
   /// Rendered words between [openedAt] and the current position.
   final int wordsThisSession;
-
-  /// How far into a session the reminder line appears. Read from Settings
-  /// when the session opens, not compiled in.
-  final int reminderTarget;
-
-  final bool isReminderDismissed;
 
   /// Whether the user closed the forgotten-marker banner this session.
   final bool isSoftBannerDismissed;
@@ -183,12 +175,6 @@ final class ReaderUiState {
       hadSoftPositionOnOpen &&
       marker == null &&
       source.resume.softPosition != null;
-
-  /// Whether the nonblocking reminder line should be visible.
-  bool get showReminder =>
-      canCommitProgress &&
-      !isReminderDismissed &&
-      wordsThisSession >= reminderTarget;
 
   /// How many extracts start in each block, keyed by block id.
   ///
@@ -240,7 +226,6 @@ final class ReaderUiState {
     String? lastExtractId,
     bool shouldClearLastExtract = false,
     int? wordsThisSession,
-    bool? isReminderDismissed,
     bool? isSoftBannerDismissed,
     StudyDay? effectiveDueDay,
     UiMessage? message,
@@ -265,8 +250,6 @@ final class ReaderUiState {
         ? null
         : (lastExtractId ?? this.lastExtractId),
     wordsThisSession: wordsThisSession ?? this.wordsThisSession,
-    reminderTarget: reminderTarget,
-    isReminderDismissed: isReminderDismissed ?? this.isReminderDismissed,
     isSoftBannerDismissed: isSoftBannerDismissed ?? this.isSoftBannerDismissed,
     hadSoftPositionOnOpen: hadSoftPositionOnOpen,
     message: shouldClearMessage ? null : (message ?? this.message),
@@ -319,9 +302,6 @@ final class ReaderViewModel
       effectiveDueDay: await ref
           .read(effectiveDueQueryProvider)
           .forTopic(topic),
-      reminderTarget: (await ref.read(schedulingContextProvider).settings())
-          .reader
-          .reminderWords,
       openedAt:
           (arg.initialAnchor != null &&
               document.containsAnchor(arg.initialAnchor!))
@@ -694,15 +674,6 @@ final class ReaderViewModel
   Future<List<Extract>> _reloadExtracts(String sourceId) =>
       ref.read(contentRepositoryProvider).listExtractsOfParent(sourceId);
 
-  /// Hides the session reminder line until the next session.
-  void dismissReminder() {
-    final current = state.valueOrNull;
-    if (current == null) return;
-    state = AsyncValue<ReaderUiState>.data(
-      current.copyWith(isReminderDismissed: true),
-    );
-  }
-
   /// Consumes the one-shot completion signal.
   ///
   /// `isDone` means "a terminal command just committed", not "this source is
@@ -774,6 +745,46 @@ final class ReaderViewModel
             operation,
             sourceId: current.source.id,
             blockId: block.id,
+            baseContentRevision: current.document.contentRevision,
+          ),
+        ),
+  );
+
+  /// Adds a new block straight after [blockId].
+  ///
+  /// The outline's "add a heading here" — the new line goes after the last
+  /// block of the section above it, so a heading arrives as the next sibling
+  /// rather than inside the section it was added from.
+  Future<void> insertBlockAfter({
+    required String blockId,
+    required String markdown,
+  }) => _runEdit(
+    (OperationId operation, ReaderUiState current) => ref
+        .read(readerCommandRunnerProvider)
+        .insertSourceBlock(
+          InsertSourceBlock(
+            operation,
+            sourceId: current.source.id,
+            afterBlockId: blockId,
+            markdown: markdown,
+            baseContentRevision: current.document.contentRevision,
+          ),
+        ),
+  );
+
+  /// Moves a heading's whole section past the sibling section beside it.
+  Future<void> moveSection({
+    required String blockId,
+    required bool shouldMoveUp,
+  }) => _runEdit(
+    (OperationId operation, ReaderUiState current) => ref
+        .read(readerCommandRunnerProvider)
+        .moveSourceSection(
+          MoveSourceSection(
+            operation,
+            sourceId: current.source.id,
+            blockId: blockId,
+            shouldMoveUp: shouldMoveUp,
             baseContentRevision: current.document.contentRevision,
           ),
         ),

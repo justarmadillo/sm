@@ -137,7 +137,7 @@ class _SettingsBody extends StatelessWidget {
           _smartPostponeAdjust(),
           _ProfileRegistry(draft: draft, model: model),
           _mercy(),
-          _reader(),
+          _maintenance(),
           _diagnostics(),
         ],
       ),
@@ -211,7 +211,7 @@ class _SettingsBody extends StatelessWidget {
   Widget _queue() => SettingsSection(
     title: 'Daily Outstanding queue',
     description:
-        'SM20 priority-sorts items and topics independently, applies each '
+        'SM20 priority-sorts cards and topics independently, applies each '
         'randomization curve, then merges the two outputs at the selected '
         'topic percentage. There are no capacity caps or Study More overlay.',
     children: <Widget>[
@@ -234,9 +234,9 @@ class _SettingsBody extends StatelessWidget {
         ),
       ),
       SettingsRow(
-        label: 'Item randomization',
+        label: 'Card randomization',
         hint:
-            'The item-family slider value used by SM20’s nonlinear '
+            'The card-family slider value used by SM20’s nonlinear '
             'randomization curve (0–100).',
         control: DoubleSliderField(
           value: draft.queue.itemRandomization.toDouble(),
@@ -255,7 +255,7 @@ class _SettingsBody extends StatelessWidget {
         label: 'Topic randomization',
         hint:
             'The topic-family slider value. Topic extraction starts only '
-            'after every item extraction has consumed its random draws.',
+            'after every card extraction has consumed its random draws.',
         control: DoubleSliderField(
           value: draft.queue.topicRandomization.toDouble(),
           min: 0,
@@ -363,7 +363,7 @@ class _SettingsBody extends StatelessWidget {
   Widget _cards() => SettingsSection(
     title: 'Card memory',
     description:
-        'The supplied SM20 source does not reconstruct item memory. Cards '
+        'The supplied SM20 source does not reconstruct card memory. Cards '
         'retain FSRS memory while still participating in SM20 priority, '
         'Outstanding, Smart Postpone, and Mercy.',
     children: <Widget>[
@@ -580,7 +580,7 @@ class _SettingsBody extends StatelessWidget {
         'added before random dispersion, not the final interval.',
     children: <Widget>[
       SettingsRow(
-        label: 'Item delay factor',
+        label: 'Card delay factor',
         hint: 'Stored 1–400%; 20% is displayed by SM20 as factor 1.20.',
         control: IntField(
           value: smart.itemDelayPercent,
@@ -608,8 +608,8 @@ class _SettingsBody extends StatelessWidget {
         ),
       ),
       SettingsRow(
-        label: 'Item maximum added delay',
-        hint: 'Pre-dispersion clamp for item delay days.',
+        label: 'Card maximum added delay',
+        hint: 'Pre-dispersion clamp for card delay days.',
         control: IntField(
           value: smart.itemMaximumDelayDays,
           min: 1,
@@ -636,8 +636,8 @@ class _SettingsBody extends StatelessWidget {
         ),
       ),
       SettingsRow(
-        label: 'Item minimum added delay',
-        hint: 'Pre-dispersion minimum, and forced-pass item minimum.',
+        label: 'Card minimum added delay',
+        hint: 'Pre-dispersion minimum, and forced-pass card minimum.',
         control: IntField(
           value: smart.itemMinimumDelayDays,
           min: 1,
@@ -664,8 +664,8 @@ class _SettingsBody extends StatelessWidget {
         ),
       ),
       SettingsRow(
-        label: 'Skip all items',
-        hint: 'Reject the item family in a normal parameter pass.',
+        label: 'Skip all cards',
+        hint: 'Reject the card family in a normal parameter pass.',
         control: SwitchField(
           value: smart.shouldSkipItems,
           onChanged: (bool value) => _editSmartPostpone(
@@ -686,8 +686,8 @@ class _SettingsBody extends StatelessWidget {
         ),
       ),
       SettingsRow(
-        label: 'Item interval cutoff',
-        hint: 'Reject an item when age is greater than or equal to this.',
+        label: 'Card interval cutoff',
+        hint: 'Reject a card when age is greater than or equal to this.',
         control: IntField(
           value: smart.itemAgeCutoffDays,
           min: 2,
@@ -744,8 +744,8 @@ class _SettingsBody extends StatelessWidget {
         ),
       ),
       SettingsRow(
-        label: 'Item postponement-count cutoff',
-        hint: 'Reject when total item postponements reach this count.',
+        label: 'Card postponement-count cutoff',
+        hint: 'Reject when total card postponements reach this count.',
         control: IntField(
           value: smart.itemPostponeCountCutoff,
           min: 1,
@@ -770,8 +770,8 @@ class _SettingsBody extends StatelessWidget {
         ),
       ),
       SettingsRow(
-        label: 'Item priority threshold',
-        hint: 'Reject an item when rank-derived priority P is below this.',
+        label: 'Card priority threshold',
+        hint: 'Reject a card when rank-derived priority P is below this.',
         control: DoubleField(
           value: smart.itemPriorityThreshold,
           min: 0.01,
@@ -840,7 +840,7 @@ class _SettingsBody extends StatelessWidget {
         ),
       ),
       SettingsRow(
-        label: 'Modify item delay by FI',
+        label: 'Modify card delay by FI',
         hint:
             'Preserved inert SM20 checkbox. Changing it does not alter the '
             'evaluator’s delay calculation.',
@@ -869,7 +869,7 @@ class _SettingsBody extends StatelessWidget {
   Widget _mercy() => SettingsSection(
     title: 'Mercy',
     description:
-        'Mercy scores scheduled items and topic-family elements, orders them, '
+        'Mercy scores scheduled cards and topic-family elements, orders them, '
         'then redistributes actual due dates. Its investment estimate uses '
         'the live collection-specific 20×20 interval-factor matrix.',
     children: <Widget>[
@@ -1041,26 +1041,20 @@ class _SettingsBody extends StatelessWidget {
     ),
   );
 
-  Widget _reader() => SettingsSection(
-    title: 'Reader',
-    description: 'Reader-only preferences; these do not alter SM20 records.',
+  Widget _maintenance() => SettingsSection(
+    title: 'Maintenance',
+    description:
+        'Housekeeping over the database file. These change how the collection '
+        'is stored, never what it holds, and never a schedule.',
     children: <Widget>[
       SettingsRow(
-        label: 'Reminder after',
+        label: 'Optimize database',
         hint:
-            'Words past the opening position before the nonblocking reader '
-            'reminder appears.',
-        control: IntField(
-          value: draft.reader.reminderWords,
-          min: 0,
-          max: 100000,
-          suffix: 'words',
-          onChanged: (int value) => model.edit(
-            (AppSettings settings) => settings.copyWith(
-              reader: settings.reader.copyWith(reminderWords: value),
-            ),
-          ),
-        ),
+            'Checks the collection for damage, rebuilds the search index if '
+            'it has drifted, merges its segments, and compacts the file so '
+            'space freed by deleted elements is handed back. Safe to run any '
+            'time; a large collection can take a moment.',
+        control: _OptimizeButton(isBusy: state.isBusy, model: model),
       ),
     ],
   );
@@ -1382,4 +1376,34 @@ class _ProfileRegistryState extends State<_ProfileRegistry> {
         ),
     ];
   }
+}
+
+/// The Optimize control, which is a button until it is a progress indicator.
+///
+/// The pass rewrites the whole database file, so on a large collection it is
+/// slow enough that a button which merely greyed out would read as broken.
+class _OptimizeButton extends StatelessWidget {
+  const _OptimizeButton({required this.isBusy, required this.model});
+
+  final bool isBusy;
+  final SettingsViewModel model;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: <Widget>[
+      if (isBusy) ...<Widget>[
+        const SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        const SizedBox(width: 10),
+      ],
+      FilledButton.tonal(
+        onPressed: isBusy ? null : model.optimizeDatabase,
+        child: Text(isBusy ? 'Optimizing…' : 'Optimize now'),
+      ),
+    ],
+  );
 }

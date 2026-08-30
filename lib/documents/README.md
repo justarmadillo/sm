@@ -20,6 +20,7 @@ plain unit test, which is why a parsing bug is cheap to reproduce.
 | `source_edit.dart` | the append-only record of every edit ever made |
 | `position_migration.dart` | how stored positions move when the text is spliced |
 | `block_edit.dart` | turns an edit made to one block into an exact splice |
+| `outline.dart` | the headings, and which stretch of text each one owns |
 
 ## The thing to understand first
 

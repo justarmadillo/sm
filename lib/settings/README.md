@@ -12,7 +12,6 @@ back from stored key/value pairs.
 | `postpone_settings.dart` | how an overloaded day is handled automatically |
 | `smart_postpone_settings.dart` | the manual Smart Postpone pass, and its profiles |
 | `mercy_settings.dart` | how a backlog is spread over future days |
-| `reader_settings.dart` | typography and layout in the Reader |
 | `diagnostics_settings.dart` | whether the log is written, and how large it gets |
 | `settings_store.dart` | reads them once, caches them, writes changes back |
 | `settings_list_equality.dart` | compares the list-shaped values by content |

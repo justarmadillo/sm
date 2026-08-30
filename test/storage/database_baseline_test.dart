@@ -183,7 +183,7 @@ void main() {
       await expectLater(
         db.customStatement(
           'INSERT INTO cards (id, parent_element_id, parent_element_type, '
-          'kind, front, back, cloze_ordinal, created_at_utc) '
+          'type, front, back, cloze_ordinal, created_at_utc) '
           'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
           <Object?>['c1', 'e1', 1, 0, 'q', 'a', 1, 0],
         ),
@@ -193,7 +193,7 @@ void main() {
       // The cloze form is accepted.
       await db.customStatement(
         'INSERT INTO cards (id, parent_element_id, parent_element_type, '
-        'kind, front, back, cloze_ordinal, created_at_utc) '
+        'type, front, back, cloze_ordinal, created_at_utc) '
         'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         <Object?>['c2', 'e1', 1, 1, '{{c1::x}}', '', 1, 0],
       );
@@ -402,9 +402,9 @@ void main() {
         );
 
         clock.setTo(DateTime.utc(2026, 1, 1, 7));
-        await service.createBackup(kind: BackupKind.preMigration);
+        await service.createBackup(type: BackupType.preMigration);
         clock.setTo(DateTime.utc(2026, 1, 2, 7));
-        await service.createBackup(kind: BackupKind.preMigration);
+        await service.createBackup(type: BackupType.preMigration);
         // Several daily rotations must not evict the pre-migration copies.
         for (var day = 1; day <= 4; day++) {
           clock.setTo(DateTime.utc(2026, 1, day, 9));
@@ -412,10 +412,10 @@ void main() {
         }
 
         expect(
-          service.listBackups(kind: BackupKind.preMigration),
+          service.listBackups(type: BackupType.preMigration),
           hasLength(2),
         );
-        expect(service.listBackups(kind: BackupKind.daily), hasLength(1));
+        expect(service.listBackups(type: BackupType.daily), hasLength(1));
       },
     );
 

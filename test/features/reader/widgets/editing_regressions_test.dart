@@ -283,9 +283,7 @@ void main() {
 
 /// Sends one space key down and reports whether anything claimed it.
 Future<KeyEventResult> _sendSpace(WidgetTester tester) async {
-  final bool handled = await tester.sendKeyDownEvent(
-    LogicalKeyboardKey.space,
-  );
+  final bool handled = await tester.sendKeyDownEvent(LogicalKeyboardKey.space);
   await tester.sendKeyUpEvent(LogicalKeyboardKey.space);
   await tester.pumpAndSettle();
   return handled ? KeyEventResult.handled : KeyEventResult.ignored;

@@ -182,7 +182,10 @@ final class AppHarness {
 
   late final BrowserCommandRunner filing = BrowserCommandRunner(
     tree: browserTree,
+    content: content,
     learning: learning,
+    search: search,
+    context: context,
     transfer: transfer,
     transactions: transactions,
     clock: clock,

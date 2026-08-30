@@ -24,7 +24,7 @@ final class ActivityRecord {
   const ActivityRecord({
     required this.id,
     required this.operationId,
-    required this.kind,
+    required this.type,
     required this.atUtc,
     this.ref,
     this.durationMs,
@@ -37,7 +37,7 @@ final class ActivityRecord {
   final String operationId;
 
   /// Stable dotted name, for example `topic.encounter_completed`.
-  final String kind;
+  final String type;
 
   final DateTime atUtc;
   final ElementRef? ref;
@@ -104,6 +104,12 @@ abstract interface class LearningRepository {
   /// earlier than its canonical FSRS due.
   Future<List<CardState>> listCardStates({Set<ElementLifecycle>? lifecycles});
 
+  /// Removes a card's FSRS memory row.
+  ///
+  /// Only for a card being deleted for good. Every other path keeps the row:
+  /// a card without memory is a card whose whole history has been forgotten.
+  Future<void> deleteCardState(String cardId);
+
   /// Appends one lossless FSRS review event.
   Future<void> appendReview(ReviewRecord record);
 
@@ -112,6 +118,15 @@ abstract interface class LearningRepository {
 
   /// Review history for one card, oldest first.
   Future<List<ReviewRecord>> listReviewsForCard(String cardId);
+
+  /// Removes a card's review history.
+  ///
+  /// The log is append-only everywhere else, and the foreign key on it exists
+  /// so that removing a card cannot quietly erase the evidence of every
+  /// review it ever had. Deleting an element for good is the one case that
+  /// was never what the key was guarding against: the card is going, and a
+  /// review of a card that no longer exists cannot be shown to anyone.
+  Future<void> deleteReviewsForCard(String cardId);
 
   /// Optimizer input: genuine card reviews which have not been undone.
   Future<List<ReviewRecord>> listOptimizerReviews();
@@ -137,12 +152,12 @@ abstract interface class LearningRepository {
   /// Appends one activity record.
   Future<void> appendActivity(ActivityRecord record);
 
-  /// Whether an activity row already exists for [operationId] and [kind].
+  /// Whether an activity row already exists for [operationId] and [type].
   ///
   /// This is how terminal commands stay exactly-once: the log is the record
   /// of what has been applied, so a retried Done finds its own footprint and
   /// declines to advance the schedule a second time.
-  Future<bool> hasActivity(String operationId, String kind);
+  Future<bool> hasActivity(String operationId, String type);
 
   /// Recent activity, newest first. For the diagnostics panel.
   Future<List<ActivityRecord>> listRecentActivity({int limit = 50});

@@ -1,10 +1,16 @@
-/// Carries out the Browser's filing commands, one transaction each.
+/// Carries out the Browser's commands, one transaction each.
 ///
-/// Every command here rewrites two things and nothing else: which element a
-/// row is filed under, and the order of the rows it now sits among. Due days,
-/// intervals, priorities, A-factors and extract provenance are all read-only
-/// from in here — reorganising a collection is not a repetition, and an
-/// extract that moves keeps pointing at the passage it was cut from.
+/// Two unrelated jobs live here, and the difference matters. The filing
+/// commands rewrite two things and nothing else: which element a row is filed
+/// under, and the order of the rows it now sits among. Due days, intervals,
+/// priorities, A-factors and extract provenance are all read-only from in
+/// there — reorganising a collection is not a repetition, and an extract that
+/// moves keeps pointing at the passage it was cut from.
+///
+/// `deleteElement` is the exception, and the only command in the app that
+/// destroys anything. It is kept in the same runner because the Browser is
+/// the one screen that offers it and because it needs the same loaded tree
+/// the moves do: what goes is what the user saw filed underneath the row.
 ///
 /// Siblings are renumbered as a block rather than nudged one at a time. A
 /// collection built before filing existed has no ordinals at all, so there is
@@ -16,32 +22,43 @@ library;
 import 'package:incremental_reader/features/browser/browser_commands.dart';
 import 'package:incremental_reader/features/browser/browser_tree_query.dart';
 import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/scheduling_context.dart';
+import 'package:incremental_reader/scheduling/sm20_collection_state.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/result.dart';
+import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
+import 'package:incremental_reader/storage/contracts/search_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 
-const String kBrowserMovedUpKind = 'browser.moved_up';
-const String kBrowserMovedDownKind = 'browser.moved_down';
-const String kBrowserNestedKind = 'browser.nested';
-const String kBrowserLiftedKind = 'browser.lifted';
-const String kBrowserFiledKind = 'browser.filed';
+const String kBrowserMovedUpType = 'browser.moved_up';
+const String kBrowserMovedDownType = 'browser.moved_down';
+const String kBrowserNestedType = 'browser.nested';
+const String kBrowserLiftedType = 'browser.lifted';
+const String kBrowserFiledType = 'browser.filed';
+const String kBrowserDeletedType = 'browser.deleted';
 
-/// The Browser's move commands.
+/// The Browser's move and delete commands.
 final class BrowserCommandRunner {
   BrowserCommandRunner({
     required BrowserTreeQuery tree,
+    required ContentRepository content,
     required LearningRepository learning,
+    required SearchRepository search,
+    required SchedulingContext context,
     required TransferRepository transfer,
     required TransactionRunner transactions,
     required Clock clock,
     required IdGenerator ids,
     DiagnosticSink diagnostics = const NullDiagnosticSink(),
   }) : _tree = tree,
+       _content = content,
        _learning = learning,
+       _search = search,
+       _context = context,
        _transfer = transfer,
        _transactions = transactions,
        _clock = clock,
@@ -49,7 +66,10 @@ final class BrowserCommandRunner {
        _diagnostics = diagnostics;
 
   final BrowserTreeQuery _tree;
+  final ContentRepository _content;
   final LearningRepository _learning;
+  final SearchRepository _search;
+  final SchedulingContext _context;
   final TransferRepository _transfer;
   final TransactionRunner _transactions;
   final Clock _clock;
@@ -58,7 +78,7 @@ final class BrowserCommandRunner {
 
   /// Swaps an element with the sibling above it.
   Future<Result<BrowserFilingOutcome>> moveUp(MoveElementUp command) =>
-      _run(command, kBrowserMovedUpKind, (_TreeIndex index) {
+      _run(command, kBrowserMovedUpType, (_TreeIndex index) {
         final _Level level = index.levelOf(command.ref);
         final int position = level.positionOf(command.ref);
         if (position <= 0) {
@@ -76,7 +96,7 @@ final class BrowserCommandRunner {
 
   /// Swaps an element with the sibling below it.
   Future<Result<BrowserFilingOutcome>> moveDown(MoveElementDown command) =>
-      _run(command, kBrowserMovedDownKind, (_TreeIndex index) {
+      _run(command, kBrowserMovedDownType, (_TreeIndex index) {
         final _Level level = index.levelOf(command.ref);
         final int position = level.positionOf(command.ref);
         if (position >= level.refs.length - 1) {
@@ -95,7 +115,7 @@ final class BrowserCommandRunner {
   /// Files an element under the sibling above it, last among its children.
   Future<Result<BrowserFilingOutcome>> nestUnderPreviousSibling(
     NestElementUnderPreviousSibling command,
-  ) => _run(command, kBrowserNestedKind, (_TreeIndex index) {
+  ) => _run(command, kBrowserNestedType, (_TreeIndex index) {
     final _Level level = index.levelOf(command.ref);
     final int position = level.positionOf(command.ref);
     if (position <= 0) {
@@ -123,7 +143,7 @@ final class BrowserCommandRunner {
   /// Files an element beside its parent, directly after it.
   Future<Result<BrowserFilingOutcome>> liftOutOfParent(
     LiftElementOutOfParent command,
-  ) => _run(command, kBrowserLiftedKind, (_TreeIndex index) {
+  ) => _run(command, kBrowserLiftedType, (_TreeIndex index) {
     final _Level level = index.levelOf(command.ref);
     final ElementRef? oldParent = level.parentRef;
     if (oldParent == null) {
@@ -149,7 +169,7 @@ final class BrowserCommandRunner {
 
   /// Files an element under a named parent, in front of a named sibling.
   Future<Result<BrowserFilingOutcome>> fileUnder(FileElementUnder command) =>
-      _run(command, kBrowserFiledKind, (_TreeIndex index) {
+      _run(command, kBrowserFiledType, (_TreeIndex index) {
         final ElementRef? newParent = command.parentRef;
         if (newParent == command.ref) {
           return const Err<_Placement>(
@@ -188,6 +208,192 @@ final class BrowserCommandRunner {
         );
       });
 
+  /// Erases an element and everything below it.
+  ///
+  /// The append-only logs are left alone, as undoing an extract leaves them:
+  /// they record what the scheduler did on a day, not what the collection
+  /// holds today. A card's review history is the one exception, and only
+  /// because its foreign key leaves no choice.
+  Future<Result<BrowserDeletionOutcome>> deleteElement(
+    DeleteElement command,
+  ) async {
+    try {
+      return await _transactions.run<Result<BrowserDeletionOutcome>>(() async {
+        if (await _learning.hasActivity(
+          command.operationId.value,
+          kBrowserDeletedType,
+        )) {
+          // A resent delete has already happened. Replaying it would report a
+          // second removal of rows that are long gone.
+          return const Ok<BrowserDeletionOutcome>(
+            BrowserDeletionOutcome(deletedRefs: <ElementRef>[]),
+          );
+        }
+
+        final _TreeIndex index = _TreeIndex.of(await _tree.load());
+        if (!index.contains(command.ref)) {
+          return Err<BrowserDeletionOutcome>(
+            NotFoundFailure(
+              'that element is no longer in the collection',
+              entity: 'element',
+              id: command.ref.id,
+            ),
+          );
+        }
+
+        final Set<ElementRef> doomed = await _everythingUnder(
+          command.ref,
+          index,
+        );
+        await _erase(doomed);
+        await _forgetInTodaysQueues(doomed);
+        await _learning.appendActivity(
+          ActivityRecord(
+            id: _ids.newId(),
+            operationId: command.operationId.value,
+            type: kBrowserDeletedType,
+            atUtc: command.timestampUtc,
+            ref: command.ref,
+            metadata: <String, Object?>{'removed': doomed.length},
+          ),
+        );
+        await _transfer.advanceGeneration();
+        _diagnostics.record(
+          DiagnosticEvent(
+            level: DiagnosticLevel.info,
+            name: kBrowserDeletedType,
+            timestampUtc: _clock.nowUtc(),
+            operationId: command.operationId,
+            fields: <String, Object?>{
+              'element': command.ref.id,
+              'removed': doomed.length,
+            },
+          ),
+        );
+        return Ok<BrowserDeletionOutcome>(
+          BrowserDeletionOutcome(deletedRefs: doomed.toList()),
+        );
+      });
+    } on Object catch (error, stackTrace) {
+      final UnexpectedFailure failure = UnexpectedFailure(
+        'command $kBrowserDeletedType failed',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+      _diagnostics.record(
+        DiagnosticEvent(
+          level: DiagnosticLevel.error,
+          name: kBrowserDeletedType,
+          timestampUtc: _clock.nowUtc(),
+          operationId: command.operationId,
+          failure: failure,
+        ),
+      );
+      return Err<BrowserDeletionOutcome>(failure);
+    }
+  }
+
+  /// Removes every row [doomed] owns, in the order the foreign keys allow.
+  ///
+  /// Cards, then extracts, then sources: the database refuses to drop a source
+  /// while an extract still names it, and refuses to drop a card while its
+  /// memory or its review history survives. Working outwards like this means
+  /// those refusals never fire on a deletion the user asked for, and still
+  /// fire on one nobody did.
+  Future<void> _erase(Set<ElementRef> doomed) async {
+    for (final ElementRef ref in _deletionOrder(doomed)) {
+      await _search.deleteDocument(ref);
+      await _learning.deleteSchedule(ref);
+      switch (ref.type) {
+        case ElementType.card:
+          await _learning.deleteCardState(ref.id);
+          await _learning.deleteReviewsForCard(ref.id);
+          await _content.deleteCard(ref.id);
+        case ElementType.extract:
+          await _content.deleteExtract(ref.id);
+        case ElementType.source:
+          await _content.deleteSource(ref.id);
+      }
+    }
+  }
+
+  /// Takes the deleted refs out of the day's queues.
+  ///
+  /// The runtime state is a list of ids, not of rows, so nothing in the
+  /// database removes them when the elements go. The daily sort drops
+  /// unknown refs on its own, but the stage a user is halfway through does
+  /// not run that sort, and would offer an element that no longer exists.
+  Future<void> _forgetInTodaysQueues(Set<ElementRef> doomed) async {
+    final Sm20CollectionState runtime = await _context.runtimeState();
+    List<ElementRef> survivors(List<ElementRef> queue) => <ElementRef>[
+      for (final ElementRef ref in queue)
+        if (!doomed.contains(ref)) ref,
+    ];
+    await _context.saveRuntimeState(
+      runtime.copyWith(
+        outstanding: survivors(runtime.outstanding),
+        outstandingItems: survivors(runtime.outstandingItems),
+        outstandingTopics: survivors(runtime.outstandingTopics),
+        finalDrill: survivors(runtime.finalDrill),
+        pending: survivors(runtime.pending),
+      ),
+    );
+  }
+
+  /// Everything that has to go when [top] goes.
+  ///
+  /// Two different descendants, and both are needed. The tree gives what the
+  /// user can see filed underneath the row. Provenance gives what the
+  /// database will not let go of: an extract dragged clear across the
+  /// collection still names the source it was cut from, and that source
+  /// cannot be dropped while it does.
+  Future<Set<ElementRef>> _everythingUnder(
+    ElementRef top,
+    _TreeIndex index,
+  ) async {
+    final Set<ElementRef> found = <ElementRef>{};
+    final List<ElementRef> unexplored = <ElementRef>[...index.subtreeOf(top)];
+    while (unexplored.isNotEmpty) {
+      final ElementRef ref = unexplored.removeLast();
+      if (!found.add(ref)) continue;
+      unexplored.addAll(await _childrenByProvenance(ref));
+      unexplored.addAll(index.subtreeOf(ref));
+    }
+    return found;
+  }
+
+  /// What was cut or formulated from [ref], whatever it is.
+  Future<List<ElementRef>> _childrenByProvenance(ElementRef ref) async {
+    switch (ref.type) {
+      case ElementType.card:
+        return const <ElementRef>[];
+      case ElementType.source:
+        return <ElementRef>[
+          for (final extract in await _content.listExtractsOfSource(ref.id))
+            ElementRef(id: extract.id, type: ElementType.extract),
+          for (final card in await _content.listCardsOfSource(ref.id))
+            ElementRef(id: card.id, type: ElementType.card),
+        ];
+      case ElementType.extract:
+        return <ElementRef>[
+          for (final extract in await _content.listExtractsOfParent(ref.id))
+            ElementRef(id: extract.id, type: ElementType.extract),
+          for (final card in await _content.listCardsOfExtract(ref.id))
+            ElementRef(id: card.id, type: ElementType.card),
+        ];
+    }
+  }
+
+  /// Cards, then extracts, then sources: the order the foreign keys allow.
+  static List<ElementRef> _deletionOrder(Set<ElementRef> refs) => <ElementRef>[
+    for (final ElementRef ref in refs)
+      if (ref.type == ElementType.card) ref,
+    for (final ElementRef ref in refs)
+      if (ref.type == ElementType.extract) ref,
+    for (final ElementRef ref in refs)
+      if (ref.type == ElementType.source) ref,
+  ];
+
   static List<ElementRef> _swapped(
     List<ElementRef> refs,
     int first,
@@ -207,12 +413,12 @@ final class BrowserCommandRunner {
   /// above rather than whatever a second ordering rule would have produced.
   Future<Result<BrowserFilingOutcome>> _run(
     BrowserFilingCommand command,
-    String kind,
+    String type,
     Result<_Placement> Function(_TreeIndex index) plan,
   ) async {
     try {
       return await _transactions.run<Result<BrowserFilingOutcome>>(() async {
-        if (await _learning.hasActivity(command.operationId.value, kind)) {
+        if (await _learning.hasActivity(command.operationId.value, type)) {
           // A resent move is the same move. Replaying it would walk the
           // element one further step in the same direction.
           return Ok<BrowserFilingOutcome>(
@@ -253,7 +459,7 @@ final class BrowserCommandRunner {
           ActivityRecord(
             id: _ids.newId(),
             operationId: command.operationId.value,
-            kind: kind,
+            type: type,
             atUtc: command.timestampUtc,
             ref: command.ref,
             metadata: <String, Object?>{
@@ -266,7 +472,7 @@ final class BrowserCommandRunner {
         _diagnostics.record(
           DiagnosticEvent(
             level: DiagnosticLevel.info,
-            name: kind,
+            name: type,
             timestampUtc: _clock.nowUtc(),
             operationId: command.operationId,
             fields: <String, Object?>{
@@ -284,14 +490,14 @@ final class BrowserCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       final UnexpectedFailure failure = UnexpectedFailure(
-        'command $kind failed',
+        'command $type failed',
         cause: error,
         stackTrace: stackTrace,
       );
       _diagnostics.record(
         DiagnosticEvent(
           level: DiagnosticLevel.error,
-          name: kind,
+          name: type,
           timestampUtc: _clock.nowUtc(),
           operationId: command.operationId,
           failure: failure,
@@ -428,6 +634,15 @@ final class _TreeIndex {
   _Level levelOf(ElementRef ref) {
     final ElementRef? parent = _parentOf[ref];
     return _Level(parentRef: parent, refs: childrenOf(parent));
+  }
+
+  /// [top] and everything filed anywhere below it, [top] first.
+  List<ElementRef> subtreeOf(ElementRef top) {
+    final List<ElementRef> collected = <ElementRef>[top];
+    for (final ElementRef child in _childrenOf[top] ?? const <ElementRef>[]) {
+      collected.addAll(subtreeOf(child));
+    }
+    return collected;
   }
 
   /// Whether [candidate] is [ancestor] itself or sits anywhere below it.

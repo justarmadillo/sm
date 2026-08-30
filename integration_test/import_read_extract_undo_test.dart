@@ -66,8 +66,9 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    final extractButton = find.widgetWithText(OutlinedButton, 'Extract');
-    tester.widget<OutlinedButton>(extractButton).onPressed!();
+    // Extract lives only on the toolbar that floats over the selection now.
+    final extractButton = find.widgetWithText(TextButton, 'Extract');
+    tester.widget<TextButton>(extractButton).onPressed!();
     await tester.pump();
     expect(find.text('Extracted'), findsOneWidget);
     expect(find.text('Undo'), findsOneWidget);

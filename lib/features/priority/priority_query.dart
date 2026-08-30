@@ -281,9 +281,9 @@ final class PriorityQuery {
       case ElementType.card:
         final Card? card = await _content.findCard(ref.id);
         if (card == null) return ('Card', '');
-        final String question = switch (card.kind) {
-          CardKind.qa => card.front,
-          CardKind.cloze => renderClozeQuestion(card.front, card.clozeOrdinal!),
+        final String question = switch (card.type) {
+          CardType.qa => card.front,
+          CardType.cloze => renderClozeQuestion(card.front, card.clozeOrdinal!),
         };
         return ('Card', excerptOf(question));
     }

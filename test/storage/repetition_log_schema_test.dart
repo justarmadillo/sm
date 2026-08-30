@@ -54,7 +54,7 @@ void main() {
       <Object?>['x1', 'passage', 's1', 's1', 1, 0, 7, 'b' * 64, 1000],
     );
     await db.customStatement(
-      'INSERT INTO cards (id, extract_id, kind, front, back, created_at_utc) '
+      'INSERT INTO cards (id, extract_id, type, front, back, created_at_utc) '
       'VALUES (?, ?, ?, ?, ?, ?)',
       <Object?>['c1', 'x1', 0, 'Q?', 'A.', 1000],
     );

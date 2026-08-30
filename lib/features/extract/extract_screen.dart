@@ -20,6 +20,7 @@ import 'package:incremental_reader/features/reader/typography_controller.dart';
 import 'package:incremental_reader/features/reader/widgets/extract_highlights.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
+import 'package:incremental_reader/features/reader/widgets/selection_knobs.dart';
 import 'package:incremental_reader/features/reader/widgets/selection_toolbar.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
@@ -70,6 +71,13 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
     final RenderObject? box = _surfaceKey.currentContext?.findRenderObject();
     if (box is! RenderBox || !box.hasSize) return null;
     return global.shift(-box.localToGlobal(Offset.zero));
+  }
+
+  /// The same conversion for a single point, which the selection knobs need.
+  Offset? _toSurfacePoint(Offset global) {
+    final RenderObject? box = _surfaceKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return null;
+    return global - box.localToGlobal(Offset.zero);
   }
 
   Size? get _surfaceSize {
@@ -168,7 +176,6 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
               _ExtractActionBar(
                 state: state,
                 selection: selection,
-                onExtract: () => _extractSelection(model),
                 onFormulate: () => _formulate(context, state, model),
                 onDismiss: () => _dismiss(context, model),
                 onLater: model.later,
@@ -262,6 +269,15 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
           ),
           onExtractMarksTap: (Block block) =>
               _openChildContext(context, state, block),
+        ),
+        // Filled rather than left to size itself: its knobs are positioned,
+        // and a stack of nothing but positioned children collapses to a point
+        // that no finger can reach.
+        Positioned.fill(
+          child: SelectionKnobLayer(
+            controller: selection,
+            toSurfaceSpace: _toSurfacePoint,
+          ),
         ),
         SelectionToolbarLayer(
           controller: selection,
@@ -518,7 +534,6 @@ class _ExtractActionBar extends StatelessWidget {
   const _ExtractActionBar({
     required this.state,
     required this.selection,
-    required this.onExtract,
     required this.onFormulate,
     required this.onDismiss,
     required this.onLater,
@@ -527,7 +542,6 @@ class _ExtractActionBar extends StatelessWidget {
 
   final ExtractUiState state;
   final ReaderSelectionController selection;
-  final VoidCallback onExtract;
   final VoidCallback onFormulate;
   final VoidCallback onDismiss;
   final VoidCallback onLater;
@@ -574,13 +588,16 @@ class _ExtractActionBar extends StatelessWidget {
         : selection.hasSelection && !selection.canExtract
         ? 'Select within one block.'
         : selection.canExtract
-        ? 'Selection ready — Extract more (Ctrl+E).'
+        ? 'Selection ready — Extract above it, or Ctrl+E.'
         : 'Refine, extract further, or formulate cards.',
     style: const TextStyle(fontSize: 12, color: AppColors.muted),
   );
 
   /// Wraps onto a second row rather than overflowing when the window is too
-  /// narrow to hold five buttons on one line.
+  /// narrow to hold four buttons on one line.
+  ///
+  /// Cutting a further extract is not here: it belongs to the selection, and
+  /// the toolbar that floats over the selection already offers it.
   Widget _buttons() => Wrap(
     spacing: 6,
     runSpacing: 6,
@@ -588,10 +605,6 @@ class _ExtractActionBar extends StatelessWidget {
     crossAxisAlignment: WrapCrossAlignment.center,
     children: <Widget>[
       if (state.canMutate) ...<Widget>[
-        OutlinedButton(
-          onPressed: !state.isBusy && selection.canExtract ? onExtract : null,
-          child: const Text('Extract more'),
-        ),
         FilledButton.tonal(
           onPressed: state.isBusy ? null : onFormulate,
           child: const Text('Formulate'),

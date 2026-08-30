@@ -445,7 +445,7 @@ class _CardEditorState extends State<_CardEditor> {
     text: widget.state.card.back,
   );
 
-  bool get _isCloze => widget.state.card.kind == CardKind.cloze;
+  bool get _isCloze => widget.state.card.type == CardType.cloze;
 
   @override
   void dispose() {

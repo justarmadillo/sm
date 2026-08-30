@@ -425,6 +425,15 @@ final class DriftContentRepository implements ContentRepository {
   }
 
   @override
+  Future<void> deleteSource(String id) async {
+    // Blocks and the edit journal cascade from this row; extracts do not,
+    // and a source that still has one is refused by the foreign key.
+    await (_database.delete(
+      _database.sources,
+    )..where(($SourcesTable t) => t.id.equals(id))).go();
+  }
+
+  @override
   Future<void> deleteExtract(String id) async {
     await (_database.delete(
       _database.extracts,
@@ -505,6 +514,13 @@ final class DriftContentRepository implements ContentRepository {
               ]))
             .get();
     return <Card>[for (final row in rows) cardFromRow(row)];
+  }
+
+  @override
+  Future<void> deleteCard(String id) async {
+    await (_database.delete(
+      _database.cards,
+    )..where(($CardsTable t) => t.id.equals(id))).go();
   }
 
   @override

@@ -167,7 +167,7 @@ void main() {
       await harness.importFixture();
       final activity = await harness.learning.listRecentActivity();
       final imported = activity.firstWhere(
-        (ActivityRecord r) => r.kind == kSourceImportedKind,
+        (ActivityRecord r) => r.type == kSourceImportedType,
       );
       expect(imported.metadata!['blocks'], 4);
       expect(imported.metadata.toString(), isNot(contains('paragraph')));
@@ -288,7 +288,7 @@ void main() {
       expect(snapshot.storedInterval, 1);
 
       final logged = (await harness.learning.listRecentActivity()).firstWhere(
-        (ActivityRecord r) => r.kind == 'topic.encounter_completed',
+        (ActivityRecord r) => r.type == 'topic.encounter_completed',
       );
       expect(logged.durationMs, 90000);
       // SM20 records what the repetition actually decided: the interval it
@@ -326,7 +326,7 @@ void main() {
       expect(snapshot.dueDay, first.unwrap().schedule.dueDay.toString());
       expect(
         (await harness.learning.listRecentActivity()).where(
-          (ActivityRecord r) => r.kind == 'topic.encounter_completed',
+          (ActivityRecord r) => r.type == 'topic.encounter_completed',
         ),
         hasLength(1),
       );

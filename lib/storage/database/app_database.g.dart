@@ -2382,11 +2382,11 @@ class $ExtractsTable extends Extracts
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _parentIsSourceMeta = const VerificationMeta(
-    'parentIsSource',
+  static const VerificationMeta _hasSourceAsParentMeta = const VerificationMeta(
+    'hasSourceAsParent',
   );
   @override
-  late final GeneratedColumn<bool> parentIsSource = GeneratedColumn<bool>(
+  late final GeneratedColumn<bool> hasSourceAsParent = GeneratedColumn<bool>(
     'parent_is_source',
     aliasedName,
     false,
@@ -2498,7 +2498,7 @@ class $ExtractsTable extends Extracts
     markdown,
     sourceId,
     parentId,
-    parentIsSource,
+    hasSourceAsParent,
     startUtf8,
     endUtf8,
     anchorRevision,
@@ -2551,14 +2551,14 @@ class $ExtractsTable extends Extracts
     }
     if (data.containsKey('parent_is_source')) {
       context.handle(
-        _parentIsSourceMeta,
-        parentIsSource.isAcceptableOrUnknown(
+        _hasSourceAsParentMeta,
+        hasSourceAsParent.isAcceptableOrUnknown(
           data['parent_is_source']!,
-          _parentIsSourceMeta,
+          _hasSourceAsParentMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_parentIsSourceMeta);
+      context.missing(_hasSourceAsParentMeta);
     }
     if (data.containsKey('start_utf8')) {
       context.handle(
@@ -2659,7 +2659,7 @@ class $ExtractsTable extends Extracts
         DriftSqlType.string,
         data['${effectivePrefix}parent_id'],
       )!,
-      parentIsSource: attachedDatabase.typeMapping.read(
+      hasSourceAsParent: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}parent_is_source'],
       )!,
@@ -2713,7 +2713,14 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
 
   /// Immediate parent: a source or another extract.
   final String parentId;
-  final bool parentIsSource;
+
+  /// Whether [parentId] names a source rather than another extract.
+  ///
+  /// The column stays `parent_is_source`, which is what every collection on
+  /// disk and every migration's raw SQL already calls it. Letting Drift derive
+  /// `has_source_as_parent` from the Dart name would rename the column and
+  /// every existing collection would stop loading its extracts.
+  final bool hasSourceAsParent;
 
   /// Byte range of the parent's markdown this passage was taken from.
   final int startUtf8;
@@ -2739,7 +2746,7 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
     required this.markdown,
     required this.sourceId,
     required this.parentId,
-    required this.parentIsSource,
+    required this.hasSourceAsParent,
     required this.startUtf8,
     required this.endUtf8,
     required this.anchorRevision,
@@ -2756,7 +2763,7 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
     map['markdown'] = Variable<String>(markdown);
     map['source_id'] = Variable<String>(sourceId);
     map['parent_id'] = Variable<String>(parentId);
-    map['parent_is_source'] = Variable<bool>(parentIsSource);
+    map['parent_is_source'] = Variable<bool>(hasSourceAsParent);
     map['start_utf8'] = Variable<int>(startUtf8);
     map['end_utf8'] = Variable<int>(endUtf8);
     map['anchor_revision'] = Variable<int>(anchorRevision);
@@ -2776,7 +2783,7 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
       markdown: Value(markdown),
       sourceId: Value(sourceId),
       parentId: Value(parentId),
-      parentIsSource: Value(parentIsSource),
+      hasSourceAsParent: Value(hasSourceAsParent),
       startUtf8: Value(startUtf8),
       endUtf8: Value(endUtf8),
       anchorRevision: Value(anchorRevision),
@@ -2800,7 +2807,7 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
       markdown: serializer.fromJson<String>(json['markdown']),
       sourceId: serializer.fromJson<String>(json['sourceId']),
       parentId: serializer.fromJson<String>(json['parentId']),
-      parentIsSource: serializer.fromJson<bool>(json['parentIsSource']),
+      hasSourceAsParent: serializer.fromJson<bool>(json['hasSourceAsParent']),
       startUtf8: serializer.fromJson<int>(json['startUtf8']),
       endUtf8: serializer.fromJson<int>(json['endUtf8']),
       anchorRevision: serializer.fromJson<int>(json['anchorRevision']),
@@ -2819,7 +2826,7 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
       'markdown': serializer.toJson<String>(markdown),
       'sourceId': serializer.toJson<String>(sourceId),
       'parentId': serializer.toJson<String>(parentId),
-      'parentIsSource': serializer.toJson<bool>(parentIsSource),
+      'hasSourceAsParent': serializer.toJson<bool>(hasSourceAsParent),
       'startUtf8': serializer.toJson<int>(startUtf8),
       'endUtf8': serializer.toJson<int>(endUtf8),
       'anchorRevision': serializer.toJson<int>(anchorRevision),
@@ -2836,7 +2843,7 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
     String? markdown,
     String? sourceId,
     String? parentId,
-    bool? parentIsSource,
+    bool? hasSourceAsParent,
     int? startUtf8,
     int? endUtf8,
     int? anchorRevision,
@@ -2850,7 +2857,7 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
     markdown: markdown ?? this.markdown,
     sourceId: sourceId ?? this.sourceId,
     parentId: parentId ?? this.parentId,
-    parentIsSource: parentIsSource ?? this.parentIsSource,
+    hasSourceAsParent: hasSourceAsParent ?? this.hasSourceAsParent,
     startUtf8: startUtf8 ?? this.startUtf8,
     endUtf8: endUtf8 ?? this.endUtf8,
     anchorRevision: anchorRevision ?? this.anchorRevision,
@@ -2866,9 +2873,9 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
       markdown: data.markdown.present ? data.markdown.value : this.markdown,
       sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
       parentId: data.parentId.present ? data.parentId.value : this.parentId,
-      parentIsSource: data.parentIsSource.present
-          ? data.parentIsSource.value
-          : this.parentIsSource,
+      hasSourceAsParent: data.hasSourceAsParent.present
+          ? data.hasSourceAsParent.value
+          : this.hasSourceAsParent,
       startUtf8: data.startUtf8.present ? data.startUtf8.value : this.startUtf8,
       endUtf8: data.endUtf8.present ? data.endUtf8.value : this.endUtf8,
       anchorRevision: data.anchorRevision.present
@@ -2899,7 +2906,7 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
           ..write('markdown: $markdown, ')
           ..write('sourceId: $sourceId, ')
           ..write('parentId: $parentId, ')
-          ..write('parentIsSource: $parentIsSource, ')
+          ..write('hasSourceAsParent: $hasSourceAsParent, ')
           ..write('startUtf8: $startUtf8, ')
           ..write('endUtf8: $endUtf8, ')
           ..write('anchorRevision: $anchorRevision, ')
@@ -2918,7 +2925,7 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
     markdown,
     sourceId,
     parentId,
-    parentIsSource,
+    hasSourceAsParent,
     startUtf8,
     endUtf8,
     anchorRevision,
@@ -2936,7 +2943,7 @@ class ExtractRow extends DataClass implements Insertable<ExtractRow> {
           other.markdown == this.markdown &&
           other.sourceId == this.sourceId &&
           other.parentId == this.parentId &&
-          other.parentIsSource == this.parentIsSource &&
+          other.hasSourceAsParent == this.hasSourceAsParent &&
           other.startUtf8 == this.startUtf8 &&
           other.endUtf8 == this.endUtf8 &&
           other.anchorRevision == this.anchorRevision &&
@@ -2952,7 +2959,7 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
   final Value<String> markdown;
   final Value<String> sourceId;
   final Value<String> parentId;
-  final Value<bool> parentIsSource;
+  final Value<bool> hasSourceAsParent;
   final Value<int> startUtf8;
   final Value<int> endUtf8;
   final Value<int> anchorRevision;
@@ -2967,7 +2974,7 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
     this.markdown = const Value.absent(),
     this.sourceId = const Value.absent(),
     this.parentId = const Value.absent(),
-    this.parentIsSource = const Value.absent(),
+    this.hasSourceAsParent = const Value.absent(),
     this.startUtf8 = const Value.absent(),
     this.endUtf8 = const Value.absent(),
     this.anchorRevision = const Value.absent(),
@@ -2983,7 +2990,7 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
     required String markdown,
     required String sourceId,
     required String parentId,
-    required bool parentIsSource,
+    required bool hasSourceAsParent,
     required int startUtf8,
     required int endUtf8,
     this.anchorRevision = const Value.absent(),
@@ -2997,7 +3004,7 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
        markdown = Value(markdown),
        sourceId = Value(sourceId),
        parentId = Value(parentId),
-       parentIsSource = Value(parentIsSource),
+       hasSourceAsParent = Value(hasSourceAsParent),
        startUtf8 = Value(startUtf8),
        endUtf8 = Value(endUtf8),
        selectedTextHash = Value(selectedTextHash),
@@ -3007,7 +3014,7 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
     Expression<String>? markdown,
     Expression<String>? sourceId,
     Expression<String>? parentId,
-    Expression<bool>? parentIsSource,
+    Expression<bool>? hasSourceAsParent,
     Expression<int>? startUtf8,
     Expression<int>? endUtf8,
     Expression<int>? anchorRevision,
@@ -3023,7 +3030,7 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
       if (markdown != null) 'markdown': markdown,
       if (sourceId != null) 'source_id': sourceId,
       if (parentId != null) 'parent_id': parentId,
-      if (parentIsSource != null) 'parent_is_source': parentIsSource,
+      if (hasSourceAsParent != null) 'parent_is_source': hasSourceAsParent,
       if (startUtf8 != null) 'start_utf8': startUtf8,
       if (endUtf8 != null) 'end_utf8': endUtf8,
       if (anchorRevision != null) 'anchor_revision': anchorRevision,
@@ -3041,7 +3048,7 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
     Value<String>? markdown,
     Value<String>? sourceId,
     Value<String>? parentId,
-    Value<bool>? parentIsSource,
+    Value<bool>? hasSourceAsParent,
     Value<int>? startUtf8,
     Value<int>? endUtf8,
     Value<int>? anchorRevision,
@@ -3057,7 +3064,7 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
       markdown: markdown ?? this.markdown,
       sourceId: sourceId ?? this.sourceId,
       parentId: parentId ?? this.parentId,
-      parentIsSource: parentIsSource ?? this.parentIsSource,
+      hasSourceAsParent: hasSourceAsParent ?? this.hasSourceAsParent,
       startUtf8: startUtf8 ?? this.startUtf8,
       endUtf8: endUtf8 ?? this.endUtf8,
       anchorRevision: anchorRevision ?? this.anchorRevision,
@@ -3085,8 +3092,8 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
     if (parentId.present) {
       map['parent_id'] = Variable<String>(parentId.value);
     }
-    if (parentIsSource.present) {
-      map['parent_is_source'] = Variable<bool>(parentIsSource.value);
+    if (hasSourceAsParent.present) {
+      map['parent_is_source'] = Variable<bool>(hasSourceAsParent.value);
     }
     if (startUtf8.present) {
       map['start_utf8'] = Variable<int>(startUtf8.value);
@@ -3125,7 +3132,7 @@ class ExtractsCompanion extends UpdateCompanion<ExtractRow> {
           ..write('markdown: $markdown, ')
           ..write('sourceId: $sourceId, ')
           ..write('parentId: $parentId, ')
-          ..write('parentIsSource: $parentIsSource, ')
+          ..write('hasSourceAsParent: $hasSourceAsParent, ')
           ..write('startUtf8: $startUtf8, ')
           ..write('endUtf8: $endUtf8, ')
           ..write('anchorRevision: $anchorRevision, ')
@@ -3177,13 +3184,13 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
   @override
-  late final GeneratedColumn<int> kind = GeneratedColumn<int>(
-    'kind',
+  late final GeneratedColumn<int> type = GeneratedColumn<int>(
+    'type',
     aliasedName,
     false,
-    check: () => ComparableExpr(kind).isBetweenValues(0, 1),
+    check: () => ComparableExpr(type).isBetweenValues(0, 1),
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
@@ -3243,7 +3250,7 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
     id,
     parentElementId,
     parentElementType,
-    kind,
+    type,
     front,
     back,
     clozeOrdinal,
@@ -3285,13 +3292,13 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
         ),
       );
     }
-    if (data.containsKey('kind')) {
+    if (data.containsKey('type')) {
       context.handle(
-        _kindMeta,
-        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
       );
     } else if (isInserting) {
-      context.missing(_kindMeta);
+      context.missing(_typeMeta);
     }
     if (data.containsKey('front')) {
       context.handle(
@@ -3359,9 +3366,9 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
         DriftSqlType.int,
         data['${effectivePrefix}parent_element_type'],
       ),
-      kind: attachedDatabase.typeMapping.read(
+      type: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}kind'],
+        data['${effectivePrefix}type'],
       )!,
       front: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -3402,8 +3409,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
   final String? parentElementId;
   final int? parentElementType;
 
-  /// Index into the card-kind enum.
-  final int kind;
+  /// Index into the CardType enum.
+  final int type;
   final String front;
   final String back;
   final int? clozeOrdinal;
@@ -3413,7 +3420,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     required this.id,
     this.parentElementId,
     this.parentElementType,
-    required this.kind,
+    required this.type,
     required this.front,
     required this.back,
     this.clozeOrdinal,
@@ -3430,7 +3437,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     if (!nullToAbsent || parentElementType != null) {
       map['parent_element_type'] = Variable<int>(parentElementType);
     }
-    map['kind'] = Variable<int>(kind);
+    map['type'] = Variable<int>(type);
     map['front'] = Variable<String>(front);
     map['back'] = Variable<String>(back);
     if (!nullToAbsent || clozeOrdinal != null) {
@@ -3452,7 +3459,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       parentElementType: parentElementType == null && nullToAbsent
           ? const Value.absent()
           : Value(parentElementType),
-      kind: Value(kind),
+      type: Value(type),
       front: Value(front),
       back: Value(back),
       clozeOrdinal: clozeOrdinal == null && nullToAbsent
@@ -3474,7 +3481,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       id: serializer.fromJson<String>(json['id']),
       parentElementId: serializer.fromJson<String?>(json['parentElementId']),
       parentElementType: serializer.fromJson<int?>(json['parentElementType']),
-      kind: serializer.fromJson<int>(json['kind']),
+      type: serializer.fromJson<int>(json['type']),
       front: serializer.fromJson<String>(json['front']),
       back: serializer.fromJson<String>(json['back']),
       clozeOrdinal: serializer.fromJson<int?>(json['clozeOrdinal']),
@@ -3489,7 +3496,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       'id': serializer.toJson<String>(id),
       'parentElementId': serializer.toJson<String?>(parentElementId),
       'parentElementType': serializer.toJson<int?>(parentElementType),
-      'kind': serializer.toJson<int>(kind),
+      'type': serializer.toJson<int>(type),
       'front': serializer.toJson<String>(front),
       'back': serializer.toJson<String>(back),
       'clozeOrdinal': serializer.toJson<int?>(clozeOrdinal),
@@ -3502,7 +3509,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     String? id,
     Value<String?> parentElementId = const Value.absent(),
     Value<int?> parentElementType = const Value.absent(),
-    int? kind,
+    int? type,
     String? front,
     String? back,
     Value<int?> clozeOrdinal = const Value.absent(),
@@ -3516,7 +3523,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     parentElementType: parentElementType.present
         ? parentElementType.value
         : this.parentElementType,
-    kind: kind ?? this.kind,
+    type: type ?? this.type,
     front: front ?? this.front,
     back: back ?? this.back,
     clozeOrdinal: clozeOrdinal.present ? clozeOrdinal.value : this.clozeOrdinal,
@@ -3532,7 +3539,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       parentElementType: data.parentElementType.present
           ? data.parentElementType.value
           : this.parentElementType,
-      kind: data.kind.present ? data.kind.value : this.kind,
+      type: data.type.present ? data.type.value : this.type,
       front: data.front.present ? data.front.value : this.front,
       back: data.back.present ? data.back.value : this.back,
       clozeOrdinal: data.clozeOrdinal.present
@@ -3553,7 +3560,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
           ..write('id: $id, ')
           ..write('parentElementId: $parentElementId, ')
           ..write('parentElementType: $parentElementType, ')
-          ..write('kind: $kind, ')
+          ..write('type: $type, ')
           ..write('front: $front, ')
           ..write('back: $back, ')
           ..write('clozeOrdinal: $clozeOrdinal, ')
@@ -3568,7 +3575,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     id,
     parentElementId,
     parentElementType,
-    kind,
+    type,
     front,
     back,
     clozeOrdinal,
@@ -3582,7 +3589,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
           other.id == this.id &&
           other.parentElementId == this.parentElementId &&
           other.parentElementType == this.parentElementType &&
-          other.kind == this.kind &&
+          other.type == this.type &&
           other.front == this.front &&
           other.back == this.back &&
           other.clozeOrdinal == this.clozeOrdinal &&
@@ -3594,7 +3601,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
   final Value<String> id;
   final Value<String?> parentElementId;
   final Value<int?> parentElementType;
-  final Value<int> kind;
+  final Value<int> type;
   final Value<String> front;
   final Value<String> back;
   final Value<int?> clozeOrdinal;
@@ -3605,7 +3612,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     this.id = const Value.absent(),
     this.parentElementId = const Value.absent(),
     this.parentElementType = const Value.absent(),
-    this.kind = const Value.absent(),
+    this.type = const Value.absent(),
     this.front = const Value.absent(),
     this.back = const Value.absent(),
     this.clozeOrdinal = const Value.absent(),
@@ -3617,7 +3624,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     required String id,
     this.parentElementId = const Value.absent(),
     this.parentElementType = const Value.absent(),
-    required int kind,
+    required int type,
     required String front,
     required String back,
     this.clozeOrdinal = const Value.absent(),
@@ -3625,7 +3632,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     this.editedAtUtc = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
-       kind = Value(kind),
+       type = Value(type),
        front = Value(front),
        back = Value(back),
        createdAtUtc = Value(createdAtUtc);
@@ -3633,7 +3640,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     Expression<String>? id,
     Expression<String>? parentElementId,
     Expression<int>? parentElementType,
-    Expression<int>? kind,
+    Expression<int>? type,
     Expression<String>? front,
     Expression<String>? back,
     Expression<int>? clozeOrdinal,
@@ -3645,7 +3652,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
       if (id != null) 'id': id,
       if (parentElementId != null) 'parent_element_id': parentElementId,
       if (parentElementType != null) 'parent_element_type': parentElementType,
-      if (kind != null) 'kind': kind,
+      if (type != null) 'type': type,
       if (front != null) 'front': front,
       if (back != null) 'back': back,
       if (clozeOrdinal != null) 'cloze_ordinal': clozeOrdinal,
@@ -3659,7 +3666,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     Value<String>? id,
     Value<String?>? parentElementId,
     Value<int?>? parentElementType,
-    Value<int>? kind,
+    Value<int>? type,
     Value<String>? front,
     Value<String>? back,
     Value<int?>? clozeOrdinal,
@@ -3671,7 +3678,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
       id: id ?? this.id,
       parentElementId: parentElementId ?? this.parentElementId,
       parentElementType: parentElementType ?? this.parentElementType,
-      kind: kind ?? this.kind,
+      type: type ?? this.type,
       front: front ?? this.front,
       back: back ?? this.back,
       clozeOrdinal: clozeOrdinal ?? this.clozeOrdinal,
@@ -3693,8 +3700,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     if (parentElementType.present) {
       map['parent_element_type'] = Variable<int>(parentElementType.value);
     }
-    if (kind.present) {
-      map['kind'] = Variable<int>(kind.value);
+    if (type.present) {
+      map['type'] = Variable<int>(type.value);
     }
     if (front.present) {
       map['front'] = Variable<String>(front.value);
@@ -3723,7 +3730,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
           ..write('id: $id, ')
           ..write('parentElementId: $parentElementId, ')
           ..write('parentElementType: $parentElementType, ')
-          ..write('kind: $kind, ')
+          ..write('type: $type, ')
           ..write('front: $front, ')
           ..write('back: $back, ')
           ..write('clozeOrdinal: $clozeOrdinal, ')
@@ -4150,10 +4157,16 @@ class ScheduleRow extends DataClass implements Insertable<ScheduleRow> {
   /// citation if its source is ever removed.
   final String? rootId;
 
-  /// Immediate learning-element parent; one coordinate for every kind.
+  /// Where the element is filed in the Browser: one parent coordinate for
+  /// every kind of element, null at the top of the tree.
+  ///
+  /// Set to the element's origin when it is created and to wherever the user
+  /// drags it afterwards. Provenance is not this column: an extract's real
+  /// parent and byte range live on `extracts`, and no move touches them.
   final String? parentElementId;
 
-  /// Pending/user-visible order metadata, independent of priority and due.
+  /// Order among the rows filed under the same parent, ascending. Null until
+  /// something is moved, and independent of priority and due.
   final int? ordinal;
   final int? createdAtUtc;
   final int? updatedAtUtc;
@@ -8185,7 +8198,7 @@ class RevlogRow extends DataClass implements Insertable<RevlogRow> {
   final String elementId;
   final int elementType;
 
-  /// Stable `RevlogEventType` value. Never the enum index.
+  /// Stable `ReviewLogEventType` value. Never the enum index.
   final int eventType;
   final int atUtc;
 
@@ -11590,10 +11603,10 @@ class $ActivityEventsTable extends ActivityEvents
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
   @override
-  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
-    'kind',
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
     aliasedName,
     false,
     type: DriftSqlType.string,
@@ -11636,7 +11649,7 @@ class $ActivityEventsTable extends ActivityEvents
     operationId,
     elementId,
     elementType,
-    kind,
+    type,
     atUtc,
     durationMs,
     metadataJson,
@@ -11684,13 +11697,13 @@ class $ActivityEventsTable extends ActivityEvents
         ),
       );
     }
-    if (data.containsKey('kind')) {
+    if (data.containsKey('type')) {
       context.handle(
-        _kindMeta,
-        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
       );
     } else if (isInserting) {
-      context.missing(_kindMeta);
+      context.missing(_typeMeta);
     }
     if (data.containsKey('at_utc')) {
       context.handle(
@@ -11740,9 +11753,9 @@ class $ActivityEventsTable extends ActivityEvents
         DriftSqlType.int,
         data['${effectivePrefix}element_type'],
       ),
-      kind: attachedDatabase.typeMapping.read(
+      type: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}kind'],
+        data['${effectivePrefix}type'],
       )!,
       atUtc: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -11773,7 +11786,7 @@ class ActivityEventRow extends DataClass
   final int? elementType;
 
   /// Stable dotted event name, for example `reader.done`.
-  final String kind;
+  final String type;
   final int atUtc;
 
   /// Foreground duration, logged from day one so time-based features remain
@@ -11785,7 +11798,7 @@ class ActivityEventRow extends DataClass
     required this.operationId,
     this.elementId,
     this.elementType,
-    required this.kind,
+    required this.type,
     required this.atUtc,
     this.durationMs,
     this.metadataJson,
@@ -11801,7 +11814,7 @@ class ActivityEventRow extends DataClass
     if (!nullToAbsent || elementType != null) {
       map['element_type'] = Variable<int>(elementType);
     }
-    map['kind'] = Variable<String>(kind);
+    map['type'] = Variable<String>(type);
     map['at_utc'] = Variable<int>(atUtc);
     if (!nullToAbsent || durationMs != null) {
       map['duration_ms'] = Variable<int>(durationMs);
@@ -11822,7 +11835,7 @@ class ActivityEventRow extends DataClass
       elementType: elementType == null && nullToAbsent
           ? const Value.absent()
           : Value(elementType),
-      kind: Value(kind),
+      type: Value(type),
       atUtc: Value(atUtc),
       durationMs: durationMs == null && nullToAbsent
           ? const Value.absent()
@@ -11843,7 +11856,7 @@ class ActivityEventRow extends DataClass
       operationId: serializer.fromJson<String>(json['operationId']),
       elementId: serializer.fromJson<String?>(json['elementId']),
       elementType: serializer.fromJson<int?>(json['elementType']),
-      kind: serializer.fromJson<String>(json['kind']),
+      type: serializer.fromJson<String>(json['type']),
       atUtc: serializer.fromJson<int>(json['atUtc']),
       durationMs: serializer.fromJson<int?>(json['durationMs']),
       metadataJson: serializer.fromJson<String?>(json['metadataJson']),
@@ -11857,7 +11870,7 @@ class ActivityEventRow extends DataClass
       'operationId': serializer.toJson<String>(operationId),
       'elementId': serializer.toJson<String?>(elementId),
       'elementType': serializer.toJson<int?>(elementType),
-      'kind': serializer.toJson<String>(kind),
+      'type': serializer.toJson<String>(type),
       'atUtc': serializer.toJson<int>(atUtc),
       'durationMs': serializer.toJson<int?>(durationMs),
       'metadataJson': serializer.toJson<String?>(metadataJson),
@@ -11869,7 +11882,7 @@ class ActivityEventRow extends DataClass
     String? operationId,
     Value<String?> elementId = const Value.absent(),
     Value<int?> elementType = const Value.absent(),
-    String? kind,
+    String? type,
     int? atUtc,
     Value<int?> durationMs = const Value.absent(),
     Value<String?> metadataJson = const Value.absent(),
@@ -11878,7 +11891,7 @@ class ActivityEventRow extends DataClass
     operationId: operationId ?? this.operationId,
     elementId: elementId.present ? elementId.value : this.elementId,
     elementType: elementType.present ? elementType.value : this.elementType,
-    kind: kind ?? this.kind,
+    type: type ?? this.type,
     atUtc: atUtc ?? this.atUtc,
     durationMs: durationMs.present ? durationMs.value : this.durationMs,
     metadataJson: metadataJson.present ? metadataJson.value : this.metadataJson,
@@ -11893,7 +11906,7 @@ class ActivityEventRow extends DataClass
       elementType: data.elementType.present
           ? data.elementType.value
           : this.elementType,
-      kind: data.kind.present ? data.kind.value : this.kind,
+      type: data.type.present ? data.type.value : this.type,
       atUtc: data.atUtc.present ? data.atUtc.value : this.atUtc,
       durationMs: data.durationMs.present
           ? data.durationMs.value
@@ -11911,7 +11924,7 @@ class ActivityEventRow extends DataClass
           ..write('operationId: $operationId, ')
           ..write('elementId: $elementId, ')
           ..write('elementType: $elementType, ')
-          ..write('kind: $kind, ')
+          ..write('type: $type, ')
           ..write('atUtc: $atUtc, ')
           ..write('durationMs: $durationMs, ')
           ..write('metadataJson: $metadataJson')
@@ -11925,7 +11938,7 @@ class ActivityEventRow extends DataClass
     operationId,
     elementId,
     elementType,
-    kind,
+    type,
     atUtc,
     durationMs,
     metadataJson,
@@ -11938,7 +11951,7 @@ class ActivityEventRow extends DataClass
           other.operationId == this.operationId &&
           other.elementId == this.elementId &&
           other.elementType == this.elementType &&
-          other.kind == this.kind &&
+          other.type == this.type &&
           other.atUtc == this.atUtc &&
           other.durationMs == this.durationMs &&
           other.metadataJson == this.metadataJson);
@@ -11949,7 +11962,7 @@ class ActivityEventsCompanion extends UpdateCompanion<ActivityEventRow> {
   final Value<String> operationId;
   final Value<String?> elementId;
   final Value<int?> elementType;
-  final Value<String> kind;
+  final Value<String> type;
   final Value<int> atUtc;
   final Value<int?> durationMs;
   final Value<String?> metadataJson;
@@ -11959,7 +11972,7 @@ class ActivityEventsCompanion extends UpdateCompanion<ActivityEventRow> {
     this.operationId = const Value.absent(),
     this.elementId = const Value.absent(),
     this.elementType = const Value.absent(),
-    this.kind = const Value.absent(),
+    this.type = const Value.absent(),
     this.atUtc = const Value.absent(),
     this.durationMs = const Value.absent(),
     this.metadataJson = const Value.absent(),
@@ -11970,21 +11983,21 @@ class ActivityEventsCompanion extends UpdateCompanion<ActivityEventRow> {
     required String operationId,
     this.elementId = const Value.absent(),
     this.elementType = const Value.absent(),
-    required String kind,
+    required String type,
     required int atUtc,
     this.durationMs = const Value.absent(),
     this.metadataJson = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        operationId = Value(operationId),
-       kind = Value(kind),
+       type = Value(type),
        atUtc = Value(atUtc);
   static Insertable<ActivityEventRow> custom({
     Expression<String>? id,
     Expression<String>? operationId,
     Expression<String>? elementId,
     Expression<int>? elementType,
-    Expression<String>? kind,
+    Expression<String>? type,
     Expression<int>? atUtc,
     Expression<int>? durationMs,
     Expression<String>? metadataJson,
@@ -11995,7 +12008,7 @@ class ActivityEventsCompanion extends UpdateCompanion<ActivityEventRow> {
       if (operationId != null) 'operation_id': operationId,
       if (elementId != null) 'element_id': elementId,
       if (elementType != null) 'element_type': elementType,
-      if (kind != null) 'kind': kind,
+      if (type != null) 'type': type,
       if (atUtc != null) 'at_utc': atUtc,
       if (durationMs != null) 'duration_ms': durationMs,
       if (metadataJson != null) 'metadata_json': metadataJson,
@@ -12008,7 +12021,7 @@ class ActivityEventsCompanion extends UpdateCompanion<ActivityEventRow> {
     Value<String>? operationId,
     Value<String?>? elementId,
     Value<int?>? elementType,
-    Value<String>? kind,
+    Value<String>? type,
     Value<int>? atUtc,
     Value<int?>? durationMs,
     Value<String?>? metadataJson,
@@ -12019,7 +12032,7 @@ class ActivityEventsCompanion extends UpdateCompanion<ActivityEventRow> {
       operationId: operationId ?? this.operationId,
       elementId: elementId ?? this.elementId,
       elementType: elementType ?? this.elementType,
-      kind: kind ?? this.kind,
+      type: type ?? this.type,
       atUtc: atUtc ?? this.atUtc,
       durationMs: durationMs ?? this.durationMs,
       metadataJson: metadataJson ?? this.metadataJson,
@@ -12042,8 +12055,8 @@ class ActivityEventsCompanion extends UpdateCompanion<ActivityEventRow> {
     if (elementType.present) {
       map['element_type'] = Variable<int>(elementType.value);
     }
-    if (kind.present) {
-      map['kind'] = Variable<String>(kind.value);
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
     }
     if (atUtc.present) {
       map['at_utc'] = Variable<int>(atUtc.value);
@@ -12067,7 +12080,7 @@ class ActivityEventsCompanion extends UpdateCompanion<ActivityEventRow> {
           ..write('operationId: $operationId, ')
           ..write('elementId: $elementId, ')
           ..write('elementType: $elementType, ')
-          ..write('kind: $kind, ')
+          ..write('type: $type, ')
           ..write('atUtc: $atUtc, ')
           ..write('durationMs: $durationMs, ')
           ..write('metadataJson: $metadataJson, ')
@@ -14324,7 +14337,7 @@ typedef $$ExtractsTableCreateCompanionBuilder =
       required String markdown,
       required String sourceId,
       required String parentId,
-      required bool parentIsSource,
+      required bool hasSourceAsParent,
       required int startUtf8,
       required int endUtf8,
       Value<int> anchorRevision,
@@ -14341,7 +14354,7 @@ typedef $$ExtractsTableUpdateCompanionBuilder =
       Value<String> markdown,
       Value<String> sourceId,
       Value<String> parentId,
-      Value<bool> parentIsSource,
+      Value<bool> hasSourceAsParent,
       Value<int> startUtf8,
       Value<int> endUtf8,
       Value<int> anchorRevision,
@@ -14399,8 +14412,8 @@ class $$ExtractsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<bool> get parentIsSource => $composableBuilder(
-    column: $table.parentIsSource,
+  ColumnFilters<bool> get hasSourceAsParent => $composableBuilder(
+    column: $table.hasSourceAsParent,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -14492,8 +14505,8 @@ class $$ExtractsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<bool> get parentIsSource => $composableBuilder(
-    column: $table.parentIsSource,
+  ColumnOrderings<bool> get hasSourceAsParent => $composableBuilder(
+    column: $table.hasSourceAsParent,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -14579,8 +14592,8 @@ class $$ExtractsTableAnnotationComposer
   GeneratedColumn<String> get parentId =>
       $composableBuilder(column: $table.parentId, builder: (column) => column);
 
-  GeneratedColumn<bool> get parentIsSource => $composableBuilder(
-    column: $table.parentIsSource,
+  GeneratedColumn<bool> get hasSourceAsParent => $composableBuilder(
+    column: $table.hasSourceAsParent,
     builder: (column) => column,
   );
 
@@ -14676,7 +14689,7 @@ class $$ExtractsTableTableManager
                 Value<String> markdown = const Value.absent(),
                 Value<String> sourceId = const Value.absent(),
                 Value<String> parentId = const Value.absent(),
-                Value<bool> parentIsSource = const Value.absent(),
+                Value<bool> hasSourceAsParent = const Value.absent(),
                 Value<int> startUtf8 = const Value.absent(),
                 Value<int> endUtf8 = const Value.absent(),
                 Value<int> anchorRevision = const Value.absent(),
@@ -14691,7 +14704,7 @@ class $$ExtractsTableTableManager
                 markdown: markdown,
                 sourceId: sourceId,
                 parentId: parentId,
-                parentIsSource: parentIsSource,
+                hasSourceAsParent: hasSourceAsParent,
                 startUtf8: startUtf8,
                 endUtf8: endUtf8,
                 anchorRevision: anchorRevision,
@@ -14708,7 +14721,7 @@ class $$ExtractsTableTableManager
                 required String markdown,
                 required String sourceId,
                 required String parentId,
-                required bool parentIsSource,
+                required bool hasSourceAsParent,
                 required int startUtf8,
                 required int endUtf8,
                 Value<int> anchorRevision = const Value.absent(),
@@ -14723,7 +14736,7 @@ class $$ExtractsTableTableManager
                 markdown: markdown,
                 sourceId: sourceId,
                 parentId: parentId,
-                parentIsSource: parentIsSource,
+                hasSourceAsParent: hasSourceAsParent,
                 startUtf8: startUtf8,
                 endUtf8: endUtf8,
                 anchorRevision: anchorRevision,
@@ -14806,7 +14819,7 @@ typedef $$CardsTableCreateCompanionBuilder =
       required String id,
       Value<String?> parentElementId,
       Value<int?> parentElementType,
-      required int kind,
+      required int type,
       required String front,
       required String back,
       Value<int?> clozeOrdinal,
@@ -14819,7 +14832,7 @@ typedef $$CardsTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String?> parentElementId,
       Value<int?> parentElementType,
-      Value<int> kind,
+      Value<int> type,
       Value<String> front,
       Value<String> back,
       Value<int?> clozeOrdinal,
@@ -14892,8 +14905,8 @@ class $$CardsTableFilterComposer extends Composer<_$AppDatabase, $CardsTable> {
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get kind => $composableBuilder(
-    column: $table.kind,
+  ColumnFilters<int> get type => $composableBuilder(
+    column: $table.type,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -14997,8 +15010,8 @@ class $$CardsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get kind => $composableBuilder(
-    column: $table.kind,
+  ColumnOrderings<int> get type => $composableBuilder(
+    column: $table.type,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -15050,8 +15063,8 @@ class $$CardsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get kind =>
-      $composableBuilder(column: $table.kind, builder: (column) => column);
+  GeneratedColumn<int> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
 
   GeneratedColumn<String> get front =>
       $composableBuilder(column: $table.front, builder: (column) => column);
@@ -15156,7 +15169,7 @@ class $$CardsTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String?> parentElementId = const Value.absent(),
                 Value<int?> parentElementType = const Value.absent(),
-                Value<int> kind = const Value.absent(),
+                Value<int> type = const Value.absent(),
                 Value<String> front = const Value.absent(),
                 Value<String> back = const Value.absent(),
                 Value<int?> clozeOrdinal = const Value.absent(),
@@ -15167,7 +15180,7 @@ class $$CardsTableTableManager
                 id: id,
                 parentElementId: parentElementId,
                 parentElementType: parentElementType,
-                kind: kind,
+                type: type,
                 front: front,
                 back: back,
                 clozeOrdinal: clozeOrdinal,
@@ -15180,7 +15193,7 @@ class $$CardsTableTableManager
                 required String id,
                 Value<String?> parentElementId = const Value.absent(),
                 Value<int?> parentElementType = const Value.absent(),
-                required int kind,
+                required int type,
                 required String front,
                 required String back,
                 Value<int?> clozeOrdinal = const Value.absent(),
@@ -15191,7 +15204,7 @@ class $$CardsTableTableManager
                 id: id,
                 parentElementId: parentElementId,
                 parentElementType: parentElementType,
-                kind: kind,
+                type: type,
                 front: front,
                 back: back,
                 clozeOrdinal: clozeOrdinal,
@@ -18967,7 +18980,7 @@ typedef $$ActivityEventsTableCreateCompanionBuilder =
       required String operationId,
       Value<String?> elementId,
       Value<int?> elementType,
-      required String kind,
+      required String type,
       required int atUtc,
       Value<int?> durationMs,
       Value<String?> metadataJson,
@@ -18979,7 +18992,7 @@ typedef $$ActivityEventsTableUpdateCompanionBuilder =
       Value<String> operationId,
       Value<String?> elementId,
       Value<int?> elementType,
-      Value<String> kind,
+      Value<String> type,
       Value<int> atUtc,
       Value<int?> durationMs,
       Value<String?> metadataJson,
@@ -19015,8 +19028,8 @@ class $$ActivityEventsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get kind => $composableBuilder(
-    column: $table.kind,
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19065,8 +19078,8 @@ class $$ActivityEventsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get kind => $composableBuilder(
-    column: $table.kind,
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -19111,8 +19124,8 @@ class $$ActivityEventsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get kind =>
-      $composableBuilder(column: $table.kind, builder: (column) => column);
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
 
   GeneratedColumn<int> get atUtc =>
       $composableBuilder(column: $table.atUtc, builder: (column) => column);
@@ -19169,7 +19182,7 @@ class $$ActivityEventsTableTableManager
                 Value<String> operationId = const Value.absent(),
                 Value<String?> elementId = const Value.absent(),
                 Value<int?> elementType = const Value.absent(),
-                Value<String> kind = const Value.absent(),
+                Value<String> type = const Value.absent(),
                 Value<int> atUtc = const Value.absent(),
                 Value<int?> durationMs = const Value.absent(),
                 Value<String?> metadataJson = const Value.absent(),
@@ -19179,7 +19192,7 @@ class $$ActivityEventsTableTableManager
                 operationId: operationId,
                 elementId: elementId,
                 elementType: elementType,
-                kind: kind,
+                type: type,
                 atUtc: atUtc,
                 durationMs: durationMs,
                 metadataJson: metadataJson,
@@ -19191,7 +19204,7 @@ class $$ActivityEventsTableTableManager
                 required String operationId,
                 Value<String?> elementId = const Value.absent(),
                 Value<int?> elementType = const Value.absent(),
-                required String kind,
+                required String type,
                 required int atUtc,
                 Value<int?> durationMs = const Value.absent(),
                 Value<String?> metadataJson = const Value.absent(),
@@ -19201,7 +19214,7 @@ class $$ActivityEventsTableTableManager
                 operationId: operationId,
                 elementId: elementId,
                 elementType: elementType,
-                kind: kind,
+                type: type,
                 atUtc: atUtc,
                 durationMs: durationMs,
                 metadataJson: metadataJson,

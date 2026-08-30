@@ -28,16 +28,16 @@ final class StudyDayBoundaryException implements Exception {
   const StudyDayBoundaryException({
     required this.zoneId,
     required this.localBoundary,
-    required this.kind,
+    required this.type,
   });
 
   final String zoneId;
   final DateTime localBoundary;
-  final String kind;
+  final String type;
 
   @override
   String toString() =>
-      '$kind StudyDay boundary $localBoundary in home timezone $zoneId';
+      '$type StudyDay boundary $localBoundary in home timezone $zoneId';
 }
 
 /// A zone with one fixed offset. Useful for UTC and for deterministic tests.
@@ -212,7 +212,7 @@ final class StudyDayCalendar {
     throw StudyDayBoundaryException(
       zoneId: zone.zoneId,
       localBoundary: naiveLocal,
-      kind: candidates.isEmpty ? 'Nonexistent' : 'Ambiguous',
+      type: candidates.isEmpty ? 'Nonexistent' : 'Ambiguous',
     );
   }
 

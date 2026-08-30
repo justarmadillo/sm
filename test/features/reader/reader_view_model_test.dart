@@ -133,9 +133,7 @@ void main() {
       final state = await readerFor(sourceId, ReaderMode.browse);
       final model = modelFor(sourceId, ReaderMode.browse);
 
-      await model.recordPosition(
-        anchorIn(state.document.blocks[3], 0),
-      );
+      await model.recordPosition(anchorIn(state.document.blocks[3], 0));
 
       final stored = await container
           .read(contentRepositoryProvider)
@@ -243,7 +241,7 @@ void main() {
           .read(learningRepositoryProvider)
           .listRecentActivity();
       final encounter = logged.firstWhere(
-        (r) => r.kind == 'topic.encounter_completed',
+        (r) => r.type == 'topic.encounter_completed',
       );
       expect(encounter.durationMs, 240000);
     });
@@ -273,50 +271,12 @@ void main() {
       expect(state.topic.aFactor, closeTo(1.2, 1e-9));
     });
 
-    test('the reminder line appears only after enough reading', () async {
-      final sourceId = await importFixture();
-      final state = await readerFor(sourceId, ReaderMode.scheduled);
-      final model = modelFor(sourceId, ReaderMode.scheduled);
-
-      expect(state.showReminder, isFalse);
-
-      await model.recordPosition(
-        anchorIn(state.document.blocks.last, 0),
-      );
-      var current = container
-          .read(
-            readerViewModelProvider(
-              ReaderRequest(sourceId: sourceId, mode: ReaderMode.scheduled),
-            ),
-          )
-          .requireValue;
-      expect(
-        current.showReminder,
-        isFalse,
-        reason: 'this fixture is far shorter than the 500-word target',
-      );
-
-      // Dismissing keeps it hidden even once the target is met.
-      model.dismissReminder();
-      current = container
-          .read(
-            readerViewModelProvider(
-              ReaderRequest(sourceId: sourceId, mode: ReaderMode.scheduled),
-            ),
-          )
-          .requireValue;
-      expect(current.isReminderDismissed, isTrue);
-      expect(current.showReminder, isFalse);
-    });
-
     test('a forgotten marker leaves a soft position to recover from', () async {
       final sourceId = await importFixture();
       final state = await readerFor(sourceId, ReaderMode.scheduled);
       final model = modelFor(sourceId, ReaderMode.scheduled);
 
-      await model.recordPosition(
-        anchorIn(state.document.blocks[3], 0),
-      );
+      await model.recordPosition(anchorIn(state.document.blocks[3], 0));
       final afterScroll = container
           .read(
             readerViewModelProvider(

@@ -16,7 +16,7 @@ import 'package:incremental_reader/storage/database/tables.dart';
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 12;
+const int kSchemaVersion = 14;
 
 /// Name of the external-content FTS5 index over [SearchDocuments].
 const String kSearchIndexTable = 'search_index';
@@ -62,6 +62,15 @@ class AppDatabase extends _$AppDatabase {
           'database schema $from is newer than this build supports ($to)',
         );
       }
+      // Two columns called `kind` become `type` (schema 14). This runs ahead
+      // of every version block rather than inside its own, because the v6 step
+      // rebuilds `cards` from the *current* Dart definition and a rebuild
+      // cannot copy across a column the file on disk still calls `kind`. Both
+      // statements do nothing once the rename has happened, so a file at any
+      // version may run them.
+      await _renameColumnIfPresent('cards', 'kind', 'type');
+      await _renameColumnIfPresent('activity_events', 'kind', 'type');
+
       if (from < 2) {
         // Rebuild both tables so descendant content cannot disappear via
         // an accidental physical parent delete. The app uses lifecycle
@@ -555,6 +564,32 @@ class AppDatabase extends _$AppDatabase {
         await _migrateAnchorsToDocumentSpace(m);
         await _createIndexes(m);
       }
+      if (from < 13) {
+        // Drop the reader reminder threshold. The nonblocking reminder line
+        // it configured is gone, so the row was read by nothing; a settings
+        // key with no reader is how a future reader concludes the feature
+        // still exists and wires a control back onto it.
+        //
+        // Settings are a flat key/value table, so this deletes one row and
+        // changes no schema. AppSettings.fromMap already ignores unknown
+        // keys, which is why an interrupted upgrade is harmless here.
+        await customStatement(
+          "DELETE FROM settings WHERE key = 'reader.reminder_words'",
+        );
+      }
+      if (from < 14) {
+        // `kind` became `type` on cards and activity_events. The app had two
+        // words for one idea -- a card's kind, an element's type -- and a
+        // reader had no way to tell whether the difference meant anything. It
+        // did not.
+        //
+        // The two RENAME COLUMN statements themselves run at the top of this
+        // callback, ahead of the v6 rebuild that would otherwise trip over
+        // them. RENAME COLUMN rather than a table rebuild: it keeps the rows,
+        // the indexes and the CHECK constraints that name the column, and
+        // SQLite rewrites those references itself.
+        await _createIndexes(m);
+      }
     },
     beforeOpen: (OpeningDetails details) async {
       // SQLite disables foreign keys per connection by default, so this
@@ -565,6 +600,21 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('PRAGMA busy_timeout = 5000');
     },
   );
+
+  /// Renames [from] to [to], and does nothing when the rename already
+  /// happened.
+  ///
+  /// Idempotent for the same reason [_addColumnIfMissing] is: a migration
+  /// interrupted half-way must be safe to run again, and `RENAME COLUMN` on a
+  /// column that is already gone is an error rather than a no-op.
+  Future<void> _renameColumnIfPresent(
+    String table,
+    String from,
+    String to,
+  ) async {
+    if (!await _hasColumn(table, from)) return;
+    await customStatement('ALTER TABLE $table RENAME COLUMN $from TO $to');
+  }
 
   /// Adds [column] only when the table does not already have it.
   ///
@@ -1053,13 +1103,47 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Whether the full-text index reports itself consistent with its content
-  /// table. Checked by the diagnostics panel alongside the integrity check.
+  /// Merges the full-text index's segments into fewer, larger ones.
+  ///
+  /// FTS5 writes each change as a new segment and only merges them as it goes,
+  /// so an index written over months of extraction answers the same query by
+  /// reading many more b-trees than it needs. This is housekeeping, not
+  /// repair: the terms it holds are identical afterwards.
+  Future<void> optimizeSearchIndex() async {
+    await customStatement(
+      "INSERT INTO $kSearchIndexTable($kSearchIndexTable) VALUES ('optimize')",
+    );
+  }
+
+  /// Whether the full-text index is internally consistent. Checked by the
+  /// diagnostics panel alongside the integrity check.
+  ///
+  /// This says nothing about whether the index still agrees with the rows it
+  /// indexes -- see [isSearchIndexInStepWithContent] for that.
   Future<bool> isSearchIndexValid() async {
     try {
       await customStatement(
         'INSERT INTO $kSearchIndexTable($kSearchIndexTable) '
         "VALUES ('integrity-check')",
+      );
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  /// Whether the full-text index still holds exactly the terms its content
+  /// table implies.
+  ///
+  /// The stricter of the two checks, and the one worth running before a
+  /// rebuild: an external-content index whose triggers were missing for a
+  /// while is perfectly well-formed in itself and simply has fewer rows in it
+  /// than the collection does. Only `rank = 1` compares the two.
+  Future<bool> isSearchIndexInStepWithContent() async {
+    try {
+      await customStatement(
+        'INSERT INTO $kSearchIndexTable($kSearchIndexTable, rank) '
+        "VALUES ('integrity-check', 1)",
       );
       return true;
     } on Object {

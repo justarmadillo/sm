@@ -42,7 +42,7 @@ class _FormulationDialog extends StatefulWidget {
   State<_FormulationDialog> createState() => _FormulationDialogState();
 }
 
-enum _DraftKind { qa, cloze }
+enum _DraftType { qa, cloze }
 
 class _FormulationDialogState extends State<_FormulationDialog> {
   final TextEditingController _question = TextEditingController();
@@ -51,7 +51,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
     text: widget.seedText,
   );
   final List<CardDraft> _queued = <CardDraft>[];
-  _DraftKind _kind = _DraftKind.qa;
+  _DraftType _type = _DraftType.qa;
   String? _error;
 
   @override
@@ -80,9 +80,9 @@ class _FormulationDialogState extends State<_FormulationDialog> {
             children: <Widget>[
               Text(_introLine()),
               const SizedBox(height: 16),
-              _cardKindSelector(context),
+              _cardTypeSelector(context),
               const SizedBox(height: 16),
-              if (_kind == _DraftKind.qa)
+              if (_type == _DraftType.qa)
                 ..._questionAndAnswerFields()
               else
                 ..._clozeFields(context, clozeCountInEditor),
@@ -126,12 +126,12 @@ class _FormulationDialogState extends State<_FormulationDialog> {
 
   /// How many cards the fields as currently filled in would add, counting an
   /// incomplete Q&A pair as none.
-  int _cardCountInEditor(int clozeCountInEditor) => switch (_kind) {
-    _DraftKind.qa
+  int _cardCountInEditor(int clozeCountInEditor) => switch (_type) {
+    _DraftType.qa
         when _question.text.trim().isNotEmpty &&
             _answer.text.trim().isNotEmpty =>
       1,
-    _DraftKind.cloze => clozeCountInEditor,
+    _DraftType.cloze => clozeCountInEditor,
     _ => 0,
   };
 
@@ -148,24 +148,24 @@ class _FormulationDialogState extends State<_FormulationDialog> {
   /// The two icons are dropped on a narrow window: they decorate a choice the
   /// words already make, and they are what pushes the pair past a phone's
   /// dialog width.
-  Widget _cardKindSelector(BuildContext context) {
+  Widget _cardTypeSelector(BuildContext context) {
     final bool hasRoomForIcons = !isCompactWidth(context);
-    return SegmentedButton<_DraftKind>(
-      segments: <ButtonSegment<_DraftKind>>[
-        ButtonSegment<_DraftKind>(
-          value: _DraftKind.qa,
+    return SegmentedButton<_DraftType>(
+      segments: <ButtonSegment<_DraftType>>[
+        ButtonSegment<_DraftType>(
+          value: _DraftType.qa,
           label: const Text('Question & answer'),
           icon: hasRoomForIcons ? const Icon(Icons.quiz_outlined) : null,
         ),
-        ButtonSegment<_DraftKind>(
-          value: _DraftKind.cloze,
+        ButtonSegment<_DraftType>(
+          value: _DraftType.cloze,
           label: const Text('Cloze'),
           icon: hasRoomForIcons ? const Icon(Icons.short_text) : null,
         ),
       ],
-      selected: <_DraftKind>{_kind},
-      onSelectionChanged: (Set<_DraftKind> value) => setState(() {
-        _kind = value.single;
+      selected: <_DraftType>{_type},
+      onSelectionChanged: (Set<_DraftType> value) => setState(() {
+        _type = value.single;
         _error = null;
       }),
     );
@@ -294,8 +294,8 @@ class _FormulationDialogState extends State<_FormulationDialog> {
   }
 
   CardDraft? _currentDraft({required bool allowEmpty}) {
-    switch (_kind) {
-      case _DraftKind.qa:
+    switch (_type) {
+      case _DraftType.qa:
         final question = _question.text.trim();
         final answer = _answer.text.trim();
         if (question.isEmpty && answer.isEmpty && allowEmpty) return null;
@@ -304,7 +304,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
           return null;
         }
         return QaCardDraft(question: question, answer: answer);
-      case _DraftKind.cloze:
+      case _DraftType.cloze:
         final text = _cloze.text.trim();
         if (text.isEmpty && allowEmpty) return null;
         final deletions = parseClozeDeletions(text);
@@ -347,11 +347,11 @@ class _FormulationDialogState extends State<_FormulationDialog> {
   }
 
   void _clearCurrent() {
-    switch (_kind) {
-      case _DraftKind.qa:
+    switch (_type) {
+      case _DraftType.qa:
         _question.clear();
         _answer.clear();
-      case _DraftKind.cloze:
+      case _DraftType.cloze:
         _cloze.clear();
     }
   }

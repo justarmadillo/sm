@@ -33,10 +33,10 @@ import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 
 /// Activity kind recorded when relative priority changes.
-const String kPrioritySetKind = 'element.priority_set';
+const String kPrioritySetType = 'element.priority_set';
 
 /// Activity kind recorded when a range is spread across many elements.
-const String kPrioritySpreadKind = 'element.priority_spread';
+const String kPrioritySpreadType = 'element.priority_spread';
 
 /// Runs the commands behind the priority slider, the browser, and Spread.
 final class PriorityCommandRunner {
@@ -68,7 +68,7 @@ final class PriorityCommandRunner {
 
   /// Places an element at an exact order key.
   Future<Result<ElementSchedule>> setRank(SetPriority command) =>
-      _run<ElementSchedule>(command, kPrioritySetKind, () async {
+      _run<ElementSchedule>(command, kPrioritySetType, () async {
         final ElementSchedule? schedule = await _learning.findSchedule(
           command.ref,
         );
@@ -78,14 +78,14 @@ final class PriorityCommandRunner {
           schedule,
           command.rank,
           await _context.priorityScale(),
-          kPrioritySetKind,
+          kPrioritySetType,
         );
       });
 
   /// Places an element at [SetPriorityPercent.percent] of the collection.
   Future<Result<ElementSchedule>> setPercent(
     SetPriorityPercent command,
-  ) => _run<ElementSchedule>(command, kPrioritySetKind, () async {
+  ) => _run<ElementSchedule>(command, kPrioritySetType, () async {
     if (command.percent.isNaN || command.percent < 0 || command.percent > 100) {
       return const Err<ElementSchedule>(
         ValidationFailure('priority is a percent from 0 to 100'),
@@ -99,12 +99,12 @@ final class PriorityCommandRunner {
       schedule.priority,
       command.percent,
     );
-    return _apply(command, schedule, rank, scale, kPrioritySetKind);
+    return _apply(command, schedule, rank, scale, kPrioritySetType);
   });
 
   /// Moves an element between two neighbours, as a drag does.
   Future<Result<ElementSchedule>> reorder(ReorderPriority command) =>
-      _run<ElementSchedule>(command, kPrioritySetKind, () async {
+      _run<ElementSchedule>(command, kPrioritySetType, () async {
         final ElementSchedule? schedule = await _learning.findSchedule(
           command.ref,
         );
@@ -121,12 +121,12 @@ final class PriorityCommandRunner {
           command.after,
           command.before,
         );
-        return _apply(command, schedule, rank, scale, kPrioritySetKind);
+        return _apply(command, schedule, rank, scale, kPrioritySetType);
       });
 
   /// Nudges an element past its neighbours.
   Future<Result<ElementSchedule>> step(StepPriority command) =>
-      _run<ElementSchedule>(command, kPrioritySetKind, () async {
+      _run<ElementSchedule>(command, kPrioritySetType, () async {
         final ElementSchedule? schedule = await _learning.findSchedule(
           command.ref,
         );
@@ -142,13 +142,13 @@ final class PriorityCommandRunner {
           schedule.priority,
           target,
         );
-        return _apply(command, schedule, rank, scale, kPrioritySetKind);
+        return _apply(command, schedule, rank, scale, kPrioritySetType);
       });
 
   /// Applies Increase, Decrease, Spread, or Adjust exactly in subset order.
   Future<Result<int>> batch(
     BatchPriority command,
-  ) => _run<int>(command, kPrioritySpreadKind, () async {
+  ) => _run<int>(command, kPrioritySpreadType, () async {
     if (command.refs.isEmpty) {
       return const Err<int>(ValidationFailure('choose an element subset'));
     }
@@ -344,7 +344,7 @@ final class PriorityCommandRunner {
       ActivityRecord(
         id: _ids.newId(),
         operationId: command.operationId.value,
-        kind: kPrioritySpreadKind,
+        type: kPrioritySpreadType,
         atUtc: now,
         metadata: <String, Object?>{
           'count': schedules.length,
@@ -403,7 +403,7 @@ final class PriorityCommandRunner {
     ElementSchedule schedule,
     PriorityRank rank,
     PriorityScale scale,
-    String kind,
+    String type,
   ) async {
     if (rank == schedule.priority) {
       return Ok<ElementSchedule>(schedule);
@@ -435,7 +435,7 @@ final class PriorityCommandRunner {
       ActivityRecord(
         id: _ids.newId(),
         operationId: command.operationId.value,
-        kind: kind,
+        type: type,
         atUtc: command.timestampUtc,
         ref: schedule.ref,
         metadata: <String, Object?>{
@@ -449,12 +449,12 @@ final class PriorityCommandRunner {
 
   Future<Result<T>> _run<T>(
     AppCommand command,
-    String kind,
+    String type,
     Future<Result<T>> Function() body,
   ) async {
     try {
       return await _transactions.run<Result<T>>(() async {
-        if (await _learning.hasActivity(command.operationId.value, kind)) {
+        if (await _learning.hasActivity(command.operationId.value, type)) {
           final ElementRef? ref = switch (command) {
             SetPriority(:final ref) ||
             SetPriorityPercent(:final ref) ||
@@ -475,7 +475,7 @@ final class PriorityCommandRunner {
         _diagnostics.record(
           DiagnosticEvent(
             level: result.isOk ? DiagnosticLevel.info : DiagnosticLevel.warning,
-            name: kind,
+            name: type,
             timestampUtc: _clock.nowUtc(),
             operationId: command.operationId,
             fields: <String, Object?>{'ok': result.isOk},
@@ -486,14 +486,14 @@ final class PriorityCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       final UnexpectedFailure failure = UnexpectedFailure(
-        'command $kind failed',
+        'command $type failed',
         cause: error,
         stackTrace: stackTrace,
       );
       _diagnostics.record(
         DiagnosticEvent(
           level: DiagnosticLevel.error,
-          name: kind,
+          name: type,
           timestampUtc: _clock.nowUtc(),
           operationId: command.operationId,
           failure: failure,

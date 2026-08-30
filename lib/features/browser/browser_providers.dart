@@ -19,12 +19,16 @@ final Provider<BrowserTreeQuery> browserTreeQueryProvider =
       ),
     );
 
-/// Runs the moves the Browser can make: up, down, nest, lift, and drop.
+/// Runs the moves the Browser can make — up, down, nest, lift, drop — and the
+/// one deletion that is permanent.
 final Provider<BrowserCommandRunner> browserCommandRunnerProvider =
     Provider<BrowserCommandRunner>(
       (Ref ref) => BrowserCommandRunner(
         tree: ref.watch(browserTreeQueryProvider),
+        content: ref.watch(contentRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
+        search: ref.watch(searchRepositoryProvider),
+        context: ref.watch(schedulingContextProvider),
         transfer: ref.watch(transferRepositoryProvider),
         transactions: ref.watch(transactionRunnerProvider),
         clock: ref.watch(clockProvider),

@@ -55,14 +55,14 @@ final class ReviewUiState {
   /// Whether the inline editor is open.
   final bool isEditing;
 
-  String get question => switch (card.kind) {
-    CardKind.qa => card.front,
-    CardKind.cloze => renderClozeQuestion(card.front, card.clozeOrdinal!),
+  String get question => switch (card.type) {
+    CardType.qa => card.front,
+    CardType.cloze => renderClozeQuestion(card.front, card.clozeOrdinal!),
   };
 
-  String get answer => switch (card.kind) {
-    CardKind.qa => card.back,
-    CardKind.cloze => renderClozeAnswer(card.front),
+  String get answer => switch (card.type) {
+    CardType.qa => card.back,
+    CardType.cloze => renderClozeAnswer(card.front),
   };
 
   /// The element this card was formulated from, when it has one.

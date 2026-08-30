@@ -32,11 +32,11 @@ import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 
-const String kDailyAdmissionKind = 'sm20.queue.opened';
-const String kSmartPostponeKind = 'sm20.smart_postpone';
-const String kEnterStageKind = 'sm20.queue.stage_entered';
-const String kCutDrillsKind = 'sm20.queue.drills_cut';
-const String kRandomizeQueueKind = 'sm20.queue.randomized';
+const String kDailyAdmissionType = 'sm20.queue.opened';
+const String kSmartPostponeType = 'sm20.smart_postpone';
+const String kEnterStageType = 'sm20.queue.stage_entered';
+const String kCutDrillsType = 'sm20.queue.drills_cut';
+const String kRandomizeQueueType = 'sm20.queue.randomized';
 
 String dailyAdmissionOperationId(StudyDay day) => 'sm20-queue:$day';
 
@@ -306,14 +306,14 @@ final class QueueCommandRunner {
 
         final bool logged = await _learning.hasActivity(
           command.operationId.value,
-          kDailyAdmissionKind,
+          kDailyAdmissionType,
         );
         if (!logged) {
           await _learning.appendActivity(
             ActivityRecord(
               id: _ids.newId(),
               operationId: command.operationId.value,
-              kind: kDailyAdmissionKind,
+              type: kDailyAdmissionType,
               atUtc: command.timestampUtc,
               metadata: <String, Object?>{
                 'day': command.day.toString(),
@@ -331,7 +331,7 @@ final class QueueCommandRunner {
         _diagnostics.record(
           DiagnosticEvent(
             level: DiagnosticLevel.info,
-            name: kDailyAdmissionKind,
+            name: kDailyAdmissionType,
             timestampUtc: _clock.nowUtc(),
             operationId: command.operationId,
             fields: <String, Object?>{
@@ -355,7 +355,7 @@ final class QueueCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<AdmissionOutcome>(
-        _fail(command, kDailyAdmissionKind, error, stackTrace),
+        _fail(command, kDailyAdmissionType, error, stackTrace),
       );
     }
   }
@@ -398,7 +398,7 @@ final class QueueCommandRunner {
           ActivityRecord(
             id: _ids.newId(),
             operationId: command.operationId.value,
-            kind: kEnterStageKind,
+            type: kEnterStageType,
             atUtc: command.timestampUtc,
             metadata: <String, Object?>{
               'stage': command.stage.name,
@@ -416,7 +416,7 @@ final class QueueCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<Sm20QueueCommandOutcome>(
-        _fail(command, kEnterStageKind, error, stackTrace),
+        _fail(command, kEnterStageType, error, stackTrace),
       );
     }
   }
@@ -449,7 +449,7 @@ final class QueueCommandRunner {
           ActivityRecord(
             id: _ids.newId(),
             operationId: command.operationId.value,
-            kind: kCutDrillsKind,
+            type: kCutDrillsType,
             atUtc: command.timestampUtc,
             metadata: <String, Object?>{'removed': removed},
           ),
@@ -461,7 +461,7 @@ final class QueueCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<Sm20QueueCommandOutcome>(
-        _fail(command, kCutDrillsKind, error, stackTrace),
+        _fail(command, kCutDrillsType, error, stackTrace),
       );
     }
   }
@@ -511,7 +511,7 @@ final class QueueCommandRunner {
           ActivityRecord(
             id: _ids.newId(),
             operationId: command.operationId.value,
-            kind: kRandomizeQueueKind,
+            type: kRandomizeQueueType,
             atUtc: command.timestampUtc,
             metadata: <String, Object?>{
               'queue': command.queue.name,
@@ -529,7 +529,7 @@ final class QueueCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<Sm20QueueCommandOutcome>(
-        _fail(command, kRandomizeQueueKind, error, stackTrace),
+        _fail(command, kRandomizeQueueType, error, stackTrace),
       );
     }
   }
@@ -616,7 +616,7 @@ final class QueueCommandRunner {
           ActivityRecord(
             id: _ids.newId(),
             operationId: command.operationId.value,
-            kind: kSmartPostponeKind,
+            type: kSmartPostponeType,
             atUtc: command.timestampUtc,
             metadata: <String, Object?>{
               'profile': result.profile.profileName,
@@ -637,7 +637,7 @@ final class QueueCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<AppliedSmartPostpone>(
-        _fail(command, kSmartPostponeKind, error, stackTrace),
+        _fail(command, kSmartPostponeType, error, stackTrace),
       );
     }
   }
@@ -1001,19 +1001,19 @@ final class QueueCommandRunner {
 
   UnexpectedFailure _fail(
     AppCommand command,
-    String kind,
+    String type,
     Object error,
     StackTrace stackTrace,
   ) {
     final UnexpectedFailure failure = UnexpectedFailure(
-      'command $kind failed',
+      'command $type failed',
       cause: error,
       stackTrace: stackTrace,
     );
     _diagnostics.record(
       DiagnosticEvent(
         level: DiagnosticLevel.error,
-        name: kind,
+        name: type,
         timestampUtc: _clock.nowUtc(),
         operationId: command.operationId,
         failure: failure,

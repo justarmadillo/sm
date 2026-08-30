@@ -210,7 +210,7 @@ Extract extractFromRow(ExtractRow row) => Extract(
   provenance: Provenance(
     sourceId: row.sourceId,
     parentId: row.parentId,
-    hasSourceAsParent: row.parentIsSource,
+    hasSourceAsParent: row.hasSourceAsParent,
     startAnchor: ReaderAnchor(
       utf8Offset: row.startUtf8,
       contentRevision: row.anchorRevision,
@@ -235,7 +235,7 @@ ExtractsCompanion extractToCompanion(Extract extract) {
     markdown: extract.markdown,
     sourceId: provenance.sourceId,
     parentId: provenance.parentId,
-    parentIsSource: provenance.hasSourceAsParent,
+    hasSourceAsParent: provenance.hasSourceAsParent,
     startUtf8: provenance.startUtf8,
     endUtf8: provenance.endUtf8,
     anchorRevision: Value<int>(provenance.contentRevision),
@@ -253,7 +253,7 @@ ExtractsCompanion extractToCompanion(Extract extract) {
 Card cardFromRow(CardRow row) => Card(
   id: row.id,
   parent: cardParentFromRow(row),
-  kind: CardKind.values[row.kind],
+  type: CardType.values[row.type],
   front: row.front,
   back: row.back,
   clozeOrdinal: row.clozeOrdinal,
@@ -281,7 +281,7 @@ CardsCompanion cardToCompanion(Card card) => CardsCompanion.insert(
               ? ElementType.source.index
               : ElementType.extract.index),
   ),
-  kind: card.kind.index,
+  type: card.type.index,
   front: card.front,
   back: card.back,
   clozeOrdinal: Value<int?>(card.clozeOrdinal),

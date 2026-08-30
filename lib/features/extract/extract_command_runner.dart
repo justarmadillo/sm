@@ -35,10 +35,10 @@ import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 
 /// Activity kind recorded when an extract is created.
-const String kExtractCreatedKind = 'extract.created';
+const String kExtractCreatedType = 'extract.created';
 
 /// Activity kind recorded when an extract is undone.
-const String kExtractUndoneKind = 'extract.undone';
+const String kExtractUndoneType = 'extract.undone';
 
 /// Runs the commands for creating, undoing, and editing extracts.
 final class ExtractCommandRunner {
@@ -80,7 +80,7 @@ final class ExtractCommandRunner {
   /// Creates an extract from a verified selection, in one transaction.
   Future<Result<Extract>> createExtract(CreateExtract command) => _run<Extract>(
     command,
-    kExtractCreatedKind,
+    kExtractCreatedType,
     () async {
       final parent = await _resolveParent(
         command.parentId,
@@ -255,7 +255,7 @@ final class ExtractCommandRunner {
       );
       await _log(
         command,
-        kExtractCreatedKind,
+        kExtractCreatedType,
         ref: ref,
         metadata: <String, Object?>{
           'parent': command.parentId,
@@ -270,7 +270,7 @@ final class ExtractCommandRunner {
   /// Removes an extract entirely, as though it had never been made.
   Future<Result<Unit>> undoExtract(
     UndoExtract command,
-  ) => _run<Unit>(command, kExtractUndoneKind, () async {
+  ) => _run<Unit>(command, kExtractUndoneType, () async {
     final extract = await _content.findExtract(command.extractId);
     if (extract == null) {
       return Err<Unit>(
@@ -285,7 +285,7 @@ final class ExtractCommandRunner {
     final ref = ElementRef(id: extract.id, type: ElementType.extract);
     final recent = await _learning.listRecentActivity(limit: 1);
     if (recent.isEmpty ||
-        recent.single.kind != kExtractCreatedKind ||
+        recent.single.type != kExtractCreatedType ||
         recent.single.ref != ref) {
       return const Err<Unit>(
         ConflictFailure('only the most recently created extract can be undone'),
@@ -311,7 +311,7 @@ final class ExtractCommandRunner {
     // Scheduling history is append-only. Retain the creation record even when
     // the just-created content is removed so transfer and audit consumers can
     // still explain why the former element briefly had a schedule.
-    await _log(command, kExtractUndoneKind, ref: ref);
+    await _log(command, kExtractUndoneType, ref: ref);
     return okUnit;
   });
 
@@ -401,12 +401,12 @@ final class ExtractCommandRunner {
 
   Future<Result<T>> _run<T>(
     AppCommand command,
-    String kind,
+    String type,
     Future<Result<T>> Function() body,
   ) async {
     try {
       return await _transactions.run<Result<T>>(() async {
-        if (await _learning.hasActivity(command.operationId.value, kind)) {
+        if (await _learning.hasActivity(command.operationId.value, type)) {
           return Err<T>(
             ConflictFailure('operation ${command.operationId} already applied'),
           );
@@ -416,7 +416,7 @@ final class ExtractCommandRunner {
         _diagnostics.record(
           DiagnosticEvent(
             level: result.isOk ? DiagnosticLevel.info : DiagnosticLevel.warning,
-            name: kind,
+            name: type,
             timestampUtc: _clock.nowUtc(),
             operationId: command.operationId,
             fields: <String, Object?>{'ok': result.isOk},
@@ -427,14 +427,14 @@ final class ExtractCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       final failure = UnexpectedFailure(
-        'command $kind failed',
+        'command $type failed',
         cause: error,
         stackTrace: stackTrace,
       );
       _diagnostics.record(
         DiagnosticEvent(
           level: DiagnosticLevel.error,
-          name: kind,
+          name: type,
           timestampUtc: _clock.nowUtc(),
           operationId: command.operationId,
           failure: failure,
@@ -446,14 +446,14 @@ final class ExtractCommandRunner {
 
   Future<void> _log(
     AppCommand command,
-    String kind, {
+    String type, {
     ElementRef? ref,
     Map<String, Object?>? metadata,
   }) => _learning.appendActivity(
     ActivityRecord(
       id: _ids.newId(),
       operationId: command.operationId.value,
-      kind: kind,
+      type: type,
       atUtc: command.timestampUtc,
       ref: ref,
       metadata: metadata,

@@ -31,10 +31,9 @@ void main() {
       // Sibling burying arrives in M4 and would push two of the three cards
       // off today. This test is about the M3 loop reaching every card it
       // formulated; burying has its own coverage.
-      await DriftSettingsRepository(database).write(
-        'card.bury_siblings',
-        'false',
-      );
+      await DriftSettingsRepository(
+        database,
+      ).saveValue('card.bury_siblings', 'false');
       final clock = FakeClock(DateTime.utc(2026, 3, 5, 12));
       final container = ProviderContainer(
         overrides: <Override>[
@@ -80,10 +79,9 @@ void main() {
       await gesture.moveTo(Offset(box.right - 1, box.top + 8));
       await gesture.up();
       await tester.pumpAndSettle();
+      // Extract lives only on the toolbar that floats over the selection now.
       tester
-          .widget<OutlinedButton>(
-            find.widgetWithText(OutlinedButton, 'Extract'),
-          )
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Extract'))
           .onPressed!();
       await tester.pumpAndSettle();
       expect(find.text('Extracted'), findsOneWidget);

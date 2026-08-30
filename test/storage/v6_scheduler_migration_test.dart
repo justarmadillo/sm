@@ -40,7 +40,7 @@ void main() {
       addTearDown(database.close);
 
       await database.customStatement(
-        'INSERT INTO cards (id, parent_element_id, parent_element_type, kind, '
+        'INSERT INTO cards (id, parent_element_id, parent_element_type, type, '
         'front, back, created_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?)',
         <Object?>['card', null, null, 0, 'q', 'a', 1000],
       );

@@ -27,9 +27,9 @@ import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 
-const String kMercyPreviewedKind = 'mercy.previewed';
-const String kMercyAppliedKind = 'mercy.applied';
-const String kMercyUndoneKind = 'mercy.undone';
+const String kMercyPreviewedType = 'mercy.previewed';
+const String kMercyAppliedType = 'mercy.applied';
+const String kMercyUndoneType = 'mercy.undone';
 
 /// Handles the app's durable confirmation wrapper around SM20 Mercy.
 final class MercyCommandRunner {
@@ -225,7 +225,7 @@ final class MercyCommandRunner {
         );
         await _activity(
           command.operationId.value,
-          kMercyPreviewedKind,
+          kMercyPreviewedType,
           command.timestampUtc,
           <String, Object?>{
             'batch_id': batch.batchId,
@@ -259,7 +259,7 @@ final class MercyCommandRunner {
       return await _transactions.run<Result<int>>(() async {
         if (await _learning.hasActivity(
           command.operationId.value,
-          kMercyAppliedKind,
+          kMercyAppliedType,
         )) {
           return const Err<int>(
             ConflictFailure('that Mercy operation was already applied'),
@@ -516,7 +516,7 @@ final class MercyCommandRunner {
         );
         await _activity(
           command.operationId.value,
-          kMercyAppliedKind,
+          kMercyAppliedType,
           command.timestampUtc,
           <String, Object?>{
             'batch_id': stored.batchId,
@@ -551,7 +551,7 @@ final class MercyCommandRunner {
       return await _transactions.run<Result<int>>(() async {
         if (await _learning.hasActivity(
           command.operationId.value,
-          kMercyUndoneKind,
+          kMercyUndoneType,
         )) {
           return const Err<int>(
             ConflictFailure('that undo was already applied'),
@@ -786,7 +786,7 @@ final class MercyCommandRunner {
         );
         await _activity(
           command.operationId.value,
-          kMercyUndoneKind,
+          kMercyUndoneType,
           command.timestampUtc,
           <String, Object?>{
             'batch_id': applied.batchId,
@@ -862,14 +862,14 @@ final class MercyCommandRunner {
 
   Future<void> _activity(
     String operationId,
-    String kind,
+    String type,
     DateTime atUtc,
     Map<String, Object?> metadata,
   ) => _learning.appendActivity(
     ActivityRecord(
       id: _ids.newId(),
       operationId: operationId,
-      kind: kind,
+      type: type,
       atUtc: atUtc,
       metadata: metadata,
     ),

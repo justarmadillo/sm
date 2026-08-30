@@ -197,7 +197,7 @@ void main() {
     await selectEdited.up();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Extract'));
+    await tester.tap(find.widgetWithText(TextButton, 'Extract'));
     await tester.pumpAndSettle();
 
     expect(

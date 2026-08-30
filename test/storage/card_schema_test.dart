@@ -307,7 +307,7 @@ void main() {
       // the id and its type travel together.
       await expectLater(
         database.customStatement(
-          'INSERT INTO cards (id, parent_element_id, kind, front, back, '
+          'INSERT INTO cards (id, parent_element_id, type, front, back, '
           'created_at_utc) VALUES (?, ?, ?, ?, ?, ?)',
           <Object?>['halfParent', 'e1', 0, 'q', 'a', 0],
         ),
@@ -315,7 +315,7 @@ void main() {
       );
       await expectLater(
         database.customStatement(
-          'INSERT INTO cards (id, parent_element_type, kind, front, back, '
+          'INSERT INTO cards (id, parent_element_type, type, front, back, '
           'created_at_utc) VALUES (?, ?, ?, ?, ?, ?)',
           <Object?>['halfType', 1, 0, 'q', 'a', 0],
         ),
@@ -392,7 +392,7 @@ Future<void> _seedCardParents(
   for (var index = 1; index <= count; index++) {
     final id = 'c$index';
     await database.customStatement(
-      'INSERT INTO cards (id, extract_id, kind, front, back, created_at_utc) '
+      'INSERT INTO cards (id, extract_id, type, front, back, created_at_utc) '
       'VALUES (?, ?, ?, ?, ?, ?)',
       <Object?>[id, 'e1', 0, 'q$index', 'a$index', 0],
     );

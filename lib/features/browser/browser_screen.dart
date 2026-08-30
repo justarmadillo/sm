@@ -23,10 +23,8 @@ import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/features/browser/browser_providers.dart';
 import 'package:incremental_reader/features/browser/browser_tree_query.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
-import 'package:incremental_reader/features/browser/element_content_query.dart';
 import 'package:incremental_reader/features/browser/import_sheet.dart';
-import 'package:incremental_reader/features/extract/extract_screen.dart';
-import 'package:incremental_reader/features/extract/extract_view_model.dart';
+import 'package:incremental_reader/features/browser/open_element.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
@@ -56,17 +54,6 @@ final FutureProvider<List<BrowserTreeNode>> browserTreeProvider =
       (Ref ref) => ref.watch(browserTreeQueryProvider).load(),
     );
 
-/// The body of one element, for the detail pane.
-final AutoDisposeFutureProviderFamily<ElementContent?, ElementRef>
-elementContentProvider = FutureProvider.autoDispose
-    .family<ElementContent?, ElementRef>(
-      (Ref ref, ElementRef elementRef) =>
-          ref.watch(elementContentQueryProvider).load(elementRef),
-    );
-
-/// Width of the detail pane, wide enough for a paragraph of prose.
-const double _kDetailPaneWidth = 420;
-
 /// Horizontal step per level of nesting.
 ///
 /// Wide enough that a level's guide can sit directly under its parent's
@@ -92,9 +79,6 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   /// wall of closed rows hides exactly that.
   final Set<ElementRef> _expanded = <ElementRef>{};
   bool _hasSeededExpansion = false;
-
-  /// The row the detail pane is showing, or null when the pane is closed.
-  ElementRef? _selected;
 
   /// Types the tree is restricted to; empty means everything.
   Set<ElementType> _types = const <ElementType>{};
@@ -146,7 +130,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
             Center(child: Text('Could not load the tree.\n$error')),
-        data: _treeAndDetail,
+        data: _filterAndTree,
       ),
     );
   }
@@ -244,49 +228,16 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     });
   }
 
-  /// The tree, with the detail pane beside it once something is selected.
-  ///
-  /// A 420-pixel pane and a tree cannot share a phone's width, so on a narrow
-  /// window the pane takes the screen instead and its close button is the way
-  /// back to the tree.
-  Widget _treeAndDetail(List<BrowserTreeNode> roots) {
-    final bool hasRoomForBoth = !isCompactWidth(context);
-    final bool isPaneOpen = _selected != null;
-    return Column(
-      children: <Widget>[
-        if (hasRoomForBoth || !isPaneOpen)
-          _TypeFilter(
-            selected: _types,
-            onChanged: (Set<ElementType> types) =>
-                setState(() => _types = types),
-          ),
-        Expanded(
-          child: hasRoomForBoth
-              ? Row(
-                  children: <Widget>[
-                    Expanded(child: _buildBody(roots)),
-                    if (isPaneOpen) _detailPane(width: _kDetailPaneWidth),
-                  ],
-                )
-              : isPaneOpen
-              ? _detailPane(width: null)
-              : _buildBody(roots),
-        ),
-      ],
-    );
-  }
-
-  /// A card has no screen of its own to open; it is reviewed, not read.
-  Widget _detailPane({required double? width}) {
-    return _ElementDetailPane(
-      elementRef: _selected!,
-      width: width,
-      onClose: () => setState(() => _selected = null),
-      onOpen: _selected!.type == ElementType.card
-          ? null
-          : () => unawaited(_openElement(_selected!)),
-    );
-  }
+  /// The type filter above the tree.
+  Widget _filterAndTree(List<BrowserTreeNode> roots) => Column(
+    children: <Widget>[
+      _TypeFilter(
+        selected: _types,
+        onChanged: (Set<ElementType> types) => setState(() => _types = types),
+      ),
+      Expanded(child: _buildBody(roots)),
+    ],
+  );
 
   /// Makes a new element and files it where the user asked for it.
   ///
@@ -393,48 +344,17 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     };
   }
 
-  /// Opens the screen that owns an element, for the work the pane cannot do.
+  /// Opens the screen that owns an element. Clicking a row means "show me
+  /// this", and the screen that owns the element is the only place that can.
   Future<void> _openElement(ElementRef elementRef) async {
-    switch (elementRef.type) {
-      case ElementType.source:
-        await openReader(
-          context,
-          ref,
-          sourceId: elementRef.id,
-          mode: ReaderMode.browse,
-        );
-      case ElementType.extract:
-        await openExtract(
-          context,
-          ref,
-          extractId: elementRef.id,
-          mode: ExtractMode.browse,
-        );
-      case ElementType.card:
-        return;
-    }
+    await openElement(context, ref, elementRef: elementRef);
     if (!mounted) return;
     ref.invalidate(browserTreeProvider);
-    ref.invalidate(elementContentProvider(elementRef));
   }
 
   Future<void> _runAction(String action, BrowserTreeNode node) async {
     final BrowserViewModel model = ref.read(browserViewModelProvider.notifier);
     switch (action) {
-      case 'open':
-        // Browse, not a scheduled sitting. Opening something to look at it
-        // from a browser is not the same as being handed it by the queue, and
-        // offering Done and Postpone here invites recording a repetition that
-        // never happened. The Reader's own "Continue reading" promotes the
-        // session when that is what the user meant.
-        if (node.ref.type == ElementType.source) {
-          await openReader(
-            context,
-            ref,
-            sourceId: node.ref.id,
-            mode: ReaderMode.browse,
-          );
-        }
       case 'rename':
         final String? title = await _promptForTitle(context, node.title);
         if (title != null) await model.rename(node.ref.id, title);
@@ -443,19 +363,9 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
       case 'undismiss':
         await model.undismiss(node.ref);
       case 'delete':
-        if (await _confirmDelete(context, node.title)) {
-          await model.deleteSource(node.ref.id);
+        if (await _confirmDelete(context, node)) {
+          await model.deleteElement(node.ref);
         }
-      // The four moves. Each is filing and nothing else, so none of them
-      // needs a confirmation: the reverse move is one click away.
-      case 'move_up':
-        await model.moveUp(node.ref);
-      case 'move_down':
-        await model.moveDown(node.ref);
-      case 'nest':
-        await model.nestUnderPreviousSibling(node.ref);
-      case 'lift':
-        await model.liftOutOfParent(node.ref);
     }
     ref.invalidate(browserTreeProvider);
   }
@@ -485,14 +395,8 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
 
   Widget _buildBody(List<BrowserTreeNode> roots) {
     final List<_TreeRow> rows = <_TreeRow>[];
-    for (var index = 0; index < roots.length; index++) {
-      _flatten(
-        roots[index],
-        0,
-        rows,
-        isFirstAmongSiblings: index == 0,
-        isLastAmongSiblings: index == roots.length - 1,
-      );
+    for (final BrowserTreeNode root in roots) {
+      _flatten(root, 0, rows);
     }
     if (rows.isEmpty) {
       return const Center(
@@ -508,8 +412,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
       itemBuilder: (BuildContext context, int index) => _NodeRow(
         row: rows[index],
         isExpanded: _expanded.contains(rows[index].node.ref),
-        isSelected: _selected == rows[index].node.ref,
-        onSelect: () => setState(() => _selected = rows[index].node.ref),
+        onOpen: () => unawaited(_openElement(rows[index].node.ref)),
         onToggle: () => setState(() {
           final ElementRef ref_ = rows[index].node.ref;
           if (!_expanded.remove(ref_)) _expanded.add(ref_);
@@ -538,35 +441,14 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   /// A filtered-out node still yields its children: hiding a source would
   /// otherwise hide every card underneath it, which is the opposite of what
   /// filtering to cards means.
-  void _flatten(
-    BrowserTreeNode node,
-    int depth,
-    List<_TreeRow> rows, {
-    required bool isFirstAmongSiblings,
-    required bool isLastAmongSiblings,
-  }) {
+  void _flatten(BrowserTreeNode node, int depth, List<_TreeRow> rows) {
     final bool matches = _types.isEmpty || _types.contains(node.ref.type);
-    if (matches) {
-      rows.add(
-        _TreeRow(
-          node: node,
-          depth: depth,
-          isFirstAmongSiblings: isFirstAmongSiblings,
-          isLastAmongSiblings: isLastAmongSiblings,
-        ),
-      );
-    }
+    if (matches) rows.add(_TreeRow(node: node, depth: depth));
     final bool shouldShowChildren =
         _expanded.contains(node.ref) || (!matches && _types.isNotEmpty);
     if (!shouldShowChildren) return;
-    for (var index = 0; index < node.children.length; index++) {
-      _flatten(
-        node.children[index],
-        matches ? depth + 1 : depth,
-        rows,
-        isFirstAmongSiblings: index == 0,
-        isLastAmongSiblings: index == node.children.length - 1,
-      );
+    for (final BrowserTreeNode child in node.children) {
+      _flatten(child, matches ? depth + 1 : depth, rows);
     }
   }
 
@@ -578,25 +460,13 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   }
 }
 
-/// One visible line: a node, how deep it sits, and which moves it has room
-/// for.
+/// One visible line: a node and how deep it sits.
 @immutable
 final class _TreeRow {
-  const _TreeRow({
-    required this.node,
-    required this.depth,
-    required this.isFirstAmongSiblings,
-    required this.isLastAmongSiblings,
-  });
+  const _TreeRow({required this.node, required this.depth});
 
   final BrowserTreeNode node;
   final int depth;
-
-  /// Nothing above it in its own level, so it can neither rise nor nest.
-  final bool isFirstAmongSiblings;
-
-  /// Nothing below it in its own level, so it cannot sink further.
-  final bool isLastAmongSiblings;
 }
 
 class _TypeFilter extends StatelessWidget {
@@ -634,8 +504,7 @@ class _NodeRow extends StatelessWidget {
   const _NodeRow({
     required this.row,
     required this.isExpanded,
-    required this.isSelected,
-    required this.onSelect,
+    required this.onOpen,
     required this.onToggle,
     required this.onPriority,
     required this.onAction,
@@ -646,10 +515,10 @@ class _NodeRow extends StatelessWidget {
 
   final _TreeRow row;
   final bool isExpanded;
-  final bool isSelected;
 
-  /// Shows this element's content in the detail pane.
-  final VoidCallback onSelect;
+  /// Opens the screen that owns this element, which is also where it is
+  /// edited: there is one reader for both browsing and reading.
+  final VoidCallback onOpen;
 
   /// Opens or closes this element's children. Bound to the chevron alone, so
   /// that clicking a row means "show me this" rather than "fold this away".
@@ -691,7 +560,12 @@ class _NodeRow extends StatelessWidget {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 2),
-                  child: _draggableCard(node, hasChildren, isDismissed),
+                  child: _droppableCard(
+                    context,
+                    node,
+                    hasChildren,
+                    isDismissed,
+                  ),
                 ),
               ),
             ],
@@ -701,87 +575,146 @@ class _NodeRow extends StatelessWidget {
     );
   }
 
-  /// The row, both as something that can be picked up and as somewhere to drop.
-  ///
-  /// A long press starts the drag on every platform, mouse included: a plain
-  /// drag would fight the list's own scrolling, and on a phone that is the
-  /// gesture that would be lost.
-  Widget _draggableCard(
+  /// The row as somewhere to drop. What can be picked *up* is the handle
+  /// inside it, not the whole card.
+  Widget _droppableCard(
+    BuildContext context,
     BrowserTreeNode node,
     bool hasChildren,
     bool isDismissed,
   ) {
-    final Widget card = _card(node, hasChildren, isDismissed);
-    return LongPressDraggable<ElementRef>(
-      data: node.ref,
-      feedback: _DragLabel(title: node.title, type: node.ref.type),
-      childWhenDragging: Opacity(opacity: 0.35, child: card),
-      child: DragTarget<ElementRef>(
-        onWillAcceptWithDetails: (DragTargetDetails<ElementRef> details) =>
-            details.data != node.ref,
-        onAcceptWithDetails: (DragTargetDetails<ElementRef> details) =>
-            onDropOnto(details.data),
-        builder:
-            (
-              BuildContext context,
-              List<ElementRef?> candidates,
-              List<dynamic> rejected,
-            ) => candidates.isEmpty
-            ? card
-            : DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.accent, width: 2),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: card,
+    final Widget card = _card(context, node, hasChildren, isDismissed);
+    return DragTarget<ElementRef>(
+      onWillAcceptWithDetails: (DragTargetDetails<ElementRef> details) =>
+          details.data != node.ref,
+      onAcceptWithDetails: (DragTargetDetails<ElementRef> details) =>
+          onDropOnto(details.data),
+      builder:
+          (
+            BuildContext context,
+            List<ElementRef?> candidates,
+            List<dynamic> rejected,
+          ) => candidates.isEmpty
+          ? card
+          : DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.accent, width: 2),
+                borderRadius: BorderRadius.circular(6),
               ),
-      ),
+              child: card,
+            ),
     );
   }
 
-  /// One row of the tree: the expand arrow, the type badge, the title and
-  /// preview, then the counts and the per-element commands.
-  Widget _card(BrowserTreeNode node, bool hasChildren, bool isDismissed) {
+  /// One row of the tree. Tapping it opens the element; the handle files it.
+  Widget _card(
+    BuildContext context,
+    BrowserTreeNode node,
+    bool hasChildren,
+    bool isDismissed,
+  ) {
     return Material(
-      color: isSelected
-          ? AppColors.accent.withValues(alpha: 0.10)
-          : AppColors.surface,
+      color: AppColors.surface,
       borderRadius: BorderRadius.circular(6),
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
-        onTap: onSelect,
+        onTap: onOpen,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-          child: Row(
-            children: <Widget>[
-              _expandArrow(hasChildren),
-              ElementTypeBadge(type: node.ref.type),
-              const SizedBox(width: 8),
-              Expanded(child: _titleAndPreview(node, isDismissed)),
-              if (hasChildren) ...<Widget>[
-                // How many elements this branch holds, itself excluded.
-                _mutedLabel('${node.subtreeSize - 1}'),
-                const SizedBox(width: 8),
-              ],
-              if (node.dueDay != null) _mutedLabel(node.dueDay.toString()),
-              IconButton(
-                tooltip: 'Priority',
-                onPressed: onPriority,
-                icon: const Icon(Icons.low_priority, size: 17),
-              ),
-              _NewElementMenu(isRowMenu: true, onSelected: onCreate),
-              _actionMenu(node, isDismissed),
-            ],
-          ),
+          padding: const EdgeInsets.fromLTRB(4, 7, 8, 7),
+          child: isCompactWidth(context)
+              ? _stackedRow(node, hasChildren, isDismissed)
+              : _oneRow(node, hasChildren, isDismissed),
         ),
       ),
     );
   }
 
+  /// The desktop shape: everything the row knows, on one line.
+  Widget _oneRow(BrowserTreeNode node, bool hasChildren, bool isDismissed) =>
+      Row(
+        children: <Widget>[
+          _dragHandle(node),
+          _expandArrow(hasChildren),
+          ElementTypeBadge(type: node.ref.type),
+          const SizedBox(width: 8),
+          Expanded(child: _titleAndPreview(node, isDismissed)),
+          if (hasChildren) ...<Widget>[
+            // How many elements this branch holds, itself excluded.
+            _mutedLabel('${node.subtreeSize - 1}'),
+            const SizedBox(width: 8),
+          ],
+          if (node.dueDay != null) _mutedLabel(node.dueDay.toString()),
+          ..._rowButtons(node, isDismissed),
+        ],
+      );
+
+  /// The phone shape. The badge's word, the branch count, the due day and
+  /// three buttons together leave the title about eight characters, and the
+  /// title is the one thing on the row that says which element this is. The
+  /// title takes the width; everything else moves to a line underneath.
+  Widget _stackedRow(BrowserTreeNode node, bool hasChildren, bool isDismissed) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            _dragHandle(node),
+            _expandArrow(hasChildren),
+            ElementTypeBadge(type: node.ref.type, shouldShowLabel: false),
+            const SizedBox(width: 8),
+            Expanded(child: _titleAndPreview(node, isDismissed)),
+          ],
+        ),
+        Row(
+          children: <Widget>[
+            const SizedBox(width: _kHandleWidth + _kArrowWidth),
+            Expanded(child: _mutedLabel(_metaLine(node, hasChildren))),
+            ..._rowButtons(node, isDismissed),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// The two numbers the wide row shows as bare labels, named rather than
+  /// positioned: on a line of their own there is no heading above them to say
+  /// which is which.
+  String _metaLine(BrowserTreeNode node, bool hasChildren) => <String>[
+    if (hasChildren) '${node.subtreeSize - 1} inside',
+    if (node.dueDay != null) 'due ${node.dueDay}',
+  ].join('  ·  ');
+
+  /// The three per-row commands, the same in both shapes.
+  List<Widget> _rowButtons(BrowserTreeNode node, bool isDismissed) => <Widget>[
+    IconButton(
+      tooltip: 'Priority',
+      onPressed: onPriority,
+      icon: const Icon(Icons.low_priority, size: 17),
+      constraints: _kRowButtonConstraints,
+      padding: EdgeInsets.zero,
+    ),
+    _NewElementMenu(isRowMenu: true, onSelected: onCreate),
+    _actionMenu(node, isDismissed),
+  ];
+
+  /// The row is picked up by its handle, the way the priority queue's rows
+  /// are. A long press on the card was the only gesture that filed anything
+  /// and nothing on screen said so, which is why the moves ended up duplicated
+  /// as a menu.
+  Widget _dragHandle(BrowserTreeNode node) => Draggable<ElementRef>(
+    data: node.ref,
+    feedback: _DragLabel(title: node.title, type: node.ref.type),
+    childWhenDragging: const SizedBox(width: _kHandleWidth),
+    child: const SizedBox(
+      width: _kHandleWidth,
+      child: Icon(Icons.drag_indicator, size: 17, color: AppColors.muted),
+    ),
+  );
+
   /// A fixed-width slot, so childless rows still line up with their siblings.
   Widget _expandArrow(bool hasChildren) {
     return SizedBox(
-      width: 22,
+      width: _kArrowWidth,
       child: hasChildren
           ? InkResponse(
               onTap: onToggle,
@@ -824,63 +757,65 @@ class _NodeRow extends StatelessWidget {
     );
   }
 
-  Widget _mutedLabel(String text) =>
-      Text(text, style: const TextStyle(fontSize: 11, color: AppColors.muted));
+  Widget _mutedLabel(String text) => Text(
+    text,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: const TextStyle(fontSize: 11, color: AppColors.muted),
+  );
 
-  /// Only a source can be opened, renamed, or deleted; an extract is reached
-  /// through its parent and removed with it.
+  /// Only a source can be renamed. Delete is offered on every row: an extract
+  /// or a card the user no longer wants is reachable no other way, and it
+  /// takes the whole branch filed under it with it.
   ///
-  /// The moves sit in the same menu, below a divider: they are about where the
-  /// row is kept rather than what it is, and each is disabled when the row is
-  /// already at that edge of its level.
+  /// Filing is not in here. Where a row is kept is answered by dragging it,
+  /// and a menu of move up / move down / nest / lift was a second, clumsier
+  /// vocabulary for the same thing.
   Widget _actionMenu(BrowserTreeNode node, bool isDismissed) {
     final bool isSource = node.ref.type == ElementType.source;
-    return PopupMenuButton<String>(
-      tooltip: 'Element actions',
-      icon: const Icon(Icons.more_vert, size: 17),
-      onSelected: onAction,
-      itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-        if (isSource)
-          const PopupMenuItem<String>(value: 'open', child: Text('Open')),
-        if (isSource)
-          const PopupMenuItem<String>(value: 'rename', child: Text('Rename')),
-        if (isDismissed)
+    return SizedBox(
+      width: _kRowButtonConstraints.maxWidth,
+      height: _kRowButtonConstraints.maxHeight,
+      child: PopupMenuButton<String>(
+        tooltip: 'Element actions',
+        icon: const Icon(Icons.more_vert, size: 17),
+        padding: EdgeInsets.zero,
+        onSelected: onAction,
+        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+          if (isSource)
+            const PopupMenuItem<String>(value: 'rename', child: Text('Rename')),
+          if (isDismissed)
+            const PopupMenuItem<String>(
+              value: 'undismiss',
+              child: Text('Undismiss'),
+            )
+          else
+            const PopupMenuItem<String>(
+              value: 'dismiss',
+              child: Text('Dismiss (keep content)'),
+            ),
           const PopupMenuItem<String>(
-            value: 'undismiss',
-            child: Text('Undismiss'),
-          )
-        else
-          const PopupMenuItem<String>(
-            value: 'dismiss',
-            child: Text('Dismiss (keep content)'),
+            value: 'delete',
+            child: Text('Delete for good'),
           ),
-        if (isSource)
-          const PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
-        const PopupMenuDivider(),
-        PopupMenuItem<String>(
-          value: 'move_up',
-          enabled: !row.isFirstAmongSiblings,
-          child: const Text('Move up'),
-        ),
-        PopupMenuItem<String>(
-          value: 'move_down',
-          enabled: !row.isLastAmongSiblings,
-          child: const Text('Move down'),
-        ),
-        PopupMenuItem<String>(
-          value: 'nest',
-          enabled: !row.isFirstAmongSiblings,
-          child: const Text('Nest under the row above'),
-        ),
-        PopupMenuItem<String>(
-          value: 'lift',
-          enabled: node.parentRef != null,
-          child: const Text('Move out one level'),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
+
+/// Width of the drag handle's slot.
+const double _kHandleWidth = 26;
+
+/// Width of the expand chevron's slot.
+const double _kArrowWidth = 22;
+
+/// A row's buttons are tighter than Material's default 48-pixel target: three
+/// of them at that size take half a phone's width away from the title.
+const BoxConstraints _kRowButtonConstraints = BoxConstraints.tightFor(
+  width: 34,
+  height: 34,
+);
 
 /// What the New menu can make.
 enum _NewElement {
@@ -1052,231 +987,6 @@ class _IndentGuide extends StatelessWidget {
   );
 }
 
-/// The content of the selected element, beside the tree.
-///
-/// A tree of titles answers "what came out of what" and nothing else. Reading
-/// or fixing the text behind a row meant opening the screen that owns that
-/// kind of element and coming back — which is a poor way to work through a
-/// collection. The pane keeps the list in view while the text is on screen.
-class _ElementDetailPane extends ConsumerStatefulWidget {
-  const _ElementDetailPane({
-    required this.elementRef,
-    required this.onClose,
-    required this.onOpen,
-    required this.width,
-  });
-
-  final ElementRef elementRef;
-  final VoidCallback onClose;
-
-  /// How wide to draw. Null when the pane has the screen to itself.
-  final double? width;
-
-  /// Opens the element's own screen, for what the pane deliberately cannot do.
-  final VoidCallback? onOpen;
-
-  @override
-  ConsumerState<_ElementDetailPane> createState() => _ElementDetailPaneState();
-}
-
-class _ElementDetailPaneState extends ConsumerState<_ElementDetailPane> {
-  final TextEditingController _body = TextEditingController();
-  final TextEditingController _back = TextEditingController();
-
-  /// What the fields were last filled from, so that a rebuild while the user
-  /// is typing does not put the stored text back under their cursor.
-  ElementRef? _filledFrom;
-  String? _filledBody;
-  String? _filledBack;
-
-  @override
-  void dispose() {
-    _body.dispose();
-    _back.dispose();
-    super.dispose();
-  }
-
-  void _fill(ElementContent content) {
-    if (_filledFrom == content.ref &&
-        _filledBody == content.body &&
-        _filledBack == content.back) {
-      return;
-    }
-    _filledFrom = content.ref;
-    _filledBody = content.body;
-    _filledBack = content.back;
-    _body.text = content.body;
-    _back.text = content.back ?? '';
-  }
-
-  Future<void> _save(ElementContent content) async {
-    final BrowserViewModel model = ref.read(browserViewModelProvider.notifier);
-    switch (content.ref.type) {
-      case ElementType.extract:
-        await model.editExtract(content.ref.id, _body.text);
-      case ElementType.card:
-        await model.editCard(
-          content.ref.id,
-          front: _body.text,
-          back: content.back == null ? null : _back.text,
-        );
-      case ElementType.source:
-        return;
-    }
-    if (!mounted) return;
-    ref.invalidate(elementContentProvider(content.ref));
-    ref.invalidate(browserTreeProvider);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final AsyncValue<ElementContent?> content = ref.watch(
-      elementContentProvider(widget.elementRef),
-    );
-    return Container(
-      width: widget.width,
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(left: BorderSide(color: AppColors.border)),
-      ),
-      child: content.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stack) =>
-            Center(child: Text('Could not load this element.\n$error')),
-        data: (ElementContent? loaded) => loaded == null
-            ? const Center(
-                child: Text(
-                  'This element is no longer here.',
-                  style: TextStyle(color: AppColors.muted),
-                ),
-              )
-            : _content(loaded),
-      ),
-    );
-  }
-
-  /// The detail pane: a header, the element's text, then the save row.
-  Widget _content(ElementContent content) {
-    _fill(content);
-    // A card carries a question and an answer; everything else is one body.
-    final bool isCard = content.ref.type == ElementType.card;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        _header(content),
-        const Divider(height: 1, color: AppColors.border),
-        Expanded(child: _editableFields(content, isCard)),
-        const Divider(height: 1, color: AppColors.border),
-        _saveRow(content),
-      ],
-    );
-  }
-
-  /// Type badge, title, and the ways out of the pane.
-  Widget _header(ElementContent content) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
-      child: Row(
-        children: <Widget>[
-          ElementTypeBadge(type: content.ref.type),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              content.title.isEmpty ? '(untitled)' : content.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-          ),
-          if (widget.onOpen != null)
-            IconButton(
-              tooltip: 'Open',
-              onPressed: widget.onOpen,
-              icon: const Icon(Icons.open_in_new, size: 17),
-            ),
-          IconButton(
-            tooltip: 'Close',
-            onPressed: widget.onClose,
-            icon: const Icon(Icons.close, size: 17),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// The body field, plus an answer field for a card.
-  ///
-  /// Read-only rather than hidden when the element cannot be edited, so the
-  /// text is still there to read and copy.
-  Widget _editableFields(ElementContent content, bool isCard) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          if (isCard) _fieldLabel('Question', topPadding: 0),
-          TextField(
-            controller: _body,
-            readOnly: !content.isEditable,
-            minLines: 6,
-            maxLines: null,
-            style: const TextStyle(fontSize: 13, height: 1.45),
-            decoration: const InputDecoration(
-              isDense: true,
-              border: OutlineInputBorder(),
-            ),
-          ),
-          if (isCard && content.back != null) ...<Widget>[
-            _fieldLabel('Answer', topPadding: 12),
-            TextField(
-              controller: _back,
-              readOnly: !content.isEditable,
-              minLines: 3,
-              maxLines: null,
-              style: const TextStyle(fontSize: 13, height: 1.45),
-              decoration: const InputDecoration(
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _fieldLabel(String text, {required double topPadding}) => Padding(
-    padding: EdgeInsets.fromLTRB(0, topPadding, 0, 4),
-    child: Text(
-      text,
-      style: const TextStyle(fontSize: 11, color: AppColors.muted),
-    ),
-  );
-
-  /// Says why the element cannot be edited when it cannot, and reassures that
-  /// editing is not a repetition when it can.
-  Widget _saveRow(ElementContent content) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              content.notEditableReason ?? 'Edits never reschedule.',
-              style: const TextStyle(fontSize: 11, color: AppColors.muted),
-            ),
-          ),
-          if (content.isEditable)
-            FilledButton(
-              onPressed: () => unawaited(_save(content)),
-              child: const Text('Save'),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 Future<String?> _promptForTitle(BuildContext context, String current) {
   final TextEditingController controller = TextEditingController(text: current);
   return showDialog<String>(
@@ -1302,25 +1012,37 @@ Future<String?> _promptForTitle(BuildContext context, String current) {
   ).whenComplete(controller.dispose);
 }
 
-Future<bool> _confirmDelete(BuildContext context, String title) async =>
-    await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: const Text('Delete this element?'),
-        content: Text(
-          'The content and every descendant are retained and can be '
-          'restored. Only the schedule goes.\n\n$title',
+/// The one confirmation in the app that has to be read rather than dismissed.
+///
+/// It names the size of the branch, because the row on screen shows a title
+/// and gives no hint that forty extracts and their cards are filed under it,
+/// and nothing here can be taken back afterwards.
+Future<bool> _confirmDelete(BuildContext context, BrowserTreeNode node) async {
+  final int below = node.subtreeSize - 1;
+  final String title = node.title.isEmpty ? '(untitled)' : node.title;
+  return await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) => AlertDialog(
+          title: const Text('Delete for good?'),
+          content: Text(
+            below == 0
+                ? 'This erases it. There is no undo.\n\n$title'
+                : 'This erases it and the $below element'
+                      '${below == 1 ? '' : 's'} filed under it — their text, '
+                      'their extracts and their cards. There is no undo.'
+                      '\n\n$title',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Keep'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
         ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Keep'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    ) ??
-    false;
+      ) ??
+      false;
+}

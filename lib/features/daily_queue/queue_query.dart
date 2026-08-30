@@ -255,9 +255,9 @@ final class QueueQuery {
     final Card? card = await _content.findCard(candidate.ref.id);
     if (card == null) return null;
     final Source? source = await _sourceOfCard(card);
-    final String question = switch (card.kind) {
-      CardKind.qa => card.front,
-      CardKind.cloze => renderClozeQuestion(card.front, card.clozeOrdinal!),
+    final String question = switch (card.type) {
+      CardType.qa => card.front,
+      CardType.cloze => renderClozeQuestion(card.front, card.clozeOrdinal!),
     };
     final int lapses = candidate.card?.memory.lapses ?? 0;
     return QueueEntry(

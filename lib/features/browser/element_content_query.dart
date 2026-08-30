@@ -96,7 +96,7 @@ final class ElementContentQuery {
           // A cloze card's answer is the question with the deletion revealed,
           // so offering it as a second field would invite editing a value
           // nothing reads.
-          back: card.kind == CardKind.cloze ? null : card.back,
+          back: card.type == CardType.cloze ? null : card.back,
           isEditable: true,
         );
     }

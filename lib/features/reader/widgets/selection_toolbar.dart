@@ -272,7 +272,11 @@ class SelectionToolbarLayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: controller,
+    // Not the controller alone: the toolbar is placed from the selection's
+    // rectangle on screen, and scrolling moves that rectangle without
+    // changing the selection. Listening only to the selection left the
+    // toolbar hanging over whatever text had scrolled into its place.
+    listenable: controller.selectionOnScreen,
     builder: (BuildContext context, Widget? child) {
       final Rect? global = controller.selectionBoundsGlobal();
       final Size? size = surfaceSize();

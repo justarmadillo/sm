@@ -7,8 +7,11 @@
 /// they discover that four hundred things are all "urgent".
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/features/browser/open_element.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/features/daily_queue/smart_postpone_dialog.dart';
 import 'package:incremental_reader/features/priority/priority_commands.dart';
@@ -373,12 +376,18 @@ class _FilterBar extends StatelessWidget {
   );
 
   /// The two commands that act on every row on screen at once.
+  ///
+  /// Both move elements through time, so the pair has to read as opposites:
+  /// a clock turning forward for Postpone, and the transport control for
+  /// Advance. The old `schedule_send` was a clock with a paper plane, which
+  /// at sixteen pixels is a play triangle and says "run this" rather than
+  /// "move this later".
   List<Widget> _bulkActions(BuildContext context) => <Widget>[
     TextButton.icon(
       onPressed: state.isBusy || state.entries.isEmpty
           ? null
           : () => _confirmSmartPostpone(context),
-      icon: const Icon(Icons.schedule_send, size: 16),
+      icon: const Icon(Icons.update, size: 16),
       label: const Text('Smart Postpone these'),
     ),
     TextButton.icon(
@@ -463,13 +472,31 @@ class _ElementRow extends ConsumerWidget {
         border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
-        child: isCompactWidth(context)
-            ? _stackedRow(context, ref)
-            : _columnedRow(context, ref),
+      // Tapping a row opens the element, the same as in the Browser: a queue
+      // of titles is where a badly written extract is noticed, and having to
+      // find it again somewhere else to fix it is how it stays badly written.
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: () => unawaited(_open(context, ref)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+            child: isCompactWidth(context)
+                ? _stackedRow(context, ref)
+                : _columnedRow(context, ref),
+          ),
+        ),
       ),
     );
+  }
+
+  /// Opens the element for reading or editing, then reloads the list: an edit
+  /// changes the preview this row shows.
+  Future<void> _open(BuildContext context, WidgetRef ref) async {
+    await openElement(context, ref, elementRef: entry.ref);
+    await ref.read(priorityBrowserViewModelProvider.notifier).refresh();
   }
 
   /// The desktop shape: every measurement gets a column of its own, under the
@@ -478,7 +505,7 @@ class _ElementRow extends ConsumerWidget {
     children: <Widget>[
       _dragHandle(),
       _percentCell(),
-      _typeBadgeCell(),
+      _typeBadgeCell(shouldShowLabel: true),
       const SizedBox(width: 8),
       Expanded(child: _titleAndPreview()),
       _Cell(width: _kIntervalWidth, text: '${entry.intervalDays}'),
@@ -486,13 +513,20 @@ class _ElementRow extends ConsumerWidget {
       _Cell(width: _kCountWidth, text: '${entry.lapses}'),
       _Cell(width: _kDateWidth, text: entry.lastRepetition?.toString() ?? '—'),
       _Cell(width: _kDateWidth, text: entry.nextRepetition.toString()),
-      SizedBox(width: _kActionsWidth, child: _actionButtons(context, ref)),
+      SizedBox(
+        width: _kActionsWidth,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: _actionButtons(context, ref),
+        ),
+      ),
     ],
   );
 
-  /// The phone shape. The five measurement columns need 324 pixels before the
-  /// title is given any, so they become one labelled line underneath instead:
-  /// unreadably narrow columns would be worse than a sentence.
+  /// The phone shape. The five measurements written out as a sentence took a
+  /// whole line and still pushed the title into an ellipsis; the title is the
+  /// one thing that says which element this is, so it gets the width and the
+  /// measurements move behind the info button on the line below.
   Widget _stackedRow(BuildContext context, WidgetRef ref) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: <Widget>[
@@ -500,36 +534,19 @@ class _ElementRow extends ConsumerWidget {
         children: <Widget>[
           _dragHandle(),
           _percentCell(),
-          _typeBadgeCell(),
-          const SizedBox(width: 8),
+          _typeBadgeCell(shouldShowLabel: false),
+          const SizedBox(width: 6),
           Expanded(child: _titleAndPreview()),
         ],
       ),
-      const SizedBox(height: 4),
       Row(
+        mainAxisAlignment: MainAxisAlignment.end,
         children: <Widget>[
-          const SizedBox(width: _kHandleWidth),
-          Expanded(child: _measurementLine()),
-          // The action row sizes itself to its four buttons, so it needs the
-          // same box here that the wide layout's column gives it.
-          SizedBox(width: _kActionsWidth, child: _actionButtons(context, ref)),
+          _MeasurementsButton(entry: entry),
+          ..._actionButtons(context, ref),
         ],
       ),
     ],
-  );
-
-  /// The same five numbers the columns carry, named rather than positioned.
-  Widget _measurementLine() => Text(
-    <String>[
-      'interval ${entry.intervalDays}d',
-      'reps ${entry.repetitions}',
-      'lapses ${entry.lapses}',
-      'last ${entry.lastRepetition?.toString() ?? '—'}',
-      'next ${entry.nextRepetition}',
-    ].join('  ·  '),
-    maxLines: 2,
-    overflow: TextOverflow.ellipsis,
-    style: const TextStyle(fontSize: 11, color: AppColors.muted),
   );
 
   /// A blank of the same width when the row cannot be dragged, so every row
@@ -559,12 +576,18 @@ class _ElementRow extends ConsumerWidget {
     );
   }
 
-  Widget _typeBadgeCell() {
+  /// The word beside the icon is what keeps the desktop columns aligned; on a
+  /// phone it costs sixty pixels of title to say something the icon and its
+  /// colour already say.
+  Widget _typeBadgeCell({required bool shouldShowLabel}) {
     return SizedBox(
-      width: _kBadgeWidth,
+      width: shouldShowLabel ? _kBadgeWidth : _kBadgeIconWidth,
       child: Align(
         alignment: Alignment.centerLeft,
-        child: ElementTypeBadge(type: entry.ref.type),
+        child: ElementTypeBadge(
+          type: entry.ref.type,
+          shouldShowLabel: shouldShowLabel,
+        ),
       ),
     );
   }
@@ -594,68 +617,133 @@ class _ElementRow extends ConsumerWidget {
 
   /// The four per-row commands: set priority, batch priority, smart postpone,
   /// and the learning menu.
-  Widget _actionButtons(BuildContext context, WidgetRef ref) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: <Widget>[
-        IconButton(
-          tooltip: 'Set priority (Alt+P)',
-          onPressed: () async {
-            final bool hasChanged = await showPriorityDialog(
-              context,
-              ref,
-              elementRef: entry.ref,
-            );
-            if (hasChanged) {
-              await ref
-                  .read(priorityBrowserViewModelProvider.notifier)
-                  .refresh();
-            }
-          },
-          constraints: _kActionConstraints,
+  ///
+  /// Set and batch are the same operation at two scales, which is exactly why
+  /// they may not look alike: one slider icon and one outlined slider icon
+  /// were indistinguishable at seventeen pixels, and getting them the wrong
+  /// way round rewrites a whole article's priorities.
+  List<Widget> _actionButtons(BuildContext context, WidgetRef ref) {
+    return <Widget>[
+      IconButton(
+        tooltip: 'Set priority (Alt+P)',
+        onPressed: () async {
+          final bool hasChanged = await showPriorityDialog(
+            context,
+            ref,
+            elementRef: entry.ref,
+          );
+          if (hasChanged) {
+            await ref.read(priorityBrowserViewModelProvider.notifier).refresh();
+          }
+        },
+        constraints: _kActionConstraints,
+        padding: EdgeInsets.zero,
+        icon: const Icon(Icons.tune, size: 17),
+      ),
+      IconButton(
+        tooltip: 'Batch priority for this article',
+        onPressed: onBatchPriority,
+        constraints: _kActionConstraints,
+        padding: EdgeInsets.zero,
+        icon: const Icon(Icons.account_tree_outlined, size: 17),
+      ),
+      IconButton(
+        tooltip: 'Smart Postpone this article',
+        onPressed: onSmartPostpone,
+        constraints: _kActionConstraints,
+        padding: EdgeInsets.zero,
+        icon: const Icon(Icons.update, size: 17),
+      ),
+      SizedBox(
+        width: _kActionConstraints.maxWidth,
+        height: _kActionConstraints.maxHeight,
+        child: PopupMenuButton<_LearningCommand>(
+          tooltip: 'Learning commands',
+          onSelected: onLearningCommand,
+          itemBuilder: (BuildContext context) =>
+              <PopupMenuEntry<_LearningCommand>>[
+                for (final _LearningCommand command in _LearningCommand.values)
+                  PopupMenuItem<_LearningCommand>(
+                    value: command,
+                    child: Text(command.label),
+                  ),
+              ],
+          // No `constraints` here. On PopupMenuButton that property sizes
+          // the *menu*, not the button, so the 33x33 box used for the icon
+          // buttons would shrink the menu itself. The button is sized by
+          // the SizedBox around it instead.
           padding: EdgeInsets.zero,
-          icon: const Icon(Icons.tune, size: 17),
+          icon: const Icon(Icons.more_vert, size: 17),
         ),
-        IconButton(
-          tooltip: 'Batch priority for this article',
-          onPressed: onBatchPriority,
-          constraints: _kActionConstraints,
-          padding: EdgeInsets.zero,
-          icon: const Icon(Icons.tune_outlined, size: 17),
-        ),
-        IconButton(
-          tooltip: 'Smart Postpone this article',
-          onPressed: onSmartPostpone,
-          constraints: _kActionConstraints,
-          padding: EdgeInsets.zero,
-          icon: const Icon(Icons.schedule_send_outlined, size: 17),
-        ),
-        SizedBox(
-          width: _kActionConstraints.maxWidth,
-          height: _kActionConstraints.maxHeight,
-          child: PopupMenuButton<_LearningCommand>(
-            tooltip: 'Learning commands',
-            onSelected: onLearningCommand,
-            itemBuilder: (BuildContext context) =>
-                <PopupMenuEntry<_LearningCommand>>[
-                  for (final _LearningCommand command
-                      in _LearningCommand.values)
-                    PopupMenuItem<_LearningCommand>(
-                      value: command,
-                      child: Text(command.label),
-                    ),
-                ],
-            // No `constraints` here. On PopupMenuButton that property sizes
-            // the *menu*, not the button, so the 33x33 box used for the icon
-            // buttons would shrink the menu itself. The button is sized by
-            // the SizedBox around it instead.
-            padding: EdgeInsets.zero,
-            icon: const Icon(Icons.more_vert, size: 17),
+      ),
+    ];
+  }
+}
+
+/// The five scheduling measurements, behind a button.
+///
+/// They are columns on a desktop window, where the headings say which number
+/// is which. A phone has no room for either, and a row of unlabelled numbers
+/// is worse than no numbers at all, so on a phone they are asked for.
+class _MeasurementsButton extends StatelessWidget {
+  const _MeasurementsButton({required this.entry});
+
+  final PriorityEntry entry;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: _kActionConstraints.maxWidth,
+    height: _kActionConstraints.maxHeight,
+    child: PopupMenuButton<void>(
+      tooltip: 'Scheduling details',
+      padding: EdgeInsets.zero,
+      icon: const Icon(Icons.info_outline, size: 17),
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<void>>[
+        PopupMenuItem<void>(
+          // Nothing here is a command, so nothing here is selectable. It is
+          // still a menu because that is the shape the row has room for.
+          enabled: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              for (final (String name, String value) in <(String, String)>[
+                ('Interval', '${entry.intervalDays} d'),
+                ('Repetitions', '${entry.repetitions}'),
+                ('Lapses', '${entry.lapses}'),
+                ('Last', entry.lastRepetition?.toString() ?? '—'),
+                ('Next', entry.nextRepetition.toString()),
+              ])
+                _measurementLine(name, value),
+            ],
           ),
         ),
       ],
-    );
-  }
+    ),
+  );
+
+  Widget _measurementLine(String name, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: <Widget>[
+        SizedBox(
+          width: 86,
+          child: Text(
+            name,
+            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.text,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 final class _PriorityBatchDraft {
@@ -1126,6 +1214,9 @@ Future<int?> _promptForSpacing(BuildContext context) async {
 const double _kBadgeWidth = 84;
 const double _kActionsWidth = 132;
 const double _kHandleWidth = 30;
+
+/// The badge without its word, on a phone.
+const double _kBadgeIconWidth = 22;
 
 /// Four of these fill [_kActionsWidth] exactly.
 const BoxConstraints _kActionConstraints = BoxConstraints.tightFor(

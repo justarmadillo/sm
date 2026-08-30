@@ -57,6 +57,12 @@ final class PrioritySliderState {
   /// Whether the draft differs from what is stored.
   bool get isDirty => (draftPercent - context.percent).abs() >= 0.5;
 
+  /// [shouldReplaceDraftNeighbours] takes [draftAbove] and [draftBelow]
+  /// exactly as given, null included.
+  ///
+  /// Without it the two ends of the queue could never be shown: an element
+  /// dragged to 0% has nothing above it, and `draftAbove ?? this.draftAbove`
+  /// would keep displaying whatever used to be there.
   PrioritySliderState copyWith({
     PriorityContext? context,
     double? draftPercent,
@@ -65,17 +71,17 @@ final class PrioritySliderState {
     bool shouldClearMessage = false,
     PriorityEntry? draftAbove,
     PriorityEntry? draftBelow,
-    bool shouldClearDraftNeighbours = false,
+    bool shouldReplaceDraftNeighbours = false,
   }) => PrioritySliderState(
     context: context ?? this.context,
     draftPercent: draftPercent ?? this.draftPercent,
     isBusy: isBusy ?? this.isBusy,
     message: shouldClearMessage ? null : (message ?? this.message),
-    draftAbove: shouldClearDraftNeighbours
-        ? null
+    draftAbove: shouldReplaceDraftNeighbours
+        ? draftAbove
         : (draftAbove ?? this.draftAbove),
-    draftBelow: shouldClearDraftNeighbours
-        ? null
+    draftBelow: shouldReplaceDraftNeighbours
+        ? draftBelow
         : (draftBelow ?? this.draftBelow),
   );
 }
@@ -127,7 +133,7 @@ final class PrioritySliderViewModel
     if (latest == null || latest.draftPercent != percent) return;
     state = AsyncValue<PrioritySliderState>.data(
       latest.copyWith(
-        shouldClearDraftNeighbours: true,
+        shouldReplaceDraftNeighbours: true,
         draftAbove: neighbours.above,
         draftBelow: neighbours.below,
       ),
@@ -166,10 +172,7 @@ final class PrioritySliderViewModel
         .read(priorityQueryProvider)
         .contextFor(arg);
     state = AsyncValue<PrioritySliderState>.data(
-      PrioritySliderState(
-        context: reloaded ?? current.context,
-        draftPercent: reloaded?.percent ?? current.draftPercent,
-      ),
+      _stateAfterWrite(reloaded, current),
     );
     return true;
   }
@@ -196,10 +199,26 @@ final class PrioritySliderViewModel
         .read(priorityQueryProvider)
         .contextFor(arg);
     state = AsyncValue<PrioritySliderState>.data(
-      PrioritySliderState(
-        context: reloaded ?? current.context,
-        draftPercent: reloaded?.percent ?? current.draftPercent,
-      ),
+      _stateAfterWrite(reloaded, current),
+    );
+  }
+
+  /// The dialog as it stands once a write has landed.
+  ///
+  /// The neighbours come from the reloaded context rather than being left
+  /// empty: they are otherwise only recomputed while the slider is being
+  /// dragged, so Before and After stayed blank for the rest of the dialog's
+  /// life after every Set and every arrow key.
+  static PrioritySliderState _stateAfterWrite(
+    PriorityContext? reloaded,
+    PrioritySliderState current,
+  ) {
+    final PriorityContext settled = reloaded ?? current.context;
+    return PrioritySliderState(
+      context: settled,
+      draftPercent: reloaded?.percent ?? current.draftPercent,
+      draftAbove: settled.above,
+      draftBelow: settled.below,
     );
   }
 }

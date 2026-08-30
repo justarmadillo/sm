@@ -224,7 +224,7 @@ final class TopicEncounter {
 sealed class TopicEvent {
   const TopicEvent(this.ref);
   final ElementRef ref;
-  String get kind;
+  String get type;
 }
 
 final class TopicRepetitionCommitted extends TopicEvent {
@@ -254,7 +254,7 @@ final class TopicRepetitionCommitted extends TopicEvent {
   final int randomDraws;
 
   @override
-  String get kind => 'topic.repetition_committed';
+  String get type => 'topic.repetition_committed';
 }
 
 final class TopicRescheduled extends TopicEvent {
@@ -270,7 +270,7 @@ final class TopicRescheduled extends TopicEvent {
   final StudyDay targetDay;
 
   @override
-  String get kind => 'topic.rescheduled';
+  String get type => 'topic.rescheduled';
 }
 
 final class TopicLifecycleChanged extends TopicEvent {
@@ -284,7 +284,7 @@ final class TopicLifecycleChanged extends TopicEvent {
   final Sm20ElementStatus to;
 
   @override
-  String get kind => 'topic.status_changed';
+  String get type => 'topic.status_changed';
 }
 
 @immutable

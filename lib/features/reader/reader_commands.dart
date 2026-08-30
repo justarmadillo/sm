@@ -254,6 +254,31 @@ final class InsertSourceBlock extends AppCommand {
   final int baseContentRevision;
 }
 
+/// Swap a heading's section with the sibling section above or below it.
+///
+/// The Reader's outline is the document's own heading lines, so reordering it
+/// reorders the text: a section carries its paragraphs with it. Expressed as
+/// one splice over the two adjacent sections, which is why it needs no
+/// machinery of its own beyond the commands above.
+final class MoveSourceSection extends AppCommand {
+  MoveSourceSection(
+    super.operationId, {
+    required this.sourceId,
+    required this.blockId,
+    required this.shouldMoveUp,
+    required this.baseContentRevision,
+    super.timestampUtc,
+  });
+
+  final String sourceId;
+
+  /// The heading block at the top of the section being moved.
+  final String blockId;
+
+  final bool shouldMoveUp;
+  final int baseContentRevision;
+}
+
 /// Reverse the most recent edit to a source's text.
 ///
 /// Applied as an ordinary forward splice at a new revision, so the journal

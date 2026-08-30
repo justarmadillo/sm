@@ -187,7 +187,13 @@ class Extracts extends Table {
   /// Immediate parent: a source or another extract.
   TextColumn get parentId => text()();
 
-  BoolColumn get hasSourceAsParent => boolean()();
+  /// Whether [parentId] names a source rather than another extract.
+  ///
+  /// The column stays `parent_is_source`, which is what every collection on
+  /// disk and every migration's raw SQL already calls it. Letting Drift derive
+  /// `has_source_as_parent` from the Dart name would rename the column and
+  /// every existing collection would stop loading its extracts.
+  BoolColumn get hasSourceAsParent => boolean().named('parent_is_source')();
 
   /// Byte range of the parent's markdown this passage was taken from.
   IntColumn get startUtf8 => integer()();
@@ -241,8 +247,8 @@ class Cards extends Table {
   IntColumn get parentElementType =>
       integer().nullable().check(parentElementType.isBetweenValues(0, 1))();
 
-  /// Index into the card-kind enum.
-  IntColumn get kind => integer().check(kind.isBetweenValues(0, 1))();
+  /// Index into the CardType enum.
+  IntColumn get type => integer().check(type.isBetweenValues(0, 1))();
 
   TextColumn get front => text()();
 
@@ -260,7 +266,7 @@ class Cards extends Table {
   @override
   List<String> get customConstraints => <String>[
     // A cloze card names the deletion it tests; a Q&A card never does.
-    'CHECK ((kind = 1) = (cloze_ordinal IS NOT NULL))',
+    'CHECK ((type = 1) = (cloze_ordinal IS NOT NULL))',
     'CHECK ((parent_element_id IS NULL) = (parent_element_type IS NULL))',
   ];
 }
@@ -719,7 +725,7 @@ class ActivityEvents extends Table {
   IntColumn get elementType => integer().nullable()();
 
   /// Stable dotted event name, for example `reader.done`.
-  TextColumn get kind => text()();
+  TextColumn get type => text()();
 
   IntColumn get atUtc => integer()();
 

@@ -37,11 +37,11 @@ final class BackupRetention {
 }
 
 /// Why a backup was taken. Determines its file prefix and retention class.
-enum BackupKind {
+enum BackupType {
   daily('backup'),
   preMigration('premigration');
 
-  const BackupKind(this.prefix);
+  const BackupType(this.prefix);
 
   /// File-name prefix identifying the retention class.
   final String prefix;
@@ -94,7 +94,7 @@ Result<File?> createPreMigrationBackupIfNeeded({
     backupDirectory.createSync(recursive: true);
     final stamp = _timestamp(clock.nowUtc());
     final target = File(
-      '${backupDirectory.path}/${BackupKind.preMigration.prefix}-$stamp.sqlite',
+      '${backupDirectory.path}/${BackupType.preMigration.prefix}-$stamp.sqlite',
     );
     staging = File('${target.path}.partial');
     if (staging.existsSync()) staging.deleteSync();
@@ -120,7 +120,7 @@ Result<File?> createPreMigrationBackupIfNeeded({
             .where(
               (file) => _basename(
                 file,
-              ).startsWith('${BackupKind.preMigration.prefix}-'),
+              ).startsWith('${BackupType.preMigration.prefix}-'),
             )
             .toList()
           ..sort((a, b) => _basename(b).compareTo(_basename(a)));
@@ -172,7 +172,7 @@ final class BackupService {
   /// Returns the finished file. The previous newest backup is left untouched
   /// if anything fails.
   Future<Result<File>> createBackup({
-    BackupKind kind = BackupKind.daily,
+    BackupType type = BackupType.daily,
     OperationId? operationId,
   }) async {
     final startedAt = _clock.nowUtc();
@@ -180,7 +180,7 @@ final class BackupService {
 
     final stamp = _timestamp(startedAt);
     final target = File(
-      '${_backupDirectory.path}/${kind.prefix}-$stamp.sqlite',
+      '${_backupDirectory.path}/${type.prefix}-$stamp.sqlite',
     );
     final staging = File('${target.path}.partial');
 
@@ -198,7 +198,7 @@ final class BackupService {
           DiagnosticLevel.error,
           'backup.invalid',
           operationId,
-          <String, Object?>{'kind': kind.name, 'problem': validation},
+          <String, Object?>{'kind': type.name, 'problem': validation},
         );
         return Err<File>(
           StorageFailure('backup failed validation: $validation'),
@@ -214,7 +214,7 @@ final class BackupService {
         'backup.created',
         operationId,
         <String, Object?>{
-          'kind': kind.name,
+          'kind': type.name,
           'bytes': target.lengthSync(),
           'ms': _clock.nowUtc().difference(startedAt).inMilliseconds,
         },
@@ -226,7 +226,7 @@ final class BackupService {
         DiagnosticLevel.error,
         'backup.failed',
         operationId,
-        <String, Object?>{'kind': kind.name},
+        <String, Object?>{'kind': type.name},
         StorageFailure(
           'could not write backup',
           cause: error,
@@ -244,11 +244,11 @@ final class BackupService {
   }
 
   /// Backups on disk, newest first.
-  List<File> listBackups({BackupKind? kind}) {
+  List<File> listBackups({BackupType? type}) {
     if (!_backupDirectory.existsSync()) return <File>[];
-    final prefixes = kind == null
-        ? BackupKind.values.map((BackupKind k) => k.prefix).toList()
-        : <String>[kind.prefix];
+    final prefixes = type == null
+        ? BackupType.values.map((BackupType k) => k.prefix).toList()
+        : <String>[type.prefix];
     final files = _backupDirectory.listSync().whereType<File>().where((File f) {
       final name = _basename(f);
       return name.endsWith('.sqlite') &&
@@ -291,7 +291,7 @@ final class BackupService {
   }
 
   void _pruneDaily() {
-    final backups = listBackups(kind: BackupKind.daily);
+    final backups = listBackups(type: BackupType.daily);
     // Newest first, so the first file seen for a day or month is the keeper.
     final keptDays = <String>{};
     final keptMonths = <String>{};
@@ -314,7 +314,7 @@ final class BackupService {
   }
 
   void _prunePreMigration() {
-    final backups = listBackups(kind: BackupKind.preMigration);
+    final backups = listBackups(type: BackupType.preMigration);
     for (var i = retention.preMigration; i < backups.length; i++) {
       _safeDelete(backups[i]);
     }
