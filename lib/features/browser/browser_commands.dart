@@ -108,6 +108,18 @@ final class DeleteElement extends AppCommand {
   final ElementRef ref;
 }
 
+/// Removes several selected branches as one user operation.
+///
+/// A parent and one of its descendants may both be selected. The runner
+/// unions their branches before erasing anything, so overlap never turns a
+/// valid batch into a second "not found" deletion.
+final class DeleteElements extends AppCommand {
+  DeleteElements(super.operationId, {required this.refs, super.timestampUtc});
+
+  /// The selected roots of the branches about to be removed.
+  final List<ElementRef> refs;
+}
+
 /// What one deletion removed.
 final class BrowserDeletionOutcome {
   const BrowserDeletionOutcome({required this.deletedRefs});

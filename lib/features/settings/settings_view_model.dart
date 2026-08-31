@@ -12,6 +12,7 @@ import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/daily_queue/queue_view_model.dart';
 import 'package:incremental_reader/features/priority/priority_view_model.dart';
+import 'package:incremental_reader/features/settings/fsrs_settings_rescheduler.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/database_maintenance.dart';
@@ -94,9 +95,13 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
     if (current == null || current.isBusy || !current.isDirty) return;
     state = AsyncValue<SettingsUiState>.data(current.copyWith(isBusy: true));
 
-    final Result<AppSettings> result = await ref
-        .read(settingsStoreProvider)
-        .save(current.draft);
+    final FsrsSettingsSaveResult saveResult = await FsrsSettingsRescheduler(
+      settings: ref.read(settingsStoreProvider),
+      context: ref.read(schedulingContextProvider),
+      learning: ref.read(learningRepositoryProvider),
+      transactions: ref.read(transactionRunnerProvider),
+    ).save(previous: current.saved, replacement: current.draft);
+    final Result<AppSettings> result = saveResult.settings;
     if (result.isErr) {
       state = AsyncValue<SettingsUiState>.data(
         current.copyWith(
@@ -119,7 +124,13 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
       SettingsUiState(
         saved: result.unwrap(),
         draft: result.unwrap(),
-        message: const UiMessage('Settings saved'),
+        message: UiMessage(
+          saveResult.cardsUpdated == 0
+              ? 'Settings saved'
+              : 'Settings saved. ${saveResult.cardsUpdated} card '
+                    '${saveResult.cardsUpdated == 1 ? 'schedule was' : 'schedules were'} '
+                    'updated.',
+        ),
       ),
     );
   }

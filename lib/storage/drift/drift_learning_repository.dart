@@ -473,6 +473,23 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
+  Future<List<ReviewLogEntry>> listReviewLogForOperation(
+    String operationId,
+  ) async {
+    final rows =
+        await (_database.select(_database.revlogEntries)
+              ..where(
+                ($RevlogEntriesTable t) => t.operationId.equals(operationId),
+              )
+              ..orderBy(<OrderClauseGenerator<$RevlogEntriesTable>>[
+                ($RevlogEntriesTable t) => OrderingTerm.asc(t.atUtc),
+                ($RevlogEntriesTable t) => OrderingTerm.asc(t.id),
+              ]))
+            .get();
+    return <ReviewLogEntry>[for (final row in rows) reviewLogFromRow(row)];
+  }
+
+  @override
   Future<List<ReviewLogEntry>> listRecentReviewLog({int limit = 100}) async {
     final rows =
         await (_database.select(_database.revlogEntries)

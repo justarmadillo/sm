@@ -60,7 +60,12 @@ abstract class AbstractScheduler implements IScheduler, SchedulerContext {
     final lastReview = current.lastReview;
     var interval = 0; // A new card has no elapsed time.
     if (state != State.newState && lastReview != null) {
-      interval = dateDiffInDays(lastReview, reviewTime);
+      var elapsedDaysStrategy = dateDiffInDays;
+      final custom = strategies?[StrategyMode.elapsedDays];
+      if (custom != null) {
+        elapsedDaysStrategy = custom as ElapsedDaysStrategy;
+      }
+      interval = elapsedDaysStrategy(lastReview, reviewTime);
     }
     current.lastReview = reviewTime;
     elapsedDays = interval;

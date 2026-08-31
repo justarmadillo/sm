@@ -17,6 +17,9 @@ back from stored key/value pairs.
 | `settings_list_equality.dart` | compares the list-shaped values by content |
 
 The screen that edits them is `features/settings/`, not here.
+`features/settings/fsrs_settings_rescheduler.dart` atomically saves relevant
+card-setting changes, replays memory when the parameter version changes, and
+recalculates existing FSRS due dates when requested.
 
 ## The stored keys are strings, and they are permanent
 

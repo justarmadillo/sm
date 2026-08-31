@@ -46,7 +46,8 @@ void main() {
         ),
       );
       expect(
-        () => checkParameters(<double>[for (var i = 0; i < 21; i++) double.nan]),
+        () =>
+            checkParameters(<double>[for (var i = 0; i < 21; i++) double.nan]),
         throwsA(isA<FSRSValidationError>()),
       );
       expect(checkParameters(List<double>.of(defaultW)), defaultW);
@@ -351,6 +352,24 @@ void main() {
       expect(graduated.learningSteps, 0);
     });
 
+    test('hard repeats a later learning step', () {
+      scheduler.useStrategy(StrategyMode.ankiCompatibility, true);
+      final card = Card(
+        due: DateTime.utc(2024),
+        stability: 1,
+        difficulty: 5,
+        state: State.learning,
+        learningSteps: 2,
+        lastReview: DateTime.utc(2024),
+      );
+
+      final result = scheduler.next(card, card.due, Rating.hard).card;
+
+      expect(result.learningSteps, 2);
+      expect(result.due.difference(card.due).inMinutes, 30);
+      scheduler.clearStrategy(StrategyMode.ankiCompatibility);
+    });
+
     test('with no steps configured every grade is day-scale', () {
       final noSteps = fsrs(
         learningSteps: <String>[],
@@ -476,6 +495,28 @@ void main() {
         other.next(card, now, Rating.good).card.scheduledDays,
         isNot(first),
       );
+    });
+
+    test('the Anki seed is card id plus bumped repetition count', () {
+      final strategy = genAnkiSeedStrategyWithCardId((Card card) => 500);
+      final card = Card(
+        due: now,
+        stability: 10,
+        difficulty: 5,
+        state: State.review,
+        reps: 4,
+        lastReview: now.subtract(const Duration(days: 10)),
+      );
+      late String seed;
+      final scheduler = fsrs()
+        ..useStrategy(StrategyMode.seed, (SchedulerContext context) {
+          seed = strategy(context);
+          return seed;
+        });
+
+      scheduler.next(card, now, Rating.good);
+
+      expect(seed, '505');
     });
 
     test('a custom learning-step layout is honoured', () {
@@ -647,6 +688,67 @@ void main() {
         FSRSAlgorithm(null)
             .nextShortTermStability(graduated.stability, Rating.good),
       );
+    });
+
+    test('can follow an app-defined study-day rollover', () {
+      final scheduler = fsrs()
+        ..useStrategy(
+          StrategyMode.elapsedDays,
+          (DateTime lastReview, DateTime reviewTime) {
+            DateTime studyDay(DateTime instant) {
+              final shifted = instant.subtract(const Duration(hours: 4));
+              return DateTime.utc(shifted.year, shifted.month, shifted.day);
+            }
+
+            return studyDay(reviewTime).difference(studyDay(lastReview)).inDays;
+          },
+        );
+      final card = Card(
+        due: DateTime.utc(2024, 1, 2, 3, 30),
+        stability: 10,
+        difficulty: 5,
+        state: State.review,
+        lastReview: DateTime.utc(2024, 1, 1, 23, 30),
+      );
+
+      final result = scheduler.next(card, card.due, Rating.good);
+
+      expect(result.log.elapsedDays, 0);
+      expect(scheduler.getRetrievability(card, card.due), 1);
+    });
+  });
+
+  group('Anki interval constraints', () {
+    test('all grades respect a one-day maximum', () {
+      final scheduler = fsrs(maximumInterval: 1, enableFuzz: true)
+        ..useStrategy(StrategyMode.ankiCompatibility, true);
+      final now = DateTime.utc(2024, 1, 10);
+      final card = Card(
+        due: now,
+        stability: 100,
+        difficulty: 5,
+        state: State.review,
+        scheduledDays: 30,
+        reps: 10,
+        lastReview: now.subtract(const Duration(days: 30)),
+      );
+
+      final preview = scheduler.repeat(card, now);
+
+      for (final grade in <Rating>[Rating.hard, Rating.good, Rating.easy]) {
+        expect(preview[grade].card.scheduledDays, 1, reason: '$grade');
+      }
+    });
+
+    test('fuzz bounds match Anki boundary cases', () {
+      expect(getAnkiFuzzRange(2.49, 1, 1000).toString(),
+          'FuzzRange(minIvl: 2, maxIvl: 2)');
+      expect(getAnkiFuzzRange(2.5, 1, 1000).toString(),
+          'FuzzRange(minIvl: 2, maxIvl: 4)');
+      expect(getAnkiFuzzRange(100, 101, 1000).toString(),
+          'FuzzRange(minIvl: 101, maxIvl: 108)');
+      expect(getAnkiFuzzRange(100, 1, 99).toString(),
+          'FuzzRange(minIvl: 92, maxIvl: 99)');
     });
   });
 }

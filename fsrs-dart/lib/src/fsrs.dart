@@ -93,7 +93,12 @@ class FSRS extends FSRSAlgorithm {
     final processedCard = TypeConvert.card(card);
     final at = now == null ? DateTime.now() : TypeConvert.time(now);
     if (processedCard.state == State.newState) return 0;
-    final elapsed = dateDiff(at, processedCard.lastReview, DateDiffUnit.days);
+    final lastReview = processedCard.lastReview;
+    if (lastReview == null) return 0;
+    final custom = _strategyHandler[StrategyMode.elapsedDays];
+    final elapsed = custom == null
+        ? dateDiff(at, lastReview, DateDiffUnit.days)
+        : (custom as ElapsedDaysStrategy)(lastReview, at);
     final t = elapsed > 0 ? elapsed : 0;
     return super.forgettingCurve(
       t.toDouble(),

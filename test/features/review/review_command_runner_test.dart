@@ -195,6 +195,40 @@ void main() {
       );
     });
 
+    test('also restores siblings buried by that grade', () async {
+      final Source source = await harness.importSource();
+      final List<Card> cards = await harness.formulateSiblings(source.id);
+      final CardState siblingBefore = await harness.stateOf(cards[1].id);
+
+      final ReviewOutcome outcome = await harness.grade(
+        cards.first.id,
+        CardRating.good,
+      );
+      expect(outcome.buriedSiblings, 2);
+      expect(
+        (await harness.stateOf(cards[1].id)).memory.dueAtUtc,
+        isNot(siblingBefore.memory.dueAtUtc),
+      );
+
+      final Result<CardState> undone = await harness.review.undoLastReview(
+        UndoLastReview(harness.operation(), timestampUtc: clock.nowUtc()),
+      );
+      expect(undone.isOk, isTrue, reason: '${undone.failureOrNull}');
+
+      final CardState siblingRestored = await harness.stateOf(cards[1].id);
+      expect(
+        siblingRestored.memory.canonicalFsrsJson(),
+        siblingBefore.memory.canonicalFsrsJson(),
+      );
+      expect(siblingRestored.schedule.dueDay, siblingBefore.schedule.dueDay);
+      expect(
+        (await harness.reviewLogOf(cards[1].id)).where(
+          (ReviewLogEntry entry) => entry.eventType == ReviewLogEventType.undo,
+        ),
+        hasLength(1),
+      );
+    });
+
     test('undoes whatever was graded last when no card is named', () async {
       final Source source = await harness.importSource();
       final List<Card> cards = await harness.formulateSiblings(source.id);

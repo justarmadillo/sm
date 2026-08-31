@@ -6,6 +6,7 @@ in a unit test instead of by clicking through the app.
 | Folder / file | What it decides |
 |---|---|
 | `cards/card_scheduler.dart` | when a card comes back (FSRS) |
+| `cards/fsrs_memory_recomputer.dart` | replays genuine reviews after an FSRS parameter change |
 | `topics/topic_scheduler.dart` | when a source or extract comes back (SM-20) |
 | `daily_queue/queue_policy.dart` | what is in today's queue, and in what order |
 | `mercy/mercy.dart` | how a backlog is spread over future days |
@@ -34,6 +35,10 @@ published algorithm:
 - **mercy** — bulk relief: spread a backlog over several future days.
 - **postpone** — push work later. **advance** — pull work earlier.
 - **A-factor** — how fast a topic's interval grows.
+
+FSRS is used only for recall cards. Sources and extracts remain topics and use
+SM-20; changing card retention or FSRS parameters does not reinterpret their
+schedules.
 
 ## Why the maths is exact
 

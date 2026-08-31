@@ -69,6 +69,13 @@ final class ReviewOutcome {
   final bool isLeech;
 }
 
+final class _SiblingBuryUndo {
+  const _SiblingBuryUndo({required this.current, required this.restored});
+
+  final CardState current;
+  final CardState restored;
+}
+
 /// Runs the commands for grading, undoing, editing, and deferring cards.
 final class ReviewCommandRunner {
   ReviewCommandRunner({
@@ -143,7 +150,7 @@ final class ReviewCommandRunner {
         if (command.isPractice) {
           return _logPractice(command, before, reviewedAt, pressure);
         }
-        if (!before.memory.isDueAt(reviewedAt)) {
+        if (!before.isDueAt(reviewedAt, scheduler.calendar)) {
           return const Err<ReviewOutcome>(
             ConflictFailure('that card is not due yet'),
           );
@@ -367,6 +374,15 @@ final class ReviewCommandRunner {
             ConflictFailure('the card changed after that review'),
           );
         }
+        final List<_SiblingBuryUndo>? siblingBuries =
+            await _siblingBuriesForUndo(record);
+        if (siblingBuries == null) {
+          return const Err<CardState>(
+            ConflictFailure(
+              'a sibling changed after it was buried by that review',
+            ),
+          );
+        }
         final CardState restored = scheduler.undo(current, record);
         final StudyDayCalendar calendar = await _context.calendar();
         if (!await _learning.compareAndSwapCardState(
@@ -376,6 +392,14 @@ final class ReviewCommandRunner {
           return const Err<CardState>(
             ConflictFailure('the card changed before undo committed'),
           );
+        }
+        for (final _SiblingBuryUndo sibling in siblingBuries) {
+          if (!await _learning.compareAndSwapCardState(
+            expected: sibling.current,
+            replacement: sibling.restored,
+          )) {
+            throw StateError('a buried sibling changed before undo committed');
+          }
         }
         await _journal.append(
           operationId: command.operationId.value,
@@ -410,8 +434,23 @@ final class ReviewCommandRunner {
           metadata: <String, Object?>{
             'undone_operation': record.operationId,
             'undone_grade': record.rating.value,
+            'restored_siblings': siblingBuries.length,
           },
         );
+        for (final _SiblingBuryUndo sibling in siblingBuries) {
+          await _journal.append(
+            operationId: command.operationId.value,
+            ref: sibling.current.ref,
+            eventType: ReviewLogEventType.undo,
+            atUtc: command.timestampUtc,
+            before: _journal.cardSnapshot(sibling.current),
+            after: _journal.cardSnapshot(sibling.restored),
+            metadata: <String, Object?>{
+              'undone_operation': record.operationId,
+              'undone_event': ReviewLogEventType.bury.name,
+            },
+          );
+        }
         await _learning.appendActivity(
           ActivityRecord(
             id: _ids.newId(),
@@ -423,6 +462,9 @@ final class ReviewCommandRunner {
           ),
         );
         await _restoreToOutstanding(restored);
+        for (final _SiblingBuryUndo sibling in siblingBuries) {
+          await _restoreToOutstanding(sibling.restored);
+        }
         await _transfer.advanceGeneration();
         return Ok<CardState>(restored);
       });
@@ -431,6 +473,69 @@ final class ReviewCommandRunner {
         _fail(command, kReviewUndoneType, error, stackTrace),
       );
     }
+  }
+
+  Future<List<_SiblingBuryUndo>?> _siblingBuriesForUndo(
+    ReviewRecord review,
+  ) async {
+    final entries = await _learning.listReviewLogForOperation(
+      review.operationId,
+    );
+    final buries = entries.where(
+      (ReviewLogEntry entry) => entry.eventType == ReviewLogEventType.bury,
+    );
+    final result = <_SiblingBuryUndo>[];
+    for (final ReviewLogEntry entry in buries) {
+      final metadata = entry.metadata;
+      final String? beforeJson = metadata?['state_before'] as String?;
+      final String? afterJson = metadata?['state_after'] as String?;
+      final String? dueDay = metadata?['due_day_before'] as String?;
+      final String? originalDueDay =
+          metadata?['original_due_day_before'] as String?;
+      if (beforeJson == null ||
+          afterJson == null ||
+          dueDay == null ||
+          originalDueDay == null) {
+        return null;
+      }
+      final CardState? current = await _learning.findCardState(entry.ref.id);
+      if (current == null || current.memory.toJson() != afterJson) return null;
+      final CardMemory before = CardMemory.fromJson(beforeJson);
+      final CardMemory restoredMemory = CardMemory(
+        cardId: before.cardId,
+        state: before.state,
+        step: before.step,
+        stability: before.stability,
+        difficulty: before.difficulty,
+        repetitionCount: before.repetitionCount,
+        lapses: before.lapses,
+        lastReviewAtUtc: before.lastReviewAtUtc,
+        dueAtUtc: before.dueAtUtc,
+        originalDueAtUtc: before.originalDueAtUtc,
+        schedulerVersion: before.schedulerVersion,
+        parametersVersion: before.parametersVersion,
+        postponeCount: before.postponeCount,
+        scheduledDays: before.scheduledDays,
+        schedulerName: before.schedulerName,
+        revision: current.memory.revision + 1,
+      );
+      final CardState restored = CardState(
+        schedule: current.schedule.copyWith(
+          dueDay: StudyDay.parse(
+            dueDay,
+            zoneId: current.schedule.dueDay.zoneId,
+          ),
+          originalDueDay: StudyDay.parse(
+            originalDueDay,
+            zoneId: current.schedule.originalDueDay.zoneId,
+          ),
+          revision: current.schedule.revision + 1,
+        ),
+        memory: restoredMemory,
+      );
+      result.add(_SiblingBuryUndo(current: current, restored: restored));
+    }
+    return result;
   }
 
   /// Rewrites a card's text. Never reschedules.
@@ -694,7 +799,7 @@ final class ReviewCommandRunner {
       // A sibling already inside a learning step is mid-repetition; pushing
       // it to tomorrow would abandon work the user has started.
       if (state.memory.isIntradayStep) continue;
-      if (!state.memory.isDueAt(command.timestampUtc)) {
+      if (!state.isDueAt(command.timestampUtc, calendar)) {
         continue;
       }
       final CardState after = scheduler.rescheduleElement(
@@ -721,6 +826,10 @@ final class ReviewCommandRunner {
           metadata: <String, Object?>{
             'sibling_of': command.cardId,
             'until': tomorrow.toString(),
+            'state_before': state.memory.toJson(),
+            'state_after': after.memory.toJson(),
+            'due_day_before': state.schedule.dueDay.toString(),
+            'original_due_day_before': state.schedule.originalDueDay.toString(),
           },
         ),
       );

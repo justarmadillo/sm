@@ -34,20 +34,34 @@ int convertStepUnitToMinutes(String step) {
 
 /// The default step layout.
 ///
-/// Again always restarts at step 0. Hard repeats the current step — at step 0
-/// it uses the midpoint of the first two steps, or 1.5x the only step. Good
-/// advances, and stops being offered once there is no next step, which is how a
-/// card graduates to day-scale intervals. In [State.review] the only step that
-/// applies is the relearning entry point after a lapse.
+/// Again always restarts at step 0. Hard uses the midpoint of the first two
+/// steps, or 1.5x the only step. Good advances, and stops being offered once
+/// there is no next step, which is how a card graduates to day-scale intervals.
+/// In [State.review] only the relearning entry point after a lapse applies.
 Map<Rating, LearningStepResult> basicLearningStepsStrategy(
   FSRSParameters params,
   State state,
   int curStep,
-) {
-  final learningSteps =
-      state == State.relearning || state == State.review
-          ? params.relearningSteps
-          : params.learningSteps;
+) =>
+    _learningStepsStrategy(params, state, curStep, repeatsLaterHardStep: false);
+
+/// Anki's step layout, where Hard repeats the current step after step zero.
+Map<Rating, LearningStepResult> ankiLearningStepsStrategy(
+  FSRSParameters params,
+  State state,
+  int curStep,
+) =>
+    _learningStepsStrategy(params, state, curStep, repeatsLaterHardStep: true);
+
+Map<Rating, LearningStepResult> _learningStepsStrategy(
+  FSRSParameters params,
+  State state,
+  int curStep, {
+  required bool repeatsLaterHardStep,
+}) {
+  final learningSteps = state == State.relearning || state == State.review
+      ? params.relearningSteps
+      : params.learningSteps;
   final stepsLength = learningSteps.length;
   if (stepsLength == 0 || curStep >= stepsLength) {
     return <Rating, LearningStepResult>{};
@@ -58,8 +72,18 @@ Map<Rating, LearningStepResult> basicLearningStepsStrategy(
   int againInterval() => convertStepUnitToMinutes(firstStep);
 
   int hardInterval() {
+    final currentStep = curStep < 0 ? 0 : curStep;
+    if (repeatsLaterHardStep && currentStep > 0) {
+      return convertStepUnitToMinutes(learningSteps[currentStep]);
+    }
     if (stepsLength == 1) {
-      return jsRound(convertStepUnitToMinutes(firstStep) * 1.5);
+      final firstMinutes = convertStepUnitToMinutes(firstStep);
+      final hardMinutes = firstMinutes * 1.5;
+      return jsRound(
+        repeatsLaterHardStep
+            ? hardMinutes.clamp(0, firstMinutes + 1440).toDouble()
+            : hardMinutes,
+      );
     }
     final nextStep = learningSteps[1];
     return jsRound(

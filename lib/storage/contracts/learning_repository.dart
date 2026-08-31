@@ -178,6 +178,9 @@ abstract interface class LearningRepository {
     int? limit,
   });
 
+  /// Every repetition-log entry written by one atomic command, oldest first.
+  Future<List<ReviewLogEntry>> listReviewLogForOperation(String operationId);
+
   /// The most recent entries across the whole collection, newest first.
   Future<List<ReviewLogEntry>> listRecentReviewLog({int limit = 100});
 

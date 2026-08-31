@@ -37,3 +37,14 @@ SeedStrategy genSeedStrategyWithCardId(Object Function(Card) cardId) {
     return sum == 0 ? '0' : jsNumberToString(sum);
   };
 }
+
+/// Derives Anki's stable `card id + repetition count` fuzz seed.
+///
+/// The caller supplies the persistent numeric card id because the portable
+/// FSRS [Card] deliberately has no storage identity of its own.
+SeedStrategy genAnkiSeedStrategyWithCardId(int Function(Card) cardId) {
+  return (SchedulerContext context) {
+    final seed = cardId(context.current) + context.current.reps;
+    return seed == 0 ? '0' : jsNumberToString(seed);
+  };
+}

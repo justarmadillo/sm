@@ -7,7 +7,7 @@
 /// there — reorganising a collection is not a repetition, and an extract that
 /// moves keeps pointing at the passage it was cut from.
 ///
-/// `deleteElement` is the exception, and the only command in the app that
+/// Deletion is the exception, and the only command in the app that
 /// destroys anything. It is kept in the same runner because the Browser is
 /// the one screen that offers it and because it needs the same loaded tree
 /// the moves do: what goes is what the user saw filed underneath the row.
@@ -27,6 +27,7 @@ import 'package:incremental_reader/scheduling/sm20_collection_state.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
@@ -214,13 +215,36 @@ final class BrowserCommandRunner {
   /// they record what the scheduler did on a day, not what the collection
   /// holds today. A card's review history is the one exception, and only
   /// because its foreign key leaves no choice.
-  Future<Result<BrowserDeletionOutcome>> deleteElement(
-    DeleteElement command,
-  ) async {
+  Future<Result<BrowserDeletionOutcome>> deleteElement(DeleteElement command) =>
+      _deleteElements(
+        operationId: command.operationId,
+        timestampUtc: command.timestampUtc,
+        refs: <ElementRef>[command.ref],
+      );
+
+  /// Erases every selected branch in one transaction and one operation.
+  Future<Result<BrowserDeletionOutcome>> deleteElements(
+    DeleteElements command,
+  ) => _deleteElements(
+    operationId: command.operationId,
+    timestampUtc: command.timestampUtc,
+    refs: command.refs,
+  );
+
+  Future<Result<BrowserDeletionOutcome>> _deleteElements({
+    required OperationId operationId,
+    required DateTime timestampUtc,
+    required List<ElementRef> refs,
+  }) async {
+    if (refs.isEmpty) {
+      return const Err<BrowserDeletionOutcome>(
+        ValidationFailure('select at least one element'),
+      );
+    }
     try {
       return await _transactions.run<Result<BrowserDeletionOutcome>>(() async {
         if (await _learning.hasActivity(
-          command.operationId.value,
+          operationId.value,
           kBrowserDeletedType,
         )) {
           // A resent delete has already happened. Replaying it would report a
@@ -231,30 +255,37 @@ final class BrowserCommandRunner {
         }
 
         final _TreeIndex index = _TreeIndex.of(await _tree.load());
-        if (!index.contains(command.ref)) {
+        final ElementRef? missing = refs.cast<ElementRef?>().firstWhere(
+          (ElementRef? ref) => !index.contains(ref!),
+          orElse: () => null,
+        );
+        if (missing != null) {
           return Err<BrowserDeletionOutcome>(
             NotFoundFailure(
               'that element is no longer in the collection',
               entity: 'element',
-              id: command.ref.id,
+              id: missing.id,
             ),
           );
         }
 
-        final Set<ElementRef> doomed = await _everythingUnder(
-          command.ref,
-          index,
-        );
+        final Set<ElementRef> doomed = <ElementRef>{};
+        for (final ElementRef ref in refs) {
+          doomed.addAll(await _everythingUnder(ref, index));
+        }
         await _erase(doomed);
         await _forgetInTodaysQueues(doomed);
         await _learning.appendActivity(
           ActivityRecord(
             id: _ids.newId(),
-            operationId: command.operationId.value,
+            operationId: operationId.value,
             type: kBrowserDeletedType,
-            atUtc: command.timestampUtc,
-            ref: command.ref,
-            metadata: <String, Object?>{'removed': doomed.length},
+            atUtc: timestampUtc,
+            ref: refs.first,
+            metadata: <String, Object?>{
+              'removed': doomed.length,
+              'selected': refs.length,
+            },
           ),
         );
         await _transfer.advanceGeneration();
@@ -263,9 +294,10 @@ final class BrowserCommandRunner {
             level: DiagnosticLevel.info,
             name: kBrowserDeletedType,
             timestampUtc: _clock.nowUtc(),
-            operationId: command.operationId,
+            operationId: operationId,
             fields: <String, Object?>{
-              'element': command.ref.id,
+              'element': refs.first.id,
+              'selected': refs.length,
               'removed': doomed.length,
             },
           ),
@@ -285,7 +317,7 @@ final class BrowserCommandRunner {
           level: DiagnosticLevel.error,
           name: kBrowserDeletedType,
           timestampUtc: _clock.nowUtc(),
-          operationId: command.operationId,
+          operationId: operationId,
           failure: failure,
         ),
       );

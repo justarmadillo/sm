@@ -219,22 +219,44 @@ class FSRSAlgorithm {
 
   /// Applies fuzz to [ivl], or returns it rounded when fuzz is off or the
   /// interval is too short to be worth jittering.
-  int applyFuzz(double ivl, num elapsedDays) {
+  int applyFuzz(
+    double ivl,
+    num minimumInterval, {
+    bool useAnkiBounds = false,
+  }) {
     if (!_param.enableFuzz || ivl < 2.5) return jsRound(ivl);
     final generator = alea(_seed); // The seed stays private on purpose.
     final fuzzFactor = generator.call();
-    final range = getFuzzRange(ivl, elapsedDays, _param.maximumInterval);
+    final range = useAnkiBounds
+        ? getAnkiFuzzRange(ivl, minimumInterval, _param.maximumInterval)
+        : getFuzzRange(ivl, minimumInterval, _param.maximumInterval);
     return (fuzzFactor * (range.maxIvl - range.minIvl + 1) + range.minIvl)
         .floor();
   }
 
   /// The interval, in days, for a memory of stability [s].
-  int nextInterval(double s, num elapsedDays) {
+  int nextInterval(
+    double s,
+    num elapsedDays, {
+    int? previousInterval,
+  }) {
     final newInterval = math.min(
       math.max(1, jsRound(s * _intervalModifier)),
       _param.maximumInterval,
     );
-    return applyFuzz(newInterval.toDouble(), elapsedDays);
+    if (previousInterval == null) {
+      return applyFuzz(newInterval.toDouble(), elapsedDays);
+    }
+    final minimumInterval = minimumReviewFuzzInterval(
+      newInterval.toDouble(),
+      previousInterval,
+      _param.maximumInterval,
+    );
+    return applyFuzz(
+      newInterval.toDouble(),
+      minimumInterval,
+      useAnkiBounds: true,
+    );
   }
 
   /// Damps a difficulty change so that a hard card gets harder more slowly.
@@ -310,7 +332,8 @@ class FSRSAlgorithm {
     final w = _param.w;
     final sinc = math.pow(s, -w[19]).toDouble() *
         math.exp(w[17] * (g.value - 3 + w[18]));
-    final maskedSinc = g.value >= Rating.hard.value ? math.max(sinc, 1.0) : sinc;
+    final maskedSinc =
+        g.value >= Rating.hard.value ? math.max(sinc, 1.0) : sinc;
     return roundTo(clamp(s * maskedSinc, sMin, 36500.0), 8);
   }
 
@@ -319,8 +342,7 @@ class FSRSAlgorithm {
   /// A null or zeroed [memoryState] means a first review, which initialises
   /// rather than updates. [Rating.manual] leaves the state untouched, because a
   /// calendar move is not a repetition.
-  FSRSState nextState(FSRSState? memoryState, double t, Rating g,
-      [double? r]) {
+  FSRSState nextState(FSRSState? memoryState, double t, Rating g, [double? r]) {
     final d = memoryState?.difficulty ?? 0;
     final s = memoryState?.stability ?? 0;
     if (t < 0) {

@@ -62,7 +62,12 @@ final class QueueCandidate {
   bool isDue({required DateTime nowUtc, required StudyDay today}) {
     if (!schedule.lifecycle.isSchedulable) return false;
     if (isCard) {
-      return !(effectiveCardDueAtUtc ?? card!.memory.dueAtUtc).isAfter(nowUtc);
+      final CardMemory memory = card!.memory;
+      if (effectiveCardDueAtUtc != null && memory.isIntradayStep) {
+        return !effectiveCardDueAtUtc!.isAfter(nowUtc);
+      }
+      if (memory.isIntradayStep) return memory.isDueAt(nowUtc);
+      return schedule.dueDay <= today;
     }
     return (effectiveTopicDueDay ?? topic!.schedule.algorithmicDueDay) <= today;
   }

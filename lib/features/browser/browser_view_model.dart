@@ -148,6 +148,15 @@ final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
     LearningCommand command,
     ElementRef ref_, {
     LearningCommandAnswers answers = const LearningCommandAnswers(),
+  }) => applyLearningCommandToSelection(command, <ElementRef>[
+    ref_,
+  ], answers: answers);
+
+  /// Runs one Learning command over the Browser's current selection.
+  Future<void> applyLearningCommandToSelection(
+    LearningCommand command,
+    List<ElementRef> refs, {
+    LearningCommandAnswers answers = const LearningCommandAnswers(),
   }) async {
     final StudyDay day = await ref.read(schedulingContextProvider).today();
     await _command<PriorityBrowserCommandOutcome>(
@@ -155,7 +164,7 @@ final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
         command,
         commandRunner: ref.read(priorityBrowserCommandRunnerProvider),
         operation: operation,
-        refs: <ElementRef>[ref_],
+        refs: refs,
         day: day,
         timestampUtc: ref.read(clockProvider).nowUtc(),
         answers: answers,
@@ -165,7 +174,8 @@ final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
       success: (PriorityBrowserCommandOutcome outcome) =>
           outcome.changedRefCount == 0
           ? 'Nothing was eligible'
-          : '${command.successVerb} 1 element',
+          : '${command.successVerb} ${outcome.changedRefCount} element'
+                '${outcome.changedRefCount == 1 ? '' : 's'}',
     );
   }
 
@@ -179,6 +189,18 @@ final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
         (OperationId operation) => ref
             .read(browserCommandRunnerProvider)
             .deleteElement(DeleteElement(operation, ref: ref_)),
+        success: (BrowserDeletionOutcome outcome) {
+          final int removed = outcome.deletedRefs.length;
+          return removed == 1 ? 'Deleted.' : 'Deleted $removed elements.';
+        },
+      );
+
+  /// Erases every selected branch as one indivisible Browser action.
+  Future<void> deleteElements(List<ElementRef> refs) =>
+      _command<BrowserDeletionOutcome>(
+        (OperationId operation) => ref
+            .read(browserCommandRunnerProvider)
+            .deleteElements(DeleteElements(operation, refs: refs)),
         success: (BrowserDeletionOutcome outcome) {
           final int removed = outcome.deletedRefs.length;
           return removed == 1 ? 'Deleted.' : 'Deleted $removed elements.';

@@ -14,7 +14,13 @@ enum StrategyMode {
   learningSteps('LearningSteps'),
 
   /// Replace the fuzz seed derivation.
-  seed('Seed');
+  seed('Seed'),
+
+  /// Replace the study-day calculation used for elapsed FSRS days.
+  elapsedDays('ElapsedDays'),
+
+  /// Opt into Anki's learning-step and review-fuzz scheduling policies.
+  ankiCompatibility('AnkiCompatibility');
 
   const StrategyMode(this.label);
 
@@ -43,6 +49,15 @@ class LearningStepResult {
 
 /// Produces the fuzz seed for the review being scheduled.
 typedef SeedStrategy = String Function(SchedulerContext context);
+
+/// Counts study days between two review instants.
+///
+/// The default counts UTC calendar dates. Apps with a local rollover should
+/// provide a function that maps both instants through that same rollover.
+typedef ElapsedDaysStrategy = int Function(
+  DateTime lastReview,
+  DateTime reviewTime,
+);
 
 /// Lays out the (re)learning steps for [state] at step [curStep].
 ///

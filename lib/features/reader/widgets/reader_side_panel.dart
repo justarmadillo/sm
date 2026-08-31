@@ -185,20 +185,23 @@ class _PanelHeader extends StatelessWidget {
     ),
     child: Row(
       children: <Widget>[
-        _TabChip(
-          label: 'Outline',
-          count: outlineCount,
-          selected: tab == ReaderPanelTab.outline,
-          onTap: () => onTabChanged(ReaderPanelTab.outline),
+        Expanded(
+          child: _TabChip(
+            label: 'Outline',
+            count: outlineCount,
+            selected: tab == ReaderPanelTab.outline,
+            onTap: () => onTabChanged(ReaderPanelTab.outline),
+          ),
         ),
         const SizedBox(width: 6),
-        _TabChip(
-          label: 'Extracts',
-          count: extractCount,
-          selected: tab == ReaderPanelTab.extracts,
-          onTap: () => onTabChanged(ReaderPanelTab.extracts),
+        Expanded(
+          child: _TabChip(
+            label: 'Extracts',
+            count: extractCount,
+            selected: tab == ReaderPanelTab.extracts,
+            onTap: () => onTabChanged(ReaderPanelTab.extracts),
+          ),
         ),
-        const Spacer(),
         IconButton(
           onPressed: onClose,
           icon: const Icon(Icons.close, size: 16),
@@ -238,6 +241,9 @@ class _TabChip extends StatelessWidget {
       ),
       child: Text(
         '$label  $count',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: 12,
           fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
@@ -297,8 +303,8 @@ class _OutlineList extends StatefulWidget {
 }
 
 class _OutlineListState extends State<_OutlineList> {
-  /// Where the selected heading sat, top to bottom. Null until a row is
-  /// tapped.
+  /// Where the selected heading sat, top to bottom. Null while the panel is
+  /// using its initial current-or-first heading selection.
   ///
   /// The selection is deliberately not a block id. A block is addressed by
   /// its position in the parse, so moving a section renumbers every id after
@@ -321,7 +327,14 @@ class _OutlineListState extends State<_OutlineList> {
   /// occupies that position is the useful answer.
   OutlineEntry? get _selectedEntry {
     final int? position = _selectedPosition;
-    if (position == null || widget.outline.isEmpty) return null;
+    if (widget.outline.isEmpty) return null;
+    if (position == null) {
+      final String? currentBlockId = widget.currentBlockId;
+      return currentBlockId == null
+          ? widget.outline.first
+          : outlineEntryOf(widget.outline, currentBlockId) ??
+                widget.outline.first;
+    }
     OutlineEntry? nearest;
     for (final OutlineEntry entry in widget.outline) {
       if (entry.text != _selectedText) continue;
@@ -439,33 +452,48 @@ class _OutlineListState extends State<_OutlineList> {
           ),
         ),
       ),
-      padding: EdgeInsets.only(
-        left: 8 + (entry.level - 1) * _kOutlineIndentStep,
-      ),
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            _selectedPosition = entry.position;
-            _selectedText = entry.text;
-          });
-          widget.onGoToBlock(entry.blockId);
-        },
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 6, 8, 6),
-          child: Text(
-            entry.text.isEmpty ? '(untitled heading)' : entry.text,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: entry.level <= 2 ? 12.5 : 12,
-              height: 1.35,
-              fontWeight: entry.level <= 2 ? FontWeight.w600 : FontWeight.w400,
-              color: isCurrent || isSelected
-                  ? AppColors.accent
-                  : AppColors.text,
+      child: Stack(
+        children: <Widget>[
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _OutlineHierarchyGuidePainter(level: entry.level),
+              ),
             ),
           ),
-        ),
+          Padding(
+            padding: EdgeInsets.only(
+              left: 8 + (entry.level - 1) * _kOutlineIndentStep,
+            ),
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _selectedPosition = entry.position;
+                  _selectedText = entry.text;
+                });
+                widget.onGoToBlock(entry.blockId);
+              },
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+                child: Text(
+                  entry.text.isEmpty ? '(untitled heading)' : entry.text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: entry.level <= 2 ? 12.5 : 12,
+                    height: 1.35,
+                    fontWeight: entry.level <= 2
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                    color: isCurrent || isSelected
+                        ? AppColors.accent
+                        : AppColors.text,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -496,6 +524,34 @@ class _OutlineListState extends State<_OutlineList> {
   }
 }
 
+/// VS Code-like vertical guides make a deeply nested branch readable without
+/// spending horizontal space on tree controls.
+final class _OutlineHierarchyGuidePainter extends CustomPainter {
+  const _OutlineHierarchyGuidePainter({required this.level});
+
+  final int level;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint guidePaint = Paint()
+      ..color = AppColors.border.withValues(alpha: 0.8)
+      ..strokeWidth = 1;
+    for (var ancestorLevel = 1; ancestorLevel < level; ancestorLevel++) {
+      final double horizontalPosition =
+          3 + (ancestorLevel - 1) * _kOutlineIndentStep;
+      canvas.drawLine(
+        Offset(horizontalPosition, 0),
+        Offset(horizontalPosition, size.height),
+        guidePaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_OutlineHierarchyGuidePainter oldDelegate) =>
+      oldDelegate.level != level;
+}
+
 /// The outline's commands, on a bar above the headings.
 ///
 /// A bar rather than a menu on every row: reorganising an outline is a run of
@@ -510,7 +566,7 @@ class _OutlineToolbar extends StatelessWidget {
     required this.onAction,
   });
 
-  /// The entry every button acts on, or null when no row has been tapped.
+  /// The entry every button acts on, or null when the outline is empty.
   final OutlineEntry? selectedEntry;
 
   final List<OutlineEntry> outline;
@@ -609,7 +665,7 @@ class _OutlineToolbar extends StatelessWidget {
           width: _kOutlineToolbarButtonSize,
           height: _kOutlineToolbarButtonSize,
         ),
-        color: AppColors.muted,
+        color: AppColors.accent,
         disabledColor: AppColors.muted.withValues(alpha: 0.3),
       ),
     );

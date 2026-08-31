@@ -117,11 +117,7 @@ class FuzzRange {
   String toString() => 'FuzzRange(minIvl: $minIvl, maxIvl: $maxIvl)';
 }
 
-/// Computes the fuzz window around [interval].
-///
-/// The window never dips to or below [elapsedDays] when the new interval is
-/// longer than the elapsed time, so fuzz can never schedule a card earlier than
-/// the review that just happened.
+/// Computes the ts-fsrs-compatible fuzz window around [interval].
 FuzzRange getFuzzRange(
   double interval,
   num elapsedDays,
@@ -133,15 +129,66 @@ FuzzRange getFuzzRange(
     final contribution = capped - range.start;
     delta += range.factor * (contribution > 0.0 ? contribution : 0.0);
   }
-  final ivl =
+  final constrainedInterval =
       interval < maximumInterval ? interval : maximumInterval.toDouble();
-  var minIvl = _max(2, jsRound(ivl - delta));
-  final maxIvl = _min(jsRound(ivl + delta), maximumInterval.toInt());
-  if (ivl > elapsedDays) {
-    minIvl = _max(minIvl, elapsedDays.toInt() + 1);
+  var minimum = _max(2, jsRound(constrainedInterval - delta));
+  final maximum = _min(
+    jsRound(constrainedInterval + delta),
+    maximumInterval.toInt(),
+  );
+  if (constrainedInterval > elapsedDays) {
+    minimum = _max(minimum, elapsedDays.toInt() + 1);
   }
-  minIvl = _min(minIvl, maxIvl);
-  return FuzzRange(minIvl, maxIvl);
+  minimum = _min(minimum, maximum);
+  return FuzzRange(minimum, maximum);
+}
+
+/// Computes Anki's constrained fuzz window around [interval].
+///
+/// [minimumInterval] is normally derived from the card's previously scheduled
+/// interval. It is clamped to [maximumInterval], as Anki does when strict grade
+/// ordering is impossible at the configured maximum.
+FuzzRange getAnkiFuzzRange(
+  double interval,
+  num minimumInterval,
+  num maximumInterval,
+) {
+  final maximum = _max(1, maximumInterval.toInt());
+  final minimum = minimumInterval.toInt().clamp(1, maximum);
+  final constrainedInterval = interval.clamp(
+    minimum.toDouble(),
+    maximum.toDouble(),
+  );
+  var delta = 1.0;
+  for (final range in _fuzzRanges) {
+    final capped =
+        constrainedInterval < range.end ? constrainedInterval : range.end;
+    final contribution = capped - range.start;
+    delta += range.factor * (contribution > 0.0 ? contribution : 0.0);
+  }
+  if (constrainedInterval < 2.5) {
+    delta = 0;
+  }
+  var lower = jsRound(constrainedInterval - delta).clamp(minimum, maximum);
+  var upper = jsRound(constrainedInterval + delta).clamp(minimum, maximum);
+  if (upper == lower && upper > 2 && upper < maximum) {
+    upper += 1;
+  }
+  lower = _min(lower, upper);
+  return FuzzRange(lower, upper);
+}
+
+/// Chooses Anki's lower fuzz bound from the previous scheduled interval.
+int minimumReviewFuzzInterval(
+  double interval,
+  int previousInterval,
+  int maximumInterval,
+) {
+  final rounded = jsRound(interval);
+  final upper = getAnkiFuzzRange(interval, 1, maximumInterval).maxIvl;
+  if (rounded > previousInterval) return previousInterval + 1;
+  if (previousInterval <= upper) return previousInterval;
+  return 0;
 }
 
 int _max(int a, int b) => a > b ? a : b;
@@ -177,7 +224,7 @@ int dateDiffInDays(DateTime last, DateTime cur) {
   final curUtc = cur.toUtc();
   final utc1 = DateTime.utc(lastUtc.year, lastUtc.month, lastUtc.day)
       .millisecondsSinceEpoch;
-  final utc2 =
-      DateTime.utc(curUtc.year, curUtc.month, curUtc.day).millisecondsSinceEpoch;
+  final utc2 = DateTime.utc(curUtc.year, curUtc.month, curUtc.day)
+      .millisecondsSinceEpoch;
   return ((utc2 - utc1) / 86400000).floor();
 }

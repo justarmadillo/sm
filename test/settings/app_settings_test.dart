@@ -41,6 +41,7 @@ void main() {
           relearningStepMinutes: <int>[5, 20],
           maximumIntervalDays: 1000,
           isFuzzingEnabled: false,
+          shouldRescheduleAfterSettingsChange: false,
           leechLapses: 5,
           shouldBurySiblings: false,
         ),
@@ -106,6 +107,17 @@ void main() {
       expect(restored.mercy.intervalFactorMatrix, isNull);
     });
 
+    test('empty FSRS step lists round-trip as direct scheduling', () {
+      const AppSettings settings = AppSettings(
+        cards: CardSettings(
+          learningStepMinutes: <int>[],
+          relearningStepMinutes: <int>[],
+        ),
+      );
+
+      expect(AppSettings.fromMap(settings.toMap()), settings);
+    });
+
     test('the flat form contains no replaced scheduler keys', () {
       final Map<String, String> stored = const AppSettings().toMap();
       expect(
@@ -137,7 +149,9 @@ void main() {
         'queue.auto_sort': 'perhaps',
         'remember.first_interval_low_days': '',
         'card.desired_retention': 'NaN',
+        'card.fsrs_parameters': '1,2,3',
         'card.learning_steps': 'x, y, z',
+        'card.relearning_steps': '1440',
         'postpone.default.scope': 'future-build-value',
         'postpone.default.topic_a_factor_cutoff': 'Infinity',
         'mercy.mode': 'unknown',
@@ -156,9 +170,14 @@ void main() {
         defaults.remember.firstIntervalLowDays,
       );
       expect(settings.cards.desiredRetention, defaults.cards.desiredRetention);
+      expect(settings.cards.fsrsParameters, defaults.cards.fsrsParameters);
       expect(
         settings.cards.learningStepMinutes,
         defaults.cards.learningStepMinutes,
+      );
+      expect(
+        settings.cards.relearningStepMinutes,
+        defaults.cards.relearningStepMinutes,
       );
       expect(
         settings.postpone.defaultProfile.scope,

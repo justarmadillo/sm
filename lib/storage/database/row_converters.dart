@@ -468,26 +468,36 @@ RevlogEntriesCompanion reviewLogToCompanion(ReviewLogEntry entry) =>
     );
 
 /// Domain FSRS memory from its row.
-CardMemory cardMemoryFromRow(CardMemoryRow row) => CardMemory(
-  cardId: row.cardId,
-  state: CardLearningState.fromValue(row.state),
-  step: row.step,
-  stability: row.stability,
-  difficulty: row.difficulty,
-  repetitionCount: row.reps,
-  lapses: row.lapses,
-  lastReviewAtUtc: row.lastReviewUtc == null
-      ? null
-      : fromEpochMs(row.lastReviewUtc!),
-  dueAtUtc: fromEpochMs(row.dueAtUtc),
-  originalDueAtUtc: fromEpochMs(row.originalDueAtUtc),
-  schedulerVersion: row.schedulerVersion,
-  parametersVersion: row.parametersVersion,
-  postponeCount: row.postponeCount,
-  scheduledDays: row.scheduledDays,
-  schedulerName: row.schedulerName,
-  revision: row.revision,
-);
+CardMemory cardMemoryFromRow(CardMemoryRow row) {
+  final memory = CardMemory(
+    cardId: row.cardId,
+    state: CardLearningState.fromValue(row.state),
+    step: row.step,
+    stability: row.stability,
+    difficulty: row.difficulty,
+    repetitionCount: row.reps,
+    lapses: row.lapses,
+    lastReviewAtUtc: row.lastReviewUtc == null
+        ? null
+        : fromEpochMs(row.lastReviewUtc!),
+    dueAtUtc: fromEpochMs(row.dueAtUtc),
+    originalDueAtUtc: fromEpochMs(row.originalDueAtUtc),
+    schedulerVersion: row.schedulerVersion,
+    parametersVersion: row.parametersVersion,
+    postponeCount: row.postponeCount,
+    scheduledDays: row.scheduledDays,
+    schedulerName: row.schedulerName,
+    revision: row.revision,
+  );
+  final String? storedState = row.fsrsStateJson;
+  if (storedState != null) {
+    final Object? decoded = jsonDecode(storedState);
+    if (jsonEncode(decoded) != memory.canonicalFsrsJson()) {
+      throw StateError('card ${row.cardId} has inconsistent FSRS state');
+    }
+  }
+  return memory;
+}
 
 /// Row companion for inserting or replacing a card's FSRS memory.
 CardMemoriesCompanion cardMemoryToCompanion(CardMemory memory) =>

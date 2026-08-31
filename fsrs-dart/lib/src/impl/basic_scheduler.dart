@@ -19,7 +19,11 @@ class BasicScheduler extends AbstractScheduler {
     super.algorithm, [
     super.strategies,
   ]) {
-    var strategy = basicLearningStepsStrategy;
+    final usesAnkiCompatibility =
+        strategies?[StrategyMode.ankiCompatibility] == true;
+    var strategy = usesAnkiCompatibility
+        ? ankiLearningStepsStrategy
+        : basicLearningStepsStrategy;
     final custom = strategies?[StrategyMode.learningSteps];
     if (custom != null) {
       strategy = custom as LearningStepsStrategy;
@@ -79,7 +83,8 @@ class BasicScheduler extends AbstractScheduler {
         nextCard.scheduledDays = (scheduledMinutes / 1440).floor();
       } else {
         nextCard.learningSteps = 0;
-        final interval = algorithm.nextInterval(nextCard.stability, elapsedDays);
+        final interval =
+            algorithm.nextInterval(nextCard.stability, elapsedDays);
         nextCard.scheduledDays = interval;
         nextCard.due = dateScheduler(reviewTime, interval, isDay: true);
       }
@@ -104,7 +109,8 @@ class BasicScheduler extends AbstractScheduler {
     if (exist != null) return exist;
 
     final nextCard = _nextDs(elapsedDays.toDouble(), grade);
-    _applyLearningSteps(nextCard, grade, last.state /* Learning or Relearning */);
+    _applyLearningSteps(
+        nextCard, grade, last.state /* Learning or Relearning */);
     final item = RecordLogItem(card: nextCard, log: buildLog(grade));
     next[grade] = item;
     return item;
@@ -116,7 +122,8 @@ class BasicScheduler extends AbstractScheduler {
     if (exist != null) return exist;
 
     final interval = elapsedDays.toDouble();
-    final retrievability = algorithm.forgettingCurve(interval, current.stability);
+    final retrievability =
+        algorithm.forgettingCurve(interval, current.stability);
     final nextAgain = _nextDs(interval, Rating.again, retrievability);
     final nextHard = _nextDs(interval, Rating.hard, retrievability);
     final nextGood = _nextDs(interval, Rating.good, retrievability);
@@ -152,25 +159,44 @@ class BasicScheduler extends AbstractScheduler {
     return card;
   }
 
-  /// Orders the three passing intervals so they strictly increase.
+  /// Orders passing intervals by grade.
   ///
-  /// Hard is never longer than Good and Good is never shorter than Hard + 1, so
-  /// a harder grade can never buy a longer wait than an easier one.
+  /// With Anki compatibility, intervals stay below the configured maximum and
+  /// become equal at the ceiling when strict ordering is impossible.
   void _nextInterval(
     Card nextHard,
     Card nextGood,
     Card nextEasy,
     double interval,
   ) {
-    var hardInterval = algorithm.nextInterval(nextHard.stability, interval);
-    var goodInterval = algorithm.nextInterval(nextGood.stability, interval);
+    final maximumInterval = algorithm.parameters.maximumInterval;
+    var hardInterval = algorithm.nextInterval(
+      nextHard.stability,
+      interval,
+      previousInterval: _previousIntervalForAnki,
+    );
+    var goodInterval = algorithm.nextInterval(
+      nextGood.stability,
+      interval,
+      previousInterval: _previousIntervalForAnki,
+    );
     hardInterval = hardInterval < goodInterval ? hardInterval : goodInterval;
-    goodInterval =
-        goodInterval > hardInterval + 1 ? goodInterval : hardInterval + 1;
-    final easyIntervalRaw = algorithm.nextInterval(nextEasy.stability, interval);
-    final easyInterval = easyIntervalRaw > goodInterval + 1
-        ? easyIntervalRaw
+    final usesAnkiCompatibility =
+        strategies?[StrategyMode.ankiCompatibility] == true;
+    final goodMinimum = usesAnkiCompatibility
+        ? _min(hardInterval + 1, maximumInterval)
+        : hardInterval + 1;
+    goodInterval = goodInterval > goodMinimum ? goodInterval : goodMinimum;
+    final easyIntervalRaw = algorithm.nextInterval(
+      nextEasy.stability,
+      interval,
+      previousInterval: _previousIntervalForAnki,
+    );
+    final easyMinimum = usesAnkiCompatibility
+        ? _min(goodInterval + 1, maximumInterval)
         : goodInterval + 1;
+    final easyInterval =
+        easyIntervalRaw > easyMinimum ? easyIntervalRaw : easyMinimum;
 
     nextHard.scheduledDays = hardInterval;
     nextHard.due = dateScheduler(reviewTime, hardInterval, isDay: true);
@@ -179,6 +205,13 @@ class BasicScheduler extends AbstractScheduler {
     nextEasy.scheduledDays = easyInterval;
     nextEasy.due = dateScheduler(reviewTime, easyInterval, isDay: true);
   }
+
+  static int _min(int first, int second) => first < second ? first : second;
+
+  int? get _previousIntervalForAnki =>
+      strategies?[StrategyMode.ankiCompatibility] == true
+          ? current.scheduledDays
+          : null;
 
   void _nextState(Card nextHard, Card nextGood, Card nextEasy) {
     nextHard.state = State.review;

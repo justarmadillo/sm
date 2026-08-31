@@ -96,6 +96,14 @@ final class AppSettings {
         ),
       ),
       cards: CardSettings(
+        fsrsParameters: _readFsrsParameters(
+          stored['card.fsrs_parameters'],
+          fallback.cards.fsrsParameters,
+        ),
+        fsrsParametersVersion:
+            stored['card.fsrs_parameters_version']?.trim().isNotEmpty == true
+            ? stored['card.fsrs_parameters_version']!.trim()
+            : fallback.cards.fsrsParametersVersion,
         desiredRetention: _readDouble(
           stored['card.desired_retention'],
           fallback.cards.desiredRetention,
@@ -105,10 +113,12 @@ final class AppSettings {
         learningStepMinutes: _readPositiveIntList(
           stored['card.learning_steps'],
           fallback.cards.learningStepMinutes,
+          maximum: 1439,
         ),
         relearningStepMinutes: _readPositiveIntList(
           stored['card.relearning_steps'],
           fallback.cards.relearningStepMinutes,
+          maximum: 1439,
         ),
         maximumIntervalDays: _readInt(
           stored['card.maximum_interval_days'],
@@ -119,6 +129,10 @@ final class AppSettings {
         isFuzzingEnabled: _readBool(
           stored['card.enable_fuzzing'],
           fallback.cards.isFuzzingEnabled,
+        ),
+        shouldRescheduleAfterSettingsChange: _readBool(
+          stored['card.reschedule_after_settings_change'],
+          fallback.cards.shouldRescheduleAfterSettingsChange,
         ),
         leechLapses: _readInt(
           stored['card.leech_lapses'],
@@ -387,10 +401,14 @@ final class AppSettings {
       'remember.first_interval_low_days': '${remember.firstIntervalLowDays}',
       'remember.first_interval_high_days': '${remember.firstIntervalHighDays}',
       'card.desired_retention': '${cards.desiredRetention}',
+      'card.fsrs_parameters': cards.fsrsParameters.join(','),
+      'card.fsrs_parameters_version': cards.fsrsParametersVersion,
       'card.learning_steps': cards.learningStepMinutes.join(','),
       'card.relearning_steps': cards.relearningStepMinutes.join(','),
       'card.maximum_interval_days': '${cards.maximumIntervalDays}',
       'card.enable_fuzzing': '${cards.isFuzzingEnabled}',
+      'card.reschedule_after_settings_change':
+          '${cards.shouldRescheduleAfterSettingsChange}',
       'card.leech_lapses': '${cards.leechLapses}',
       'card.bury_siblings': '${cards.shouldBurySiblings}',
       'postpone.auto_enabled': '${postpone.isAutomaticPostponeEnabled}',
@@ -533,17 +551,35 @@ T _readEnum<T extends Enum>(String? raw, List<T> values, T fallback) {
   return fallback;
 }
 
-List<int> _readPositiveIntList(String? raw, List<int> fallback) {
+List<int> _readPositiveIntList(
+  String? raw,
+  List<int> fallback, {
+  required int maximum,
+}) {
   if (raw == null) return fallback;
+  if (raw.trim().isEmpty) return const <int>[];
   final List<String> parts = raw.split(',');
   if (parts.isEmpty) return fallback;
   final values = <int>[];
   for (final String part in parts) {
     final int? value = int.tryParse(part.trim());
-    if (value == null || value <= 0) return fallback;
+    if (value == null || value <= 0 || value > maximum) return fallback;
     values.add(value);
   }
-  return values.isEmpty ? fallback : List<int>.unmodifiable(values);
+  return List<int>.unmodifiable(values);
+}
+
+List<double> _readFsrsParameters(String? raw, List<double> fallback) {
+  if (raw == null) return fallback;
+  final List<String> parts = raw.split(',');
+  if (parts.length != 21) return fallback;
+  final parameters = <double>[];
+  for (final String part in parts) {
+    final double? parameter = double.tryParse(part.trim());
+    if (parameter == null || !parameter.isFinite) return fallback;
+    parameters.add(parameter);
+  }
+  return List<double>.unmodifiable(parameters);
 }
 
 List<int>? _readIntMatrix(String? raw, List<int>? fallback) {

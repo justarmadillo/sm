@@ -453,11 +453,15 @@ class IntListField extends StatefulWidget {
   const IntListField({
     required this.values,
     required this.onChanged,
+    this.maximum = 1439,
     super.key,
   });
 
   final List<int> values;
   final ValueChanged<List<int>> onChanged;
+
+  /// Intraday steps stay below one day; day-scale scheduling belongs to FSRS.
+  final int maximum;
 
   @override
   State<IntListField> createState() => _IntListFieldState();
@@ -472,7 +476,8 @@ class _IntListFieldState extends State<IntListField> {
   void didUpdateWidget(IntListField oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.values.join(',') != oldWidget.values.join(',') &&
-        _parse(_controller.text).join(',') != widget.values.join(',')) {
+        _parse(_controller.text, widget.maximum).join(',') !=
+            widget.values.join(',')) {
       _controller.text = widget.values.join(', ');
     }
   }
@@ -483,9 +488,11 @@ class _IntListFieldState extends State<IntListField> {
     super.dispose();
   }
 
-  static List<int> _parse(String text) => <int>[
+  static List<int> _parse(String text, int maximum) => <int>[
     for (final String part in text.split(','))
-      if (int.tryParse(part.trim()) case final int value when value > 0) value,
+      if (int.tryParse(part.trim()) case final int value
+          when value > 0 && value <= maximum)
+        value,
   ];
 
   @override
@@ -498,10 +505,7 @@ class _IntListFieldState extends State<IntListField> {
     ),
     style: const TextStyle(fontSize: 13),
     onChanged: (String text) {
-      final List<int> parsed = _parse(text);
-      // An empty sequence cannot schedule anything, so it is simply not
-      // reported until the user has typed at least one interval.
-      if (parsed.isNotEmpty) widget.onChanged(parsed);
+      widget.onChanged(_parse(text, widget.maximum));
     },
   );
 }

@@ -96,6 +96,32 @@ QueuePolicy _policy(List<QueueCandidate> all, {QueueSettings? settings}) =>
     );
 
 void main() {
+  test('review cards are due for their whole study day', () {
+    final QueueCandidate card = _card('day-card', PriorityRank.middle);
+    final CardState state = card.card!;
+    final QueueCandidate exactTimeIsLater = QueueCandidate.card(
+      state.copyWith(
+        memory: CardMemory(
+          cardId: state.memory.cardId,
+          state: state.memory.state,
+          step: state.memory.step,
+          stability: state.memory.stability,
+          difficulty: state.memory.difficulty,
+          repetitionCount: state.memory.repetitionCount,
+          lapses: state.memory.lapses,
+          lastReviewAtUtc: state.memory.lastReviewAtUtc,
+          dueAtUtc: _now.add(const Duration(hours: 8)),
+          originalDueAtUtc: _now.add(const Duration(hours: 8)),
+          schedulerVersion: state.memory.schedulerVersion,
+          parametersVersion: state.memory.parametersVersion,
+          scheduledDays: state.memory.scheduledDays,
+        ),
+      ),
+    );
+
+    expect(exactTimeIsLater.isDue(nowUtc: _now, today: _today), isTrue);
+  });
+
   group('the item/topic merge ratio (section 9.4)', () {
     test('takes items while (1 - topicFraction) > ni / (ni + nt + 1)', () {
       // At the default 20 percent topic share the inequality first fails at

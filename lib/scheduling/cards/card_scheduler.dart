@@ -21,7 +21,7 @@ import 'package:meta/meta.dart';
 /// carry `dart-fsrs/2.0.1+FSRS-6`, and that is the point of the field.
 const String kCardSchedulerVersion = 'fsrs_dart/5.4.1+FSRS-6';
 
-/// The pinned FSRS-6 default weights shipped by fsrs_dart.
+/// The version label for the default FSRS-6 weights shipped by fsrs_dart.
 const String kCardParametersVersion = 'fsrs_dart/5.4.1/defaultW';
 
 /// Frozen by the database: it is the default of the `scheduler_name` column and
@@ -75,7 +75,7 @@ enum CardLearningState {
   };
 }
 
-/// Pinned FSRS settings used by [CardScheduler].
+/// Versioned FSRS settings used by [CardScheduler].
 @immutable
 final class CardSchedulerSettings {
   const CardSchedulerSettings({
@@ -95,12 +95,13 @@ final class CardSchedulerSettings {
 
   /// Builds the FSRS settings the user configured.
   ///
-  /// The parameter vector itself is not user-editable in v1 — it stays pinned
-  /// and versioned, because a hand-edited weight would silently reinterpret
-  /// every review already in the log. Retention, steps, and the interval cap
-  /// are safe to change at any time and are therefore exposed.
+  /// The parameter vector is stored and versioned with the collection. A
+  /// parameter change is applied by replaying genuine review history before
+  /// existing due dates are recalculated.
   factory CardSchedulerSettings.fromUserSettings(CardSettings settings) =>
       CardSchedulerSettings(
+        parameters: settings.fsrsParameters,
+        parametersVersion: settings.fsrsParametersVersion,
         desiredRetention: settings.desiredRetention,
         learningSteps: <Duration>[
           for (final int minutes in settings.learningStepMinutes)
@@ -177,6 +178,21 @@ final class CardMemory {
     if ((stability == null) != (difficulty == null)) {
       throw ArgumentError(
         'stability and difficulty must either both be null or both be set',
+      );
+    }
+    if (stability != null && (!stability.isFinite || stability <= 0)) {
+      throw ArgumentError.value(
+        stability,
+        'stability',
+        'must be finite and positive',
+      );
+    }
+    if (difficulty != null &&
+        (!difficulty.isFinite || difficulty < 1 || difficulty > 10)) {
+      throw ArgumentError.value(
+        difficulty,
+        'difficulty',
+        'must be finite and between 1 and 10',
       );
     }
     if (repetitionCount > 0 && (stability == null || difficulty == null)) {
@@ -336,9 +352,9 @@ final class CardMemory {
   /// Replaces the canonical item repetition without recording a review.
   ///
   /// This is the item-side projection of SM20's low-level rescheduler. Memory
-  /// strength/difficulty and review counters are preserved; the due instant,
-  /// stored interval, optional last-review correction, and postponement count
-  /// are the only mutable fields.
+  /// strength/difficulty, review counters, and last-review instant are
+  /// preserved. A manual move is not a review and must never invent history
+  /// merely to make an unusual target date look like a positive interval.
   CardMemory lowLevelRescheduled({
     required DateTime targetDueAtUtc,
     required double actualIntervalDays,
@@ -348,6 +364,13 @@ final class CardMemory {
     _requireUtc(targetDueAtUtc, 'targetDueAtUtc');
     if (adjustedLastReviewAtUtc != null) {
       _requireUtc(adjustedLastReviewAtUtc, 'adjustedLastReviewAtUtc');
+    }
+    if (adjustedLastReviewAtUtc != lastReviewAtUtc) {
+      throw ArgumentError.value(
+        adjustedLastReviewAtUtc,
+        'adjustedLastReviewAtUtc',
+        'a reschedule cannot change the last review instant',
+      );
     }
     if (!actualIntervalDays.isFinite || actualIntervalDays < 0) {
       throw ArgumentError.value(
@@ -364,7 +387,7 @@ final class CardMemory {
       difficulty: difficulty,
       repetitionCount: repetitionCount,
       lapses: lapses,
-      lastReviewAtUtc: adjustedLastReviewAtUtc,
+      lastReviewAtUtc: lastReviewAtUtc,
       dueAtUtc: targetDueAtUtc,
       originalDueAtUtc: targetDueAtUtc,
       schedulerVersion: schedulerVersion,
@@ -476,6 +499,15 @@ final class CardState {
 
   ElementRef get ref => schedule.ref;
 
+  /// Intraday steps wait for their exact instant; every other card is due for
+  /// its whole configured study day, including a brand-new card.
+  bool isDueAt(DateTime instantUtc, StudyDayCalendar calendar) {
+    _requireUtc(instantUtc, 'instantUtc');
+    return memory.isIntradayStep
+        ? memory.isDueAt(instantUtc)
+        : schedule.dueDay <= calendar.dayOf(instantUtc);
+  }
+
   CardState copyWith({ElementSchedule? schedule, CardMemory? memory}) =>
       CardState(
         schedule: schedule ?? this.schedule,
@@ -580,7 +612,7 @@ final class CardReviewTransition {
   final ReviewRecord record;
 }
 
-/// Pure adapter around the pinned dart-fsrs implementation.
+/// Pure adapter around the versioned dart-fsrs implementation.
 abstract interface class FsrsAdapter {
   CardReviewTransition review(
     CardState state, {
@@ -606,9 +638,9 @@ final class CardScheduler implements FsrsAdapter {
 
   /// Applies one scheduled recall grade.
   ///
-  /// Fuzzing remains enabled by default, but its random stream is derived from
-  /// [operationId]. Retrying one command therefore produces the same due date
-  /// and exact state snapshot instead of rolling a second interval.
+  /// Fuzzing remains enabled by default, with a stream derived from persistent
+  /// card identity and repetition count. Retrying or undoing and re-answering
+  /// therefore produces the same due date for the same memory state.
   @override
   CardReviewTransition review(
     CardState state, {
@@ -646,10 +678,17 @@ final class CardScheduler implements FsrsAdapter {
 
     final String preStateJson = state.memory.toJson();
     final fsrs.RecordLogItem result = _engineFor(
-      operationId,
+      state.memory,
     ).next(_toFsrsCard(state.memory), reviewedAtUtc, _toFsrsRating(rating));
     final fsrs.Card reviewed = result.card;
-    final DateTime dueAtUtc = reviewed.due.toUtc();
+    final bool isIntraday = reviewed.state != fsrs.State.review;
+    final int scheduledDays = reviewed.scheduledDays;
+    final StudyDay dueDay = isIntraday
+        ? calendar.dayOf(reviewed.due.toUtc())
+        : calendar.dayOf(reviewedAtUtc).addDays(scheduledDays);
+    final DateTime dueAtUtc = isIntraday
+        ? reviewed.due.toUtc()
+        : calendar.startOfDayUtc(dueDay);
 
     final CardMemory memory = CardMemory(
       cardId: state.memory.cardId,
@@ -670,11 +709,10 @@ final class CardScheduler implements FsrsAdapter {
       schedulerVersion: settings.schedulerVersion,
       parametersVersion: settings.parametersVersion,
       postponeCount: state.memory.postponeCount,
-      scheduledDays: dueAtUtc.difference(reviewedAtUtc).inMinutes / 1440,
+      scheduledDays: scheduledDays.toDouble(),
       schedulerName: kCardSchedulerName,
       revision: state.memory.revision + 1,
     );
-    final StudyDay dueDay = calendar.dayOf(memory.dueAtUtc);
     final ElementSchedule schedule = state.schedule.copyWith(
       dueDay: dueDay,
       originalDueDay: dueDay,
@@ -725,17 +763,9 @@ final class CardScheduler implements FsrsAdapter {
       (state.memory.scheduledDays ??
               lastDay.daysUntil(calendar.dayOf(state.memory.dueAtUtc)))
           .round(),
-      1,
+      0,
     );
-    late final int actualInterval;
-    late final DateTime adjustedLast;
-    if (targetDay > lastDay) {
-      actualInterval = lastDay.daysUntil(targetDay);
-      adjustedLast = priorLast;
-    } else {
-      actualInterval = 1;
-      adjustedLast = calendar.startOfDayUtc(targetDay.addDays(-1));
-    }
+    final int actualInterval = math.max(lastDay.daysUntil(targetDay), 0);
     return state.copyWith(
       schedule: state.schedule.copyWith(
         dueDay: targetDay,
@@ -745,9 +775,66 @@ final class CardScheduler implements FsrsAdapter {
       memory: state.memory.lowLevelRescheduled(
         targetDueAtUtc: targetUtc,
         actualIntervalDays: actualInterval.toDouble(),
-        adjustedLastReviewAtUtc: adjustedLast,
+        adjustedLastReviewAtUtc: priorLast,
         didIntervalGrow: actualInterval > oldInterval,
       ),
+    );
+  }
+
+  /// Recomputes an interday due date after retention or interval settings
+  /// change, without pretending that another review occurred.
+  ///
+  /// Overdue cards stay overdue. Moving them into the future during a settings
+  /// save would hide work the user has already reached, which Anki also avoids
+  /// during FSRS rescheduling.
+  CardState rescheduleForSettings(CardState state, {required StudyDay today}) {
+    final CardMemory before = state.memory;
+    if (before.state != CardLearningState.review ||
+        before.lastReviewAtUtc == null ||
+        before.stability == null) {
+      return state;
+    }
+    final fsrs.FSRS engine = _engineFor(before);
+    engine.seed = '${_stableCardSeed(before.cardId) + before.repetitionCount}';
+    final int interval = engine.nextInterval(
+      before.stability!,
+      0,
+      previousInterval: before.scheduledDays?.round() ?? 0,
+    );
+    final StudyDay targetDay = calendar
+        .dayOf(before.lastReviewAtUtc!)
+        .addDays(interval);
+    if (state.schedule.dueDay < today && targetDay >= today) return state;
+    if (targetDay == state.schedule.dueDay &&
+        before.scheduledDays == interval.toDouble()) {
+      return state;
+    }
+    final DateTime targetUtc = calendar.startOfDayUtc(targetDay);
+    final CardMemory memory = CardMemory(
+      cardId: before.cardId,
+      state: before.state,
+      step: before.step,
+      stability: before.stability,
+      difficulty: before.difficulty,
+      repetitionCount: before.repetitionCount,
+      lapses: before.lapses,
+      lastReviewAtUtc: before.lastReviewAtUtc,
+      dueAtUtc: targetUtc,
+      originalDueAtUtc: targetUtc,
+      schedulerVersion: settings.schedulerVersion,
+      parametersVersion: settings.parametersVersion,
+      postponeCount: before.postponeCount,
+      scheduledDays: interval.toDouble(),
+      schedulerName: before.schedulerName,
+      revision: before.revision + 1,
+    );
+    return CardState(
+      schedule: state.schedule.copyWith(
+        dueDay: targetDay,
+        originalDueDay: targetDay,
+        revision: state.schedule.revision + 1,
+      ),
+      memory: memory,
     );
   }
 
@@ -809,16 +896,14 @@ final class CardScheduler implements FsrsAdapter {
   @override
   double retrievability(CardMemory memory, {required DateTime atUtc}) {
     _requireUtc(atUtc, 'atUtc');
-    return _engineFor(
-      'retrievability',
-    ).getRetrievability(_toFsrsCard(memory), atUtc);
+    return _engineFor(memory).getRetrievability(_toFsrsCard(memory), atUtc);
   }
 
   /// The engine, configured for one operation.
   ///
-  /// Built per call rather than held as a field, because it carries the fuzz
-  /// seed of the operation it was built for.
-  fsrs.FSRS _engineFor(String operationId) {
+  /// Built per call because elapsed-day and fuzz policies depend on the card
+  /// and this scheduler's study-day calendar.
+  fsrs.FSRS _engineFor(CardMemory memory) {
     final fsrs.FSRS engine = fsrs.fsrs(
       requestRetention: settings.desiredRetention,
       maximumInterval: settings.maximumIntervalDays,
@@ -827,17 +912,34 @@ final class CardScheduler implements FsrsAdapter {
       learningSteps: _toFsrsSteps(settings.learningSteps),
       relearningSteps: _toFsrsSteps(settings.relearningSteps),
     );
-    if (!settings.isFuzzingEnabled) {
-      return engine;
-    }
-    // Fuzzing stays on, but its random stream is derived from the operation id
-    // rather than from the review instant, so retrying one command lands on the
-    // same day again instead of rolling a second interval.
-    return engine.useStrategy(
-      fsrs.StrategyMode.seed,
-      (fsrs.SchedulerContext context) => operationId,
+    engine.useStrategy(
+      fsrs.StrategyMode.elapsedDays,
+      (DateTime lastReview, DateTime reviewTime) => calendar
+          .dayOf(lastReview.toUtc())
+          .daysUntil(calendar.dayOf(reviewTime.toUtc())),
     );
+    engine.useStrategy(fsrs.StrategyMode.ankiCompatibility, true);
+    if (settings.isFuzzingEnabled) {
+      // Card identity plus the bumped repetition count is stable across a
+      // retry, undo/re-answer, and application restart, matching Anki's rule.
+      engine.useStrategy(
+        fsrs.StrategyMode.seed,
+        (fsrs.SchedulerContext context) =>
+            '${_stableCardSeed(memory.cardId) + context.current.reps}',
+      );
+    }
+    return engine;
   }
+}
+
+/// Stable 32-bit FNV-1a hash for string card ids used by the fuzz seed.
+int _stableCardSeed(String cardId) {
+  var hash = 0x811c9dc5;
+  for (final int byte in utf8.encode(cardId)) {
+    hash ^= byte;
+    hash = (hash * 0x01000193) & 0xFFFFFFFF;
+  }
+  return hash;
 }
 
 /// The step list in the `10m` spelling fsrs_dart parses.

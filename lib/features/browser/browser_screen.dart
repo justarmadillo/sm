@@ -80,6 +80,8 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   /// what is the one thing this screen shows that a flat list could not, and a
   /// wall of closed rows hides exactly that.
   final Set<ElementRef> _expanded = <ElementRef>{};
+  final Set<ElementRef> _selected = <ElementRef>{};
+  bool _isSelecting = false;
   bool _hasSeededExpansion = false;
 
   /// Types the tree is restricted to; empty means everything.
@@ -142,6 +144,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     BuildContext context,
     AsyncValue<List<BrowserTreeNode>> tree,
   ) {
+    if (_isSelecting) return _selectionAppBar(tree);
     final bool isNarrow = isCompactWidth(context);
     return AppBar(
       title: const Text('Browser'),
@@ -152,6 +155,11 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
           // so it lands at the top of the tree. The same menu on a row files
           // it under that row instead.
           onSelected: (_NewElement choice) => _create(context, choice, null),
+        ),
+        IconButton(
+          tooltip: 'Select elements',
+          onPressed: () => setState(() => _isSelecting = true),
+          icon: const Icon(Icons.checklist),
         ),
         IconButton(
           tooltip: 'Search (Ctrl+F)',
@@ -222,12 +230,100 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     );
   }
 
+  /// Batch actions replace navigation while a selection is active.
+  PreferredSizeWidget _selectionAppBar(
+    AsyncValue<List<BrowserTreeNode>> tree,
+  ) => AppBar(
+    leading: IconButton(
+      tooltip: 'Clear selection',
+      onPressed: () => setState(() {
+        _selected.clear();
+        _isSelecting = false;
+      }),
+      icon: const Icon(Icons.close),
+    ),
+    title: Text('${_selected.length} selected'),
+    actions: <Widget>[
+      IconButton(
+        tooltip: 'Select all visible elements',
+        onPressed: () =>
+            _selectAllVisible(tree.valueOrNull ?? const <BrowserTreeNode>[]),
+        icon: const Icon(Icons.select_all),
+      ),
+      LearningCommandMenu(
+        onSelected: _runSelectedLearningCommand,
+        isEnabled: _selected.isNotEmpty,
+        size: 48,
+      ),
+      IconButton(
+        tooltip: 'Delete selected elements',
+        onPressed: _selected.isEmpty
+            ? null
+            : () => unawaited(
+                _deleteSelection(tree.valueOrNull ?? const <BrowserTreeNode>[]),
+              ),
+        icon: const Icon(Icons.delete_outline),
+      ),
+      const SizedBox(width: 8),
+    ],
+  );
+
   void _expandAll(AsyncValue<List<BrowserTreeNode>> tree) {
     setState(() {
       _expanded
         ..clear()
         ..addAll(_allRefs(tree.valueOrNull ?? const <BrowserTreeNode>[]));
     });
+  }
+
+  void _selectAllVisible(List<BrowserTreeNode> roots) {
+    final List<_TreeRow> rows = _visibleRows(roots);
+    setState(() => _selected.addAll(rows.map((_TreeRow row) => row.node.ref)));
+  }
+
+  void _toggleSelection(ElementRef ref_) {
+    setState(() {
+      _isSelecting = true;
+      if (!_selected.remove(ref_)) _selected.add(ref_);
+    });
+  }
+
+  Future<void> _runSelectedLearningCommand(LearningCommand command) async {
+    final LearningCommandAnswers? answers = await askForLearningCommand(
+      context,
+      command,
+    );
+    if (answers == null || !mounted) return;
+    await ref
+        .read(browserViewModelProvider.notifier)
+        .applyLearningCommandToSelection(
+          command,
+          _selected.toList(growable: false),
+          answers: answers,
+        );
+    if (!mounted) return;
+    setState(() {
+      _selected.clear();
+      _isSelecting = false;
+    });
+    ref.invalidate(browserTreeProvider);
+  }
+
+  Future<void> _deleteSelection(List<BrowserTreeNode> roots) async {
+    final List<BrowserTreeNode> nodes = <BrowserTreeNode>[
+      for (final BrowserTreeNode node in _allNodes(roots))
+        if (_selected.contains(node.ref)) node,
+    ];
+    if (!await _confirmDeleteSelection(context, nodes) || !mounted) return;
+    await ref
+        .read(browserViewModelProvider.notifier)
+        .deleteElements(_selected.toList(growable: false));
+    if (!mounted) return;
+    setState(() {
+      _selected.clear();
+      _isSelecting = false;
+    });
+    ref.invalidate(browserTreeProvider);
   }
 
   /// The type filter above the tree.
@@ -417,10 +513,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   }
 
   Widget _buildBody(List<BrowserTreeNode> roots) {
-    final List<_TreeRow> rows = <_TreeRow>[];
-    for (final BrowserTreeNode root in roots) {
-      _flatten(root, 0, rows);
-    }
+    final List<_TreeRow> rows = _visibleRows(roots);
     if (rows.isEmpty) {
       return const Center(
         child: Text(
@@ -435,6 +528,9 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
       itemBuilder: (BuildContext context, int index) => _NodeRow(
         row: rows[index],
         isExpanded: _expanded.contains(rows[index].node.ref),
+        isSelectionMode: _isSelecting,
+        isSelected: _selected.contains(rows[index].node.ref),
+        onSelect: () => _toggleSelection(rows[index].node.ref),
         onOpen: () => unawaited(_openElement(rows[index].node.ref)),
         onToggle: () => setState(() {
           final ElementRef ref_ = rows[index].node.ref;
@@ -461,6 +557,14 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     );
   }
 
+  List<_TreeRow> _visibleRows(List<BrowserTreeNode> roots) {
+    final List<_TreeRow> rows = <_TreeRow>[];
+    for (final BrowserTreeNode root in roots) {
+      _flatten(root, 0, rows);
+    }
+    return rows;
+  }
+
   /// Depth-first walk that emits only what is currently visible.
   ///
   /// A filtered-out node still yields its children: hiding a source would
@@ -481,6 +585,13 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     for (final BrowserTreeNode node in nodes) {
       yield node.ref;
       yield* _allRefs(node.children);
+    }
+  }
+
+  Iterable<BrowserTreeNode> _allNodes(List<BrowserTreeNode> nodes) sync* {
+    for (final BrowserTreeNode node in nodes) {
+      yield node;
+      yield* _allNodes(node.children);
     }
   }
 }
@@ -529,6 +640,9 @@ class _NodeRow extends StatelessWidget {
   const _NodeRow({
     required this.row,
     required this.isExpanded,
+    required this.isSelectionMode,
+    required this.isSelected,
+    required this.onSelect,
     required this.onOpen,
     required this.onToggle,
     required this.onPriority,
@@ -541,6 +655,12 @@ class _NodeRow extends StatelessWidget {
 
   final _TreeRow row;
   final bool isExpanded;
+  final bool isSelectionMode;
+  final bool isSelected;
+
+  /// Selects this row. A long press starts selection on touch; the app-bar
+  /// Select action provides the same discoverable path for mouse users.
+  final VoidCallback onSelect;
 
   /// Opens the screen that owns this element, which is also where it is
   /// edited: there is one reader for both browsing and reading.
@@ -613,6 +733,7 @@ class _NodeRow extends StatelessWidget {
     bool isDismissed,
   ) {
     final Widget card = _card(context, node, hasChildren, isDismissed);
+    if (isSelectionMode) return card;
     return DragTarget<ElementRef>(
       onWillAcceptWithDetails: (DragTargetDetails<ElementRef> details) =>
           details.data != node.ref,
@@ -642,12 +763,18 @@ class _NodeRow extends StatelessWidget {
     bool hasChildren,
     bool isDismissed,
   ) {
+    final Color restingColor = isDismissed
+        ? _kDismissedElementWash
+        : AppColors.surface;
     return Material(
-      color: AppColors.surface,
+      color: isSelected
+          ? Color.alphaBlend(AppColors.selection, restingColor)
+          : restingColor,
       borderRadius: BorderRadius.circular(6),
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
-        onTap: onOpen,
+        onTap: isSelectionMode ? onSelect : onOpen,
+        onLongPress: onSelect,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(4, 7, 8, 7),
           child: isCompactWidth(context)
@@ -662,18 +789,18 @@ class _NodeRow extends StatelessWidget {
   Widget _oneRow(BrowserTreeNode node, bool hasChildren, bool isDismissed) =>
       Row(
         children: <Widget>[
-          _dragHandle(node),
+          _leadingControl(node),
           _expandArrow(hasChildren),
           ElementTypeBadge(type: node.ref.type),
           const SizedBox(width: 8),
-          Expanded(child: _titleAndPreview(node, isDismissed)),
+          Expanded(child: _titleAndPreview(node)),
           if (hasChildren) ...<Widget>[
             // How many elements this branch holds, itself excluded.
             _mutedLabel('${node.subtreeSize - 1}'),
             const SizedBox(width: 8),
           ],
           if (node.dueDay != null) _mutedLabel(node.dueDay.toString()),
-          ..._rowButtons(node, isDismissed),
+          if (!isSelectionMode) ..._rowButtons(node, isDismissed),
         ],
       );
 
@@ -687,18 +814,18 @@ class _NodeRow extends StatelessWidget {
       children: <Widget>[
         Row(
           children: <Widget>[
-            _dragHandle(node),
+            _leadingControl(node),
             _expandArrow(hasChildren),
             ElementTypeBadge(type: node.ref.type, shouldShowLabel: false),
             const SizedBox(width: 8),
-            Expanded(child: _titleAndPreview(node, isDismissed)),
+            Expanded(child: _titleAndPreview(node)),
           ],
         ),
         Row(
           children: <Widget>[
             const SizedBox(width: _kHandleWidth + _kArrowWidth),
             Expanded(child: _mutedLabel(_metaLine(node, hasChildren))),
-            ..._rowButtons(node, isDismissed),
+            if (!isSelectionMode) ..._rowButtons(node, isDismissed),
           ],
         ),
       ],
@@ -729,6 +856,17 @@ class _NodeRow extends StatelessWidget {
     ),
     _actionMenu(node, isDismissed),
   ];
+
+  Widget _leadingControl(BrowserTreeNode node) => isSelectionMode
+      ? SizedBox(
+          width: _kHandleWidth,
+          child: Checkbox(
+            value: isSelected,
+            onChanged: (_) => onSelect(),
+            visualDensity: VisualDensity.compact,
+          ),
+        )
+      : _dragHandle(node);
 
   /// The row is picked up by its handle, the way the priority queue's rows
   /// are. A long press on the card was the only gesture that filed anything
@@ -762,9 +900,9 @@ class _NodeRow extends StatelessWidget {
     );
   }
 
-  /// A dismissed element keeps its place in the tree but is struck through:
-  /// its content is still there, it is only out of the queue.
-  Widget _titleAndPreview(BrowserTreeNode node, bool isDismissed) {
+  /// A dismissed element keeps normal readable text. Its yellow row wash is
+  /// the familiar "suspended" signal and makes clear the content still exists.
+  Widget _titleAndPreview(BrowserTreeNode node) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -772,12 +910,7 @@ class _NodeRow extends StatelessWidget {
           node.title.isEmpty ? '(untitled)' : node.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: isDismissed ? AppColors.muted : null,
-            decoration: isDismissed ? TextDecoration.lineThrough : null,
-          ),
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ),
         if (node.preview.isNotEmpty)
           Text(
@@ -846,6 +979,9 @@ const BoxConstraints _kRowButtonConstraints = BoxConstraints.tightFor(
   width: 34,
   height: 34,
 );
+
+/// The warm wash used by Anki-style suspended notes without obscuring text.
+const Color _kDismissedElementWash = Color(0xFFFFF0A8);
 
 /// What the New menu can make.
 enum _NewElement {
@@ -1075,4 +1211,50 @@ Future<bool> _confirmDelete(BuildContext context, BrowserTreeNode node) async {
         ),
       ) ??
       false;
+}
+
+/// Confirms the exact union of selected branches, since selecting a parent and
+/// its child must not make the warning count that child twice.
+Future<bool> _confirmDeleteSelection(
+  BuildContext context,
+  List<BrowserTreeNode> selectedNodes,
+) async {
+  final Set<ElementRef> doomed = <ElementRef>{};
+  void collect(BrowserTreeNode node) {
+    doomed.add(node.ref);
+    for (final BrowserTreeNode child in node.children) {
+      collect(child);
+    }
+  }
+
+  for (final BrowserTreeNode node in selectedNodes) {
+    collect(node);
+  }
+  final int selectedCount = selectedNodes.length;
+  final int descendantCount = doomed.length - selectedCount;
+  final bool? didConfirm = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) => AlertDialog(
+      title: Text('Delete $selectedCount selected?'),
+      content: Text(
+        descendantCount == 0
+            ? 'This erases the selected element'
+                  '${selectedCount == 1 ? '' : 's'}. There is no undo.'
+            : 'This erases the selected elements and $descendantCount '
+                  'element${descendantCount == 1 ? '' : 's'} filed under '
+                  'them. There is no undo.',
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Keep'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  return didConfirm ?? false;
 }

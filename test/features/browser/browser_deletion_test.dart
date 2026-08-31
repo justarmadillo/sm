@@ -248,6 +248,53 @@ void main() {
     expect(replayed.unwrap().deletedRefs, isEmpty);
   });
 
+  test('one batch deletes several selected branches', () async {
+    final Result<BrowserDeletionOutcome> result = await harness.filing
+        .deleteElements(
+          DeleteElements(
+            harness.operation(),
+            refs: <ElementRef>[refOf(alpha), refOf(beta)],
+          ),
+        );
+
+    expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
+    expect(result.unwrap().deletedRefs, hasLength(4));
+    expect(await rootTitles(), isEmpty);
+  });
+
+  test(
+    'a selected descendant is counted once with its selected parent',
+    () async {
+      final Result<BrowserDeletionOutcome> result = await harness.filing
+          .deleteElements(
+            DeleteElements(
+              harness.operation(),
+              refs: <ElementRef>[
+                refOf(alpha),
+                ElementRef(id: alphaExtract.id, type: ElementType.extract),
+              ],
+            ),
+          );
+
+      expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
+      expect(result.unwrap().deletedRefs, hasLength(3));
+      expect(await rootTitles(), <String>['Beta']);
+    },
+  );
+
+  test(
+    'an empty delete selection is refused without changing anything',
+    () async {
+      final Result<BrowserDeletionOutcome> result = await harness.filing
+          .deleteElements(
+            DeleteElements(harness.operation(), refs: const <ElementRef>[]),
+          );
+
+      expect(result.failureOrNull, isA<ValidationFailure>());
+      expect(await rootTitles(), unorderedEquals(<String>['Alpha', 'Beta']));
+    },
+  );
+
   test('deleting something already gone is reported, not thrown', () async {
     await harness.filing.deleteElement(
       DeleteElement(harness.operation(), ref: refOf(alpha)),

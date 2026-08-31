@@ -103,9 +103,8 @@ final class SchedulingContext {
 
   /// The FSRS adapter, configured.
   ///
-  /// The parameter vector stays pinned even though retention and steps are
-  /// editable: a hand-edited weight would silently reinterpret every review
-  /// already in the log.
+  /// The persisted parameter vector is versioned. Settings changes can replay
+  /// genuine review history before this context begins producing new states.
   Future<CardScheduler> cardScheduler() async {
     final AppSettings current = await settings();
     return CardScheduler(

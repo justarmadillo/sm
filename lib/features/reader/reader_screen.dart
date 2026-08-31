@@ -8,6 +8,7 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -94,6 +95,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   ReaderSelectionController? _selection;
   bool _hasOpenedAtMarker = false;
+  bool _isStatusExpanded = false;
 
   /// Open by default: the outline is how a 50k-word chapter stays navigable,
   /// and the extract list is the record of what has already been processed.
@@ -114,10 +116,32 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Map<String, int> _extractMarks = const <String, int>{};
 
   @override
+  void initState() {
+    super.initState();
+    if (_usesMobileSystemChrome) {
+      unawaited(
+        SystemChrome.setEnabledSystemUIMode(
+          SystemUiMode.manual,
+          overlays: const <SystemUiOverlay>[SystemUiOverlay.bottom],
+        ),
+      );
+    }
+  }
+
+  @override
   void dispose() {
     _selection?.dispose();
+    if (_usesMobileSystemChrome) {
+      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    }
     super.dispose();
   }
+
+  /// Desktop system chrome belongs to the window, while a phone's status bar
+  /// can safely make way for the document only for the Reader route.
+  bool get _usesMobileSystemChrome =>
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 
   /// Converts a global rectangle into the reading surface's own coordinates.
   ///
@@ -296,7 +320,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               _onReaderScrollKey(state, event),
           child: Column(
             children: <Widget>[
-              _StatusBar(state: state),
+              _StatusBar(
+                state: state,
+                isExpanded: _isStatusExpanded,
+                onToggle: () =>
+                    setState(() => _isStatusExpanded = !_isStatusExpanded),
+              ),
               if (state.showSoftPositionBanner)
                 _SoftPositionBanner(
                   onConfirm: model.confirmSoftPosition,
@@ -748,38 +777,53 @@ class _TypographySlider extends StatelessWidget {
 }
 
 class _StatusBar extends StatelessWidget {
-  const _StatusBar({required this.state});
+  const _StatusBar({
+    required this.state,
+    required this.isExpanded,
+    required this.onToggle,
+  });
 
   final ReaderUiState state;
+  final bool isExpanded;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final due = state.effectiveDueDay ?? state.topic.schedule.algorithmicDueDay;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: DefaultTextStyle.merge(
-        style: const TextStyle(fontSize: 12, color: AppColors.muted),
-        // Three pieces of status on one line is more than a phone fits, and
-        // none of them is droppable, so on a narrow window they wrap instead.
-        child: isCompactWidth(context)
-            ? Wrap(
-                spacing: 12,
-                runSpacing: 4,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: _statusParts(due),
-              )
-            : Row(
-                children: <Widget>[
-                  ..._statusParts(due).take(2),
-                  const Spacer(),
-                  ..._statusParts(due).skip(2),
-                ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _StatusToggle(isExpanded: isExpanded, onPressed: onToggle),
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: DefaultTextStyle.merge(
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                // Three pieces of status on one line is more than a phone
+                // fits, so on a narrow window they wrap instead.
+                child: isCompactWidth(context)
+                    ? Wrap(
+                        spacing: 12,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: _statusParts(due),
+                      )
+                    : Row(
+                        children: <Widget>[
+                          ..._statusParts(due).take(2),
+                          const Spacer(),
+                          ..._statusParts(due).skip(2),
+                        ],
+                      ),
               ),
+            ),
+        ],
       ),
     );
   }
@@ -799,6 +843,44 @@ class _StatusBar extends StatelessWidget {
     ],
     Text('Repetitions ${state.topic.repetitionCount} · next $due'),
   ];
+}
+
+/// Keeps the collapsed status discoverable to touch, keyboard, and screen
+/// readers without spending a full line on scheduling details.
+class _StatusToggle extends StatelessWidget {
+  const _StatusToggle({required this.isExpanded, required this.onPressed});
+
+  final bool isExpanded;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    expanded: isExpanded,
+    label: isExpanded ? 'Collapse reading status' : 'Expand reading status',
+    excludeSemantics: true,
+    child: InkWell(
+      onTap: onPressed,
+      child: SizedBox(
+        height: 30,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            const Text(
+              'Reading status',
+              style: TextStyle(fontSize: 11, color: AppColors.muted),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              isExpanded ? Icons.expand_less : Icons.expand_more,
+              size: 17,
+              color: AppColors.muted,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _StatusPillButton extends StatelessWidget {
@@ -938,7 +1020,9 @@ class _ActionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+      padding: isCompactWidth(context)
+          ? const EdgeInsets.fromLTRB(6, 3, 6, 3)
+          : const EdgeInsets.fromLTRB(20, 10, 20, 12),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
@@ -951,7 +1035,7 @@ class _ActionBar extends StatelessWidget {
           listenable: controller,
           builder: (BuildContext context, Widget? child) =>
               isCompactWidth(context)
-              ? _hintAboveButtons(context)
+              ? _compactButtons(context)
               : _oneLine(context),
         ),
       ),
@@ -966,16 +1050,55 @@ class _ActionBar extends StatelessWidget {
     ],
   );
 
-  /// Narrow window: five buttons and a sentence do not share a line, so the
-  /// sentence goes above and the buttons take as many rows as they need.
-  Widget _hintAboveButtons(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: <Widget>[
-      _hint(),
-      const SizedBox(height: 8),
-      Align(alignment: Alignment.centerRight, child: _buttons(context)),
-    ],
-  );
+  /// Phone actions use short labels beneath familiar icons, keeping every
+  /// command visible in one row while returning vertical space to the text.
+  Widget _compactButtons(BuildContext context) {
+    if (!state.canCommitProgress && !state.canUndoEdit) {
+      return const SizedBox.shrink();
+    }
+    return Row(
+      key: const Key('compact-reader-actions'),
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: <Widget>[
+        if (state.canUndoEdit)
+          _CompactReaderAction(
+            icon: Icons.undo,
+            label: 'Undo',
+            onPressed: state.isBusy ? null : () => unawaited(model.undoEdit()),
+          ),
+        if (state.canCommitProgress) ...<Widget>[
+          _CompactReaderAction(
+            icon: Icons.auto_fix_high,
+            label: 'Formulate',
+            onPressed: state.isBusy ? null : onFormulate,
+          ),
+          _CompactReaderAction(
+            icon: Icons.pause_circle_outline,
+            label: 'Dismiss',
+            onPressed: state.isBusy ? null : model.dismiss,
+          ),
+          _CompactReaderAction(
+            icon: Icons.replay,
+            label: 'Later',
+            onPressed: state.isBusy ? null : model.later,
+          ),
+          _CompactReaderAction(
+            icon: Icons.calendar_today_outlined,
+            label: 'Postpone',
+            onPressed: state.isBusy
+                ? null
+                : () => unawaited(_postponeFromPrompt(context)),
+          ),
+          _CompactReaderAction(
+            icon: Icons.check,
+            label: 'Done',
+            isPrimary: true,
+            onPressed: state.isBusy ? null : model.done,
+          ),
+        ],
+      ],
+    );
+  }
 
   Widget _hint() => Text(
     _hintFor(controller),
@@ -1030,10 +1153,7 @@ class _ActionBar extends StatelessWidget {
     OutlinedButton(
       onPressed: state.isBusy
           ? null
-          : () async {
-              final int? days = await _promptForDays(context);
-              if (days != null) await model.later(days: days);
-            },
+          : () => unawaited(_postponeFromPrompt(context)),
       child: const Text('Postpone…'),
     ),
     FilledButton(
@@ -1041,6 +1161,11 @@ class _ActionBar extends StatelessWidget {
       child: const Text('Done'),
     ),
   ];
+
+  Future<void> _postponeFromPrompt(BuildContext context) async {
+    final int? days = await _promptForDays(context);
+    if (days != null) await model.later(days: days);
+  }
 
   String _hintFor(ReaderSelectionController selection) {
     if (!state.canCommitProgress) {
@@ -1055,6 +1180,64 @@ class _ActionBar extends StatelessWidget {
           'your place.';
     }
     return 'Select text to extract. Click the left margin to place the marker.';
+  }
+}
+
+/// A phone-sized action with a full semantic label and a deliberately small
+/// visual footprint; the surrounding row remains the large tap target.
+class _CompactReaderAction extends StatelessWidget {
+  const _CompactReaderAction({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.isPrimary = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool isPrimary;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color foreground = isPrimary ? Colors.white : AppColors.accent;
+    final Color background = isPrimary ? AppColors.accent : Colors.transparent;
+    return Expanded(
+      child: Semantics(
+        button: true,
+        label: label,
+        enabled: onPressed != null,
+        excludeSemantics: true,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            height: 43,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Opacity(
+              opacity: onPressed == null ? 0.4 : 1,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Icon(icon, size: 18, color: foreground),
+                  const SizedBox(height: 1),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.fade,
+                    softWrap: false,
+                    style: TextStyle(fontSize: 10, color: foreground),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

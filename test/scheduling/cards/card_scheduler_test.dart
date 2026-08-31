@@ -80,6 +80,23 @@ void main() {
         ),
         throwsArgumentError,
       );
+      expect(
+        () => CardMemory(
+          cardId: 'invalid-memory',
+          state: CardLearningState.review,
+          step: null,
+          stability: double.nan,
+          difficulty: 11,
+          repetitionCount: 1,
+          lapses: 0,
+          lastReviewAtUtc: start,
+          dueAtUtc: start,
+          originalDueAtUtc: start,
+          schedulerVersion: 'test',
+          parametersVersion: 'test',
+        ),
+        throwsArgumentError,
+      );
     });
   });
 
@@ -134,7 +151,7 @@ void main() {
           operationId: 'reference-$i',
         );
         state = transition.state;
-        intervals.add(state.memory.dueAtUtc.difference(reviewedAt).inDays);
+        intervals.add(state.memory.scheduledDays!.round());
         reviewedAt = state.memory.dueAtUtc;
       }
 
@@ -239,6 +256,209 @@ void main() {
       expect(
         reviewed.schedule.originalDueDay,
         calendar.dayOf(reviewed.memory.originalDueAtUtc),
+      );
+      expect(
+        reviewed.memory.dueAtUtc,
+        calendar.startOfDayUtc(reviewed.schedule.dueDay),
+      );
+    });
+
+    test('elapsed FSRS days follow the configured rollover', () {
+      const StudyDayCalendar rolloverCalendar = StudyDayCalendar(
+        zone: FixedOffsetZone.utc,
+        rollover: Duration(hours: 4),
+      );
+      const CardScheduler scheduler = CardScheduler(
+        calendar: rolloverCalendar,
+        settings: CardSchedulerSettings(isFuzzingEnabled: false),
+      );
+      final DateTime firstReview = DateTime.utc(2026, 3, 5, 23, 30);
+      final CardState learned = scheduler
+          .review(
+            newCard(due: firstReview),
+            rating: CardRating.easy,
+            reviewedAtUtc: firstReview,
+            operationId: 'rollover-first',
+          )
+          .state;
+      final DateTime afterUtcMidnight = DateTime.utc(2026, 3, 6, 3, 30);
+      final DateTime beforeUtcMidnight = DateTime.utc(2026, 3, 5, 23, 31);
+
+      final CardReviewTransition afterMidnight = scheduler.review(
+        learned,
+        rating: CardRating.good,
+        reviewedAtUtc: afterUtcMidnight,
+        operationId: 'rollover-after',
+      );
+      final CardReviewTransition beforeMidnight = scheduler.review(
+        learned,
+        rating: CardRating.good,
+        reviewedAtUtc: beforeUtcMidnight,
+        operationId: 'rollover-before',
+      );
+
+      expect(
+        afterMidnight.state.memory.stability,
+        beforeMidnight.state.memory.stability,
+      );
+      expect(
+        scheduler.retrievability(learned.memory, atUtc: afterUtcMidnight),
+        1,
+      );
+    });
+
+    test('rescheduling preserves review history and the actual interval', () {
+      const CardScheduler scheduler = CardScheduler(
+        calendar: calendar,
+        settings: CardSchedulerSettings(isFuzzingEnabled: false),
+      );
+      final CardState reviewed = scheduler
+          .review(
+            newCard(),
+            rating: CardRating.easy,
+            reviewedAtUtc: start,
+            operationId: 'prepare-reschedule',
+          )
+          .state;
+      final StudyDay lastReviewDay = calendar.dayOf(start);
+
+      final CardState movedLater = scheduler.rescheduleElement(
+        reviewed,
+        targetDay: lastReviewDay.addDays(20),
+        today: lastReviewDay,
+      );
+      expect(movedLater.memory.lastReviewAtUtc, start);
+      expect(movedLater.memory.scheduledDays, 20);
+      expect(
+        calendar.dayOf(movedLater.memory.dueAtUtc),
+        movedLater.schedule.dueDay,
+      );
+
+      final CardState movedBeforeLastReview = scheduler.rescheduleElement(
+        reviewed,
+        targetDay: lastReviewDay.addDays(-2),
+        today: lastReviewDay,
+      );
+      expect(movedBeforeLastReview.memory.lastReviewAtUtc, start);
+      expect(movedBeforeLastReview.memory.scheduledDays, 0);
+      expect(
+        calendar.dayOf(movedBeforeLastReview.memory.dueAtUtc),
+        movedBeforeLastReview.schedule.dueDay,
+      );
+    });
+
+    test('low-level rescheduling refuses to rewrite review history', () {
+      final CardMemory memory = CardMemory(
+        cardId: 'history-card',
+        state: CardLearningState.review,
+        step: null,
+        stability: 10,
+        difficulty: 5,
+        repetitionCount: 2,
+        lapses: 0,
+        lastReviewAtUtc: start,
+        dueAtUtc: start.add(const Duration(days: 10)),
+        originalDueAtUtc: start.add(const Duration(days: 10)),
+        schedulerVersion: kCardSchedulerVersion,
+        parametersVersion: kCardParametersVersion,
+        scheduledDays: 10,
+      );
+
+      expect(
+        () => memory.lowLevelRescheduled(
+          targetDueAtUtc: start.add(const Duration(days: 5)),
+          actualIntervalDays: 5,
+          adjustedLastReviewAtUtc: start.subtract(const Duration(days: 1)),
+          didIntervalGrow: false,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('settings rescheduling changes only eligible interday cards', () {
+      final StudyDay lastDay = calendar.dayOf(start);
+      final CardState before = CardState(
+        schedule: ElementSchedule(
+          ref: const ElementRef(id: 'settings-card', type: ElementType.card),
+          priority: PriorityRank.middle,
+          lifecycle: ElementLifecycle.active,
+          dueDay: lastDay.addDays(100),
+          originalDueDay: lastDay.addDays(100),
+        ),
+        memory: CardMemory(
+          cardId: 'settings-card',
+          state: CardLearningState.review,
+          step: null,
+          stability: 100,
+          difficulty: 5,
+          repetitionCount: 5,
+          lapses: 0,
+          lastReviewAtUtc: start,
+          dueAtUtc: calendar.startOfDayUtc(lastDay.addDays(100)),
+          originalDueAtUtc: calendar.startOfDayUtc(lastDay.addDays(100)),
+          schedulerVersion: kCardSchedulerVersion,
+          parametersVersion: kCardParametersVersion,
+          scheduledDays: 100,
+        ),
+      );
+      const CardScheduler scheduler = CardScheduler(
+        calendar: calendar,
+        settings: CardSchedulerSettings(
+          desiredRetention: 0.99,
+          maximumIntervalDays: 30,
+          isFuzzingEnabled: false,
+        ),
+      );
+
+      final CardState after = scheduler.rescheduleForSettings(
+        before,
+        today: lastDay.addDays(1),
+      );
+
+      expect(after.memory.lastReviewAtUtc, start);
+      expect(after.memory.stability, before.memory.stability);
+      expect(after.memory.difficulty, before.memory.difficulty);
+      expect(after.memory.scheduledDays, lessThanOrEqualTo(30));
+      expect(after.schedule.dueDay, calendar.dayOf(after.memory.dueAtUtc));
+    });
+
+    test('settings rescheduling never hides an overdue card', () {
+      final StudyDay lastDay = calendar.dayOf(start);
+      final CardState overdue = CardState(
+        schedule: ElementSchedule(
+          ref: const ElementRef(id: 'overdue-card', type: ElementType.card),
+          priority: PriorityRank.middle,
+          lifecycle: ElementLifecycle.active,
+          dueDay: lastDay.addDays(1),
+          originalDueDay: lastDay.addDays(1),
+        ),
+        memory: CardMemory(
+          cardId: 'overdue-card',
+          state: CardLearningState.review,
+          step: null,
+          stability: 100,
+          difficulty: 5,
+          repetitionCount: 2,
+          lapses: 0,
+          lastReviewAtUtc: start,
+          dueAtUtc: calendar.startOfDayUtc(lastDay.addDays(1)),
+          originalDueAtUtc: calendar.startOfDayUtc(lastDay.addDays(1)),
+          schedulerVersion: kCardSchedulerVersion,
+          parametersVersion: kCardParametersVersion,
+          scheduledDays: 1,
+        ),
+      );
+      const CardScheduler scheduler = CardScheduler(
+        calendar: calendar,
+        settings: CardSchedulerSettings(
+          desiredRetention: 0.7,
+          isFuzzingEnabled: false,
+        ),
+      );
+
+      expect(
+        scheduler.rescheduleForSettings(overdue, today: lastDay.addDays(10)),
+        overdue,
       );
     });
 

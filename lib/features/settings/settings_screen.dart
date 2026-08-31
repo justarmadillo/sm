@@ -420,7 +420,7 @@ class _SettingsBody extends StatelessWidget {
         hint:
             'The intervals, in minutes, a brand-new card goes through before '
             'it joins the normal FSRS schedule. "1, 10" shows it again after '
-            'a minute, then after ten.',
+            'a minute, then after ten. Leave empty to use FSRS directly.',
         control: IntListField(
           values: draft.cards.learningStepMinutes,
           onChanged: (List<int> value) => model.edit(
@@ -434,7 +434,7 @@ class _SettingsBody extends StatelessWidget {
         label: 'Relearning steps',
         hint:
             'The intervals, in minutes, a card goes back through after a '
-            'lapse.',
+            'lapse. Leave empty to use FSRS directly.',
         control: IntListField(
           values: draft.cards.relearningStepMinutes,
           onChanged: (List<int> value) => model.edit(
@@ -471,6 +471,23 @@ class _SettingsBody extends StatelessWidget {
           onChanged: (bool value) => model.edit(
             (AppSettings settings) => settings.copyWith(
               cards: settings.cards.copyWith(isFuzzingEnabled: value),
+            ),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Reschedule after FSRS changes',
+        hint:
+            'Immediately updates existing review-card due dates when desired '
+            'retention, fuzzing, or the maximum interval changes. Overdue and '
+            'in-progress learning cards are left where they are.',
+        control: SwitchField(
+          value: draft.cards.shouldRescheduleAfterSettingsChange,
+          onChanged: (bool value) => model.edit(
+            (AppSettings settings) => settings.copyWith(
+              cards: settings.cards.copyWith(
+                shouldRescheduleAfterSettingsChange: value,
+              ),
             ),
           ),
         ),
