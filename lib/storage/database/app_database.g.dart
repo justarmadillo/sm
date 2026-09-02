@@ -757,6 +757,630 @@ class SourcesCompanion extends UpdateCompanion<SourceRow> {
   }
 }
 
+class $SourceAssetsTable extends SourceAssets
+    with TableInfo<$SourceAssetsTable, SourceAssetRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SourceAssetsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES sources (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _srcRefMeta = const VerificationMeta('srcRef');
+  @override
+  late final GeneratedColumn<String> srcRef = GeneratedColumn<String>(
+    'src_ref',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(minTextLength: 1),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sha256Meta = const VerificationMeta('sha256');
+  @override
+  late final GeneratedColumn<String> sha256 = GeneratedColumn<String>(
+    'sha256',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 64,
+      maxTextLength: 64,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mimeMeta = const VerificationMeta('mime');
+  @override
+  late final GeneratedColumn<String> mime = GeneratedColumn<String>(
+    'mime',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(minTextLength: 7),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _widthPxMeta = const VerificationMeta(
+    'widthPx',
+  );
+  @override
+  late final GeneratedColumn<int> widthPx = GeneratedColumn<int>(
+    'width_px',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(widthPx).isBiggerThanValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _heightPxMeta = const VerificationMeta(
+    'heightPx',
+  );
+  @override
+  late final GeneratedColumn<int> heightPx = GeneratedColumn<int>(
+    'height_px',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(heightPx).isBiggerThanValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _byteSizeMeta = const VerificationMeta(
+    'byteSize',
+  );
+  @override
+  late final GeneratedColumn<int> byteSize = GeneratedColumn<int>(
+    'byte_size',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(byteSize).isBiggerThanValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stateMeta = const VerificationMeta('state');
+  @override
+  late final GeneratedColumn<int> state = GeneratedColumn<int>(
+    'state',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(state).isBetweenValues(0, 2),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _importedAtUtcMeta = const VerificationMeta(
+    'importedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> importedAtUtc = GeneratedColumn<int>(
+    'imported_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sourceId,
+    srcRef,
+    sha256,
+    mime,
+    widthPx,
+    heightPx,
+    byteSize,
+    state,
+    importedAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'source_assets';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SourceAssetRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('src_ref')) {
+      context.handle(
+        _srcRefMeta,
+        srcRef.isAcceptableOrUnknown(data['src_ref']!, _srcRefMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_srcRefMeta);
+    }
+    if (data.containsKey('sha256')) {
+      context.handle(
+        _sha256Meta,
+        sha256.isAcceptableOrUnknown(data['sha256']!, _sha256Meta),
+      );
+    } else if (isInserting) {
+      context.missing(_sha256Meta);
+    }
+    if (data.containsKey('mime')) {
+      context.handle(
+        _mimeMeta,
+        mime.isAcceptableOrUnknown(data['mime']!, _mimeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_mimeMeta);
+    }
+    if (data.containsKey('width_px')) {
+      context.handle(
+        _widthPxMeta,
+        widthPx.isAcceptableOrUnknown(data['width_px']!, _widthPxMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_widthPxMeta);
+    }
+    if (data.containsKey('height_px')) {
+      context.handle(
+        _heightPxMeta,
+        heightPx.isAcceptableOrUnknown(data['height_px']!, _heightPxMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_heightPxMeta);
+    }
+    if (data.containsKey('byte_size')) {
+      context.handle(
+        _byteSizeMeta,
+        byteSize.isAcceptableOrUnknown(data['byte_size']!, _byteSizeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_byteSizeMeta);
+    }
+    if (data.containsKey('state')) {
+      context.handle(
+        _stateMeta,
+        state.isAcceptableOrUnknown(data['state']!, _stateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stateMeta);
+    }
+    if (data.containsKey('imported_at_utc')) {
+      context.handle(
+        _importedAtUtcMeta,
+        importedAtUtc.isAcceptableOrUnknown(
+          data['imported_at_utc']!,
+          _importedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_importedAtUtcMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SourceAssetRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SourceAssetRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      )!,
+      srcRef: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}src_ref'],
+      )!,
+      sha256: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sha256'],
+      )!,
+      mime: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mime'],
+      )!,
+      widthPx: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}width_px'],
+      )!,
+      heightPx: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}height_px'],
+      )!,
+      byteSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}byte_size'],
+      )!,
+      state: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}state'],
+      )!,
+      importedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}imported_at_utc'],
+      )!,
+    );
+  }
+
+  @override
+  $SourceAssetsTable createAlias(String alias) {
+    return $SourceAssetsTable(attachedDatabase, alias);
+  }
+}
+
+class SourceAssetRow extends DataClass implements Insertable<SourceAssetRow> {
+  final String id;
+  final String sourceId;
+
+  /// Portable reference kept verbatim in the source markdown.
+  final String srcRef;
+
+  /// Lowercase hexadecimal SHA-256, also used as the safe blob filename.
+  final String sha256;
+  final String mime;
+  final int widthPx;
+  final int heightPx;
+  final int byteSize;
+
+  /// ok (0), missing (1), or failed validation (2).
+  final int state;
+  final int importedAtUtc;
+  const SourceAssetRow({
+    required this.id,
+    required this.sourceId,
+    required this.srcRef,
+    required this.sha256,
+    required this.mime,
+    required this.widthPx,
+    required this.heightPx,
+    required this.byteSize,
+    required this.state,
+    required this.importedAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['source_id'] = Variable<String>(sourceId);
+    map['src_ref'] = Variable<String>(srcRef);
+    map['sha256'] = Variable<String>(sha256);
+    map['mime'] = Variable<String>(mime);
+    map['width_px'] = Variable<int>(widthPx);
+    map['height_px'] = Variable<int>(heightPx);
+    map['byte_size'] = Variable<int>(byteSize);
+    map['state'] = Variable<int>(state);
+    map['imported_at_utc'] = Variable<int>(importedAtUtc);
+    return map;
+  }
+
+  SourceAssetsCompanion toCompanion(bool nullToAbsent) {
+    return SourceAssetsCompanion(
+      id: Value(id),
+      sourceId: Value(sourceId),
+      srcRef: Value(srcRef),
+      sha256: Value(sha256),
+      mime: Value(mime),
+      widthPx: Value(widthPx),
+      heightPx: Value(heightPx),
+      byteSize: Value(byteSize),
+      state: Value(state),
+      importedAtUtc: Value(importedAtUtc),
+    );
+  }
+
+  factory SourceAssetRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SourceAssetRow(
+      id: serializer.fromJson<String>(json['id']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      srcRef: serializer.fromJson<String>(json['srcRef']),
+      sha256: serializer.fromJson<String>(json['sha256']),
+      mime: serializer.fromJson<String>(json['mime']),
+      widthPx: serializer.fromJson<int>(json['widthPx']),
+      heightPx: serializer.fromJson<int>(json['heightPx']),
+      byteSize: serializer.fromJson<int>(json['byteSize']),
+      state: serializer.fromJson<int>(json['state']),
+      importedAtUtc: serializer.fromJson<int>(json['importedAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'srcRef': serializer.toJson<String>(srcRef),
+      'sha256': serializer.toJson<String>(sha256),
+      'mime': serializer.toJson<String>(mime),
+      'widthPx': serializer.toJson<int>(widthPx),
+      'heightPx': serializer.toJson<int>(heightPx),
+      'byteSize': serializer.toJson<int>(byteSize),
+      'state': serializer.toJson<int>(state),
+      'importedAtUtc': serializer.toJson<int>(importedAtUtc),
+    };
+  }
+
+  SourceAssetRow copyWith({
+    String? id,
+    String? sourceId,
+    String? srcRef,
+    String? sha256,
+    String? mime,
+    int? widthPx,
+    int? heightPx,
+    int? byteSize,
+    int? state,
+    int? importedAtUtc,
+  }) => SourceAssetRow(
+    id: id ?? this.id,
+    sourceId: sourceId ?? this.sourceId,
+    srcRef: srcRef ?? this.srcRef,
+    sha256: sha256 ?? this.sha256,
+    mime: mime ?? this.mime,
+    widthPx: widthPx ?? this.widthPx,
+    heightPx: heightPx ?? this.heightPx,
+    byteSize: byteSize ?? this.byteSize,
+    state: state ?? this.state,
+    importedAtUtc: importedAtUtc ?? this.importedAtUtc,
+  );
+  SourceAssetRow copyWithCompanion(SourceAssetsCompanion data) {
+    return SourceAssetRow(
+      id: data.id.present ? data.id.value : this.id,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      srcRef: data.srcRef.present ? data.srcRef.value : this.srcRef,
+      sha256: data.sha256.present ? data.sha256.value : this.sha256,
+      mime: data.mime.present ? data.mime.value : this.mime,
+      widthPx: data.widthPx.present ? data.widthPx.value : this.widthPx,
+      heightPx: data.heightPx.present ? data.heightPx.value : this.heightPx,
+      byteSize: data.byteSize.present ? data.byteSize.value : this.byteSize,
+      state: data.state.present ? data.state.value : this.state,
+      importedAtUtc: data.importedAtUtc.present
+          ? data.importedAtUtc.value
+          : this.importedAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SourceAssetRow(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('srcRef: $srcRef, ')
+          ..write('sha256: $sha256, ')
+          ..write('mime: $mime, ')
+          ..write('widthPx: $widthPx, ')
+          ..write('heightPx: $heightPx, ')
+          ..write('byteSize: $byteSize, ')
+          ..write('state: $state, ')
+          ..write('importedAtUtc: $importedAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    sourceId,
+    srcRef,
+    sha256,
+    mime,
+    widthPx,
+    heightPx,
+    byteSize,
+    state,
+    importedAtUtc,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SourceAssetRow &&
+          other.id == this.id &&
+          other.sourceId == this.sourceId &&
+          other.srcRef == this.srcRef &&
+          other.sha256 == this.sha256 &&
+          other.mime == this.mime &&
+          other.widthPx == this.widthPx &&
+          other.heightPx == this.heightPx &&
+          other.byteSize == this.byteSize &&
+          other.state == this.state &&
+          other.importedAtUtc == this.importedAtUtc);
+}
+
+class SourceAssetsCompanion extends UpdateCompanion<SourceAssetRow> {
+  final Value<String> id;
+  final Value<String> sourceId;
+  final Value<String> srcRef;
+  final Value<String> sha256;
+  final Value<String> mime;
+  final Value<int> widthPx;
+  final Value<int> heightPx;
+  final Value<int> byteSize;
+  final Value<int> state;
+  final Value<int> importedAtUtc;
+  final Value<int> rowid;
+  const SourceAssetsCompanion({
+    this.id = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.srcRef = const Value.absent(),
+    this.sha256 = const Value.absent(),
+    this.mime = const Value.absent(),
+    this.widthPx = const Value.absent(),
+    this.heightPx = const Value.absent(),
+    this.byteSize = const Value.absent(),
+    this.state = const Value.absent(),
+    this.importedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SourceAssetsCompanion.insert({
+    required String id,
+    required String sourceId,
+    required String srcRef,
+    required String sha256,
+    required String mime,
+    required int widthPx,
+    required int heightPx,
+    required int byteSize,
+    required int state,
+    required int importedAtUtc,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       sourceId = Value(sourceId),
+       srcRef = Value(srcRef),
+       sha256 = Value(sha256),
+       mime = Value(mime),
+       widthPx = Value(widthPx),
+       heightPx = Value(heightPx),
+       byteSize = Value(byteSize),
+       state = Value(state),
+       importedAtUtc = Value(importedAtUtc);
+  static Insertable<SourceAssetRow> custom({
+    Expression<String>? id,
+    Expression<String>? sourceId,
+    Expression<String>? srcRef,
+    Expression<String>? sha256,
+    Expression<String>? mime,
+    Expression<int>? widthPx,
+    Expression<int>? heightPx,
+    Expression<int>? byteSize,
+    Expression<int>? state,
+    Expression<int>? importedAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sourceId != null) 'source_id': sourceId,
+      if (srcRef != null) 'src_ref': srcRef,
+      if (sha256 != null) 'sha256': sha256,
+      if (mime != null) 'mime': mime,
+      if (widthPx != null) 'width_px': widthPx,
+      if (heightPx != null) 'height_px': heightPx,
+      if (byteSize != null) 'byte_size': byteSize,
+      if (state != null) 'state': state,
+      if (importedAtUtc != null) 'imported_at_utc': importedAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SourceAssetsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? sourceId,
+    Value<String>? srcRef,
+    Value<String>? sha256,
+    Value<String>? mime,
+    Value<int>? widthPx,
+    Value<int>? heightPx,
+    Value<int>? byteSize,
+    Value<int>? state,
+    Value<int>? importedAtUtc,
+    Value<int>? rowid,
+  }) {
+    return SourceAssetsCompanion(
+      id: id ?? this.id,
+      sourceId: sourceId ?? this.sourceId,
+      srcRef: srcRef ?? this.srcRef,
+      sha256: sha256 ?? this.sha256,
+      mime: mime ?? this.mime,
+      widthPx: widthPx ?? this.widthPx,
+      heightPx: heightPx ?? this.heightPx,
+      byteSize: byteSize ?? this.byteSize,
+      state: state ?? this.state,
+      importedAtUtc: importedAtUtc ?? this.importedAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (srcRef.present) {
+      map['src_ref'] = Variable<String>(srcRef.value);
+    }
+    if (sha256.present) {
+      map['sha256'] = Variable<String>(sha256.value);
+    }
+    if (mime.present) {
+      map['mime'] = Variable<String>(mime.value);
+    }
+    if (widthPx.present) {
+      map['width_px'] = Variable<int>(widthPx.value);
+    }
+    if (heightPx.present) {
+      map['height_px'] = Variable<int>(heightPx.value);
+    }
+    if (byteSize.present) {
+      map['byte_size'] = Variable<int>(byteSize.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<int>(state.value);
+    }
+    if (importedAtUtc.present) {
+      map['imported_at_utc'] = Variable<int>(importedAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SourceAssetsCompanion(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('srcRef: $srcRef, ')
+          ..write('sha256: $sha256, ')
+          ..write('mime: $mime, ')
+          ..write('widthPx: $widthPx, ')
+          ..write('heightPx: $heightPx, ')
+          ..write('byteSize: $byteSize, ')
+          ..write('state: $state, ')
+          ..write('importedAtUtc: $importedAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SourceEditsTable extends SourceEdits
     with TableInfo<$SourceEditsTable, SourceEditRow> {
   @override
@@ -12665,6 +13289,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $SourcesTable sources = $SourcesTable(this);
+  late final $SourceAssetsTable sourceAssets = $SourceAssetsTable(this);
   late final $SourceEditsTable sourceEdits = $SourceEditsTable(this);
   late final $BlocksTable blocks = $BlocksTable(this);
   late final $ExtractsTable extracts = $ExtractsTable(this);
@@ -12692,6 +13317,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     sources,
+    sourceAssets,
     sourceEdits,
     blocks,
     extracts,
@@ -12710,6 +13336,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'sources',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('source_assets', kind: UpdateKind.delete)],
+    ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
         'sources',
@@ -12763,6 +13396,24 @@ typedef $$SourcesTableUpdateCompanionBuilder =
 final class $$SourcesTableReferences
     extends BaseReferences<_$AppDatabase, $SourcesTable, SourceRow> {
   $$SourcesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$SourceAssetsTable, List<SourceAssetRow>>
+  _sourceAssetsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.sourceAssets,
+    aliasName: 'sources__id__source_assets__source_id',
+  );
+
+  $$SourceAssetsTableProcessedTableManager get sourceAssetsRefs {
+    final manager = $$SourceAssetsTableTableManager(
+      $_db,
+      $_db.sourceAssets,
+    ).filter((f) => f.sourceId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_sourceAssetsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 
   static MultiTypedResultKey<$SourceEditsTable, List<SourceEditRow>>
   _sourceEditsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
@@ -12888,6 +13539,31 @@ class $$SourcesTableFilterComposer
     column: $table.revision,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> sourceAssetsRefs(
+    Expression<bool> Function($$SourceAssetsTableFilterComposer f) f,
+  ) {
+    final $$SourceAssetsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.sourceAssets,
+      getReferencedColumn: (t) => t.sourceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SourceAssetsTableFilterComposer(
+            $db: $db,
+            $table: $db.sourceAssets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 
   Expression<bool> sourceEditsRefs(
     Expression<bool> Function($$SourceEditsTableFilterComposer f) f,
@@ -13092,6 +13768,31 @@ class $$SourcesTableAnnotationComposer
   GeneratedColumn<int> get revision =>
       $composableBuilder(column: $table.revision, builder: (column) => column);
 
+  Expression<T> sourceAssetsRefs<T extends Object>(
+    Expression<T> Function($$SourceAssetsTableAnnotationComposer a) f,
+  ) {
+    final $$SourceAssetsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.sourceAssets,
+      getReferencedColumn: (t) => t.sourceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SourceAssetsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.sourceAssets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> sourceEditsRefs<T extends Object>(
     Expression<T> Function($$SourceEditsTableAnnotationComposer a) f,
   ) {
@@ -13182,6 +13883,7 @@ class $$SourcesTableTableManager
           (SourceRow, $$SourcesTableReferences),
           SourceRow,
           PrefetchHooks Function({
+            bool sourceAssetsRefs,
             bool sourceEditsRefs,
             bool blocksRefs,
             bool extractsRefs,
@@ -13268,6 +13970,7 @@ class $$SourcesTableTableManager
               .toList(),
           prefetchHooksCallback:
               ({
+                sourceAssetsRefs = false,
                 sourceEditsRefs = false,
                 blocksRefs = false,
                 extractsRefs = false,
@@ -13275,6 +13978,7 @@ class $$SourcesTableTableManager
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
+                    if (sourceAssetsRefs) db.sourceAssets,
                     if (sourceEditsRefs) db.sourceEdits,
                     if (blocksRefs) db.blocks,
                     if (extractsRefs) db.extracts,
@@ -13282,6 +13986,27 @@ class $$SourcesTableTableManager
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
                     return [
+                      if (sourceAssetsRefs)
+                        await $_getPrefetchedData<
+                          SourceRow,
+                          $SourcesTable,
+                          SourceAssetRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$SourcesTableReferences
+                              ._sourceAssetsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$SourcesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).sourceAssetsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.sourceId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (sourceEditsRefs)
                         await $_getPrefetchedData<
                           SourceRow,
@@ -13366,10 +14091,425 @@ typedef $$SourcesTableProcessedTableManager =
       (SourceRow, $$SourcesTableReferences),
       SourceRow,
       PrefetchHooks Function({
+        bool sourceAssetsRefs,
         bool sourceEditsRefs,
         bool blocksRefs,
         bool extractsRefs,
       })
+    >;
+typedef $$SourceAssetsTableCreateCompanionBuilder =
+    SourceAssetsCompanion Function({
+      required String id,
+      required String sourceId,
+      required String srcRef,
+      required String sha256,
+      required String mime,
+      required int widthPx,
+      required int heightPx,
+      required int byteSize,
+      required int state,
+      required int importedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$SourceAssetsTableUpdateCompanionBuilder =
+    SourceAssetsCompanion Function({
+      Value<String> id,
+      Value<String> sourceId,
+      Value<String> srcRef,
+      Value<String> sha256,
+      Value<String> mime,
+      Value<int> widthPx,
+      Value<int> heightPx,
+      Value<int> byteSize,
+      Value<int> state,
+      Value<int> importedAtUtc,
+      Value<int> rowid,
+    });
+
+final class $$SourceAssetsTableReferences
+    extends BaseReferences<_$AppDatabase, $SourceAssetsTable, SourceAssetRow> {
+  $$SourceAssetsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $SourcesTable _sourceIdTable(_$AppDatabase db) =>
+      db.sources.createAlias('source_assets__source_id__sources__id');
+
+  $$SourcesTableProcessedTableManager get sourceId {
+    final $_column = $_itemColumn<String>('source_id')!;
+
+    final manager = $$SourcesTableTableManager(
+      $_db,
+      $_db.sources,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sourceIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$SourceAssetsTableFilterComposer
+    extends Composer<_$AppDatabase, $SourceAssetsTable> {
+  $$SourceAssetsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get srcRef => $composableBuilder(
+    column: $table.srcRef,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sha256 => $composableBuilder(
+    column: $table.sha256,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mime => $composableBuilder(
+    column: $table.mime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get widthPx => $composableBuilder(
+    column: $table.widthPx,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get heightPx => $composableBuilder(
+    column: $table.heightPx,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get byteSize => $composableBuilder(
+    column: $table.byteSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get importedAtUtc => $composableBuilder(
+    column: $table.importedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$SourcesTableFilterComposer get sourceId {
+    final $$SourcesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceId,
+      referencedTable: $db.sources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SourcesTableFilterComposer(
+            $db: $db,
+            $table: $db.sources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SourceAssetsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SourceAssetsTable> {
+  $$SourceAssetsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get srcRef => $composableBuilder(
+    column: $table.srcRef,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sha256 => $composableBuilder(
+    column: $table.sha256,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mime => $composableBuilder(
+    column: $table.mime,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get widthPx => $composableBuilder(
+    column: $table.widthPx,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get heightPx => $composableBuilder(
+    column: $table.heightPx,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get byteSize => $composableBuilder(
+    column: $table.byteSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get importedAtUtc => $composableBuilder(
+    column: $table.importedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$SourcesTableOrderingComposer get sourceId {
+    final $$SourcesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceId,
+      referencedTable: $db.sources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SourcesTableOrderingComposer(
+            $db: $db,
+            $table: $db.sources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SourceAssetsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SourceAssetsTable> {
+  $$SourceAssetsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get srcRef =>
+      $composableBuilder(column: $table.srcRef, builder: (column) => column);
+
+  GeneratedColumn<String> get sha256 =>
+      $composableBuilder(column: $table.sha256, builder: (column) => column);
+
+  GeneratedColumn<String> get mime =>
+      $composableBuilder(column: $table.mime, builder: (column) => column);
+
+  GeneratedColumn<int> get widthPx =>
+      $composableBuilder(column: $table.widthPx, builder: (column) => column);
+
+  GeneratedColumn<int> get heightPx =>
+      $composableBuilder(column: $table.heightPx, builder: (column) => column);
+
+  GeneratedColumn<int> get byteSize =>
+      $composableBuilder(column: $table.byteSize, builder: (column) => column);
+
+  GeneratedColumn<int> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<int> get importedAtUtc => $composableBuilder(
+    column: $table.importedAtUtc,
+    builder: (column) => column,
+  );
+
+  $$SourcesTableAnnotationComposer get sourceId {
+    final $$SourcesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceId,
+      referencedTable: $db.sources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SourcesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.sources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SourceAssetsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SourceAssetsTable,
+          SourceAssetRow,
+          $$SourceAssetsTableFilterComposer,
+          $$SourceAssetsTableOrderingComposer,
+          $$SourceAssetsTableAnnotationComposer,
+          $$SourceAssetsTableCreateCompanionBuilder,
+          $$SourceAssetsTableUpdateCompanionBuilder,
+          (SourceAssetRow, $$SourceAssetsTableReferences),
+          SourceAssetRow,
+          PrefetchHooks Function({bool sourceId})
+        > {
+  $$SourceAssetsTableTableManager(_$AppDatabase db, $SourceAssetsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SourceAssetsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SourceAssetsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SourceAssetsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> srcRef = const Value.absent(),
+                Value<String> sha256 = const Value.absent(),
+                Value<String> mime = const Value.absent(),
+                Value<int> widthPx = const Value.absent(),
+                Value<int> heightPx = const Value.absent(),
+                Value<int> byteSize = const Value.absent(),
+                Value<int> state = const Value.absent(),
+                Value<int> importedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SourceAssetsCompanion(
+                id: id,
+                sourceId: sourceId,
+                srcRef: srcRef,
+                sha256: sha256,
+                mime: mime,
+                widthPx: widthPx,
+                heightPx: heightPx,
+                byteSize: byteSize,
+                state: state,
+                importedAtUtc: importedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String sourceId,
+                required String srcRef,
+                required String sha256,
+                required String mime,
+                required int widthPx,
+                required int heightPx,
+                required int byteSize,
+                required int state,
+                required int importedAtUtc,
+                Value<int> rowid = const Value.absent(),
+              }) => SourceAssetsCompanion.insert(
+                id: id,
+                sourceId: sourceId,
+                srcRef: srcRef,
+                sha256: sha256,
+                mime: mime,
+                widthPx: widthPx,
+                heightPx: heightPx,
+                byteSize: byteSize,
+                state: state,
+                importedAtUtc: importedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$SourceAssetsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({sourceId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (sourceId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.sourceId,
+                                referencedTable: $$SourceAssetsTableReferences
+                                    ._sourceIdTable(db),
+                                referencedColumn: $$SourceAssetsTableReferences
+                                    ._sourceIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$SourceAssetsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SourceAssetsTable,
+      SourceAssetRow,
+      $$SourceAssetsTableFilterComposer,
+      $$SourceAssetsTableOrderingComposer,
+      $$SourceAssetsTableAnnotationComposer,
+      $$SourceAssetsTableCreateCompanionBuilder,
+      $$SourceAssetsTableUpdateCompanionBuilder,
+      (SourceAssetRow, $$SourceAssetsTableReferences),
+      SourceAssetRow,
+      PrefetchHooks Function({bool sourceId})
     >;
 typedef $$SourceEditsTableCreateCompanionBuilder =
     SourceEditsCompanion Function({
@@ -19587,6 +20727,8 @@ class $AppDatabaseManager {
   $AppDatabaseManager(this._db);
   $$SourcesTableTableManager get sources =>
       $$SourcesTableTableManager(_db, _db.sources);
+  $$SourceAssetsTableTableManager get sourceAssets =>
+      $$SourceAssetsTableTableManager(_db, _db.sourceAssets);
   $$SourceEditsTableTableManager get sourceEdits =>
       $$SourceEditsTableTableManager(_db, _db.sourceEdits);
   $$BlocksTableTableManager get blocks =>

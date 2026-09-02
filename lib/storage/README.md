@@ -5,7 +5,7 @@
 | `contracts/` | plain interfaces: what the app promises it can save and load |
 | `database/` | drift table definitions, schema version, migrations |
 | `drift/` | the classes that keep the promises in `contracts/`, using SQL |
-| `files/` | rolling backups and the rotating diagnostic log |
+| `files/` | rolling backups, source image blobs, and the rotating diagnostic log |
 | `platform/` | where the app's folders are, and timezone rules |
 
 One contract, one file, one implementation of the same name:
@@ -54,6 +54,8 @@ double-tapped grade overwrite itself.
 
 ## Where the data actually is
 
-`platform/app_paths.dart` decides. `files/backup_service.dart` copies the
-database once per study day, before the day's first write, and again before any
-migration runs.
+`platform/app_paths.dart` decides. `files/source_asset_file_store.dart` keeps
+images under portable SHA-256 names in private application support.
+`files/backup_service.dart` packages the database and referenced images once
+per study day, before the day's first write. Pre-migration backups remain a
+database-only snapshot because their one job is to protect the schema upgrade.

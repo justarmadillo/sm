@@ -27,6 +27,7 @@ import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/documents/source_asset.dart';
 import 'package:incremental_reader/documents/source_edit.dart';
 import 'package:incremental_reader/documents/text_splice.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
@@ -46,8 +47,10 @@ import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/search_repository.dart';
+import 'package:incremental_reader/storage/contracts/source_asset_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
+import 'package:incremental_reader/storage/files/source_asset_file_store.dart';
 import 'package:meta/meta.dart';
 
 /// Activity kind recorded when a source is imported.
@@ -104,6 +107,8 @@ final class ReaderCommandRunner {
     required LearningRepository learning,
     required SearchRepository search,
     required TransferRepository transfer,
+    SourceAssetRepository? assets,
+    SourceAssetFileStore Function()? assetFiles,
     required TransactionRunner transactions,
     required SchedulingContext context,
     required Clock clock,
@@ -113,6 +118,8 @@ final class ReaderCommandRunner {
        _learning = learning,
        _search = search,
        _transfer = transfer,
+       _assets = assets,
+       _assetFiles = assetFiles,
        _transactions = transactions,
        _context = context,
        _clock = clock,
@@ -124,6 +131,8 @@ final class ReaderCommandRunner {
   final LearningRepository _learning;
   final SearchRepository _search;
   final TransferRepository _transfer;
+  final SourceAssetRepository? _assets;
+  final SourceAssetFileStore Function()? _assetFiles;
   final TransactionRunner _transactions;
   final SchedulingContext _context;
   final Clock _clock;
@@ -902,6 +911,111 @@ final class ReaderCommandRunner {
         base: command.baseContentRevision,
       );
 
+  /// Saves image blobs, then inserts their metadata and Markdown together.
+  ///
+  /// Blob promotion comes first because files cannot join a SQL transaction.
+  /// Content-addressed names make a blob left by a rolled-back transaction
+  /// harmless and reusable by the next import.
+  Future<Result<SourceEdited>> insertSourceImages(
+    InsertSourceImages command,
+  ) async {
+    final assets = _assets;
+    final findAssetFiles = _assetFiles;
+    if (assets == null || findAssetFiles == null) {
+      return const Err<SourceEdited>(
+        UnexpectedFailure('image storage is not configured'),
+      );
+    }
+    final assetFiles = findAssetFiles();
+    if (command.images.isEmpty) {
+      return const Err<SourceEdited>(
+        ValidationFailure('choose at least one image'),
+      );
+    }
+    final List<SourceAsset> existingAssets = await assets.listSourceAssets(
+      command.sourceId,
+    );
+    final Set<String> existingReferences = <String>{
+      for (final SourceAsset asset in existingAssets) asset.srcRef,
+    };
+    final Set<String> newReferences = command.images
+        .map((SourceImageImport image) => image.srcRef)
+        .where((String reference) => !existingReferences.contains(reference))
+        .toSet();
+    if (existingAssets.length + newReferences.length > 2000) {
+      return const Err<SourceEdited>(
+        ValidationFailure('a source can contain at most 2,000 images'),
+      );
+    }
+
+    try {
+      for (final image in command.images) {
+        final stored = await assetFiles.saveBytes(image.bytes);
+        if (stored.sha256 != image.sha256) {
+          return const Err<SourceEdited>(
+            ValidationFailure('an image changed while it was being imported'),
+          );
+        }
+      }
+    } on Object catch (error, stackTrace) {
+      return Err<SourceEdited>(
+        UnexpectedFailure(
+          'image files could not be saved',
+          cause: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
+
+    final markdown = command.images
+        .map(
+          (SourceImageImport image) => '![${image.altText}](${image.srcRef})',
+        )
+        .join('\n\n');
+    return _runEdit(
+      command,
+      kSourceEditedType,
+      (Document document) {
+        final String? afterBlockId = command.afterBlockId;
+        if (afterBlockId == null) {
+          return document.blocks.isEmpty
+              ? TextSplice.insert(0, markdown)
+              : null;
+        }
+        final Block? block = document.blockById(afterBlockId);
+        if (block == null) return null;
+        return spliceForBlockInsertion(document, block, markdown);
+      },
+      sourceId: command.sourceId,
+      base: command.baseContentRevision,
+      beforeApply: () async {
+        for (final image in command.images) {
+          if (await assets.findSourceAssetByReference(
+                command.sourceId,
+                image.srcRef,
+              ) !=
+              null) {
+            continue;
+          }
+          await assets.insertSourceAsset(
+            SourceAsset(
+              id: _ids.newId(),
+              sourceId: command.sourceId,
+              srcRef: image.srcRef,
+              sha256: image.sha256,
+              mime: image.mime,
+              widthPx: image.widthPx,
+              heightPx: image.heightPx,
+              byteSize: image.bytes.length,
+              state: SourceAssetState.ok,
+              importedAtUtc: _clock.nowUtc(),
+            ),
+          );
+        }
+      },
+    );
+  }
+
   /// Moves a heading and everything under it past its neighbouring section.
   Future<Result<SourceEdited>> moveSourceSection(MoveSourceSection command) =>
       _runEdit(
@@ -952,6 +1066,7 @@ final class ReaderCommandRunner {
     required int base,
     bool isUndo = false,
     SourceEditRestore? restore,
+    Future<void> Function()? beforeApply,
   }) async {
     try {
       return await _transactions.run<Result<SourceEdited>>(() async {
@@ -960,6 +1075,26 @@ final class ReaderCommandRunner {
 
         final TextSplice? splice = buildSplice(document);
         if (splice == null) {
+          // A successful block edit re-derives every block id. A resent
+          // command therefore cannot rebuild its original splice, but the
+          // operation journal can still prove that it already landed.
+          final SourceEditResult replay = await _content.applySourceEdit(
+            sourceId: sourceId,
+            splice: TextSplice.insert(0, ''),
+            baseContentRevision: base,
+            operationId: command.operationId.value,
+            nowUtc: _clock.nowUtc(),
+          );
+          if (replay case SourceEditReplayed(:final source)) {
+            final Document? current = await _content.findDocument(sourceId);
+            return Ok<SourceEdited>(
+              SourceEdited(
+                source: source,
+                document: current ?? document,
+                outcome: null,
+              ),
+            );
+          }
           return const Err<SourceEdited>(
             ValidationFailure('that block is not part of this source'),
           );
@@ -975,6 +1110,7 @@ final class ReaderCommandRunner {
           );
         }
 
+        await beforeApply?.call();
         final SourceEditResult applied = await _content.applySourceEdit(
           sourceId: sourceId,
           splice: splice,

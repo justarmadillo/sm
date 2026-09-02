@@ -585,8 +585,6 @@ class _ExtractActionBar extends StatelessWidget {
   Widget _hint() => Text(
     !state.canMutate
         ? 'Browsing: you can still correct the text.'
-        : selection.hasSelection && !selection.canExtract
-        ? 'Select within one block.'
         : selection.canExtract
         ? 'Selection ready — Extract above it, or Ctrl+E.'
         : 'Refine, extract further, or formulate cards.',

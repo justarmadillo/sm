@@ -11,6 +11,7 @@
   <script src="https://cdn.jsdelivr.net/npm/cytoscape-cose-bilkent@4.1.0/cytoscape-cose-bilkent.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+  <script src="./graph-data.js"></script>
   <style>
     :root {
       color-scheme: dark;
@@ -187,6 +188,11 @@
       background: var(--panel);
       box-shadow: 0 20px 70px rgba(0, 0, 0, 0.42);
     }
+
+    /* Some embedded Chromium shells apply the component display rule after
+       the browser's default [hidden] rule. Keep a loaded graph from being
+       covered by the startup card in those shells. */
+    .empty-state[hidden] { display: none !important; }
 
     .empty-card h1 { margin: 0 0 12px; color: #eef5ff; font-size: 19px; }
     .empty-card p { margin: 8px 0; color: #9ba8b7; font-size: 12px; line-height: 1.7; }
@@ -424,6 +430,7 @@
 
       function showLoadError(error) {
         ui.empty.hidden = false;
+        ui.empty.style.display = "grid";
         ui.emptyTitle.textContent = location.protocol === "file:"
           ? "Browser file access is restricted"
           : "Graph data could not be loaded";
@@ -452,14 +459,20 @@
 
       async function loadData() {
         try {
-          // Browsers intentionally block fetch() from file:// pages. A
-          // generated JavaScript companion can still be loaded from the same
-          // folder, allowing the viewer to work by double-clicking the HTML.
-          if (location.protocol === "file:") {
-            initialize(await loadLocalCompanion());
+          const companion = window.__ARCHITECTURE_GRAPH_DATA__;
+          delete window.__ARCHITECTURE_GRAPH_DATA__;
+          // Browsers intentionally block fetch() from file:// pages. The
+          // generated companion is also useful when a local server's JSON
+          // request is slow or held open by a proxy, so prefer it whenever it
+          // was loaded successfully.
+          if (companion) {
+            initialize(companion);
             return;
           }
-          const response = await fetch("./graph-data.json", { cache: "no-store" });
+          const response = await Promise.race([
+            fetch("./graph-data.json", { cache: "no-store" }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("graph-data.json request timed out")), 8000))
+          ]);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           initialize(await response.json());
         } catch (error) {
@@ -495,6 +508,7 @@
             .forEach(node => state.collapsed.add(node.id));
         }
         ui.empty.hidden = true;
+        ui.empty.style.display = "none";
         updateStats();
         renderGraph();
       }

@@ -417,7 +417,7 @@ void main() {
       final resolved = controller.resolveSelection();
       expect(resolved, isNotNull);
       expect(document.isSameBlock(resolved!.range), isFalse);
-      expect(controller.canExtract, isFalse);
+      expect(controller.canExtract, isTrue);
       expect(resolved.markdown, startsWith('The second paragraph'));
       expect(resolved.markdown, endsWith('- A list item'));
       // The raw slice is contiguous original markdown, blank lines included.

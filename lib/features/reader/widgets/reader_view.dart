@@ -48,6 +48,7 @@ class ReaderView extends StatefulWidget {
     this.onEditCommit,
     this.onEditCancel,
     this.onEditDelete,
+    this.images = const <String, ReaderImagePresentation>{},
     super.key,
   });
 
@@ -64,6 +65,7 @@ class ReaderView extends StatefulWidget {
   final void Function(Block block)? onEditCancel;
   final void Function(Block block)? onEditDelete;
   final ReaderTypography typography;
+  final Map<String, ReaderImagePresentation> images;
 
   /// The authoritative resume marker, drawn as a filled dot.
   final ReaderAnchor? marker;
@@ -102,10 +104,12 @@ class ReaderViewState extends State<ReaderView> {
 
   List<double> _blockExtents = const <double>[];
   List<double> _blockOffsets = const <double>[];
+  double _imageMaxWidth = 560;
   double? _measuredWidth;
   TextScaler? _measuredTextScaler;
   TextDirection? _measuredDirection;
   Document? _measuredDocument;
+  Map<String, ReaderImagePresentation>? _measuredImages;
   ReaderTypography? _measuredTypography;
 
   /// The reading column itself, which is narrower than this widget and is
@@ -499,6 +503,8 @@ class ReaderViewState extends State<ReaderView> {
       onEditDelete: widget.onEditDelete,
       onParagraphMounted: widget.controller.registerParagraph,
       onParagraphUnmounted: widget.controller.unregisterParagraph,
+      images: widget.images,
+      imageMaxWidth: _imageMaxWidth,
     );
   }
 
@@ -509,6 +515,7 @@ class ReaderViewState extends State<ReaderView> {
         _measuredTextScaler == textScaler &&
         _measuredDirection == direction &&
         identical(_measuredDocument, widget.document) &&
+        identical(_measuredImages, widget.images) &&
         _measuredTypography == widget.typography) {
       return;
     }
@@ -516,6 +523,7 @@ class ReaderViewState extends State<ReaderView> {
       0.0,
       double.infinity,
     );
+    _imageMaxWidth = bodyWidth;
     final extents = <double>[];
     final offsets = <double>[];
     var offset = 24.0;
@@ -527,6 +535,7 @@ class ReaderViewState extends State<ReaderView> {
         bodyWidth: bodyWidth,
         textDirection: direction,
         textScaler: textScaler,
+        images: widget.images,
       );
       extents.add(extent);
       offset += extent;
@@ -537,6 +546,7 @@ class ReaderViewState extends State<ReaderView> {
     _measuredTextScaler = textScaler;
     _measuredDirection = direction;
     _measuredDocument = widget.document;
+    _measuredImages = widget.images;
     _measuredTypography = widget.typography;
   }
 

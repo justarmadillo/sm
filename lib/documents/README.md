@@ -6,6 +6,7 @@ plain unit test, which is why a parsing bug is cheap to reproduce.
 | File | What it is |
 |---|---|
 | `source.dart` | an imported document: its markdown and reading position |
+| `source_asset.dart` | metadata for an image referenced by source markdown |
 | `document.dart` | one source's markdown parsed at one revision |
 | `block.dart`, `block_content.dart` | one paragraph, heading, list item, or fence |
 | `extract.dart` | a passage promoted into its own learning object |

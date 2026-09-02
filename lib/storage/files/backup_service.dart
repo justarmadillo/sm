@@ -10,8 +10,11 @@
 /// one.
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive_io.dart';
+import 'package:crypto/crypto.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
@@ -46,6 +49,17 @@ enum BackupType {
   /// File-name prefix identifying the retention class.
   final String prefix;
 }
+
+/// One database-referenced asset that belongs in a daily backup package.
+final class BackupAssetReference {
+  const BackupAssetReference({required this.sha256});
+
+  /// Lowercase content hash and on-disk file name.
+  final String sha256;
+}
+
+/// Reads the valid asset references from the same collection being backed up.
+typedef BackupAssetLister = Future<List<BackupAssetReference>> Function();
 
 void _safeDeleteFile(File? file) {
   try {
@@ -149,16 +163,22 @@ final class BackupService {
     required AppDatabase database,
     required Directory backupDirectory,
     required Clock clock,
+    Directory? assetDirectory,
+    BackupAssetLister? listReferencedAssets,
     this.retention = const BackupRetention(),
     DiagnosticSink diagnostics = const NullDiagnosticSink(),
   }) : _database = database,
        _backupDirectory = backupDirectory,
        _clock = clock,
+       _assetDirectory = assetDirectory,
+       _listReferencedAssets = listReferencedAssets,
        _diagnostics = diagnostics;
 
   final AppDatabase _database;
   final Directory _backupDirectory;
   final Clock _clock;
+  final Directory? _assetDirectory;
+  final BackupAssetLister? _listReferencedAssets;
   final DiagnosticSink _diagnostics;
 
   /// How many copies of each cadence to keep.
@@ -179,21 +199,25 @@ final class BackupService {
     _backupDirectory.createSync(recursive: true);
 
     final stamp = _timestamp(startedAt);
+    final extension = type == BackupType.daily ? 'irbackup' : 'sqlite';
     final target = File(
-      '${_backupDirectory.path}/${type.prefix}-$stamp.sqlite',
+      '${_backupDirectory.path}/${type.prefix}-$stamp.$extension',
     );
     final staging = File('${target.path}.partial');
+    File? databaseSnapshot;
+    File? manifestFile;
 
     try {
       if (staging.existsSync()) staging.deleteSync();
+      databaseSnapshot = type == BackupType.daily
+          ? File('${target.path}.database.partial')
+          : staging;
+      _safeDelete(databaseSnapshot);
+      await _createDatabaseSnapshot(databaseSnapshot);
 
-      // VACUUM INTO asks SQLite for a consistent snapshot rather than reading
-      // the files behind its back.
-      await _database.customStatement('VACUUM INTO ?', <Object?>[staging.path]);
-
-      final validation = await _validate(staging);
+      final validation = await _validateDatabase(databaseSnapshot);
       if (validation != null) {
-        _safeDelete(staging);
+        _safeDelete(databaseSnapshot);
         _record(
           DiagnosticLevel.error,
           'backup.invalid',
@@ -205,8 +229,25 @@ final class BackupService {
         );
       }
 
-      // Atomic within a volume: readers see either the old file or the new.
+      var missingAssetCount = 0;
+      if (type == BackupType.daily) {
+        manifestFile = File('${target.path}.manifest.partial');
+        _safeDelete(manifestFile);
+        missingAssetCount = await _createDailyPackage(
+          packageFile: staging,
+          databaseSnapshot: databaseSnapshot,
+          manifestFile: manifestFile,
+          createdAtUtc: startedAt,
+        );
+        final packageProblem = _validatePackage(staging);
+        if (packageProblem != null) {
+          throw StateError(packageProblem);
+        }
+      }
+
+      // Atomic within a volume: readers see either no file or the complete one.
       staging.renameSync(target.path);
+      if (type == BackupType.preMigration) databaseSnapshot = null;
       await pruneOldBackups();
 
       _record(
@@ -216,6 +257,7 @@ final class BackupService {
         <String, Object?>{
           'kind': type.name,
           'bytes': target.lengthSync(),
+          'missingAssets': missingAssetCount,
           'ms': _clock.nowUtc().difference(startedAt).inMilliseconds,
         },
       );
@@ -240,6 +282,9 @@ final class BackupService {
           stackTrace: stackTrace,
         ),
       );
+    } finally {
+      _safeDelete(databaseSnapshot);
+      _safeDelete(manifestFile);
     }
   }
 
@@ -251,7 +296,9 @@ final class BackupService {
         : <String>[type.prefix];
     final files = _backupDirectory.listSync().whereType<File>().where((File f) {
       final name = _basename(f);
-      return name.endsWith('.sqlite') &&
+      final isBackupExtension =
+          name.endsWith('.sqlite') || name.endsWith('.irbackup');
+      return isBackupExtension &&
           prefixes.any((String p) => name.startsWith('$p-'));
     }).toList()..sort((File a, File b) => _basename(b).compareTo(_basename(a)));
     return files;
@@ -264,7 +311,7 @@ final class BackupService {
   }
 
   /// Whether [file] is a readable, uncorrupted database at a known schema.
-  Future<String?> _validate(File file) async {
+  Future<String?> _validateDatabase(File file) async {
     if (!file.existsSync() || file.lengthSync() == 0) {
       return 'backup file is empty';
     }
@@ -287,6 +334,116 @@ final class BackupService {
       return 'could not open backup: $error';
     } finally {
       copy?.close();
+    }
+  }
+
+  Future<void> _createDatabaseSnapshot(File snapshot) async {
+    // VACUUM INTO asks SQLite for a consistent snapshot rather than reading
+    // the files behind its back.
+    await _database.customStatement('VACUUM INTO ?', <Object?>[snapshot.path]);
+  }
+
+  /// Streams a database, manifest, and every verified asset into one package.
+  Future<int> _createDailyPackage({
+    required File packageFile,
+    required File databaseSnapshot,
+    required File manifestFile,
+    required DateTime createdAtUtc,
+  }) async {
+    final references = await _listUniqueAssetReferences();
+    final included = <Map<String, Object?>>[];
+    final missing = <Map<String, Object?>>[];
+    final includedFiles = <File>[];
+    for (final reference in references) {
+      final asset = _findAssetFile(reference.sha256);
+      final problem = await _assetProblem(asset, reference.sha256);
+      if (problem != null) {
+        missing.add(<String, Object?>{
+          'sha256': reference.sha256,
+          'problem': problem,
+        });
+        continue;
+      }
+      includedFiles.add(asset!);
+      included.add(<String, Object?>{
+        'sha256': reference.sha256,
+        'path': 'assets/${reference.sha256}',
+        'bytes': await asset.length(),
+      });
+    }
+
+    final manifest = <String, Object?>{
+      'formatVersion': 1,
+      'createdAtUtc': createdAtUtc.toUtc().toIso8601String(),
+      'database': <String, Object?>{
+        'path': 'collection.sqlite',
+        'bytes': await databaseSnapshot.length(),
+        'schemaVersion': kSchemaVersion,
+      },
+      'assets': included,
+      'missingAssets': missing,
+    };
+    await manifestFile.writeAsString(jsonEncode(manifest), flush: true);
+
+    final encoder = ZipFileEncoder();
+    encoder.create(packageFile.path);
+    try {
+      await encoder.addFile(databaseSnapshot, 'collection.sqlite');
+      await encoder.addFile(manifestFile, 'manifest.json');
+      for (final asset in includedFiles) {
+        await encoder.addFile(asset, 'assets/${_basename(asset)}');
+      }
+    } finally {
+      await encoder.close();
+    }
+    return missing.length;
+  }
+
+  Future<List<BackupAssetReference>> _listUniqueAssetReferences() async {
+    final references =
+        await _listReferencedAssets?.call() ?? const <BackupAssetReference>[];
+    final unique = <String, BackupAssetReference>{};
+    for (final reference in references) {
+      unique.putIfAbsent(reference.sha256, () => reference);
+    }
+    return unique.values.toList()
+      ..sort((first, second) => first.sha256.compareTo(second.sha256));
+  }
+
+  File? _findAssetFile(String sha256Value) {
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sha256Value)) return null;
+    final directory = _assetDirectory;
+    return directory == null ? null : File('${directory.path}/$sha256Value');
+  }
+
+  Future<String?> _assetProblem(File? asset, String expectedSha256) async {
+    if (asset == null || !asset.existsSync()) return 'file is missing';
+    final actualSha256 = (await sha256.bind(asset.openRead()).first).toString();
+    return actualSha256 == expectedSha256 ? null : 'SHA-256 does not match';
+  }
+
+  String? _validatePackage(File packageFile) {
+    if (!packageFile.existsSync() || packageFile.lengthSync() == 0) {
+      return 'backup package is empty';
+    }
+    try {
+      final input = InputFileStream(packageFile.path);
+      try {
+        final archive = ZipDecoder().decodeStream(input, verify: true);
+        final names = archive.files
+            .where((entry) => entry.isFile)
+            .map((entry) => entry.name)
+            .toSet();
+        if (!names.contains('collection.sqlite') ||
+            !names.contains('manifest.json')) {
+          return 'backup package is missing a required entry';
+        }
+      } finally {
+        input.closeSync();
+      }
+      return null;
+    } on Object catch (error) {
+      return 'could not open backup package: $error';
     }
   }
 
@@ -339,9 +496,9 @@ final class BackupService {
     );
   }
 
-  static void _safeDelete(File file) {
+  static void _safeDelete(File? file) {
     try {
-      if (file.existsSync()) file.deleteSync();
+      if (file?.existsSync() ?? false) file!.deleteSync();
     } on FileSystemException {
       // A backup that cannot be deleted is not worth failing an operation for;
       // the next prune will try again.
@@ -354,7 +511,7 @@ final class BackupService {
   static String? _stampOf(File file) {
     final name = _basename(file);
     final dash = name.indexOf('-');
-    final dot = name.lastIndexOf('.sqlite');
+    final dot = name.lastIndexOf('.');
     if (dash < 0 || dot <= dash) return null;
     final stamp = name.substring(dash + 1, dot);
     return stamp.length == 14 ? stamp : null;

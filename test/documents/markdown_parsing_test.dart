@@ -1,6 +1,7 @@
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/inline_markup.dart';
+import 'package:incremental_reader/documents/markdown_inline_parser.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:test/test.dart';
 import '../support/anchors.dart';
@@ -131,6 +132,39 @@ void main() {
   });
 
   group('inline rendering', () {
+    test(
+      'an image occupies one rendered coordinate and keeps its metadata',
+      () {
+        final imageDocument = Document.parse(
+          sourceId: 'images',
+          markdown: 'Before ![A diagram](ir-asset:abc) after',
+        );
+        final imageBlock = imageDocument.blocks.single;
+        final imageSegment = imageBlock.inline.segments.singleWhere(
+          (InlineSegment segment) => segment.styles.contains(InlineStyle.image),
+        );
+
+        expect(imageSegment.text, kObjectReplacement);
+        expect(imageSegment.renderedEnd - imageSegment.renderedStart, 1);
+        expect(imageSegment.imageAlt, 'A diagram');
+        expect(imageSegment.imageUrl, 'ir-asset:abc');
+        expect(
+          imageBlock.markdownFragmentForRendered(
+            imageSegment.renderedStart,
+            imageSegment.renderedEnd,
+          ),
+          '![A diagram](<ir-asset:abc>)',
+        );
+        expect(
+          imageBlock.rawSliceForRendered(
+            imageSegment.renderedStart,
+            imageSegment.renderedEnd,
+          ),
+          '![A diagram](ir-asset:abc)',
+        );
+      },
+    );
+
     test('a formatted paragraph renders without its markup', () {
       final paragraph = blockOfType(BlockType.paragraph);
       expect(
@@ -302,10 +336,7 @@ void main() {
 
     test('a cross-block range returns the exact original markdown', () {
       final start = anchorIn(document.blocks[3], 0);
-      final end = anchorIn(
-        document.blocks[5],
-        document.blocks[5].lengthUtf8,
-      );
+      final end = anchorIn(document.blocks[5], document.blocks[5].lengthUtf8);
       final slice = document.markdownBetween(start, end);
       expect(
         slice,

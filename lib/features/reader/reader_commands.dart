@@ -7,10 +7,13 @@
 /// by hoping the UI never fires twice.
 library;
 
+import 'dart:typed_data';
+
 import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/shared/command_base.dart';
+import 'package:meta/meta.dart';
 
 /// Import markdown as a new source.
 final class ImportSource extends AppCommand {
@@ -251,6 +254,47 @@ final class InsertSourceBlock extends AppCommand {
   final String sourceId;
   final String afterBlockId;
   final String markdown;
+  final int baseContentRevision;
+}
+
+/// One validated image whose immutable bytes are ready for app-owned storage.
+@immutable
+final class SourceImageImport {
+  const SourceImageImport({
+    required this.bytes,
+    required this.altText,
+    required this.sha256,
+    required this.mime,
+    required this.widthPx,
+    required this.heightPx,
+  });
+
+  final Uint8List bytes;
+  final String altText;
+  final String sha256;
+  final String mime;
+  final int widthPx;
+  final int heightPx;
+
+  String get srcRef => 'ir-asset:$sha256';
+}
+
+/// Adds validated images as consecutive standalone blocks after one block.
+final class InsertSourceImages extends AppCommand {
+  InsertSourceImages(
+    super.operationId, {
+    required this.sourceId,
+    required this.afterBlockId,
+    required this.images,
+    required this.baseContentRevision,
+    super.timestampUtc,
+  });
+
+  final String sourceId;
+
+  /// Block after which the images land, or null for an empty source.
+  final String? afterBlockId;
+  final List<SourceImageImport> images;
   final int baseContentRevision;
 }
 

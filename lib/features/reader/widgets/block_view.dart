@@ -8,6 +8,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:incremental_reader/documents/block.dart';
+import 'package:incremental_reader/documents/inline_markup.dart';
 import 'package:incremental_reader/features/reader/widgets/block_editor.dart';
 import 'package:incremental_reader/features/reader/widgets/block_span_builder.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
@@ -29,13 +30,40 @@ double measureBlockHeight(
   required double bodyWidth,
   required TextDirection textDirection,
   required TextScaler textScaler,
+  Map<String, ReaderImagePresentation> images =
+      const <String, ReaderImagePresentation>{},
 }) {
+  final imageSegment =
+      block.inline.segments.length == 1 &&
+          block.inline.segments.single.styles.contains(InlineStyle.image)
+      ? block.inline.segments.single
+      : null;
+  if (imageSegment != null) {
+    final asset = images[imageSegment.imageUrl]?.asset;
+    final size = fittedReaderImageSize(
+      widthPx: asset?.widthPx ?? 320,
+      heightPx: asset?.heightPx ?? 180,
+      maxWidth: bodyWidth,
+    );
+    return size.height + 28 + typography.paragraphSpacing;
+  }
+
   double textHeight(double maxWidth, {TextStyle? markerStyle}) {
-    final paragraph = TextPainter(
-      text: buildBlockSpan(block, typography),
-      textDirection: textDirection,
-      textScaler: textScaler,
-    )..layout(maxWidth: maxWidth.clamp(0, double.infinity));
+    final paragraph =
+        TextPainter(
+            text: buildBlockSpan(
+              block,
+              typography,
+              images: images,
+              imageMaxWidth: maxWidth,
+            ),
+            textDirection: textDirection,
+            textScaler: textScaler,
+          )
+          ..setPlaceholderDimensions(
+            readerImagePlaceholderDimensions(block, images, maxWidth: maxWidth),
+          )
+          ..layout(maxWidth: maxWidth.clamp(0, double.infinity));
     if (markerStyle == null) return paragraph.height;
     final marker = TextPainter(
       text: TextSpan(
@@ -80,12 +108,16 @@ class BlockView extends StatefulWidget {
     this.onEditCommit,
     this.onEditCancel,
     this.onEditDelete,
+    this.images = const <String, ReaderImagePresentation>{},
+    this.imageMaxWidth = 560,
     super.key,
   });
 
   final Block block;
   final ReaderTypography typography;
   final List<BlockHighlight> highlights;
+  final Map<String, ReaderImagePresentation> images;
+  final double imageMaxWidth;
 
   /// Called when this block's paragraph enters the tree.
   final void Function(String blockId, GlobalKey key) onParagraphMounted;
@@ -236,8 +268,14 @@ class _BlockViewState extends State<BlockView> {
 
     final paragraph = RichText(
       key: _paragraphKey,
-      text: buildBlockSpan(block, typography, highlights: widget.highlights),
-      textAlign: TextAlign.start,
+      text: buildBlockSpan(
+        block,
+        typography,
+        highlights: widget.highlights,
+        images: widget.images,
+        imageMaxWidth: widget.imageMaxWidth,
+      ),
+      textAlign: _isStandaloneImage(block) ? TextAlign.center : TextAlign.start,
     );
 
     return switch (block.type) {
@@ -250,6 +288,10 @@ class _BlockViewState extends State<BlockView> {
       BlockType.heading || BlockType.paragraph => paragraph,
     };
   }
+
+  bool _isStandaloneImage(Block block) =>
+      block.inline.segments.length == 1 &&
+      block.inline.segments.single.styles.contains(InlineStyle.image);
 
   /// A rule has no content. The empty paragraph still renders so the block
   /// keeps a registered render object and a zero-length range.

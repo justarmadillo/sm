@@ -74,6 +74,44 @@ class Sources extends Table {
   ];
 }
 
+/// Source-owned references to immutable image blobs in app storage.
+@DataClassName('SourceAssetRow')
+class SourceAssets extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get sourceId =>
+      text().references(Sources, #id, onDelete: KeyAction.cascade)();
+
+  /// Portable reference kept verbatim in the source markdown.
+  TextColumn get srcRef => text().withLength(min: 1)();
+
+  /// Lowercase hexadecimal SHA-256, also used as the safe blob filename.
+  TextColumn get sha256 => text().withLength(min: 64, max: 64)();
+
+  TextColumn get mime => text().withLength(min: 7)();
+
+  IntColumn get widthPx => integer().check(widthPx.isBiggerThanValue(0))();
+
+  IntColumn get heightPx => integer().check(heightPx.isBiggerThanValue(0))();
+
+  IntColumn get byteSize => integer().check(byteSize.isBiggerThanValue(0))();
+
+  /// ok (0), missing (1), or failed validation (2).
+  IntColumn get state => integer().check(state.isBetweenValues(0, 2))();
+
+  IntColumn get importedAtUtc => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+
+  @override
+  List<String> get customConstraints => <String>[
+    'UNIQUE (source_id, src_ref)',
+    "CHECK (sha256 NOT GLOB '*[^0-9a-f]*')",
+    "CHECK (mime LIKE 'image/%' AND length(mime) > 6)",
+  ];
+}
+
 /// Every edit ever applied to a source's text, one row per splice.
 ///
 /// Append-only. Undo appends the inverse splice at a new revision rather than

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:drift/drift.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
@@ -70,6 +71,7 @@ void main() {
         'scheduler_events',
         'search_documents',
         'settings',
+        'source_assets',
         'source_edits',
         'sources',
         'topic_states',
@@ -301,7 +303,7 @@ void main() {
       expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
       final backup = result.unwrap();
       expect(backup.existsSync(), isTrue);
-      expect(backup.path, endsWith('backup-20260305090000.sqlite'));
+      expect(backup.path, endsWith('backup-20260305090000.irbackup'));
       expect(diagnostics.named('backup.created'), hasLength(1));
 
       // No partial files survive a successful run.
@@ -313,7 +315,11 @@ void main() {
       );
 
       // The copy is a real database holding the same rows.
-      final restored = openDatabaseAt(backup);
+      final restored = _openPackagedDatabase(
+        backup,
+        workspace,
+        'restored.sqlite',
+      );
       addTearDown(restored.close);
       expect(await restored.isHealthy(), isTrue);
       final row = await restored
@@ -344,7 +350,11 @@ void main() {
         );
         final backup = (await backupFuture).unwrap();
 
-        final restored = openDatabaseAt(backup);
+        final restored = _openPackagedDatabase(
+          backup,
+          workspace,
+          'concurrent.sqlite',
+        );
         addTearDown(restored.close);
         expect(await restored.isHealthy(), isTrue);
         expect(await restored.foreignKeysValid(), isTrue);
@@ -454,5 +464,19 @@ void main() {
 
 String _stampOf(File file) {
   final name = file.path.split(RegExp(r'[/\\]')).last;
-  return name.substring(name.indexOf('-') + 1, name.lastIndexOf('.sqlite'));
+  return name.substring(name.indexOf('-') + 1, name.lastIndexOf('.'));
+}
+
+AppDatabase _openPackagedDatabase(
+  File package,
+  Directory workspace,
+  String filename,
+) {
+  final archive = ZipDecoder().decodeBytes(package.readAsBytesSync());
+  final databaseEntry = archive.files.singleWhere(
+    (entry) => entry.name == 'collection.sqlite',
+  );
+  final databaseFile = File('${workspace.path}/$filename')
+    ..writeAsBytesSync(databaseEntry.readBytes()!, flush: true);
+  return openDatabaseAt(databaseFile);
 }

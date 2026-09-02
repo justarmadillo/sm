@@ -54,7 +54,7 @@
       "file": "lib/app/providers.dart",
       "loc": 218,
       "category": "other",
-      "fanIn": 25,
+      "fanIn": 27,
       "fanOut": 32
     },
     {
@@ -1253,7 +1253,7 @@
       "file": "lib/documents/document.dart",
       "loc": 367,
       "category": "other",
-      "fanIn": 32,
+      "fanIn": 33,
       "fanOut": 5
     },
     {
@@ -2147,7 +2147,7 @@
       "file": "lib/documents/markdown_block_parser.dart",
       "loc": 1,
       "category": "other",
-      "fanIn": 101,
+      "fanIn": 104,
       "fanOut": 0
     },
     {
@@ -2557,7 +2557,7 @@
       "file": "lib/documents/outline.dart",
       "loc": 137,
       "category": "other",
-      "fanIn": 4,
+      "fanIn": 5,
       "fanOut": 3
     },
     {
@@ -2613,7 +2613,7 @@
       "file": "lib/documents/outline.dart",
       "loc": 7,
       "category": "other",
-      "fanIn": 2,
+      "fanIn": 3,
       "fanOut": 0
     },
     {
@@ -4042,7 +4042,7 @@
       "file": "package:flutter/gestures.dart",
       "loc": 0,
       "category": "external",
-      "fanIn": 50,
+      "fanIn": 53,
       "fanOut": 0
     },
     {
@@ -4053,7 +4053,7 @@
       "file": "package:flutter_riverpod/flutter_riverpod.dart",
       "loc": 0,
       "category": "external",
-      "fanIn": 37,
+      "fanIn": 39,
       "fanOut": 0
     },
     {
@@ -4064,7 +4064,7 @@
       "file": "package:flutter_test/flutter_test.dart",
       "loc": 0,
       "category": "external",
-      "fanIn": 14,
+      "fanIn": 17,
       "fanOut": 0
     },
     {
@@ -4194,10 +4194,10 @@
       "type": "module",
       "parent": null,
       "file": "lib/features/browser/browser_command_runner.dart",
-      "loc": 658,
+      "loc": 690,
       "category": "route",
       "fanIn": 2,
-      "fanOut": 14
+      "fanOut": 15
     },
     {
       "id": "features.browser.browser_command_runner.BrowserCommandRunner",
@@ -4205,7 +4205,7 @@
       "type": "class",
       "parent": "features.browser.browser_command_runner",
       "file": "lib/features/browser/browser_command_runner.dart",
-      "loc": 521,
+      "loc": 552,
       "category": "route",
       "fanIn": 0,
       "fanOut": 0,
@@ -4228,11 +4228,34 @@
       "type": "function",
       "parent": "features.browser.browser_command_runner",
       "file": "lib/features/browser/browser_command_runner.dart",
-      "loc": 84,
+      "loc": 12,
       "category": "route",
       "fanIn": 0,
-      "fanOut": 11,
+      "fanOut": 1,
       "deadCode": true
+    },
+    {
+      "id": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements",
+      "label": "deleteElements",
+      "type": "function",
+      "parent": "features.browser.browser_command_runner",
+      "file": "lib/features/browser/browser_command_runner.dart",
+      "loc": 8,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 1,
+      "deadCode": true
+    },
+    {
+      "id": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
+      "label": "_deleteElements",
+      "type": "function",
+      "parent": "features.browser.browser_command_runner",
+      "file": "lib/features/browser/browser_command_runner.dart",
+      "loc": 93,
+      "category": "route",
+      "fanIn": 2,
+      "fanOut": 12
     },
     {
       "id": "features.browser.browser_command_runner.BrowserCommandRunner.deletionOrder",
@@ -4548,7 +4571,7 @@
       "type": "module",
       "parent": null,
       "file": "lib/features/browser/browser_commands.dart",
-      "loc": 118,
+      "loc": 130,
       "category": "route",
       "fanIn": 4,
       "fanOut": 2
@@ -4636,6 +4659,29 @@
     },
     {
       "id": "features.browser.browser_commands.DeleteElement.new",
+      "label": "new",
+      "type": "function",
+      "parent": "features.browser.browser_commands",
+      "file": "lib/features/browser/browser_commands.dart",
+      "loc": 1,
+      "category": "route",
+      "fanIn": 2,
+      "fanOut": 0
+    },
+    {
+      "id": "features.browser.browser_commands.DeleteElements",
+      "label": "DeleteElements",
+      "type": "class",
+      "parent": "features.browser.browser_commands",
+      "file": "lib/features/browser/browser_commands.dart",
+      "loc": 11,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 1,
+      "deadCode": true
+    },
+    {
+      "id": "features.browser.browser_commands.DeleteElements.new",
       "label": "new",
       "type": "function",
       "parent": "features.browser.browser_commands",
@@ -4777,9 +4823,9 @@
       "type": "module",
       "parent": null,
       "file": "lib/features/browser/browser_screen.dart",
-      "loc": 1079,
+      "loc": 1272,
       "category": "route",
-      "fanIn": 1,
+      "fanIn": 2,
       "fanOut": 23
     },
     {
@@ -4814,7 +4860,7 @@
       "file": "lib/features/browser/browser_screen.dart",
       "loc": 1,
       "category": "route",
-      "fanIn": 1,
+      "fanIn": 2,
       "fanOut": 0
     },
     {
@@ -4823,11 +4869,22 @@
       "type": "class",
       "parent": "features.browser.browser_screen",
       "file": "lib/features/browser/browser_screen.dart",
-      "loc": 411,
+      "loc": 533,
       "category": "route",
       "fanIn": 0,
       "fanOut": 0,
       "deadCode": true
+    },
+    {
+      "id": "features.browser.browser_screen.BrowserScreenState.allNodes",
+      "label": "_allNodes",
+      "type": "function",
+      "parent": "features.browser.browser_screen",
+      "file": "lib/features/browser/browser_screen.dart",
+      "loc": 6,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 0
     },
     {
       "id": "features.browser.browser_screen.BrowserScreenState.allRefs",
@@ -4846,10 +4903,10 @@
       "type": "function",
       "parent": "features.browser.browser_screen",
       "file": "lib/features/browser/browser_screen.dart",
-      "loc": 84,
+      "loc": 90,
       "category": "route",
       "fanIn": 1,
-      "fanOut": 6
+      "fanOut": 7
     },
     {
       "id": "features.browser.browser_screen.BrowserScreenState.build",
@@ -4857,10 +4914,10 @@
       "type": "function",
       "parent": "features.browser.browser_screen",
       "file": "lib/features/browser/browser_screen.dart",
-      "loc": 26,
+      "loc": 32,
       "category": "entrypoint",
       "fanIn": 0,
-      "fanOut": 4
+      "fanOut": 5
     },
     {
       "id": "features.browser.browser_screen.BrowserScreenState.buildBody",
@@ -4871,7 +4928,7 @@
       "loc": 44,
       "category": "route",
       "fanIn": 1,
-      "fanOut": 10
+      "fanOut": 11
     },
     {
       "id": "features.browser.browser_screen.BrowserScreenState.cardParentFor",
@@ -4880,6 +4937,17 @@
       "parent": "features.browser.browser_screen",
       "file": "lib/features/browser/browser_screen.dart",
       "loc": 18,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 0
+    },
+    {
+      "id": "features.browser.browser_screen.BrowserScreenState.clearSelection",
+      "label": "_clearSelection",
+      "type": "function",
+      "parent": "features.browser.browser_screen",
+      "file": "lib/features/browser/browser_screen.dart",
+      "loc": 7,
       "category": "route",
       "fanIn": 1,
       "fanOut": 0
@@ -4916,6 +4984,17 @@
       "category": "route",
       "fanIn": 1,
       "fanOut": 6
+    },
+    {
+      "id": "features.browser.browser_screen.BrowserScreenState.deleteSelection",
+      "label": "_deleteSelection",
+      "type": "function",
+      "parent": "features.browser.browser_screen",
+      "file": "lib/features/browser/browser_screen.dart",
+      "loc": 16,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 3
     },
     {
       "id": "features.browser.browser_screen.BrowserScreenState.dropAbove",
@@ -5007,6 +5086,18 @@
       "fanOut": 2
     },
     {
+      "id": "features.browser.browser_screen.BrowserScreenState.runSelectedLearningCommand",
+      "label": "_runSelectedLearningCommand",
+      "type": "function",
+      "parent": "features.browser.browser_screen",
+      "file": "lib/features/browser/browser_screen.dart",
+      "loc": 20,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 3,
+      "deadCode": true
+    },
+    {
       "id": "features.browser.browser_screen.BrowserScreenState.scaffold",
       "label": "_scaffold",
       "type": "function",
@@ -5026,6 +5117,50 @@
       "loc": 9,
       "category": "route",
       "fanIn": 1,
+      "fanOut": 1
+    },
+    {
+      "id": "features.browser.browser_screen.BrowserScreenState.selectAllVisible",
+      "label": "_selectAllVisible",
+      "type": "function",
+      "parent": "features.browser.browser_screen",
+      "file": "lib/features/browser/browser_screen.dart",
+      "loc": 4,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 2
+    },
+    {
+      "id": "features.browser.browser_screen.BrowserScreenState.selectionAppBar",
+      "label": "_selectionAppBar",
+      "type": "function",
+      "parent": "features.browser.browser_screen",
+      "file": "lib/features/browser/browser_screen.dart",
+      "loc": 34,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 3
+    },
+    {
+      "id": "features.browser.browser_screen.BrowserScreenState.toggleSelection",
+      "label": "_toggleSelection",
+      "type": "function",
+      "parent": "features.browser.browser_screen",
+      "file": "lib/features/browser/browser_screen.dart",
+      "loc": 6,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 0
+    },
+    {
+      "id": "features.browser.browser_screen.BrowserScreenState.visibleRows",
+      "label": "_visibleRows",
+      "type": "function",
+      "parent": "features.browser.browser_screen",
+      "file": "lib/features/browser/browser_screen.dart",
+      "loc": 7,
+      "category": "route",
+      "fanIn": 2,
       "fanOut": 1
     },
     {
@@ -5182,7 +5317,7 @@
       "type": "class",
       "parent": "features.browser.browser_screen",
       "file": "lib/features/browser/browser_screen.dart",
-      "loc": 308,
+      "loc": 330,
       "category": "route",
       "fanIn": 0,
       "fanOut": 0,
@@ -5216,7 +5351,7 @@
       "type": "function",
       "parent": "features.browser.browser_screen",
       "file": "lib/features/browser/browser_screen.dart",
-      "loc": 22,
+      "loc": 28,
       "category": "route",
       "fanIn": 1,
       "fanOut": 3
@@ -5229,7 +5364,7 @@
       "file": "lib/features/browser/browser_screen.dart",
       "loc": 13,
       "category": "route",
-      "fanIn": 2,
+      "fanIn": 1,
       "fanOut": 1
     },
     {
@@ -5238,7 +5373,7 @@
       "type": "function",
       "parent": "features.browser.browser_screen",
       "file": "lib/features/browser/browser_screen.dart",
-      "loc": 30,
+      "loc": 31,
       "category": "route",
       "fanIn": 1,
       "fanOut": 1
@@ -5253,6 +5388,17 @@
       "category": "route",
       "fanIn": 2,
       "fanOut": 0
+    },
+    {
+      "id": "features.browser.browser_screen.NodeRow.leadingControl",
+      "label": "_leadingControl",
+      "type": "function",
+      "parent": "features.browser.browser_screen",
+      "file": "lib/features/browser/browser_screen.dart",
+      "loc": 10,
+      "category": "route",
+      "fanIn": 2,
+      "fanOut": 1
     },
     {
       "id": "features.browser.browser_screen.NodeRow.metaLine",
@@ -5282,7 +5428,7 @@
       "type": "function",
       "parent": "features.browser.browser_screen",
       "file": "lib/features/browser/browser_screen.dart",
-      "loc": 12,
+      "loc": 15,
       "category": "route",
       "fanIn": 1,
       "fanOut": 0
@@ -5326,7 +5472,7 @@
       "type": "function",
       "parent": "features.browser.browser_screen",
       "file": "lib/features/browser/browser_screen.dart",
-      "loc": 27,
+      "loc": 22,
       "category": "route",
       "fanIn": 2,
       "fanOut": 0
@@ -5395,6 +5541,17 @@
       "parent": "features.browser.browser_screen",
       "file": "lib/features/browser/browser_screen.dart",
       "loc": 34,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 0
+    },
+    {
+      "id": "features.browser.browser_screen.confirmDeleteSelection",
+      "label": "_confirmDeleteSelection",
+      "type": "function",
+      "parent": "features.browser.browser_screen",
+      "file": "lib/features/browser/browser_screen.dart",
+      "loc": 45,
       "category": "route",
       "fanIn": 1,
       "fanOut": 0
@@ -5620,9 +5777,9 @@
       "type": "module",
       "parent": null,
       "file": "lib/features/browser/browser_view_model.dart",
-      "loc": 325,
+      "loc": 347,
       "category": "route",
-      "fanIn": 12,
+      "fanIn": 13,
       "fanOut": 22
     },
     {
@@ -5665,7 +5822,7 @@
       "type": "class",
       "parent": "features.browser.browser_view_model",
       "file": "lib/features/browser/browser_view_model.dart",
-      "loc": 254,
+      "loc": 276,
       "category": "route",
       "fanIn": 0,
       "fanOut": 0,
@@ -5677,11 +5834,22 @@
       "type": "function",
       "parent": "features.browser.browser_view_model",
       "file": "lib/features/browser/browser_view_model.dart",
-      "loc": 29,
+      "loc": 12,
       "category": "route",
       "fanIn": 0,
-      "fanOut": 3,
+      "fanOut": 2,
       "deadCode": true
+    },
+    {
+      "id": "features.browser.browser_view_model.BrowserViewModel.applyLearningCommandToSelection",
+      "label": "applyLearningCommandToSelection",
+      "type": "function",
+      "parent": "features.browser.browser_view_model",
+      "file": "lib/features/browser/browser_view_model.dart",
+      "loc": 26,
+      "category": "route",
+      "fanIn": 2,
+      "fanOut": 3
     },
     {
       "id": "features.browser.browser_view_model.BrowserViewModel.build",
@@ -5702,7 +5870,7 @@
       "file": "lib/features/browser/browser_view_model.dart",
       "loc": 30,
       "category": "route",
-      "fanIn": 10,
+      "fanIn": 11,
       "fanOut": 5
     },
     {
@@ -5723,6 +5891,18 @@
       "parent": "features.browser.browser_view_model",
       "file": "lib/features/browser/browser_view_model.dart",
       "loc": 15,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 2,
+      "deadCode": true
+    },
+    {
+      "id": "features.browser.browser_view_model.BrowserViewModel.deleteElements",
+      "label": "deleteElements",
+      "type": "function",
+      "parent": "features.browser.browser_view_model",
+      "file": "lib/features/browser/browser_view_model.dart",
+      "loc": 11,
       "category": "route",
       "fanIn": 0,
       "fanOut": 2,
@@ -5795,7 +5975,7 @@
       "file": "lib/features/browser/browser_view_model.dart",
       "loc": 15,
       "category": "route",
-      "fanIn": 4,
+      "fanIn": 5,
       "fanOut": 2
     },
     {
@@ -10823,7 +11003,7 @@
       "file": "lib/features/priority/learning_command_menu.dart",
       "loc": 7,
       "category": "route",
-      "fanIn": 2,
+      "fanIn": 3,
       "fanOut": 0
     },
     {
@@ -10834,7 +11014,7 @@
       "file": "lib/features/priority/learning_command_menu.dart",
       "loc": 56,
       "category": "route",
-      "fanIn": 2,
+      "fanIn": 3,
       "fanOut": 4
     },
     {
@@ -10961,7 +11141,7 @@
       "file": "lib/features/priority/learning_commands.dart",
       "loc": 5,
       "category": "route",
-      "fanIn": 4,
+      "fanIn": 5,
       "fanOut": 0
     },
     {
@@ -14335,9 +14515,9 @@
       "type": "module",
       "parent": null,
       "file": "lib/features/reader/reader_screen.dart",
-      "loc": 1121,
+      "loc": 1331,
       "category": "route",
-      "fanIn": 6,
+      "fanIn": 7,
       "fanOut": 25
     },
     {
@@ -14346,7 +14526,7 @@
       "type": "class",
       "parent": "features.reader.reader_screen",
       "file": "lib/features/reader/reader_screen.dart",
-      "loc": 136,
+      "loc": 179,
       "category": "route",
       "fanIn": 0,
       "fanOut": 0,
@@ -14358,7 +14538,7 @@
       "type": "function",
       "parent": "features.reader.reader_screen",
       "file": "lib/features/reader/reader_screen.dart",
-      "loc": 23,
+      "loc": 25,
       "category": "entrypoint",
       "fanIn": 0,
       "fanOut": 3
@@ -14371,8 +14551,19 @@
       "file": "lib/features/reader/reader_screen.dart",
       "loc": 14,
       "category": "route",
-      "fanIn": 2,
+      "fanIn": 1,
       "fanOut": 2
+    },
+    {
+      "id": "features.reader.reader_screen.ActionBar.compactButtons",
+      "label": "_compactButtons",
+      "type": "function",
+      "parent": "features.reader.reader_screen",
+      "file": "lib/features/reader/reader_screen.dart",
+      "loc": 49,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 3
     },
     {
       "id": "features.reader.reader_screen.ActionBar.hint",
@@ -14382,19 +14573,8 @@
       "file": "lib/features/reader/reader_screen.dart",
       "loc": 4,
       "category": "route",
-      "fanIn": 2,
-      "fanOut": 1
-    },
-    {
-      "id": "features.reader.reader_screen.ActionBar.hintAboveButtons",
-      "label": "_hintAboveButtons",
-      "type": "function",
-      "parent": "features.reader.reader_screen",
-      "file": "lib/features/reader/reader_screen.dart",
-      "loc": 10,
-      "category": "route",
       "fanIn": 1,
-      "fanOut": 2
+      "fanOut": 1
     },
     {
       "id": "features.reader.reader_screen.ActionBar.hintFor",
@@ -14430,12 +14610,23 @@
       "fanOut": 2
     },
     {
+      "id": "features.reader.reader_screen.ActionBar.postponeFromPrompt",
+      "label": "_postponeFromPrompt",
+      "type": "function",
+      "parent": "features.reader.reader_screen",
+      "file": "lib/features/reader/reader_screen.dart",
+      "loc": 4,
+      "category": "route",
+      "fanIn": 2,
+      "fanOut": 1
+    },
+    {
       "id": "features.reader.reader_screen.ActionBar.progressButtons",
       "label": "_progressButtons",
       "type": "function",
       "parent": "features.reader.reader_screen",
       "file": "lib/features/reader/reader_screen.dart",
-      "loc": 34,
+      "loc": 31,
       "category": "route",
       "fanIn": 1,
       "fanOut": 1
@@ -14450,6 +14641,40 @@
       "category": "route",
       "fanIn": 1,
       "fanOut": 1
+    },
+    {
+      "id": "features.reader.reader_screen.CompactReaderAction",
+      "label": "_CompactReaderAction",
+      "type": "class",
+      "parent": "features.reader.reader_screen",
+      "file": "lib/features/reader/reader_screen.dart",
+      "loc": 57,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 0,
+      "deadCode": true
+    },
+    {
+      "id": "features.reader.reader_screen.CompactReaderAction.build",
+      "label": "build",
+      "type": "function",
+      "parent": "features.reader.reader_screen",
+      "file": "lib/features/reader/reader_screen.dart",
+      "loc": 41,
+      "category": "entrypoint",
+      "fanIn": 0,
+      "fanOut": 0
+    },
+    {
+      "id": "features.reader.reader_screen.CompactReaderAction.new",
+      "label": "new",
+      "type": "function",
+      "parent": "features.reader.reader_screen",
+      "file": "lib/features/reader/reader_screen.dart",
+      "loc": 6,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 0
     },
     {
       "id": "features.reader.reader_screen.ReaderScreen",
@@ -14483,7 +14708,7 @@
       "file": "lib/features/reader/reader_screen.dart",
       "loc": 1,
       "category": "route",
-      "fanIn": 2,
+      "fanIn": 3,
       "fanOut": 0
     },
     {
@@ -14492,7 +14717,7 @@
       "type": "class",
       "parent": "features.reader.reader_screen",
       "file": "lib/features/reader/reader_screen.dart",
-      "loc": 570,
+      "loc": 618,
       "category": "route",
       "fanIn": 0,
       "fanOut": 0,
@@ -14515,7 +14740,7 @@
       "type": "function",
       "parent": "features.reader.reader_screen",
       "file": "lib/features/reader/reader_screen.dart",
-      "loc": 37,
+      "loc": 38,
       "category": "route",
       "fanIn": 1,
       "fanOut": 2
@@ -14537,7 +14762,7 @@
       "type": "function",
       "parent": "features.reader.reader_screen",
       "file": "lib/features/reader/reader_screen.dart",
-      "loc": 84,
+      "loc": 89,
       "category": "route",
       "fanIn": 1,
       "fanOut": 14
@@ -14548,7 +14773,18 @@
       "type": "function",
       "parent": "features.reader.reader_screen",
       "file": "lib/features/reader/reader_screen.dart",
-      "loc": 5,
+      "loc": 8,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 1
+    },
+    {
+      "id": "features.reader.reader_screen.ReaderScreenState.enterReaderSystemChrome",
+      "label": "_enterReaderSystemChrome",
+      "type": "function",
+      "parent": "features.reader.reader_screen",
+      "file": "lib/features/reader/reader_screen.dart",
+      "loc": 11,
       "category": "route",
       "fanIn": 1,
       "fanOut": 0
@@ -14584,6 +14820,17 @@
       "loc": 15,
       "category": "route",
       "fanIn": 1,
+      "fanOut": 1
+    },
+    {
+      "id": "features.reader.reader_screen.ReaderScreenState.initState",
+      "label": "initState",
+      "type": "function",
+      "parent": "features.reader.reader_screen",
+      "file": "lib/features/reader/reader_screen.dart",
+      "loc": 7,
+      "category": "entrypoint",
+      "fanIn": 0,
       "fanOut": 1
     },
     {
@@ -14640,6 +14887,17 @@
       "category": "route",
       "fanIn": 1,
       "fanOut": 15
+    },
+    {
+      "id": "features.reader.reader_screen.ReaderScreenState.restoreAppSystemChrome",
+      "label": "_restoreAppSystemChrome",
+      "type": "function",
+      "parent": "features.reader.reader_screen",
+      "file": "lib/features/reader/reader_screen.dart",
+      "loc": 11,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 0
     },
     {
       "id": "features.reader.reader_screen.ReaderScreenState.rewriteHeading",
@@ -14734,6 +14992,18 @@
       "fanOut": 0
     },
     {
+      "id": "features.reader.reader_screen.ReaderScreenState.usesMobileSystemChrome_get",
+      "label": "_usesMobileSystemChrome",
+      "type": "function",
+      "parent": "features.reader.reader_screen",
+      "file": "lib/features/reader/reader_screen.dart",
+      "loc": 5,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 0,
+      "deadCode": true
+    },
+    {
       "id": "features.reader.reader_screen.SoftPositionBanner",
       "label": "_SoftPositionBanner",
       "type": "class",
@@ -14795,7 +15065,7 @@
       "type": "class",
       "parent": "features.reader.reader_screen",
       "file": "lib/features/reader/reader_screen.dart",
-      "loc": 53,
+      "loc": 68,
       "category": "route",
       "fanIn": 0,
       "fanOut": 0,
@@ -14807,10 +15077,10 @@
       "type": "function",
       "parent": "features.reader.reader_screen",
       "file": "lib/features/reader/reader_screen.dart",
-      "loc": 31,
+      "loc": 40,
       "category": "entrypoint",
       "fanIn": 0,
-      "fanOut": 2
+      "fanOut": 3
     },
     {
       "id": "features.reader.reader_screen.StatusBar.new",
@@ -14818,7 +15088,7 @@
       "type": "function",
       "parent": "features.reader.reader_screen",
       "file": "lib/features/reader/reader_screen.dart",
-      "loc": 1,
+      "loc": 5,
       "category": "route",
       "fanIn": 1,
       "fanOut": 0
@@ -14859,6 +15129,40 @@
     },
     {
       "id": "features.reader.reader_screen.StatusPillButton.new",
+      "label": "new",
+      "type": "function",
+      "parent": "features.reader.reader_screen",
+      "file": "lib/features/reader/reader_screen.dart",
+      "loc": 1,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 0
+    },
+    {
+      "id": "features.reader.reader_screen.StatusToggle",
+      "label": "_StatusToggle",
+      "type": "class",
+      "parent": "features.reader.reader_screen",
+      "file": "lib/features/reader/reader_screen.dart",
+      "loc": 37,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 0,
+      "deadCode": true
+    },
+    {
+      "id": "features.reader.reader_screen.StatusToggle.build",
+      "label": "build",
+      "type": "function",
+      "parent": "features.reader.reader_screen",
+      "file": "lib/features/reader/reader_screen.dart",
+      "loc": 28,
+      "category": "entrypoint",
+      "fanIn": 0,
+      "fanOut": 0
+    },
+    {
+      "id": "features.reader.reader_screen.StatusToggle.new",
       "label": "new",
       "type": "function",
       "parent": "features.reader.reader_screen",
@@ -14977,7 +15281,7 @@
       "file": "lib/features/reader/reader_view_model.dart",
       "loc": 934,
       "category": "route",
-      "fanIn": 9,
+      "fanIn": 10,
       "fanOut": 22
     },
     {
@@ -15024,7 +15328,7 @@
       "file": "lib/features/reader/reader_view_model.dart",
       "loc": 5,
       "category": "route",
-      "fanIn": 4,
+      "fanIn": 5,
       "fanOut": 0
     },
     {
@@ -15506,7 +15810,7 @@
       "file": "lib/features/reader/reader_view_model.dart",
       "loc": 6,
       "category": "route",
-      "fanIn": 1,
+      "fanIn": 2,
       "fanOut": 3
     },
     {
@@ -16799,9 +17103,9 @@
       "type": "module",
       "parent": null,
       "file": "lib/features/reader/widgets/reader_side_panel.dart",
-      "loc": 813,
+      "loc": 874,
       "category": "route",
-      "fanIn": 1,
+      "fanIn": 2,
       "fanOut": 5
     },
     {
@@ -16926,7 +17230,7 @@
       "file": "lib/features/reader/widgets/reader_side_panel.dart",
       "loc": 8,
       "category": "route",
-      "fanIn": 1,
+      "fanIn": 2,
       "fanOut": 0
     },
     {
@@ -17011,6 +17315,53 @@
       "deadCode": true
     },
     {
+      "id": "features.reader.widgets.reader_side_panel.OutlineHierarchyGuidePainter",
+      "label": "_OutlineHierarchyGuidePainter",
+      "type": "class",
+      "parent": "features.reader.widgets.reader_side_panel",
+      "file": "lib/features/reader/widgets/reader_side_panel.dart",
+      "loc": 27,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 0,
+      "deadCode": true
+    },
+    {
+      "id": "features.reader.widgets.reader_side_panel.OutlineHierarchyGuidePainter.new",
+      "label": "new",
+      "type": "function",
+      "parent": "features.reader.widgets.reader_side_panel",
+      "file": "lib/features/reader/widgets/reader_side_panel.dart",
+      "loc": 1,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 0
+    },
+    {
+      "id": "features.reader.widgets.reader_side_panel.OutlineHierarchyGuidePainter.paint",
+      "label": "paint",
+      "type": "function",
+      "parent": "features.reader.widgets.reader_side_panel",
+      "file": "lib/features/reader/widgets/reader_side_panel.dart",
+      "loc": 15,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 0,
+      "deadCode": true
+    },
+    {
+      "id": "features.reader.widgets.reader_side_panel.OutlineHierarchyGuidePainter.shouldRepaint",
+      "label": "shouldRepaint",
+      "type": "function",
+      "parent": "features.reader.widgets.reader_side_panel",
+      "file": "lib/features/reader/widgets/reader_side_panel.dart",
+      "loc": 3,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 0,
+      "deadCode": true
+    },
+    {
       "id": "features.reader.widgets.reader_side_panel.OutlineList",
       "label": "_OutlineList",
       "type": "class",
@@ -17051,7 +17402,7 @@
       "type": "class",
       "parent": "features.reader.widgets.reader_side_panel",
       "file": "lib/features/reader/widgets/reader_side_panel.dart",
-      "loc": 199,
+      "loc": 223,
       "category": "route",
       "fanIn": 0,
       "fanOut": 1,
@@ -17096,10 +17447,10 @@
       "type": "function",
       "parent": "features.reader.widgets.reader_side_panel",
       "file": "lib/features/reader/widgets/reader_side_panel.dart",
-      "loc": 51,
+      "loc": 68,
       "category": "route",
       "fanIn": 1,
-      "fanOut": 0
+      "fanOut": 1
     },
     {
       "id": "features.reader.widgets.reader_side_panel.OutlineListState.run",
@@ -17119,10 +17470,10 @@
       "type": "function",
       "parent": "features.reader.widgets.reader_side_panel",
       "file": "lib/features/reader/widgets/reader_side_panel.dart",
-      "loc": 21,
+      "loc": 28,
       "category": "route",
       "fanIn": 0,
-      "fanOut": 1,
+      "fanOut": 2,
       "deadCode": true
     },
     {
@@ -17176,7 +17527,7 @@
       "type": "class",
       "parent": "features.reader.widgets.reader_side_panel",
       "file": "lib/features/reader/widgets/reader_side_panel.dart",
-      "loc": 48,
+      "loc": 51,
       "category": "route",
       "fanIn": 0,
       "fanOut": 0,
@@ -17188,7 +17539,7 @@
       "type": "function",
       "parent": "features.reader.widgets.reader_side_panel",
       "file": "lib/features/reader/widgets/reader_side_panel.dart",
-      "loc": 32,
+      "loc": 35,
       "category": "entrypoint",
       "fanIn": 0,
       "fanOut": 1
@@ -17247,7 +17598,7 @@
       "file": "lib/features/reader/widgets/reader_side_panel.dart",
       "loc": 14,
       "category": "route",
-      "fanIn": 1,
+      "fanIn": 2,
       "fanOut": 0
     },
     {
@@ -17256,7 +17607,7 @@
       "type": "class",
       "parent": "features.reader.widgets.reader_side_panel",
       "file": "lib/features/reader/widgets/reader_side_panel.dart",
-      "loc": 36,
+      "loc": 39,
       "category": "route",
       "fanIn": 0,
       "fanOut": 0,
@@ -17268,7 +17619,7 @@
       "type": "function",
       "parent": "features.reader.widgets.reader_side_panel",
       "file": "lib/features/reader/widgets/reader_side_panel.dart",
-      "loc": 22,
+      "loc": 25,
       "category": "entrypoint",
       "fanIn": 0,
       "fanOut": 0
@@ -25767,7 +26118,7 @@
       "file": "lib/scheduling/history/scheduler_event.dart",
       "loc": 4,
       "category": "other",
-      "fanIn": 45,
+      "fanIn": 46,
       "fanOut": 0
     },
     {
@@ -31503,7 +31854,7 @@
       "file": "lib/settings/settings_store.dart",
       "loc": 2,
       "category": "other",
-      "fanIn": 19,
+      "fanIn": 21,
       "fanOut": 0
     },
     {
@@ -31825,7 +32176,7 @@
       "file": "lib/shared/clock.dart",
       "loc": 36,
       "category": "util",
-      "fanIn": 33,
+      "fanIn": 35,
       "fanOut": 1
     },
     {
@@ -31883,7 +32234,7 @@
       "file": "lib/shared/clock.dart",
       "loc": 1,
       "category": "util",
-      "fanIn": 21,
+      "fanIn": 23,
       "fanOut": 0
     },
     {
@@ -31963,7 +32314,7 @@
       "file": "lib/shared/command_base.dart",
       "loc": 18,
       "category": "util",
-      "fanIn": 42,
+      "fanIn": 43,
       "fanOut": 0
     },
     {
@@ -32196,7 +32547,7 @@
       "file": "lib/shared/id_generator.dart",
       "loc": 38,
       "category": "util",
-      "fanIn": 16,
+      "fanIn": 18,
       "fanOut": 2
     },
     {
@@ -32219,7 +32570,7 @@
       "file": "lib/shared/id_generator.dart",
       "loc": 1,
       "category": "util",
-      "fanIn": 4,
+      "fanIn": 6,
       "fanOut": 0
     },
     {
@@ -32383,7 +32734,7 @@
       "file": "lib/shared/operation_id.dart",
       "loc": 27,
       "category": "util",
-      "fanIn": 15,
+      "fanIn": 16,
       "fanOut": 1
     },
     {
@@ -32745,7 +33096,7 @@
       "file": "lib/shared/result.dart",
       "loc": 5,
       "category": "util",
-      "fanIn": 46,
+      "fanIn": 47,
       "fanOut": 2
     },
     {
@@ -32897,7 +33248,7 @@
       "file": "lib/shared/result.dart",
       "loc": 1,
       "category": "util",
-      "fanIn": 23,
+      "fanIn": 24,
       "fanOut": 0
     },
     {
@@ -32908,7 +33259,7 @@
       "file": "lib/shared/ui/app_theme.dart",
       "loc": 167,
       "category": "util",
-      "fanIn": 32,
+      "fanIn": 33,
       "fanOut": 1
     },
     {
@@ -34846,7 +35197,7 @@
       "file": "lib/storage/database/app_database.dart",
       "loc": 1174,
       "category": "db",
-      "fanIn": 28,
+      "fanIn": 30,
       "fanOut": 6
     },
     {
@@ -35136,7 +35487,7 @@
       "file": "lib/storage/database/connection.dart",
       "loc": 33,
       "category": "db",
-      "fanIn": 23,
+      "fanIn": 25,
       "fanOut": 3
     },
     {
@@ -35170,7 +35521,7 @@
       "file": "lib/storage/database/connection.dart",
       "loc": 3,
       "category": "db",
-      "fanIn": 12,
+      "fanIn": 14,
       "fanOut": 1
     },
     {
@@ -40885,7 +41236,7 @@
       "type": "module",
       "parent": null,
       "file": "test/features/browser/browser_deletion_test.dart",
-      "loc": 263,
+      "loc": 310,
       "category": "route",
       "fanIn": 0,
       "fanOut": 21,
@@ -40897,10 +41248,33 @@
       "type": "function",
       "parent": "test.features.browser.browser_deletion_test",
       "file": "test/features/browser/browser_deletion_test.dart",
-      "loc": 219,
+      "loc": 266,
       "category": "entrypoint",
       "fanIn": 0,
-      "fanOut": 20
+      "fanOut": 21
+    },
+    {
+      "id": "test.features.browser.browser_screen_test",
+      "label": "browser_screen_test",
+      "type": "module",
+      "parent": null,
+      "file": "test/features/browser/browser_screen_test.dart",
+      "loc": 65,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 9,
+      "deadCode": true
+    },
+    {
+      "id": "test.features.browser.browser_screen_test.main",
+      "label": "main",
+      "type": "function",
+      "parent": "test.features.browser.browser_screen_test",
+      "file": "test/features/browser/browser_screen_test.dart",
+      "loc": 51,
+      "category": "entrypoint",
+      "fanIn": 0,
+      "fanOut": 6
     },
     {
       "id": "test.features.daily_queue.later_today_stage_stores_test",
@@ -41696,6 +42070,74 @@
       "category": "entrypoint",
       "fanIn": 0,
       "fanOut": 28
+    },
+    {
+      "id": "test.features.reader.reader_screen_test",
+      "label": "reader_screen_test",
+      "type": "module",
+      "parent": null,
+      "file": "test/features/reader/reader_screen_test.dart",
+      "loc": 178,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 12,
+      "deadCode": true
+    },
+    {
+      "id": "test.features.reader.reader_screen_test.main",
+      "label": "main",
+      "type": "function",
+      "parent": "test.features.reader.reader_screen_test",
+      "file": "test/features/reader/reader_screen_test.dart",
+      "loc": 160,
+      "category": "entrypoint",
+      "fanIn": 0,
+      "fanOut": 8
+    },
+    {
+      "id": "test.features.reader.reader_side_panel_test",
+      "label": "reader_side_panel_test",
+      "type": "module",
+      "parent": null,
+      "file": "test/features/reader/reader_side_panel_test.dart",
+      "loc": 123,
+      "category": "route",
+      "fanIn": 0,
+      "fanOut": 5,
+      "deadCode": true
+    },
+    {
+      "id": "test.features.reader.reader_side_panel_test.editing",
+      "label": "_editing",
+      "type": "function",
+      "parent": "test.features.reader.reader_side_panel_test",
+      "file": "test/features/reader/reader_side_panel_test.dart",
+      "loc": 16,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 1
+    },
+    {
+      "id": "test.features.reader.reader_side_panel_test.main",
+      "label": "main",
+      "type": "function",
+      "parent": "test.features.reader.reader_side_panel_test",
+      "file": "test/features/reader/reader_side_panel_test.dart",
+      "loc": 67,
+      "category": "entrypoint",
+      "fanIn": 0,
+      "fanOut": 3
+    },
+    {
+      "id": "test.features.reader.reader_side_panel_test.panel",
+      "label": "_panel",
+      "type": "function",
+      "parent": "test.features.reader.reader_side_panel_test",
+      "file": "test/features/reader/reader_side_panel_test.dart",
+      "loc": 20,
+      "category": "route",
+      "fanIn": 1,
+      "fanOut": 2
     },
     {
       "id": "test.features.reader.reader_view_model_test",
@@ -43426,7 +43868,7 @@
       "file": "test/support/app_harness.dart",
       "loc": 1,
       "category": "other",
-      "fanIn": 34,
+      "fanIn": 36,
       "fanOut": 0
     },
     {
@@ -45437,6 +45879,11 @@
     },
     {
       "source": "features.browser.browser_command_runner",
+      "target": "shared.operation_id",
+      "type": "imports"
+    },
+    {
+      "source": "features.browser.browser_command_runner",
       "target": "shared.result",
       "type": "imports"
     },
@@ -45472,56 +45919,71 @@
     },
     {
       "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElement",
+      "target": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements",
+      "target": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
       "target": "features.browser.browser_command_runner.BrowserCommandRunner.erase",
       "type": "calls"
     },
     {
-      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElement",
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
       "target": "features.browser.browser_command_runner.BrowserCommandRunner.everythingUnder",
       "type": "calls"
     },
     {
-      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElement",
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
       "target": "features.browser.browser_command_runner.BrowserCommandRunner.forgetInTodaysQueues",
       "type": "calls"
     },
     {
-      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElement",
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
       "target": "features.browser.browser_command_runner.TreeIndex.contains",
       "type": "calls"
     },
     {
-      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElement",
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
       "target": "features.browser.browser_commands.BrowserDeletionOutcome.new",
       "type": "calls"
     },
     {
-      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElement",
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
       "target": "shared.diagnostics_sink.DiagnosticEvent.new",
       "type": "calls"
     },
     {
-      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElement",
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
       "target": "shared.result.Err.new",
       "type": "calls"
     },
     {
-      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElement",
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
       "target": "shared.result.NotFoundFailure.new",
       "type": "calls"
     },
     {
-      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElement",
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
       "target": "shared.result.Ok.new",
       "type": "calls"
     },
     {
-      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElement",
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
       "target": "shared.result.UnexpectedFailure.new",
       "type": "calls"
     },
     {
-      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElement",
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
+      "target": "shared.result.ValidationFailure.new",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_command_runner.BrowserCommandRunner.deleteElements.overload2",
       "target": "storage.contracts.learning_repository.ActivityRecord.new",
       "type": "calls"
     },
@@ -45846,6 +46308,11 @@
       "type": "extends"
     },
     {
+      "source": "features.browser.browser_commands.DeleteElements",
+      "target": "shared.command_base.AppCommand",
+      "type": "extends"
+    },
+    {
       "source": "features.browser.browser_commands.FileElementUnder",
       "target": "features.browser.browser_commands.BrowserFilingCommand",
       "type": "extends"
@@ -46022,6 +46489,11 @@
     },
     {
       "source": "features.browser.browser_screen.BrowserScreenState.appBar",
+      "target": "features.browser.browser_screen.BrowserScreenState.selectionAppBar",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.appBar",
       "target": "features.browser.browser_screen.NewElementMenu.new",
       "type": "calls"
     },
@@ -46038,6 +46510,11 @@
     {
       "source": "features.browser.browser_screen.BrowserScreenState.appBar",
       "target": "shared.ui.screen_width.isCompactWidth",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.build",
+      "target": "features.browser.browser_screen.BrowserScreenState.clearSelection",
       "type": "calls"
     },
     {
@@ -46077,11 +46554,6 @@
     },
     {
       "source": "features.browser.browser_screen.BrowserScreenState.buildBody",
-      "target": "features.browser.browser_screen.BrowserScreenState.flatten",
-      "type": "calls"
-    },
-    {
-      "source": "features.browser.browser_screen.BrowserScreenState.buildBody",
       "target": "features.browser.browser_screen.BrowserScreenState.openElement",
       "type": "calls"
     },
@@ -46093,6 +46565,16 @@
     {
       "source": "features.browser.browser_screen.BrowserScreenState.buildBody",
       "target": "features.browser.browser_screen.BrowserScreenState.runLearningCommand",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.buildBody",
+      "target": "features.browser.browser_screen.BrowserScreenState.toggleSelection",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.buildBody",
+      "target": "features.browser.browser_screen.BrowserScreenState.visibleRows",
       "type": "calls"
     },
     {
@@ -46171,6 +46653,21 @@
       "type": "calls"
     },
     {
+      "source": "features.browser.browser_screen.BrowserScreenState.deleteSelection",
+      "target": "features.browser.browser_screen.BrowserScreenState.allNodes",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.deleteSelection",
+      "target": "features.browser.browser_screen.confirmDeleteSelection",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.deleteSelection",
+      "target": "settings.settings_store.SettingsStore.invalidate",
+      "type": "calls"
+    },
+    {
       "source": "features.browser.browser_screen.BrowserScreenState.dropAbove",
       "target": "settings.settings_store.SettingsStore.invalidate",
       "type": "calls"
@@ -46241,6 +46738,21 @@
       "type": "calls"
     },
     {
+      "source": "features.browser.browser_screen.BrowserScreenState.runSelectedLearningCommand",
+      "target": "features.browser.browser_view_model.BrowserViewModel.applyLearningCommandToSelection",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.runSelectedLearningCommand",
+      "target": "features.priority.learning_command_menu.askForLearningCommand",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.runSelectedLearningCommand",
+      "target": "settings.settings_store.SettingsStore.invalidate",
+      "type": "calls"
+    },
+    {
       "source": "features.browser.browser_screen.BrowserScreenState.scaffold",
       "target": "features.browser.browser_screen.BrowserScreenState.appBar",
       "type": "calls"
@@ -46248,6 +46760,36 @@
     {
       "source": "features.browser.browser_screen.BrowserScreenState.seedExpansion",
       "target": "features.browser.browser_screen.BrowserScreenState.allRefs",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.selectAllVisible",
+      "target": "features.browser.browser_screen.BrowserScreenState.visibleRows",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.selectAllVisible",
+      "target": "shared.result.Result.map",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.selectionAppBar",
+      "target": "features.browser.browser_screen.BrowserScreenState.deleteSelection",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.selectionAppBar",
+      "target": "features.browser.browser_screen.BrowserScreenState.selectAllVisible",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.selectionAppBar",
+      "target": "features.priority.learning_command_menu.LearningCommandMenu.new",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.BrowserScreenState.visibleRows",
+      "target": "features.browser.browser_screen.BrowserScreenState.flatten",
       "type": "calls"
     },
     {
@@ -46296,13 +46838,18 @@
       "type": "calls"
     },
     {
-      "source": "features.browser.browser_screen.NodeRow.oneRow",
+      "source": "features.browser.browser_screen.NodeRow.leadingControl",
       "target": "features.browser.browser_screen.NodeRow.dragHandle",
       "type": "calls"
     },
     {
       "source": "features.browser.browser_screen.NodeRow.oneRow",
       "target": "features.browser.browser_screen.NodeRow.expandArrow",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_screen.NodeRow.oneRow",
+      "target": "features.browser.browser_screen.NodeRow.leadingControl",
       "type": "calls"
     },
     {
@@ -46342,12 +46889,12 @@
     },
     {
       "source": "features.browser.browser_screen.NodeRow.stackedRow",
-      "target": "features.browser.browser_screen.NodeRow.dragHandle",
+      "target": "features.browser.browser_screen.NodeRow.expandArrow",
       "type": "calls"
     },
     {
       "source": "features.browser.browser_screen.NodeRow.stackedRow",
-      "target": "features.browser.browser_screen.NodeRow.expandArrow",
+      "target": "features.browser.browser_screen.NodeRow.leadingControl",
       "type": "calls"
     },
     {
@@ -46607,7 +47154,7 @@
     },
     {
       "source": "features.browser.browser_view_model.BrowserViewModel.applyLearningCommand",
-      "target": "features.browser.browser_view_model.BrowserViewModel.command",
+      "target": "features.browser.browser_view_model.BrowserViewModel.applyLearningCommandToSelection",
       "type": "calls"
     },
     {
@@ -46616,7 +47163,17 @@
       "type": "calls"
     },
     {
-      "source": "features.browser.browser_view_model.BrowserViewModel.applyLearningCommand",
+      "source": "features.browser.browser_view_model.BrowserViewModel.applyLearningCommandToSelection",
+      "target": "features.browser.browser_view_model.BrowserViewModel.command",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_view_model.BrowserViewModel.applyLearningCommandToSelection",
+      "target": "features.priority.learning_commands.LearningCommandAnswers.new",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_view_model.BrowserViewModel.applyLearningCommandToSelection",
       "target": "features.priority.learning_commands.runLearningCommand",
       "type": "calls"
     },
@@ -46672,6 +47229,16 @@
     },
     {
       "source": "features.browser.browser_view_model.BrowserViewModel.deleteElement",
+      "target": "features.browser.browser_view_model.BrowserViewModel.command",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_view_model.BrowserViewModel.deleteElements",
+      "target": "features.browser.browser_commands.DeleteElements.new",
+      "type": "calls"
+    },
+    {
+      "source": "features.browser.browser_view_model.BrowserViewModel.deleteElements",
       "target": "features.browser.browser_view_model.BrowserViewModel.command",
       "type": "calls"
     },
@@ -55157,7 +55724,7 @@
     },
     {
       "source": "features.reader.reader_screen.ActionBar.build",
-      "target": "features.reader.reader_screen.ActionBar.hintAboveButtons",
+      "target": "features.reader.reader_screen.ActionBar.compactButtons",
       "type": "calls"
     },
     {
@@ -55181,21 +55748,26 @@
       "type": "calls"
     },
     {
+      "source": "features.reader.reader_screen.ActionBar.compactButtons",
+      "target": "features.reader.reader_screen.ActionBar.postponeFromPrompt",
+      "type": "calls"
+    },
+    {
+      "source": "features.reader.reader_screen.ActionBar.compactButtons",
+      "target": "features.reader.reader_screen.CompactReaderAction.new",
+      "type": "calls"
+    },
+    {
+      "source": "features.reader.reader_screen.ActionBar.compactButtons",
+      "target": "features.reader.reader_view_model.ReaderViewModel.undoEdit",
+      "type": "calls"
+    },
+    {
       "source": "features.reader.reader_screen.ActionBar.hint",
       "target": "features.reader.reader_screen.ActionBar.hintFor",
       "type": "calls"
     },
     {
-      "source": "features.reader.reader_screen.ActionBar.hintAboveButtons",
-      "target": "features.reader.reader_screen.ActionBar.buttons",
-      "type": "calls"
-    },
-    {
-      "source": "features.reader.reader_screen.ActionBar.hintAboveButtons",
-      "target": "features.reader.reader_screen.ActionBar.hint",
-      "type": "calls"
-    },
-    {
       "source": "features.reader.reader_screen.ActionBar.oneLine",
       "target": "features.reader.reader_screen.ActionBar.buttons",
       "type": "calls"
@@ -55203,11 +55775,16 @@
     {
       "source": "features.reader.reader_screen.ActionBar.oneLine",
       "target": "features.reader.reader_screen.ActionBar.hint",
+      "type": "calls"
+    },
+    {
+      "source": "features.reader.reader_screen.ActionBar.postponeFromPrompt",
+      "target": "features.reader.reader_screen.promptForDays",
       "type": "calls"
     },
     {
       "source": "features.reader.reader_screen.ActionBar.progressButtons",
-      "target": "features.reader.reader_screen.promptForDays",
+      "target": "features.reader.reader_screen.ActionBar.postponeFromPrompt",
       "type": "calls"
     },
     {
@@ -55326,6 +55903,11 @@
       "type": "calls"
     },
     {
+      "source": "features.reader.reader_screen.ReaderScreenState.dispose",
+      "target": "features.reader.reader_screen.ReaderScreenState.restoreAppSystemChrome",
+      "type": "calls"
+    },
+    {
       "source": "features.reader.reader_screen.ReaderScreenState.extractSelection",
       "target": "features.reader.widgets.reader_selection.ReaderSelectionController.resolveSelection",
       "type": "calls"
@@ -55343,6 +55925,11 @@
     {
       "source": "features.reader.reader_screen.ReaderScreenState.goToExtract",
       "target": "features.reader.widgets.reader_view.ReaderViewState.animateToAnchor",
+      "type": "calls"
+    },
+    {
+      "source": "features.reader.reader_screen.ReaderScreenState.initState",
+      "target": "features.reader.reader_screen.ReaderScreenState.enterReaderSystemChrome",
       "type": "calls"
     },
     {
@@ -55578,6 +56165,11 @@
     {
       "source": "features.reader.reader_screen.StatusBar.build",
       "target": "features.reader.reader_screen.StatusBar.statusParts",
+      "type": "calls"
+    },
+    {
+      "source": "features.reader.reader_screen.StatusBar.build",
+      "target": "features.reader.reader_screen.StatusToggle.new",
       "type": "calls"
     },
     {
@@ -56883,6 +57475,16 @@
     {
       "source": "features.reader.widgets.reader_side_panel.OutlineListState.list",
       "target": "features.reader.widgets.reader_side_panel.OutlineListState.row",
+      "type": "calls"
+    },
+    {
+      "source": "features.reader.widgets.reader_side_panel.OutlineListState.row",
+      "target": "features.reader.widgets.reader_side_panel.OutlineHierarchyGuidePainter.new",
+      "type": "calls"
+    },
+    {
+      "source": "features.reader.widgets.reader_side_panel.OutlineListState.selectedEntry_get",
+      "target": "documents.outline.outlineEntryOf",
       "type": "calls"
     },
     {
@@ -69092,6 +69694,11 @@
     },
     {
       "source": "test.features.browser.browser_deletion_test.main",
+      "target": "features.browser.browser_commands.DeleteElements.new",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.browser.browser_deletion_test.main",
       "target": "features.browser.browser_commands.FileElementUnder.new",
       "type": "calls"
     },
@@ -69178,6 +69785,81 @@
     {
       "source": "test.features.browser.browser_deletion_test.main",
       "target": "test.support.app_harness.AppHarness.operation",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test",
+      "target": "app.providers",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test",
+      "target": "external.flutter",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test",
+      "target": "external.flutter_riverpod",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test",
+      "target": "external.flutter_test",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test",
+      "target": "features.browser.browser_screen",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test",
+      "target": "shared.clock",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test",
+      "target": "shared.id_generator",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test",
+      "target": "storage.database.app_database",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test",
+      "target": "storage.database.connection",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test.main",
+      "target": "documents.markdown_block_parser.SourceLine.text",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test.main",
+      "target": "features.browser.browser_screen.BrowserScreen.new",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test.main",
+      "target": "shared.clock.FakeClock.new",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test.main",
+      "target": "shared.id_generator.FakeIdGenerator.new",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test.main",
+      "target": "storage.database.connection.openInMemoryDatabase",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.browser.browser_screen_test.main",
+      "target": "test.support.app_harness.AppHarness.close",
       "type": "calls"
     },
     {
@@ -71483,6 +72165,161 @@
     {
       "source": "test.features.reader.reader_command_runner_test.main",
       "target": "test.support.app_harness.AppHarness.new",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test",
+      "target": "app.providers",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test",
+      "target": "external.flutter",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test",
+      "target": "external.flutter_riverpod",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test",
+      "target": "external.flutter_test",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test",
+      "target": "features.browser.browser_view_model",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test",
+      "target": "features.reader.reader_screen",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test",
+      "target": "features.reader.reader_view_model",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test",
+      "target": "shared.clock",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test",
+      "target": "shared.id_generator",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test",
+      "target": "shared.ui.app_theme",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test",
+      "target": "storage.database.app_database",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test",
+      "target": "storage.database.connection",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test.main",
+      "target": "documents.markdown_block_parser.SourceLine.text",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test.main",
+      "target": "features.browser.browser_view_model.BrowserViewModel.importMarkdown",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test.main",
+      "target": "features.reader.reader_screen.ReaderScreen.new",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test.main",
+      "target": "features.reader.reader_view_model.ReaderRequest.new",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test.main",
+      "target": "shared.clock.FakeClock.new",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test.main",
+      "target": "shared.id_generator.FakeIdGenerator.new",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test.main",
+      "target": "storage.database.connection.openInMemoryDatabase",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_screen_test.main",
+      "target": "test.support.app_harness.AppHarness.close",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_side_panel_test",
+      "target": "documents.document",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_side_panel_test",
+      "target": "documents.outline",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_side_panel_test",
+      "target": "external.flutter",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_side_panel_test",
+      "target": "external.flutter_test",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_side_panel_test",
+      "target": "features.reader.widgets.reader_side_panel",
+      "type": "imports"
+    },
+    {
+      "source": "test.features.reader.reader_side_panel_test.editing",
+      "target": "features.reader.widgets.reader_side_panel.OutlineEditing.new",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_side_panel_test.main",
+      "target": "documents.markdown_block_parser.SourceLine.text",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_side_panel_test.main",
+      "target": "test.features.reader.reader_side_panel_test.editing",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_side_panel_test.main",
+      "target": "test.features.reader.reader_side_panel_test.panel",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_side_panel_test.panel",
+      "target": "features.reader.widgets.reader_side_panel.ReaderSidePanel.new",
+      "type": "calls"
+    },
+    {
+      "source": "test.features.reader.reader_side_panel_test.panel",
+      "target": "scheduling.history.scheduler_event.SchedulerEventType.parse",
       "type": "calls"
     },
     {

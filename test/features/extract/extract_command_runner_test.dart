@@ -1,6 +1,7 @@
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
+import 'package:incremental_reader/documents/inline_markup.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/features/extract/extract_command_runner.dart';
@@ -128,6 +129,38 @@ void main() {
       final result = await extract(selectRendered(paragraph, 'Cowan (2001)'));
       expect(result.unwrap().markdown, '`Cowan (2001)`');
     });
+
+    test(
+      'a selection spanning blocks becomes one standalone extract',
+      () async {
+        final first = blockOf(BlockType.paragraph);
+        final second = blockOf(BlockType.paragraph, nth: 1);
+        final firstStart = first.renderedText.indexOf('seven items');
+        final secondEnd =
+            second.renderedText.indexOf('storage') + 'storage'.length;
+        final start = anchorIn(first, first.renderedToUtf8(firstStart));
+        final end = anchorIn(
+          second,
+          second.renderedToUtf8(secondEnd, edge: RenderedEdge.trailing),
+        );
+        final selected = document.markdownBetween(start, end);
+
+        final result = await extract(
+          SelectionRange.of(
+            startAnchor: start,
+            endAnchor: end,
+            markdown: selected,
+          ),
+        );
+
+        final created = result.unwrap();
+        expect(created.markdown, contains('*seven items*'));
+        expect(created.markdown, contains('日本語-robust storage'));
+        expect(created.markdown, contains('\n\n'));
+        expect(created.provenance.range.matches(selected), isTrue);
+        expect(document.isSameBlock(created.provenance.range), isFalse);
+      },
+    );
 
     test('inline math remains inline math', () async {
       final paragraph = blockOf(BlockType.paragraph);

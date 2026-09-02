@@ -29,6 +29,7 @@ import 'package:incremental_reader/storage/contracts/database_maintenance.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/search_repository.dart';
 import 'package:incremental_reader/storage/contracts/settings_repository.dart';
+import 'package:incremental_reader/storage/contracts/source_asset_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
@@ -37,10 +38,12 @@ import 'package:incremental_reader/storage/drift/drift_database_maintenance.dart
 import 'package:incremental_reader/storage/drift/drift_learning_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_search_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_settings_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_source_asset_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_transaction_runner.dart';
 import 'package:incremental_reader/storage/drift/drift_transfer_repository.dart';
 import 'package:incremental_reader/storage/files/backup_service.dart';
 import 'package:incremental_reader/storage/files/rotating_log_sink.dart';
+import 'package:incremental_reader/storage/files/source_asset_file_store.dart';
 import 'package:incremental_reader/storage/platform/app_paths.dart';
 import 'package:incremental_reader/storage/platform/time_zones.dart';
 
@@ -163,6 +166,20 @@ final Provider<ContentRepository> contentRepositoryProvider =
       (Ref ref) => DriftContentRepository(ref.watch(databaseProvider)),
     );
 
+/// Metadata for images embedded in source markdown.
+final Provider<SourceAssetRepository> sourceAssetRepositoryProvider =
+    Provider<SourceAssetRepository>(
+      (Ref ref) => DriftSourceAssetRepository(ref.watch(databaseProvider)),
+    );
+
+/// Immutable image blobs in this installation's application-support folder.
+final Provider<SourceAssetFileStore> sourceAssetFileStoreProvider =
+    Provider<SourceAssetFileStore>(
+      (Ref ref) => SourceAssetFileStore(
+        assetDirectory: ref.watch(appPathsProvider).assetDirectory,
+      ),
+    );
+
 /// Learning aggregate: schedules, pacing, priority, activity, repetition log.
 final Provider<LearningRepository> learningRepositoryProvider =
     Provider<LearningRepository>(
@@ -202,6 +219,14 @@ final Provider<BackupService> backupServiceProvider = Provider<BackupService>(
   (Ref ref) => BackupService(
     database: ref.watch(databaseProvider),
     backupDirectory: ref.watch(appPathsProvider).backupDirectory,
+    assetDirectory: ref.watch(appPathsProvider).assetDirectory,
+    listReferencedAssets: () async => <BackupAssetReference>[
+      for (final String sha256Value
+          in await ref
+              .read(sourceAssetRepositoryProvider)
+              .listAvailableSourceAssetSha256Values())
+        BackupAssetReference(sha256: sha256Value),
+    ],
     clock: ref.watch(clockProvider),
     diagnostics: ref.watch(diagnosticsProvider),
   ),

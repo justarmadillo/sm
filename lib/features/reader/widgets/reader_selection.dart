@@ -106,8 +106,8 @@ final class ReaderSelectionController extends ChangeNotifier {
   /// Whether a non-empty selection exists.
   bool get hasSelection => _selection != null && !_selection!.isCollapsed;
 
-  /// M2 extraction is intentionally limited to one block.
-  bool get canExtract => hasSelection && _selection!.isSameBlock;
+  /// Any non-empty selection can be extracted, including one spanning blocks.
+  bool get canExtract => hasSelection;
 
   /// Points the controller at a different document and clears state.
   void setDocument(Document document) {

@@ -201,16 +201,31 @@ final class Document {
 
   /// Standalone Markdown that renders the same selected passage.
   ///
-  /// One block only. The exact raw source slice and hash remain in [range] for
-  /// provenance; this fragment repairs formatting delimiters at its boundaries
-  /// so the passage renders on its own.
+  /// The exact contiguous source slice and hash remain in [range] for
+  /// provenance. Each touched block is rendered as an independent fragment so
+  /// partial formatting delimiters and structural syntax at either edge cannot
+  /// leave the extract with invalid Markdown.
   String markdownFragmentForRange(SelectionRange range) {
-    if (!isSameBlock(range)) return '';
-    final block = blockAtOffset(range.startUtf8);
-    if (block == null) return '';
-    final start = block.utf8ToRendered(_blockRelative(block, range.startUtf8));
-    final end = block.utf8ToRendered(_blockRelative(block, range.endUtf8));
-    return block.markdownFragmentForRendered(start, end);
+    if (range.endUtf8 <= range.startUtf8) return '';
+    final startIndex = blockIndexAtOffset(range.startUtf8);
+    final endIndex = blockIndexAtOffsetTrailing(range.endUtf8);
+    if (startIndex == null || endIndex == null || endIndex < startIndex) {
+      return '';
+    }
+
+    final fragments = <String>[];
+    for (var index = startIndex; index <= endIndex; index++) {
+      final block = blocks[index];
+      final start = index == startIndex
+          ? block.utf8ToRendered(_blockRelative(block, range.startUtf8))
+          : 0;
+      final end = index == endIndex
+          ? block.utf8ToRendered(_blockRelative(block, range.endUtf8))
+          : block.renderedText.length;
+      final fragment = block.markdownFragmentForRendered(start, end);
+      if (fragment.isNotEmpty) fragments.add(fragment);
+    }
+    return fragments.join('\n\n');
   }
 
   /// Blocks touched by the range from [start] to [end], in document order.

@@ -11,6 +11,7 @@ import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
+import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
 
@@ -133,6 +134,23 @@ void main() {
             .having((MethodCall call) => call.arguments, 'arguments', <String>[
               'SystemUiOverlay.bottom',
             ]),
+      ),
+    );
+    expect(
+      platformCalls,
+      contains(
+        isA<MethodCall>()
+            .having(
+              (MethodCall call) => call.method,
+              'method',
+              'SystemChrome.setSystemUIOverlayStyle',
+            )
+            .having(
+              (MethodCall call) =>
+                  (call.arguments as Map<Object?, Object?>)['statusBarColor'],
+              'status bar color',
+              AppColors.background.toARGB32(),
+            ),
       ),
     );
 

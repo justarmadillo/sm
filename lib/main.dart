@@ -39,6 +39,18 @@ Future<void> main() async {
     ],
   );
 
+  // Startup is the one point where backup packaging and deletion cannot race.
+  // Remove abandoned staging files, then blobs whose last database owner was
+  // deleted during an earlier session.
+  final sourceAssetFiles = container.read(sourceAssetFileStoreProvider);
+  await sourceAssetFiles.deletePartialFiles();
+  await sourceAssetFiles.deleteUnreferencedBlobs(
+    (await container
+            .read(sourceAssetRepositoryProvider)
+            .listAvailableSourceAssetSha256Values())
+        .toSet(),
+  );
+
   // Settings first: the synchronous providers read a cached configuration,
   // so warming the store before the first frame stops the app rendering
   // against shipped defaults and then jumping to the user's own values.

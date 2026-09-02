@@ -17,6 +17,7 @@ import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/documents/source_asset.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/extract/extract_commands.dart';
 import 'package:incremental_reader/features/extract/extract_providers.dart';
@@ -88,10 +89,12 @@ final class ReaderUiState {
     this.wasRepetition = false,
     this.editingBlockId,
     this.canUndoEdit = false,
+    this.assets = const <SourceAsset>[],
   });
 
   final Source source;
   final Document document;
+  final List<SourceAsset> assets;
   final TopicState topic;
   final ReaderMode mode;
 
@@ -237,9 +240,11 @@ final class ReaderUiState {
     bool shouldClearEditing = false,
     bool? canUndoEdit,
     Document? document,
+    List<SourceAsset>? assets,
   }) => ReaderUiState(
     source: source ?? this.source,
     document: document ?? this.document,
+    assets: assets ?? this.assets,
     topic: topic ?? this.topic,
     mode: mode ?? this.mode,
     openedAt: openedAt ?? this.openedAt,
@@ -311,6 +316,9 @@ final class ReaderViewModel
       cardsFromSource: (await content.listCardsOfSource(source.id)).length,
       canUndoEdit: (await content.findLatestSourceEdit(source.id)) != null,
       hadSoftPositionOnOpen: source.resume.softPosition != null,
+      assets: await ref
+          .read(sourceAssetRepositoryProvider)
+          .listSourceAssets(source.id),
     );
   }
 
@@ -548,10 +556,7 @@ final class ReaderViewModel
   /// viewport, the marker, and the schedule exactly where they were.
   Future<Extract?> extractSelection(SelectionRange range) async {
     final current = state.valueOrNull;
-    if (current == null ||
-        current.isBusy ||
-        !current.canCommitProgress ||
-        !current.document.isSameBlock(range)) {
+    if (current == null || current.isBusy || !current.canCommitProgress) {
       return null;
     }
     state = AsyncValue<ReaderUiState>.data(current.copyWith(isBusy: true));
@@ -772,6 +777,24 @@ final class ReaderViewModel
         ),
   );
 
+  /// Adds prepared images at [afterBlockId], or at the start of an empty source.
+  Future<void> insertImages({
+    required String? afterBlockId,
+    required List<SourceImageImport> images,
+  }) => _runEdit(
+    (OperationId operation, ReaderUiState current) => ref
+        .read(readerCommandRunnerProvider)
+        .insertSourceImages(
+          InsertSourceImages(
+            operation,
+            sourceId: current.source.id,
+            afterBlockId: afterBlockId,
+            images: images,
+            baseContentRevision: current.document.contentRevision,
+          ),
+        ),
+  );
+
   /// Moves a heading's whole section past the sibling section beside it.
   Future<void> moveSection({
     required String blockId,
@@ -845,6 +868,9 @@ final class ReaderViewModel
         shouldClearEditing: true,
         canUndoEdit:
             (await content.findLatestSourceEdit(edited.source.id)) != null,
+        assets: await ref
+            .read(sourceAssetRepositoryProvider)
+            .listSourceAssets(edited.source.id),
         openedAt: edited.source.resume.openAt,
         message: edited.didChange
             ? _editMessage(edited.outcome!)

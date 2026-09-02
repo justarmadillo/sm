@@ -96,13 +96,6 @@ final class ExtractCommandRunner {
         );
       }
 
-      if (!parent.document.isSameBlock(command.range)) {
-        return const Err<Extract>(
-          ValidationFailure(
-            'Multi-block extraction arrives in M5; select within one block',
-          ),
-        );
-      }
       if (!parent.document.containsAnchor(command.range.startAnchor) ||
           !parent.document.containsAnchor(command.range.endAnchor) ||
           !parent.document.isBefore(

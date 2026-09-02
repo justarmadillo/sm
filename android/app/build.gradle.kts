@@ -29,7 +29,9 @@ android {
 
     defaultConfig {
         applicationId = "com.incrementalreader.incremental_reader"
-        minSdk = flutter.minSdkVersion
+        // Image clipboard streams require API 23. The supported Android
+        // deployment target is Android 13 and newer.
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

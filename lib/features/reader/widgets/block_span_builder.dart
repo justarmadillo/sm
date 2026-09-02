@@ -11,6 +11,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/inline_markup.dart';
+import 'package:incremental_reader/documents/source_asset.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 
 /// A highlighted character range within one block's rendered text.
@@ -48,6 +49,18 @@ final class BlockHighlight {
   int get hashCode => Object.hash(start, end, color, underlineColor);
 }
 
+/// Immutable rendering inputs for one portable source image reference.
+@immutable
+final class ReaderImagePresentation {
+  const ReaderImagePresentation({
+    required this.asset,
+    required this.imageProvider,
+  });
+
+  final SourceAsset asset;
+  final ImageProvider imageProvider;
+}
+
 /// Builds the span tree for [block] under [typography].
 ///
 /// [highlights] are applied on top of inline styling by splitting runs at
@@ -56,11 +69,20 @@ TextSpan buildBlockSpan(
   Block block,
   ReaderTypography typography, {
   List<BlockHighlight> highlights = const <BlockHighlight>[],
+  Map<String, ReaderImagePresentation> images =
+      const <String, ReaderImagePresentation>{},
+  double imageMaxWidth = 560,
 }) {
   final base = _baseStyleFor(block, typography);
   final children = <InlineSpan>[];
 
   for (final segment in block.inline.segments) {
+    if (segment.styles.contains(InlineStyle.image)) {
+      children.add(
+        _imageSpan(segment, images[segment.imageUrl], base, imageMaxWidth),
+      );
+      continue;
+    }
     final style = _styleForSegment(segment, base, typography);
     for (final piece in _splitByHighlights(segment, highlights)) {
       children.add(
@@ -71,6 +93,114 @@ TextSpan buildBlockSpan(
 
   return TextSpan(style: base, children: children);
 }
+
+WidgetSpan _imageSpan(
+  InlineSegment segment,
+  ReaderImagePresentation? presentation,
+  TextStyle base,
+  double maxWidth,
+) {
+  final asset = presentation?.asset;
+  final size = fittedReaderImageSize(
+    widthPx: asset?.widthPx ?? 320,
+    heightPx: asset?.heightPx ?? 180,
+    maxWidth: maxWidth,
+  );
+  final altText = segment.imageAlt?.trim().isNotEmpty == true
+      ? segment.imageAlt!
+      : 'Image';
+  final bool canDisplay =
+      asset?.state == SourceAssetState.ok && presentation != null;
+  return WidgetSpan(
+    alignment: PlaceholderAlignment.middle,
+    child: SizedBox(
+      width: size.width,
+      height: size.height + 28,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          SizedBox(
+            width: size.width,
+            height: size.height,
+            child: canDisplay
+                ? Image(
+                    image: presentation.imageProvider,
+                    width: size.width,
+                    height: size.height,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => _missingImage(size),
+                  )
+                : _missingImage(size),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            altText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: base.copyWith(
+              color: AppColors.muted,
+              fontSize: (base.fontSize ?? 16) * 0.82,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _missingImage(Size size) => Container(
+  width: size.width,
+  height: size.height,
+  alignment: Alignment.center,
+  decoration: BoxDecoration(
+    color: AppColors.codeBackground,
+    border: Border.all(color: AppColors.border),
+    borderRadius: BorderRadius.circular(6),
+  ),
+  child: const Icon(Icons.broken_image_outlined, color: AppColors.muted),
+);
+
+/// Stable fitted dimensions shared by pre-measurement and the actual widget.
+Size fittedReaderImageSize({
+  required int widthPx,
+  required int heightPx,
+  required double maxWidth,
+}) {
+  const double maximumHeight = 480;
+  final widthScale = maxWidth / widthPx;
+  final heightScale = maximumHeight / heightPx;
+  final scale = <double>[1, widthScale, heightScale].reduce(
+    (double smallest, double candidate) =>
+        candidate < smallest ? candidate : smallest,
+  );
+  return Size(widthPx * scale, heightPx * scale);
+}
+
+/// Placeholder metrics in the same order as [buildBlockSpan]'s WidgetSpans.
+///
+/// TextPainter cannot measure WidgetSpan children itself. Supplying the exact
+/// fixed boxes used by the widgets keeps mixed text-and-image blocks stable
+/// before Flutter has decoded a single pixel.
+List<PlaceholderDimensions> readerImagePlaceholderDimensions(
+  Block block,
+  Map<String, ReaderImagePresentation> images, {
+  required double maxWidth,
+}) => <PlaceholderDimensions>[
+  for (final segment in block.inline.segments)
+    if (segment.styles.contains(InlineStyle.image))
+      PlaceholderDimensions(
+        size: () {
+          final asset = images[segment.imageUrl]?.asset;
+          final imageSize = fittedReaderImageSize(
+            widthPx: asset?.widthPx ?? 320,
+            heightPx: asset?.heightPx ?? 180,
+            maxWidth: maxWidth,
+          );
+          return Size(imageSize.width, imageSize.height + 28);
+        }(),
+        alignment: PlaceholderAlignment.middle,
+      ),
+];
 
 /// Height of [block]'s first rendered line under [typography].
 ///

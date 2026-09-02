@@ -237,7 +237,7 @@ final class Block {
 String _standaloneSegmentMarkdown(String text, InlineSegment segment) {
   final styles = segment.styles;
   if (styles.contains(InlineStyle.image)) {
-    final alt = text == kObjectReplacement ? '' : _escapeMarkdown(text);
+    final alt = _escapeMarkdown(segment.imageAlt ?? '');
     final url = _angleDestination(segment.imageUrl ?? '');
     return '![$alt]($url)';
   }

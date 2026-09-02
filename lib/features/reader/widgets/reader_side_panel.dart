@@ -257,6 +257,9 @@ class _TabChip extends StatelessWidget {
 /// Horizontal step per outline level.
 const double _kOutlineIndentStep = 11;
 
+/// Shared left edge for a heading and the hierarchy guide beneath it.
+const double _kOutlineContentInset = 8;
+
 /// One toolbar button's slot, tighter than Material's 48-pixel tap target:
 /// seven of those are wider than the 280-pixel panel they have to fit in.
 const double _kOutlineToolbarButtonSize = 32;
@@ -463,7 +466,9 @@ class _OutlineListState extends State<_OutlineList> {
           ),
           Padding(
             padding: EdgeInsets.only(
-              left: 8 + (entry.level - 1) * _kOutlineIndentStep,
+              left:
+                  _kOutlineContentInset +
+                  (entry.level - 1) * _kOutlineIndentStep,
             ),
             child: InkWell(
               onTap: () {
@@ -538,7 +543,7 @@ final class _OutlineHierarchyGuidePainter extends CustomPainter {
       ..strokeWidth = 1;
     for (var ancestorLevel = 1; ancestorLevel < level; ancestorLevel++) {
       final double horizontalPosition =
-          3 + (ancestorLevel - 1) * _kOutlineIndentStep;
+          _kOutlineContentInset + (ancestorLevel - 1) * _kOutlineIndentStep;
       canvas.drawLine(
         Offset(horizontalPosition, 0),
         Offset(horizontalPosition, size.height),

@@ -37,6 +37,7 @@ final class InlineSegment {
     this.styles = const <InlineStyle>{},
     this.linkHref,
     this.imageUrl,
+    this.imageAlt,
     this.math,
   });
 
@@ -60,6 +61,9 @@ final class InlineSegment {
 
   /// Source URL of an [InlineStyle.image] run.
   final String? imageUrl;
+
+  /// Alternative text written between the image brackets.
+  final String? imageAlt;
 
   /// TeX body of an [InlineStyle.math] run.
   final String? math;

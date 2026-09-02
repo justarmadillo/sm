@@ -50,6 +50,11 @@ dependencies:
   # rules rather than the machine's current offset.
   timezone: 0.11.1
   file_selector: ^1.1.0
+  # Native clipboard image streams on Windows and Android. Clipboard bitmaps
+  # are copied into app-owned storage before their transient handle expires.
+  super_clipboard: ^0.9.1
+  # Streaming ZIP writer for portable database + image backup packages.
+  archive: ^4.2.0
   # Vendored in this repository, not fetched from pub.dev: the scheduler is the
   # one thing a review log can never be replayed without, so it is kept where a
   # change to it shows up in this repository's own diff and test run.

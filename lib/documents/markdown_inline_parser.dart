@@ -60,6 +60,7 @@ final class _InlineParser {
     Set<InlineStyle> styles, {
     String? href,
     String? imageUrl,
+    String? imageAlt,
     String? math,
   }) {
     if (text.isEmpty) return;
@@ -72,6 +73,7 @@ final class _InlineParser {
         styles: styles,
         linkHref: href,
         imageUrl: imageUrl,
+        imageAlt: imageAlt,
         math: math,
       ),
     );
@@ -150,12 +152,13 @@ final class _InlineParser {
           flushPlain(cursor);
           final alt = content.substring(link.textStart, link.textEnd);
           _emit(
-            alt.isEmpty ? kObjectReplacement : alt,
+            kObjectReplacement,
             cursor,
             link.end,
             <InlineStyle>{...styles, InlineStyle.image},
             href: href,
             imageUrl: link.destination,
+            imageAlt: alt,
           );
           cursor = link.end;
           plainStart = cursor;

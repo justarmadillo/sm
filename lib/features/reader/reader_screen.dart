@@ -12,16 +12,22 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
+import 'package:incremental_reader/documents/inline_markup.dart';
 import 'package:incremental_reader/documents/outline.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/documents/source_asset.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dart';
 import 'package:incremental_reader/features/extract/extract_context_overlay.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
+import 'package:incremental_reader/features/reader/reader_commands.dart';
+import 'package:incremental_reader/features/reader/reader_image_input.dart';
+import 'package:incremental_reader/features/reader/reader_providers.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/features/reader/typography_controller.dart';
 import 'package:incremental_reader/features/reader/widgets/block_span_builder.dart';
@@ -34,6 +40,15 @@ import 'package:incremental_reader/features/reader/widgets/selection_toolbar.dar
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
+
+/// Light status-bar treatment used while the Reader owns the mobile route.
+const SystemUiOverlayStyle _readerSystemUiStyle = SystemUiOverlayStyle(
+  statusBarColor: AppColors.background,
+  statusBarIconBrightness: Brightness.dark,
+  statusBarBrightness: Brightness.light,
+);
+
+enum _ReaderImageAction { choose, paste }
 
 /// Pushes the Reader for [sourceId] and refreshes the Browser on return.
 Future<void> openReader(
@@ -114,17 +129,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Map<String, List<BlockHighlight>> _extractHighlights =
       const <String, List<BlockHighlight>>{};
   Map<String, int> _extractMarks = const <String, int>{};
+  List<SourceAsset>? _imageAssets;
+  Map<String, ReaderImagePresentation> _imagePresentations =
+      const <String, ReaderImagePresentation>{};
 
   @override
   void initState() {
     super.initState();
     if (_usesMobileSystemChrome) {
-      unawaited(
-        SystemChrome.setEnabledSystemUIMode(
-          SystemUiMode.manual,
-          overlays: const <SystemUiOverlay>[SystemUiOverlay.bottom],
-        ),
-      );
+      _enterReaderSystemChrome();
     }
   }
 
@@ -132,9 +145,33 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void dispose() {
     _selection?.dispose();
     if (_usesMobileSystemChrome) {
-      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+      _restoreAppSystemChrome();
     }
     super.dispose();
+  }
+
+  /// Colors the hidden status-bar region so display cutouts do not leave a
+  /// black strip above the light reading surface.
+  void _enterReaderSystemChrome() {
+    SystemChrome.setSystemUIOverlayStyle(_readerSystemUiStyle);
+    unawaited(
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: const <SystemUiOverlay>[SystemUiOverlay.bottom],
+      ),
+    );
+  }
+
+  /// Restores the normal light app chrome after the Reader route closes.
+  void _restoreAppSystemChrome() {
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: AppColors.surface,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+      ),
+    );
+    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
   }
 
   /// Desktop system chrome belongs to the window, while a phone's status bar
@@ -393,6 +430,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final bool isPanelDocked = _isPanelOpen && !isCompactWidth(context);
     return AppBar(
       title: Text(state.source.title),
+      systemOverlayStyle: _readerSystemUiStyle,
       actions: <Widget>[
         if (state.mode == ReaderMode.browse)
           TextButton(
@@ -406,6 +444,27 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ),
           icon: const Icon(Icons.text_fields),
           tooltip: 'Reading appearance',
+        ),
+        PopupMenuButton<_ReaderImageAction>(
+          tooltip: 'Add image',
+          enabled: !state.isBusy,
+          icon: const Icon(Icons.add_photo_alternate_outlined),
+          onSelected: (_ReaderImageAction action) => unawaited(
+            action == _ReaderImageAction.choose
+                ? _chooseImages(state, model)
+                : _pasteImage(state, model),
+          ),
+          itemBuilder: (BuildContext context) =>
+              const <PopupMenuEntry<_ReaderImageAction>>[
+                PopupMenuItem<_ReaderImageAction>(
+                  value: _ReaderImageAction.choose,
+                  child: Text('Choose images'),
+                ),
+                PopupMenuItem<_ReaderImageAction>(
+                  value: _ReaderImageAction.paste,
+                  child: Text('Paste image'),
+                ),
+              ],
         ),
         IconButton(
           onPressed: _togglePanel,
@@ -440,6 +499,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       },
       const SingleActivator(LogicalKeyboardKey.keyE, control: true): () =>
           _extractSelection(model),
+      if (!state.isEditing)
+        const SingleActivator(LogicalKeyboardKey.keyV, control: true): () =>
+            unawaited(_pasteImage(state, model)),
       // SuperMemo's own key for "make an item out of this".
       const SingleActivator(LogicalKeyboardKey.keyZ, alt: true): () =>
           unawaited(_formulate(model, state)),
@@ -485,6 +547,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               unawaited(model.commitEdit(block, markdown)),
           onEditCancel: (Block _) => model.cancelEditing(),
           onEditDelete: (Block block) => unawaited(model.deleteBlock(block)),
+          images: _readerImages(state),
         ),
         // Filled rather than left to size itself: its knobs are positioned,
         // and a stack of nothing but positioned children collapses to a point
@@ -533,6 +596,99 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         ),
       ],
     );
+  }
+
+  Map<String, ReaderImagePresentation> _readerImages(ReaderUiState state) {
+    if (identical(_imageAssets, state.assets)) return _imagePresentations;
+    _imageAssets = state.assets;
+    if (state.assets.isEmpty) {
+      return _imagePresentations = const <String, ReaderImagePresentation>{};
+    }
+    final files = ref.read(sourceAssetFileStoreProvider);
+    return _imagePresentations = <String, ReaderImagePresentation>{
+      for (final asset in state.assets)
+        asset.srcRef: ReaderImagePresentation(
+          asset: asset,
+          imageProvider: FileImage(files.fileForSha256(asset.sha256)),
+        ),
+    };
+  }
+
+  Future<void> _chooseImages(ReaderUiState state, ReaderViewModel model) async {
+    try {
+      final images = await ref.read(readerImageInputProvider).chooseImages();
+      await _insertImages(state, model, images);
+    } on ReaderImageInputException catch (failure) {
+      if (failure.validImages.isNotEmpty) {
+        await _insertImages(state, model, failure.validImages);
+      }
+      if (mounted) showToast(context, failure.message, isError: true);
+    } on Object {
+      if (mounted) {
+        showToast(
+          context,
+          'The selected images could not be read',
+          isError: true,
+        );
+      }
+    }
+  }
+
+  Future<void> _pasteImage(ReaderUiState state, ReaderViewModel model) async {
+    if (state.isEditing) return;
+    try {
+      final images = await ref
+          .read(readerImageInputProvider)
+          .readClipboardImage();
+      await _insertImages(state, model, images);
+    } on ReaderImageInputException catch (failure) {
+      if (mounted) showToast(context, failure.message, isError: true);
+    } on Object {
+      if (mounted) {
+        showToast(
+          context,
+          'The clipboard image could not be read',
+          isError: true,
+        );
+      }
+    }
+  }
+
+  /// Selection wins over viewport position because it is the user's explicit
+  /// insertion point; the visible block is the keyboard-only fallback.
+  Future<void> _insertImages(
+    ReaderUiState state,
+    ReaderViewModel model,
+    List<SourceImageImport> images,
+  ) async {
+    if (images.isEmpty || state.isBusy) return;
+    final blockId =
+        _selection?.selection?.startBlockId ??
+        _readerKey.currentState?.topVisibleBlock?.id ??
+        (state.document.blocks.isEmpty ? null : state.document.blocks.first.id);
+    _selection?.clear();
+    await model.insertImages(afterBlockId: blockId, images: images);
+    if (!mounted) return;
+    final ReaderUiState? updated = ref
+        .read(readerViewModelProvider(widget.request))
+        .valueOrNull;
+    if (updated == null) return;
+    final String firstReference = images.first.srcRef;
+    for (final Block block in updated.document.blocks) {
+      if (!block.inline.segments.any(
+        (InlineSegment segment) => segment.imageUrl == firstReference,
+      )) {
+        continue;
+      }
+      await _readerKey.currentState?.animateToAnchor(
+        ReaderAnchor(
+          utf8Offset: block.sourceStartUtf8,
+          contentRevision: updated.document.contentRevision,
+        ),
+        alignment: 0.2,
+      );
+      break;
+    }
   }
 
   /// Shows the panel, in whichever form this window has room for.
@@ -1171,9 +1327,6 @@ class _ActionBar extends StatelessWidget {
     if (!state.canCommitProgress) {
       return 'Browsing: you can still correct the text. '
           'Choose Continue reading to extract.';
-    }
-    if (selection.hasSelection && !selection.canExtract) {
-      return 'Multi-block extraction arrives in M5. Select within one block.';
     }
     if (selection.canExtract) {
       return 'Selection ready — Extract above it, or Ctrl+E. Either keeps '

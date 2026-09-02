@@ -220,10 +220,7 @@ final class ExtractViewModel
 
   Future<Extract?> extractSelection(SelectionRange range) async {
     final current = state.valueOrNull;
-    if (current == null ||
-        !current.canMutate ||
-        current.isBusy ||
-        !current.document.isSameBlock(range)) {
+    if (current == null || !current.canMutate || current.isBusy) {
       return null;
     }
     state = AsyncValue<ExtractUiState>.data(current.copyWith(isBusy: true));

@@ -116,12 +116,26 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
       ref.read(browserViewModelProvider.notifier).shouldClearMessage();
     });
 
-    return CallbackShortcuts(
-      bindings: <ShortcutActivator, VoidCallback>{
-        kSearchShortcut: () => openSearch(context, ref),
+    return PopScope<Object?>(
+      canPop: !_isSelecting,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (!didPop && _isSelecting) _clearSelection();
       },
-      child: Focus(autofocus: true, child: _scaffold(context, tree)),
+      child: CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          kSearchShortcut: () => openSearch(context, ref),
+        },
+        child: Focus(autofocus: true, child: _scaffold(context, tree)),
+      ),
     );
+  }
+
+  /// Back leaves selection mode before it is allowed to leave the Browser.
+  void _clearSelection() {
+    setState(() {
+      _selected.clear();
+      _isSelecting = false;
+    });
   }
 
   Widget _scaffold(
@@ -236,10 +250,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   ) => AppBar(
     leading: IconButton(
       tooltip: 'Clear selection',
-      onPressed: () => setState(() {
-        _selected.clear();
-        _isSelecting = false;
-      }),
+      onPressed: _clearSelection,
       icon: const Icon(Icons.close),
     ),
     title: Text('${_selected.length} selected'),

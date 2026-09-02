@@ -16,7 +16,7 @@ import 'package:incremental_reader/storage/database/tables.dart';
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 14;
+const int kSchemaVersion = 15;
 
 /// Name of the external-content FTS5 index over [SearchDocuments].
 const String kSearchIndexTable = 'search_index';
@@ -24,6 +24,7 @@ const String kSearchIndexTable = 'search_index';
 @DriftDatabase(
   tables: <Type>[
     Sources,
+    SourceAssets,
     SourceEdits,
     Blocks,
     Extracts,
@@ -590,6 +591,16 @@ class AppDatabase extends _$AppDatabase {
         // SQLite rewrites those references itself.
         await _createIndexes(m);
       }
+      if (from < 15) {
+        // Image bytes live outside SQLite, but every markdown reference needs
+        // dimensions and integrity metadata before the Reader can lay it out.
+        // A separate cascade-owned table keeps source deletion exact while
+        // allowing identical immutable blobs to be shared by several rows.
+        if (!await _hasTable('source_assets')) {
+          await m.createTable(sourceAssets);
+        }
+        await _createIndexes(m);
+      }
     },
     beforeOpen: (OpeningDetails details) async {
       // SQLite disables foreign keys per connection by default, so this
@@ -735,6 +746,12 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_blocks_source '
       'ON blocks (source_id, idx)',
     );
+    if (await _hasTable('source_assets')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_source_assets_sha256 '
+        'ON source_assets (sha256)',
+      );
+    }
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_extracts_parent '
       'ON extracts (parent_id, created_at_utc)',
