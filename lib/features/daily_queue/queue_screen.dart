@@ -21,6 +21,7 @@ import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/features/review/review_screen.dart';
 import 'package:incremental_reader/features/settings/settings_screen.dart';
+import 'package:incremental_reader/features/video/video_screen.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/mercy/mercy.dart';
@@ -247,6 +248,11 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
           ref,
           extractId: entry.ref.id,
           mode: ExtractMode.scheduled,
+        ),
+        ElementType.video => openVideoForStudy(
+          context,
+          ref,
+          videoElementId: entry.ref.id,
         ),
         ElementType.card => openReview(context, ref, cardId: entry.ref.id),
       };

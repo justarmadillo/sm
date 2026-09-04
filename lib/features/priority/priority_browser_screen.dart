@@ -321,7 +321,14 @@ class _FilterBar extends StatelessWidget {
     for (final (String label, Set<ElementType> types)
         in <(String, Set<ElementType>)>[
           ('All', <ElementType>{}),
-          ('Topics', <ElementType>{ElementType.source, ElementType.extract}),
+          (
+            'Topics',
+            <ElementType>{
+              ElementType.source,
+              ElementType.extract,
+              ElementType.video,
+            },
+          ),
           ('Cards', <ElementType>{ElementType.card}),
         ])
       FilterChip(

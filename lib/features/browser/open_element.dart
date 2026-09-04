@@ -19,6 +19,8 @@ import 'package:incremental_reader/features/extract/extract_screen.dart';
 import 'package:incremental_reader/features/extract/extract_view_model.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
+import 'package:incremental_reader/features/video/video_screen.dart';
+import 'package:incremental_reader/features/video/video_view_model.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 
@@ -54,6 +56,13 @@ Future<void> openElement(
         ref,
         extractId: elementRef.id,
         mode: ExtractMode.browse,
+      );
+    case ElementType.video:
+      await openVideo(
+        context,
+        ref,
+        videoElementId: elementRef.id,
+        mode: VideoMode.browse,
       );
     case ElementType.card:
       await showCardEditor(context, ref, cardRef: elementRef);

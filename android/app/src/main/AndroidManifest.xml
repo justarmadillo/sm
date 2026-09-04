@@ -41,5 +41,14 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+
+        <!-- Required to open a video at its timestamp. Without this, API 30
+             and above hides every browser from the app and url_launcher
+             reports that nothing can handle the link, which looks like a
+             broken button rather than a missing permission. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
     </queries>
 </manifest>

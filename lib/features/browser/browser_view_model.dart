@@ -15,6 +15,7 @@ import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/documents/video.dart';
 import 'package:incremental_reader/features/browser/browser_commands.dart';
 import 'package:incremental_reader/features/browser/browser_providers.dart';
 import 'package:incremental_reader/features/extract/extract_commands.dart';
@@ -27,6 +28,8 @@ import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/reader_providers.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
 import 'package:incremental_reader/features/review/review_providers.dart';
+import 'package:incremental_reader/features/video/video_commands.dart';
+import 'package:incremental_reader/features/video/video_providers.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
@@ -80,6 +83,32 @@ final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
             ImportSource(operation, title: title, markdown: markdown),
           ),
       success: (Source source) => 'Imported "${source.title}"',
+    );
+    return result?.id;
+  }
+
+  /// Adds a video and the range of it worth studying.
+  Future<String?> importVideo({
+    required String url,
+    required String title,
+    required int startSeconds,
+    required int endSeconds,
+    int? durationSeconds,
+  }) async {
+    final VideoElement? result = await _command<VideoElement>(
+      (OperationId operation) => ref
+          .read(videoCommandRunnerProvider)
+          .importVideo(
+            ImportVideo(
+              operation,
+              url: url,
+              title: title,
+              startSeconds: startSeconds,
+              endSeconds: endSeconds,
+              durationSeconds: durationSeconds,
+            ),
+          ),
+      success: (VideoElement element) => 'Added "${element.displayTitle}"',
     );
     return result?.id;
   }

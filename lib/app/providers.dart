@@ -32,6 +32,7 @@ import 'package:incremental_reader/storage/contracts/settings_repository.dart';
 import 'package:incremental_reader/storage/contracts/source_asset_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
+import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/drift/drift_content_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_database_maintenance.dart';
@@ -41,6 +42,7 @@ import 'package:incremental_reader/storage/drift/drift_settings_repository.dart'
 import 'package:incremental_reader/storage/drift/drift_source_asset_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_transaction_runner.dart';
 import 'package:incremental_reader/storage/drift/drift_transfer_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_video_repository.dart';
 import 'package:incremental_reader/storage/files/backup_service.dart';
 import 'package:incremental_reader/storage/files/rotating_log_sink.dart';
 import 'package:incremental_reader/storage/files/source_asset_file_store.dart';
@@ -164,6 +166,12 @@ final Provider<TransactionRunner> transactionRunnerProvider =
 final Provider<ContentRepository> contentRepositoryProvider =
     Provider<ContentRepository>(
       (Ref ref) => DriftContentRepository(ref.watch(databaseProvider)),
+    );
+
+/// Video aggregate: videos and the ranges the user studies over them.
+final Provider<VideoRepository> videoRepositoryProvider =
+    Provider<VideoRepository>(
+      (Ref ref) => DriftVideoRepository(ref.watch(databaseProvider)),
     );
 
 /// Metadata for images embedded in source markdown.

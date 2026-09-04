@@ -6,6 +6,7 @@ import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/daily_queue/queue_providers.dart';
 import 'package:incremental_reader/features/diagnostics/diagnostics_query.dart';
 import 'package:incremental_reader/features/diagnostics/scheduler_metrics_query.dart';
+
 /// Scheduler safety metrics for the diagnostics panel.
 final Provider<SchedulerMetricsQuery> schedulerMetricsQueryProvider =
     Provider<SchedulerMetricsQuery>(
@@ -22,6 +23,7 @@ final Provider<DiagnosticsQuery> diagnosticsQueryProvider =
       (Ref ref) => DiagnosticsQuery(
         learning: ref.watch(learningRepositoryProvider),
         content: ref.watch(contentRepositoryProvider),
+        videos: ref.watch(videoRepositoryProvider),
         search: ref.watch(searchRepositoryProvider),
         context: ref.watch(schedulingContextProvider),
       ),

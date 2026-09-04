@@ -115,6 +115,9 @@ abstract interface class ContentRepository {
   /// Cards formulated directly from [sourceId], without an extract between.
   Future<List<Card>> listCardsOfSource(String sourceId);
 
+  /// Cards formulated from the video range [videoElementId].
+  Future<List<Card>> listCardsOfVideo(String videoElementId);
+
   /// Every card in the collection, oldest first.
   ///
   /// Includes cards written with no parent at all, which the per-parent

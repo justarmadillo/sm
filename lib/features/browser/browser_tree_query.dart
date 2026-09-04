@@ -20,11 +20,13 @@ library;
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/documents/video.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
+import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:meta/meta.dart';
 
 /// One element in the tree, with the children filed under it.
@@ -76,11 +78,14 @@ final class BrowserTreeNode {
 final class BrowserTreeQuery {
   BrowserTreeQuery({
     required ContentRepository content,
+    required VideoRepository videos,
     required LearningRepository learning,
   }) : _content = content,
+       _videos = videos,
        _learning = learning;
 
   final ContentRepository _content;
+  final VideoRepository _videos;
   final LearningRepository _learning;
 
   /// Everything in the collection, nested under whatever it is filed beneath.
@@ -128,6 +133,7 @@ final class BrowserTreeQuery {
   Future<List<_Element>> _listEverything() async {
     final List<Source> sources = await _content.listSources();
     final List<Extract> extracts = await _content.listExtracts();
+    final List<VideoElement> videoElements = await _videos.listVideoElements();
     final List<Card> cards = await _content.listCards();
 
     final List<_Element> elements = <_Element>[];
@@ -149,6 +155,19 @@ final class BrowserTreeQuery {
           title: _titleOf(extract.markdown),
           preview: _excerpt(extract.markdown),
           provenanceParentId: extract.provenance.parentId,
+          fallbackIndex: elements.length,
+        ),
+      );
+    }
+    for (final VideoElement element in videoElements) {
+      elements.add(
+        _Element(
+          ref: ElementRef(id: element.id, type: ElementType.video),
+          title: element.displayTitle,
+          preview: element.note.trim().isEmpty
+              ? element.rangeLabel
+              : _excerpt(element.note),
+          provenanceParentId: element.parentVideoElementId,
           fallbackIndex: elements.length,
         ),
       );

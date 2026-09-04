@@ -68,6 +68,9 @@ enum CardParentType {
 
   /// From an extract, the usual path.
   extract,
+
+  /// From a range of a video: the whole thing, or a clip cut from it.
+  video,
 }
 
 /// The element a card came from.
@@ -88,12 +91,17 @@ final class CardParent {
   const CardParent.extract(String id)
     : this(type: CardParentType.extract, id: id);
 
+  /// A card formulated from a video range, whose note is its text.
+  const CardParent.video(String id) : this(type: CardParentType.video, id: id);
+
   final CardParentType type;
   final String id;
 
   bool get isSource => type == CardParentType.source;
 
   bool get isExtract => type == CardParentType.extract;
+
+  bool get isVideo => type == CardParentType.video;
 
   @override
   bool operator ==(Object other) =>

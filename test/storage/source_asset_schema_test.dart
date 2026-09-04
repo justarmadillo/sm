@@ -73,7 +73,7 @@ void main() {
     final QueryRow version = await upgraded
         .customSelect('PRAGMA user_version')
         .getSingle();
-    expect(version.data.values.single, 15);
+    expect(version.data.values.single, 16);
     expect(
       await upgraded.customSelect('SELECT * FROM source_assets').get(),
       isEmpty,

@@ -28,7 +28,7 @@ final class SearchResult {
 
   final SearchHit hit;
 
-  /// "Article", "Extract", or "Card".
+  /// "Article", "Extract", "Video", or "Card".
   final String typeLabel;
 
   /// The element's schedule, so a result can show when it is next due and
@@ -88,6 +88,7 @@ final class SearchQuery {
             ElementType.source => 'Article',
             ElementType.extract => 'Extract',
             ElementType.card => 'Card',
+            ElementType.video => 'Video',
           },
           schedule: schedule,
           effectiveDueDay: schedule == null

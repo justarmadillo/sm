@@ -77,6 +77,11 @@ final class Sm20PostponeCandidate {
         ElementType.card => 1,
         ElementType.source => 0,
         ElementType.extract => 2,
+        // A video is a topic, and 2 is the topic path the executable's own
+        // numbering exercises. 3 means deleted; 4 is accepted by
+        // [isTopicFamily] but is reached by nothing in this port, so it is
+        // not the value to hand a live element.
+        ElementType.video => 2,
       };
 
   bool get deleted => isDeleted || effectiveTypeCode == 3;

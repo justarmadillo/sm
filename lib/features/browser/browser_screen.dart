@@ -33,6 +33,9 @@ import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/features/search/search_screen.dart';
+import 'package:incremental_reader/features/video/import_video_sheet.dart';
+import 'package:incremental_reader/features/video/video_screen.dart';
+import 'package:incremental_reader/features/video/video_view_model.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
@@ -364,9 +367,49 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         await _createTopic(context, under, isWritten: true);
       case _NewElement.importedTopic:
         await _createTopic(context, under, isWritten: false);
+      case _NewElement.video:
+        await _createVideo(context, under);
       case _NewElement.card:
         await _createCards(context, under);
     }
+  }
+
+  /// Adds a video and opens it, the way an imported chapter is opened.
+  ///
+  /// There is nothing to read in the dialog the user just filled in — the
+  /// video is somewhere else — so the useful next step is always the screen
+  /// with the Open button on it.
+  Future<void> _createVideo(
+    BuildContext context,
+    BrowserTreeNode? under,
+  ) async {
+    final VideoImportRequest? request = await showImportVideoSheet(context);
+    if (request == null || !context.mounted) return;
+
+    final BrowserViewModel model = ref.read(browserViewModelProvider.notifier);
+    final String? videoElementId = await model.importVideo(
+      url: request.url,
+      title: request.title,
+      startSeconds: request.startSeconds,
+      endSeconds: request.endSeconds,
+      durationSeconds: request.durationSeconds,
+    );
+    if (videoElementId != null && under != null) {
+      await model.fileUnder(
+        ref_: ElementRef(id: videoElementId, type: ElementType.video),
+        parentRef: under.ref,
+      );
+      setState(() => _expanded.add(under.ref));
+    }
+    ref.invalidate(browserTreeProvider);
+    if (videoElementId == null || !context.mounted) return;
+    await openVideo(
+      context,
+      ref,
+      videoElementId: videoElementId,
+      mode: VideoMode.scheduled,
+    );
+    ref.invalidate(browserTreeProvider);
   }
 
   /// Writes or imports a topic, then opens it when it was imported.
@@ -442,13 +485,16 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   /// there is not. It is still filed exactly where the user asked.
   CardParent? _cardParentFor(BrowserTreeNode? under) {
     final ElementRef? cited = switch (under?.ref.type) {
-      ElementType.source || ElementType.extract => under!.ref,
+      ElementType.source ||
+      ElementType.extract ||
+      ElementType.video => under!.ref,
       ElementType.card => under!.parentRef,
       null => null,
     };
     return switch (cited?.type) {
       ElementType.source => CardParent.source(cited!.id),
       ElementType.extract => CardParent.extract(cited!.id),
+      ElementType.video => CardParent.video(cited!.id),
       ElementType.card || null => null,
     };
   }
@@ -634,6 +680,7 @@ class _TypeFilter extends StatelessWidget {
               ('All', <ElementType>{}),
               ('Topics', <ElementType>{ElementType.source}),
               ('Extracts', <ElementType>{ElementType.extract}),
+              ('Videos', <ElementType>{ElementType.video}),
               ('Cards', <ElementType>{ElementType.card}),
             ])
           FilterChip(
@@ -1002,6 +1049,9 @@ enum _NewElement {
   /// A topic imported from a file or pasted in.
   importedTopic,
 
+  /// A video, studied by its timestamps rather than its text.
+  video,
+
   /// One or more cards, through the same formulation dialog the Reader uses.
   card,
 }
@@ -1049,6 +1099,14 @@ class _NewElementMenu extends StatelessWidget {
           dense: true,
           leading: Icon(Icons.file_open_outlined),
           title: Text('Topic from markdown'),
+        ),
+      ),
+      PopupMenuItem<_NewElement>(
+        value: _NewElement.video,
+        child: ListTile(
+          dense: true,
+          leading: Icon(Icons.smart_display_outlined),
+          title: Text('Video'),
         ),
       ),
       PopupMenuItem<_NewElement>(

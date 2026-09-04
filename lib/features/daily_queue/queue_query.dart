@@ -11,6 +11,7 @@ library;
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/documents/video.dart';
 import 'package:incremental_reader/features/daily_queue/queue_command_runner.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
@@ -24,6 +25,7 @@ import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
+import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:meta/meta.dart';
 
 /// Presentation-neutral queue row. Answers are deliberately never projected.
@@ -94,17 +96,20 @@ final class QueueProjection {
 final class QueueQuery {
   const QueueQuery({
     required ContentRepository content,
+    required VideoRepository videos,
     required LearningRepository learning,
     required QueueCommandRunner commandRunner,
     required SchedulingContext context,
     required Clock clock,
   }) : _content = content,
+       _videos = videos,
        _learning = learning,
        _commandRunner = commandRunner,
        _context = context,
        _clock = clock;
 
   final ContentRepository _content;
+  final VideoRepository _videos;
   final LearningRepository _learning;
   final QueueCommandRunner _commandRunner;
   final SchedulingContext _context;
@@ -193,6 +198,7 @@ final class QueueQuery {
     ElementType.source => _sourceEntry(candidate, lane, scale),
     ElementType.extract => _extractEntry(candidate, lane, scale),
     ElementType.card => _cardEntry(candidate, lane, scale, leechLapses),
+    ElementType.video => _videoEntry(candidate, lane, scale),
   };
 
   double? _percentOf(QueueCandidate candidate, PriorityScale scale) =>
@@ -231,6 +237,32 @@ final class QueueQuery {
       actionLabel: _actionLabel(lane, 'Process'),
       title: source?.title ?? 'Extract',
       preview: _excerpt(extract.markdown),
+      priorityPercent: _percentOf(candidate, scale),
+    );
+  }
+
+  /// A video range: the whole talk, or a clip cut out of it.
+  ///
+  /// Titled by the clip's own name when it has one and by its times when it
+  /// does not, because a queue row that says only the parent's title cannot
+  /// be told apart from the four other clips cut from the same talk.
+  Future<QueueEntry?> _videoEntry(
+    QueueCandidate candidate,
+    QueueLane lane,
+    PriorityScale scale,
+  ) async {
+    final VideoElement? element = await _videos.findVideoElement(
+      candidate.ref.id,
+    );
+    if (element == null) return null;
+    return QueueEntry(
+      candidate: candidate,
+      lane: lane,
+      actionLabel: _actionLabel(lane, 'Watch'),
+      title: element.displayTitle,
+      preview: element.note.trim().isEmpty
+          ? element.rangeLabel
+          : _excerpt(element.note),
       priorityPercent: _percentOf(candidate, scale),
     );
   }

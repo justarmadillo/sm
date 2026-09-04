@@ -17,6 +17,7 @@ import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/documents/source_edit.dart';
 import 'package:incremental_reader/documents/text_splice.dart';
+import 'package:incremental_reader/documents/video.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/history/review_log.dart';
@@ -249,6 +250,57 @@ ExtractsCompanion extractToCompanion(Extract extract) {
   );
 }
 
+/// Domain [Video] from its row.
+Video videoFromRow(VideoRow row) => Video(
+  id: row.id,
+  url: row.url,
+  platform: VideoPlatform.values[row.platform],
+  durationSeconds: row.durationSeconds,
+  addedAtUtc: fromEpochMs(row.addedAtUtc),
+);
+
+/// Row companion for a [Video].
+VideosCompanion videoToCompanion(Video video) => VideosCompanion.insert(
+  id: video.id,
+  url: video.url,
+  platform: video.platform.index,
+  durationSeconds: Value<int?>(video.durationSeconds),
+  addedAtUtc: toEpochMs(video.addedAtUtc),
+);
+
+/// Domain [VideoElement] from its row.
+VideoElement videoElementFromRow(VideoElementRow row) => VideoElement(
+  id: row.id,
+  videoId: row.videoId,
+  parentVideoElementId: row.parentVideoElementId,
+  title: row.title,
+  note: row.note,
+  startSeconds: row.startSeconds,
+  endSeconds: row.endSeconds,
+  resumeSeconds: row.resumeSeconds,
+  createdAtUtc: fromEpochMs(row.createdAtUtc),
+  editedAtUtc: row.editedAtUtc == null ? null : fromEpochMs(row.editedAtUtc!),
+  revision: row.revision,
+);
+
+/// Row companion for a [VideoElement].
+VideoElementsCompanion videoElementToCompanion(VideoElement element) =>
+    VideoElementsCompanion.insert(
+      id: element.id,
+      videoId: element.videoId,
+      parentVideoElementId: Value<String?>(element.parentVideoElementId),
+      title: Value<String?>(element.title),
+      note: Value<String>(element.note),
+      startSeconds: element.startSeconds,
+      endSeconds: element.endSeconds,
+      resumeSeconds: Value<int?>(element.resumeSeconds),
+      createdAtUtc: toEpochMs(element.createdAtUtc),
+      editedAtUtc: Value<int?>(
+        element.editedAtUtc == null ? null : toEpochMs(element.editedAtUtc!),
+      ),
+      revision: Value<int>(element.revision),
+    );
+
 /// Domain [Card] from its row.
 Card cardFromRow(CardRow row) => Card(
   id: row.id,
@@ -261,13 +313,29 @@ Card cardFromRow(CardRow row) => Card(
   editedAtUtc: row.editedAtUtc == null ? null : fromEpochMs(row.editedAtUtc!),
 );
 
+/// Which element type a card parent is stored as.
+///
+/// The mapping lives here rather than on [CardParent] because `documents/`
+/// may not import `scheduling/`, and it is written as an exhaustive switch so
+/// that adding a parent kind fails to compile rather than falling through to
+/// "source", which is what a two-way conditional did.
+ElementType elementTypeOfCardParent(CardParentType type) => switch (type) {
+  CardParentType.source => ElementType.source,
+  CardParentType.extract => ElementType.extract,
+  CardParentType.video => ElementType.video,
+};
+
 /// The sole parent a card row points at, or null for a standalone card.
 CardParent? cardParentFromRow(CardRow row) {
   final String? id = row.parentElementId;
   if (id == null) return null;
-  return row.parentElementType == ElementType.extract.index
-      ? CardParent.extract(id)
-      : CardParent.source(id);
+  return switch (row.parentElementType) {
+    final int type when type == ElementType.extract.index => CardParent.extract(
+      id,
+    ),
+    final int type when type == ElementType.video.index => CardParent.video(id),
+    _ => CardParent.source(id),
+  };
 }
 
 /// Row companion for a [Card].
@@ -277,9 +345,7 @@ CardsCompanion cardToCompanion(Card card) => CardsCompanion.insert(
   parentElementType: Value<int?>(
     card.parent == null
         ? null
-        : (card.parent!.isSource
-              ? ElementType.source.index
-              : ElementType.extract.index),
+        : elementTypeOfCardParent(card.parent!.type).index,
   ),
   type: card.type.index,
   front: card.front,

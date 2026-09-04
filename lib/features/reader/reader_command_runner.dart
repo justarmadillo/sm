@@ -30,6 +30,7 @@ import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/documents/source_asset.dart';
 import 'package:incremental_reader/documents/source_edit.dart';
 import 'package:incremental_reader/documents/text_splice.dart';
+import 'package:incremental_reader/documents/video.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/history/review_log.dart';
@@ -50,6 +51,7 @@ import 'package:incremental_reader/storage/contracts/search_repository.dart';
 import 'package:incremental_reader/storage/contracts/source_asset_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
+import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:incremental_reader/storage/files/source_asset_file_store.dart';
 import 'package:meta/meta.dart';
 
@@ -104,6 +106,7 @@ final class SourceEdited {
 final class ReaderCommandRunner {
   ReaderCommandRunner({
     required ContentRepository content,
+    required VideoRepository videos,
     required LearningRepository learning,
     required SearchRepository search,
     required TransferRepository transfer,
@@ -115,6 +118,7 @@ final class ReaderCommandRunner {
     required IdGenerator ids,
     DiagnosticSink diagnostics = const NullDiagnosticSink(),
   }) : _content = content,
+       _videos = videos,
        _learning = learning,
        _search = search,
        _transfer = transfer,
@@ -128,6 +132,7 @@ final class ReaderCommandRunner {
        _diagnostics = diagnostics;
 
   final ContentRepository _content;
+  final VideoRepository _videos;
   final LearningRepository _learning;
   final SearchRepository _search;
   final TransferRepository _transfer;
@@ -679,6 +684,42 @@ final class ReaderCommandRunner {
     CompleteTopicEncounter command,
     TopicState topic,
   ) async {
+    // A video is measured in seconds, but every question the A-factor asks is
+    // the same one: how far through did you get, is there anything left, and
+    // has this element produced items yet.
+    if (topic.ref.type == ElementType.video) {
+      final VideoElement? element = await _videos.findVideoElement(
+        topic.ref.id,
+      );
+      if (element == null) {
+        return TopicEncounter(extractsCreated: command.extractsCreated);
+      }
+      final List<VideoElement> clips = await _videos.listVideoElementsOfParent(
+        element.id,
+      );
+      final int cards = (await _content.listCardsOfVideo(element.id)).length;
+      return TopicEncounter(
+        readFraction: element.watchedFraction,
+        hasChildItems: cards > 0,
+        // `wordsRead` stays 0. The field means words, the yield rule reads it
+        // as words, and putting seconds in it would silently poison both that
+        // rule and the review log. The consequence -- the yield rule does not
+        // apply to video -- is stated rather than faked.
+        extractsCreated: command.extractsCreated,
+        hasReachedEnd: element.hasReachedEnd,
+        hasUnprocessedText:
+            secondsOutside(
+              startSeconds: element.startSeconds,
+              endSeconds: element.endSeconds,
+              covered: <(int, int)>[
+                for (final VideoElement clip in clips)
+                  (clip.startSeconds, clip.endSeconds),
+              ],
+            ) >
+            0,
+      );
+    }
+
     if (topic.isExtract) {
       final int cards = (await _content.listCardsOfExtract(
         topic.ref.id,

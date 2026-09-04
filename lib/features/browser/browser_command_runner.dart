@@ -34,6 +34,7 @@ import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/search_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
+import 'package:incremental_reader/storage/contracts/video_repository.dart';
 
 const String kBrowserMovedUpType = 'browser.moved_up';
 const String kBrowserMovedDownType = 'browser.moved_down';
@@ -47,6 +48,7 @@ final class BrowserCommandRunner {
   BrowserCommandRunner({
     required BrowserTreeQuery tree,
     required ContentRepository content,
+    required VideoRepository videos,
     required LearningRepository learning,
     required SearchRepository search,
     required SchedulingContext context,
@@ -57,6 +59,7 @@ final class BrowserCommandRunner {
     DiagnosticSink diagnostics = const NullDiagnosticSink(),
   }) : _tree = tree,
        _content = content,
+       _videos = videos,
        _learning = learning,
        _search = search,
        _context = context,
@@ -67,6 +70,7 @@ final class BrowserCommandRunner {
        _diagnostics = diagnostics;
 
   final BrowserTreeQuery _tree;
+  final VideoRepository _videos;
   final ContentRepository _content;
   final LearningRepository _learning;
   final SearchRepository _search;
@@ -343,6 +347,8 @@ final class BrowserCommandRunner {
           await _content.deleteCard(ref.id);
         case ElementType.extract:
           await _content.deleteExtract(ref.id);
+        case ElementType.video:
+          await _videos.deleteVideoElement(ref.id);
         case ElementType.source:
           await _content.deleteSource(ref.id);
       }
@@ -413,15 +419,29 @@ final class BrowserCommandRunner {
           for (final card in await _content.listCardsOfExtract(ref.id))
             ElementRef(id: card.id, type: ElementType.card),
         ];
+      case ElementType.video:
+        return <ElementRef>[
+          for (final clip in await _videos.listVideoElementsOfParent(ref.id))
+            ElementRef(id: clip.id, type: ElementType.video),
+          for (final card in await _content.listCardsOfVideo(ref.id))
+            ElementRef(id: card.id, type: ElementType.card),
+        ];
     }
   }
 
-  /// Cards, then extracts, then sources: the order the foreign keys allow.
+  /// Cards, then extracts, then videos, then sources: the order the foreign
+  /// keys allow.
+  ///
+  /// Video elements are ordered among themselves deepest first, because a clip
+  /// references the element it was cut from and the database refuses to drop a
+  /// parent while a child still names it.
   static List<ElementRef> _deletionOrder(Set<ElementRef> refs) => <ElementRef>[
     for (final ElementRef ref in refs)
       if (ref.type == ElementType.card) ref,
     for (final ElementRef ref in refs)
       if (ref.type == ElementType.extract) ref,
+    for (final ElementRef ref in refs)
+      if (ref.type == ElementType.video) ref,
     for (final ElementRef ref in refs)
       if (ref.type == ElementType.source) ref,
   ];

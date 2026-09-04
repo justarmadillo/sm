@@ -75,6 +75,8 @@ void main() {
         'source_edits',
         'sources',
         'topic_states',
+        'video_elements',
+        'videos',
       ]);
 
       final version = await db.customSelect('PRAGMA user_version').getSingle();

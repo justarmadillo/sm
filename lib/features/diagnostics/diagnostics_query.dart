@@ -22,6 +22,7 @@ import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/search_repository.dart';
+import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:meta/meta.dart';
 
 /// Everything known about one element's scheduling.
@@ -102,14 +103,17 @@ final class DiagnosticsQuery {
   const DiagnosticsQuery({
     required LearningRepository learning,
     required ContentRepository content,
+    required VideoRepository videos,
     required SearchRepository search,
     required SchedulingContext context,
   }) : _learning = learning,
        _content = content,
+       _videos = videos,
        _search = search,
        _context = context;
 
   final LearningRepository _learning;
+  final VideoRepository _videos;
   final ContentRepository _content;
   final SearchRepository _search;
   final SchedulingContext _context;
@@ -174,6 +178,7 @@ final class DiagnosticsQuery {
   Future<String?> _titleOf(ElementRef ref) async => switch (ref.type) {
     ElementType.source => (await _content.findSource(ref.id))?.title,
     ElementType.extract => (await _content.findExtract(ref.id))?.markdown,
+    ElementType.video => (await _videos.findVideoElement(ref.id))?.displayTitle,
     ElementType.card => (await _content.findCard(ref.id))?.front,
   };
 }

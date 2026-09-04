@@ -709,7 +709,11 @@ final class QueueCommandRunner {
   /// contain a future repetition added by a browser command.
   Future<List<QueueCandidate>> loadCandidates(StudyDay day) async {
     final List<ElementSchedule> topicSchedules = await _learning.listSchedules(
-      types: const <ElementType>{ElementType.source, ElementType.extract},
+      types: const <ElementType>{
+        ElementType.source,
+        ElementType.extract,
+        ElementType.video,
+      },
       lifecycles: const <ElementLifecycle>{ElementLifecycle.active},
     );
     final Map<ElementRef, TopicState> topics = await _learning.findTopics(

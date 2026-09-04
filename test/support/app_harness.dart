@@ -22,6 +22,7 @@ import 'package:incremental_reader/features/priority/priority_query.dart';
 import 'package:incremental_reader/features/reader/reader_command_runner.dart';
 import 'package:incremental_reader/features/review/review_command_runner.dart';
 import 'package:incremental_reader/features/search/search_query.dart';
+import 'package:incremental_reader/features/video/video_command_runner.dart';
 import 'package:incremental_reader/scheduling/effective_due_query.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
 import 'package:incremental_reader/scheduling/sm20_runtime_store.dart';
@@ -40,6 +41,7 @@ import 'package:incremental_reader/storage/drift/drift_search_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_settings_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_transaction_runner.dart';
 import 'package:incremental_reader/storage/drift/drift_transfer_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_video_repository.dart';
 
 /// A fully wired application stack over an in-memory database.
 final class AppHarness {
@@ -60,6 +62,7 @@ final class AppHarness {
       FakeIdGenerator(prefix: 'dataset-$operationPrefix'),
       'test-device',
     );
+    videos = DriftVideoRepository(this.database);
     transactions = DriftTransactionRunner(this.database);
     settingsStore = SettingsStore(settings);
     runtimeStore = Sm20RuntimeStore(settings);
@@ -80,6 +83,7 @@ final class AppHarness {
   final TimeZoneRules _zone;
 
   late final DriftContentRepository content;
+  late final DriftVideoRepository videos;
   late final DriftLearningRepository learning;
   late final DriftSettingsRepository settings;
   late final DriftSearchRepository search;
@@ -94,6 +98,7 @@ final class AppHarness {
 
   late final ReaderCommandRunner reader = ReaderCommandRunner(
     content: content,
+    videos: videos,
     learning: learning,
     search: search,
     transfer: transfer,
@@ -118,6 +123,7 @@ final class AppHarness {
 
   late final FormulationCommandRunner formulation = FormulationCommandRunner(
     content: content,
+    videos: videos,
     learning: learning,
     search: search,
     transfer: transfer,
@@ -177,12 +183,14 @@ final class AppHarness {
   /// SM20's priority browser and the two have nothing to do with each other.
   late final BrowserTreeQuery browserTree = BrowserTreeQuery(
     content: content,
+    videos: videos,
     learning: learning,
   );
 
   late final BrowserCommandRunner filing = BrowserCommandRunner(
     tree: browserTree,
     content: content,
+    videos: videos,
     learning: learning,
     search: search,
     context: context,
@@ -190,6 +198,19 @@ final class AppHarness {
     transactions: transactions,
     clock: clock,
     ids: FakeIdGenerator(prefix: 'filing-$operationPrefix'),
+    diagnostics: diagnostics,
+  );
+
+  /// Importing videos and cutting clips out of them.
+  late final VideoCommandRunner video = VideoCommandRunner(
+    videos: videos,
+    learning: learning,
+    search: search,
+    transfer: transfer,
+    transactions: transactions,
+    context: context,
+    clock: clock,
+    ids: FakeIdGenerator(prefix: 'video-$operationPrefix'),
     diagnostics: diagnostics,
   );
 
@@ -210,6 +231,7 @@ final class AppHarness {
 
   late final QueueQuery queueQuery = QueueQuery(
     content: content,
+    videos: videos,
     learning: learning,
     commandRunner: queue,
     context: context,
@@ -218,6 +240,7 @@ final class AppHarness {
 
   late final PriorityQuery priorityQuery = PriorityQuery(
     content: content,
+    videos: videos,
     learning: learning,
     context: context,
   );
@@ -236,6 +259,7 @@ final class AppHarness {
   late final DiagnosticsQuery diagnosticsQuery = DiagnosticsQuery(
     learning: learning,
     content: content,
+    videos: videos,
     search: search,
     context: context,
   );

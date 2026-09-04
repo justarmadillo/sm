@@ -29,6 +29,14 @@ import 'package:incremental_reader/shared/ui/app_theme.dart';
     color: Colors.teal,
     label: 'card',
   ),
+  // One word for a whole talk and for a clip cut out of it, because this
+  // badge is handed a type and nothing else. The row itself shows the time
+  // range, which is what actually tells the two apart.
+  ElementType.video => (
+    icon: Icons.smart_display_outlined,
+    color: AppColors.softMarker,
+    label: 'video',
+  ),
 };
 
 /// A compact `icon + word` badge naming an element's type.

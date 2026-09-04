@@ -15,6 +15,7 @@ final Provider<ReaderCommandRunner> readerCommandRunnerProvider =
     Provider<ReaderCommandRunner>(
       (Ref ref) => ReaderCommandRunner(
         content: ref.watch(contentRepositoryProvider),
+        videos: ref.watch(videoRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
         search: ref.watch(searchRepositoryProvider),
         transfer: ref.watch(transferRepositoryProvider),

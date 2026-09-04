@@ -15,6 +15,7 @@ final Provider<BrowserTreeQuery> browserTreeQueryProvider =
     Provider<BrowserTreeQuery>(
       (Ref ref) => BrowserTreeQuery(
         content: ref.watch(contentRepositoryProvider),
+        videos: ref.watch(videoRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
       ),
     );
@@ -26,6 +27,7 @@ final Provider<BrowserCommandRunner> browserCommandRunnerProvider =
       (Ref ref) => BrowserCommandRunner(
         tree: ref.watch(browserTreeQueryProvider),
         content: ref.watch(contentRepositoryProvider),
+        videos: ref.watch(videoRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
         search: ref.watch(searchRepositoryProvider),
         context: ref.watch(schedulingContextProvider),
@@ -40,6 +42,8 @@ final Provider<BrowserCommandRunner> browserCommandRunnerProvider =
 /// The body of any single element, for the Browser detail pane.
 final Provider<ElementContentQuery> elementContentQueryProvider =
     Provider<ElementContentQuery>(
-      (Ref ref) =>
-          ElementContentQuery(content: ref.watch(contentRepositoryProvider)),
+      (Ref ref) => ElementContentQuery(
+        content: ref.watch(contentRepositoryProvider),
+        videos: ref.watch(videoRepositoryProvider),
+      ),
     );

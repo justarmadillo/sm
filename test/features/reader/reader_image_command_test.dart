@@ -34,6 +34,7 @@ void main() {
     );
     final ReaderCommandRunner reader = ReaderCommandRunner(
       content: harness.content,
+      videos: harness.videos,
       learning: harness.learning,
       search: harness.search,
       transfer: harness.transfer,

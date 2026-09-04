@@ -16,7 +16,7 @@ import 'package:incremental_reader/storage/database/tables.dart';
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 15;
+const int kSchemaVersion = 16;
 
 /// Name of the external-content FTS5 index over [SearchDocuments].
 const String kSearchIndexTable = 'search_index';
@@ -28,6 +28,8 @@ const String kSearchIndexTable = 'search_index';
     SourceEdits,
     Blocks,
     Extracts,
+    Videos,
+    VideoElements,
     Cards,
     ElementSchedules,
     TopicStates,
@@ -601,6 +603,44 @@ class AppDatabase extends _$AppDatabase {
         }
         await _createIndexes(m);
       }
+      if (from < 16) {
+        // Video becomes a fourth element type. A video range is scheduled by
+        // the same SM20 machinery as a source or an extract -- it is a topic,
+        // processed rather than recalled -- so nothing here touches the
+        // scheduler. What it does touch is every CHECK constraint that
+        // spelled out which element types exist, because SQLite validates
+        // those on write and a video row would be refused by all five.
+        if (!await _hasTable('videos')) {
+          await m.createTable(videos);
+        }
+        if (!await _hasTable('video_elements')) {
+          await m.createTable(videoElements);
+        }
+
+        // SQLite cannot ALTER a CHECK constraint, so each of these is a full
+        // table rebuild that copies every row forward. They are listed in
+        // dependency order, and `cards` is last because rebuilding it is the
+        // one that other tables hold references into.
+        await m.alterTable(TableMigration(elementSchedules));
+        await m.alterTable(TableMigration(topicStates));
+        await m.alterTable(TableMigration(searchDocuments));
+        await m.alterTable(TableMigration(revlogEntries));
+        await m.alterTable(TableMigration(cards));
+
+        await _createIndexes(m);
+
+        // Rebuilding `search_documents` drops it and recreates it under its
+        // own name, which takes the three FTS triggers with it and leaves the
+        // external-content index addressing rowids that no longer mean what
+        // they did. `_createSearchIndex` puts the triggers back; only the
+        // `rebuild` command repopulates the index from the content table, and
+        // without it search silently returns rows for the wrong elements.
+        await _createSearchIndex();
+        await customStatement(
+          'INSERT INTO $kSearchIndexTable($kSearchIndexTable) '
+          "VALUES ('rebuild')",
+        );
+      }
     },
     beforeOpen: (OpeningDetails details) async {
       // SQLite disables foreign keys per connection by default, so this
@@ -760,6 +800,16 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_extracts_source '
       'ON extracts (source_id)',
     );
+    if (await _hasTable('video_elements')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_video_elements_video '
+        'ON video_elements (video_id, start_seconds)',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_video_elements_parent '
+        'ON video_elements (parent_video_element_id, start_seconds)',
+      );
+    }
     if (await _hasColumn('cards', 'parent_element_id')) {
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_cards_parent '

@@ -271,6 +271,98 @@ class Extracts extends Table {
   ];
 }
 
+/// A video that exists somewhere on the internet. One row per URL.
+///
+/// Deliberately separate from [VideoElements]: the thing on the internet and
+/// the ranges the user has chosen to study over it are different objects, and
+/// correcting a mistyped URL must be one write rather than one per clip.
+@DataClassName('VideoRow')
+class Videos extends Table {
+  TextColumn get id => text()();
+
+  /// The page the video is watched on, carrying no timestamp of ours.
+  TextColumn get url => text().withLength(min: 1)();
+
+  /// Index into the VideoPlatform enum: youtube (0), vumedi (1), other (2).
+  IntColumn get platform => integer().check(platform.isBetweenValues(0, 2))();
+
+  /// Whole-video length, when the user typed it. Never fetched: asking the
+  /// site for it would put the feature back under the API terms it exists to
+  /// avoid.
+  IntColumn get durationSeconds =>
+      integer().nullable().check(durationSeconds.isBiggerThanValue(0))();
+
+  IntColumn get addedAtUtc => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+/// One scheduled range over a video: the whole thing, or a clip cut from it.
+///
+/// A clip is not a different kind of thing from a whole video — it is a
+/// narrower range with a parent — which is why one table serves both and why
+/// cutting a clip out of a clip needs no rule of its own.
+@DataClassName('VideoElementRow')
+class VideoElements extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get videoId =>
+      text().references(Videos, #id, onDelete: KeyAction.restrict)();
+
+  /// The element this clip was cut from, or null on the whole video.
+  ///
+  /// RESTRICT, not CASCADE, for the same reason extracts use it: the app soft
+  /// deletes through lifecycle, and a physical parent delete must never take
+  /// independently scheduled children with it.
+  TextColumn get parentVideoElementId => text().nullable().references(
+    VideoElements,
+    #id,
+    onDelete: KeyAction.restrict,
+  )();
+
+  /// The user's own name for this range. Required on a whole video, which is
+  /// otherwise unfindable in the tree; optional on a clip, which falls back
+  /// to its own times.
+  TextColumn get title => text().nullable().withLength(min: 1, max: 500)();
+
+  /// What the user wrote about this range, and what cards formulate from.
+  TextColumn get note => text().withDefault(const Constant(''))();
+
+  IntColumn get startSeconds => integer()();
+
+  /// One past the last second of the range, so the difference is a length.
+  IntColumn get endSeconds => integer()();
+
+  /// How far into the video the user says they got.
+  ///
+  /// Typed, never observed. Playback happens outside the app, so there is no
+  /// honest way to know where the viewer is, and a value nobody entered would
+  /// be indistinguishable from one they did.
+  IntColumn get resumeSeconds => integer().nullable()();
+
+  IntColumn get createdAtUtc => integer()();
+
+  IntColumn get editedAtUtc => integer().nullable()();
+
+  IntColumn get revision => integer()
+      .check(revision.isBiggerOrEqualValue(1))
+      .withDefault(const Constant(1))();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+
+  @override
+  List<String> get customConstraints => <String>[
+    'CHECK (start_seconds >= 0)',
+    'CHECK (end_seconds > start_seconds)',
+    'CHECK (resume_seconds IS NULL OR '
+        '(resume_seconds >= start_seconds AND resume_seconds <= end_seconds))',
+    'CHECK (parent_video_element_id IS NULL OR parent_video_element_id <> id)',
+    'CHECK (parent_video_element_id IS NOT NULL OR title IS NOT NULL)',
+  ];
+}
+
 /// Formulated items.
 @DataClassName('CardRow')
 class Cards extends Table {
@@ -282,8 +374,10 @@ class Cards extends Table {
   /// SQLite cannot express a polymorphic foreign key.
   TextColumn get parentElementId => text().nullable()();
 
+  /// Enumerated rather than ranged because 2 is a card, and a card is never
+  /// the parent of another card.
   IntColumn get parentElementType =>
-      integer().nullable().check(parentElementType.isBetweenValues(0, 1))();
+      integer().nullable().check(parentElementType.isIn(<int>[0, 1, 3]))();
 
   /// Index into the CardType enum.
   IntColumn get type => integer().check(type.isBetweenValues(0, 1))();
@@ -316,7 +410,7 @@ class ElementSchedules extends Table {
 
   /// Index into the element-type enum.
   IntColumn get elementType =>
-      integer().check(elementType.isBetweenValues(0, 2))();
+      integer().check(elementType.isBetweenValues(0, 3))();
 
   /// Sortable relative priority. Lower sorts as more important.
   TextColumn get priorityKey => text().withLength(min: 1, max: 128)();
@@ -381,8 +475,10 @@ class ElementSchedules extends Table {
 class TopicStates extends Table {
   TextColumn get elementId => text()();
 
+  /// Enumerated rather than ranged because 2 is a card, and a card is
+  /// scheduled by FSRS in [CardMemories] rather than by SM20 here.
   IntColumn get elementType =>
-      integer().check(elementType.isBetweenValues(0, 1))();
+      integer().check(elementType.isIn(<int>[0, 1, 3]))();
 
   /// SM20 record status: pending, memorized, dismissed, or deleted.
   IntColumn get status => integer().check(status.isBetweenValues(0, 3))();
@@ -632,7 +728,7 @@ class RevlogEntries extends Table {
   TextColumn get elementId => text()();
 
   IntColumn get elementType =>
-      integer().check(elementType.isBetweenValues(0, 2))();
+      integer().check(elementType.isBetweenValues(0, 3))();
 
   /// Stable `ReviewLogEventType` value. Never the enum index.
   IntColumn get eventType =>
@@ -733,7 +829,7 @@ class SearchDocuments extends Table {
   TextColumn get elementId => text()();
 
   IntColumn get elementType =>
-      integer().check(elementType.isBetweenValues(0, 2))();
+      integer().check(elementType.isBetweenValues(0, 3))();
 
   TextColumn get title => text()();
 

@@ -12,9 +12,12 @@ import 'package:meta/meta.dart';
 
 /// What kind of learning element this is.
 ///
-/// Sources and extracts are *topics*: the user processes them. Cards are
-/// *items*: the user is tested on them. That distinction, not the storage
+/// Sources, extracts and videos are *topics*: the user processes them. Cards
+/// are *items*: the user is tested on them. That distinction, not the storage
 /// table, is what decides which scheduler applies.
+///
+/// **These indices are stored.** Every schedule, log and search row holds the
+/// number, not the name, so a new type may only ever be appended.
 enum ElementType {
   /// An imported document the user reads incrementally.
   source,
@@ -23,7 +26,12 @@ enum ElementType {
   extract,
 
   /// A question formulated from an extract.
-  card;
+  card,
+
+  /// A range of a video, watched incrementally: the whole thing, or a clip
+  /// cut out of it. One type covers both, because a clip is a narrower range
+  /// with a parent rather than a different kind of object.
+  video;
 
   /// Whether this element is processed rather than recalled.
   bool get isTopic => this != ElementType.card;

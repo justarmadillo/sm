@@ -20,12 +20,14 @@ import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/search_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
+import 'package:incremental_reader/storage/contracts/video_repository.dart';
 
 const String kCardsFormulatedType = 'formulation.cards_created';
 
 final class FormulationCommandRunner {
   FormulationCommandRunner({
     required ContentRepository content,
+    required VideoRepository videos,
     required LearningRepository learning,
     required SearchRepository search,
     required TransferRepository transfer,
@@ -35,6 +37,7 @@ final class FormulationCommandRunner {
     required IdGenerator ids,
     DiagnosticSink diagnostics = const NullDiagnosticSink(),
   }) : _content = content,
+       _videos = videos,
        _learning = learning,
        _search = search,
        _transfer = transfer,
@@ -46,6 +49,7 @@ final class FormulationCommandRunner {
        _diagnostics = diagnostics;
 
   final ContentRepository _content;
+  final VideoRepository _videos;
   final LearningRepository _learning;
   final SearchRepository _search;
   final TransferRepository _transfer;
@@ -72,19 +76,34 @@ final class FormulationCommandRunner {
         ElementRef? parentRef;
         ElementSchedule? parentSchedule;
         if (parent != null) {
-          final exists = parent.isExtract
-              ? await _content.findExtract(parent.id) != null
-              : await _content.findSource(parent.id) != null;
-          final String entity = parent.isExtract ? 'extract' : 'source';
-          if (!exists) {
+          // Written as an exhaustive switch so that a new kind of parent
+          // fails to compile here rather than falling through to "source"
+          // and reporting that a video does not exist.
+          final (bool exists, ElementType type, String entity) resolved =
+              switch (parent.type) {
+                CardParentType.source => (
+                  await _content.findSource(parent.id) != null,
+                  ElementType.source,
+                  'source',
+                ),
+                CardParentType.extract => (
+                  await _content.findExtract(parent.id) != null,
+                  ElementType.extract,
+                  'extract',
+                ),
+                CardParentType.video => (
+                  await _videos.findVideoElement(parent.id) != null,
+                  ElementType.video,
+                  'video',
+                ),
+              };
+          final String entity = resolved.$3;
+          if (!resolved.$1) {
             return Err<List<Card>>(
               NotFoundFailure('no such $entity', entity: entity, id: parent.id),
             );
           }
-          parentRef = ElementRef(
-            id: parent.id,
-            type: parent.isExtract ? ElementType.extract : ElementType.source,
-          );
+          parentRef = ElementRef(id: parent.id, type: resolved.$2);
           parentSchedule = await _learning.findSchedule(parentRef);
           if (parentSchedule == null) {
             return Err<List<Card>>(

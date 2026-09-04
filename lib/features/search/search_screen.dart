@@ -15,6 +15,8 @@ import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/features/search/search_providers.dart';
 import 'package:incremental_reader/features/search/search_query.dart';
+import 'package:incremental_reader/features/video/video_screen.dart';
+import 'package:incremental_reader/features/video/video_view_model.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 
@@ -126,6 +128,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ('Everything', <ElementType>{}),
           ('Articles', <ElementType>{ElementType.source}),
           ('Extracts', <ElementType>{ElementType.extract}),
+          ('Videos', <ElementType>{ElementType.video}),
           ('Cards', <ElementType>{ElementType.card}),
         ];
     return Padding(
@@ -192,6 +195,7 @@ class _ResultTile extends ConsumerWidget {
       ElementType.source => (Icons.menu_book_outlined, AppColors.accent),
       ElementType.extract => (Icons.content_cut, AppColors.extractInk),
       ElementType.card => (Icons.quiz_outlined, Colors.teal),
+      ElementType.video => (Icons.smart_display_outlined, AppColors.softMarker),
     };
 
     return Card(
@@ -293,6 +297,13 @@ class _ResultTile extends ConsumerWidget {
           ref,
           extractId: result.ref.id,
           mode: ExtractMode.browse,
+        );
+      case ElementType.video:
+        await openVideo(
+          context,
+          ref,
+          videoElementId: result.ref.id,
+          mode: VideoMode.browse,
         );
       case ElementType.card:
         // A card has no browse surface of its own; its article is the useful

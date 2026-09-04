@@ -60,6 +60,11 @@ dependencies:
   # change to it shows up in this repository's own diff and test run.
   fsrs_dart:
     path: fsrs-dart
+  # Hands a timestamped video link to the system browser. Videos are never
+  # embedded: an embedded player depends on another company continuing to
+  # permit it, and a collection that stops opening when a policy changes is
+  # worthless.
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

@@ -491,6 +491,22 @@ final class DriftContentRepository implements ContentRepository {
   }
 
   @override
+  Future<List<Card>> listCardsOfVideo(String videoElementId) async {
+    final rows =
+        await (_database.select(_database.cards)
+              ..where(
+                ($CardsTable t) =>
+                    t.parentElementId.equals(videoElementId) &
+                    t.parentElementType.equals(ElementType.video.index),
+              )
+              ..orderBy(<OrderClauseGenerator<$CardsTable>>[
+                ($CardsTable t) => OrderingTerm.asc(t.createdAtUtc),
+              ]))
+            .get();
+    return <Card>[for (final row in rows) cardFromRow(row)];
+  }
+
+  @override
   Future<void> updateCard(Card card) async {
     await (_database.update(
       _database.cards,

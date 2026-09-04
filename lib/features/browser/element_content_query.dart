@@ -9,8 +9,10 @@ library;
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/documents/video.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
+import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:meta/meta.dart';
 
 /// One element's text, in a shape the detail pane can render for any type.
@@ -48,10 +50,14 @@ final class ElementContent {
 
 /// Loads the body of one element by reference.
 final class ElementContentQuery {
-  ElementContentQuery({required ContentRepository content})
-    : _content = content;
+  ElementContentQuery({
+    required ContentRepository content,
+    required VideoRepository videos,
+  }) : _content = content,
+       _videos = videos;
 
   final ContentRepository _content;
+  final VideoRepository _videos;
 
   /// The content behind [ref], or null when it no longer exists.
   Future<ElementContent?> load(ElementRef ref) async {
@@ -84,6 +90,19 @@ final class ElementContentQuery {
           notEditableReason: children.isEmpty
               ? null
               : 'Nested extracts point into this text, so it stays fixed.',
+        );
+
+      case ElementType.video:
+        final VideoElement? element = await _videos.findVideoElement(ref.id);
+        if (element == null) return null;
+        return ElementContent(
+          ref: ref,
+          title: element.displayTitle,
+          body: element.note,
+          // A video's note is edited beside the thing it is about, where the
+          // times and the Open button are. Offering it here would invite
+          // writing about a range without being able to see which one.
+          notEditableReason: 'Open the video to write about it.',
         );
 
       case ElementType.card:

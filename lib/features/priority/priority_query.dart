@@ -9,6 +9,7 @@ library;
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/source.dart';
+import 'package:incremental_reader/documents/video.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
@@ -17,6 +18,7 @@ import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
+import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:meta/meta.dart';
 
 /// One row of the priority browser.
@@ -93,13 +95,16 @@ final class PriorityContext {
 final class PriorityQuery {
   const PriorityQuery({
     required ContentRepository content,
+    required VideoRepository videos,
     required LearningRepository learning,
     required SchedulingContext context,
   }) : _content = content,
+       _videos = videos,
        _learning = learning,
        _context = context;
 
   final ContentRepository _content;
+  final VideoRepository _videos;
   final LearningRepository _learning;
   final SchedulingContext _context;
 
@@ -278,6 +283,10 @@ final class PriorityQuery {
           extract.provenance.sourceId,
         );
         return (source?.title ?? 'Extract', excerptOf(extract.markdown));
+      case ElementType.video:
+        final VideoElement? element = await _videos.findVideoElement(ref.id);
+        if (element == null) return ('Video', '');
+        return (element.displayTitle, excerptOf(element.note));
       case ElementType.card:
         final Card? card = await _content.findCard(ref.id);
         if (card == null) return ('Card', '');
