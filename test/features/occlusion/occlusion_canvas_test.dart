@@ -9,7 +9,7 @@ import 'package:incremental_reader/documents/occlusion.dart';
 import 'package:incremental_reader/features/occlusion/widgets/occlusion_canvas.dart';
 
 void main() {
-  testWidgets('draws, resizes, and deletes with touch controls', (
+  testWidgets('draws, moves, resizes from every border, and deletes', (
     WidgetTester tester,
   ) async {
     var regions = <OcclusionRegion>[];
@@ -47,10 +47,60 @@ void main() {
     expect(regions.single.width, closeTo(0.3, 0.01));
     expect(regions.single.height, closeTo(0.4, 0.01));
 
-    await tester.drag(find.byIcon(Icons.open_in_full), const Offset(20, 10));
-    await tester.pump();
+    final Finder regionFinder = find.byKey(
+      const ValueKey<String>('occlusion-region-region-1'),
+    );
+    Future<void> movePointer(Offset start, Offset delta) async {
+      await tester.timedDragFrom(
+        start,
+        delta,
+        const Duration(milliseconds: 200),
+      );
+      await tester.pump();
+    }
+
+    Rect regionRect = tester.getRect(regionFinder);
+    await movePointer(
+      Offset(
+        regionRect.left + regionRect.width * 0.75,
+        regionRect.top + regionRect.height * 0.65,
+      ),
+      const Offset(20, 10),
+    );
+    expect(regions.single.left, closeTo(0.45, 0.02));
+    expect(regions.single.top, closeTo(0.4, 0.02));
+
+    regionRect = tester.getRect(regionFinder);
+    await movePointer(
+      Offset(regionRect.right - 1, regionRect.center.dy),
+      const Offset(20, 0),
+    );
     expect(regions.single.width, closeTo(0.4, 0.02));
+
+    regionRect = tester.getRect(regionFinder);
+    await movePointer(
+      Offset(regionRect.left + 1, regionRect.center.dy),
+      const Offset(-10, 0),
+    );
+    expect(regions.single.left, closeTo(0.4, 0.02));
+    expect(regions.single.width, closeTo(0.45, 0.02));
+
+    regionRect = tester.getRect(regionFinder);
+    await movePointer(
+      Offset(regionRect.center.dx, regionRect.top + 1),
+      const Offset(0, -10),
+    );
+    expect(regions.single.top, closeTo(0.3, 0.02));
     expect(regions.single.height, closeTo(0.5, 0.02));
+
+    regionRect = tester.getRect(regionFinder);
+    await movePointer(
+      Offset(regionRect.center.dx, regionRect.bottom - 1),
+      const Offset(0, 10),
+    );
+    expect(regions.single.height, closeTo(0.6, 0.02));
+
+    expect(find.byIcon(Icons.open_in_full), findsNothing);
 
     await tester.tap(find.byIcon(Icons.close));
     await tester.pump();

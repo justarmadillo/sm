@@ -29,6 +29,12 @@ final class DriftVideoRepository implements VideoRepository {
   }
 
   @override
+  Future<List<Video>> listVideos() async {
+    final List<VideoRow> rows = await _database.select(_database.videos).get();
+    return <Video>[for (final VideoRow row in rows) videoFromRow(row)];
+  }
+
+  @override
   Future<Video?> findVideoByUrl(String url) async {
     final row = await (_database.select(
       _database.videos,

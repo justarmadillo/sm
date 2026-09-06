@@ -18,6 +18,9 @@ abstract interface class VideoRepository {
   /// The video with [id], or null.
   Future<Video?> findVideo(String id);
 
+  /// Every underlying video, for screens that show many ranges at once.
+  Future<List<Video>> listVideos();
+
   /// The video already stored for [url], or null.
   ///
   /// Adding a second range over a talk must not create a second video row, or

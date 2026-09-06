@@ -1,9 +1,7 @@
 /// ViewModel for one reveal-and-grade recall interaction.
 ///
-/// Three affordances live here that are not part of grading itself and must
-/// not behave as if they were: undoing the last grade, editing the card's
-/// wording without rescheduling it, and jumping to the passage a failing card
-/// came from.
+/// Editing a card here never reschedules it, and a failing card can jump back
+/// to the passage it came from.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -30,7 +28,6 @@ final class ReviewUiState {
     this.isDone = false,
     this.isLeech = false,
     this.buriedSiblings = 0,
-    this.canUndo = false,
     this.isEditing = false,
     this.occlusion,
   });
@@ -50,9 +47,6 @@ final class ReviewUiState {
 
   /// How many same-parent cards the last grade pushed off today.
   final int buriedSiblings;
-
-  /// Whether a grade has been applied that can still be taken back.
-  final bool canUndo;
 
   /// Whether the inline editor is open.
   final bool isEditing;
@@ -77,7 +71,6 @@ final class ReviewUiState {
     bool? isDone,
     bool? isLeech,
     int? buriedSiblings,
-    bool? canUndo,
     bool? isEditing,
     CardOcclusion? occlusion,
   }) => ReviewUiState(
@@ -89,7 +82,6 @@ final class ReviewUiState {
     isDone: isDone ?? this.isDone,
     isLeech: isLeech ?? this.isLeech,
     buriedSiblings: buriedSiblings ?? this.buriedSiblings,
-    canUndo: canUndo ?? this.canUndo,
     isEditing: isEditing ?? this.isEditing,
     occlusion: occlusion ?? this.occlusion,
   );
@@ -167,43 +159,6 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
           isDone: true,
           isLeech: outcome.isLeech,
           buriedSiblings: outcome.buriedSiblings,
-          canUndo: true,
-        ),
-        (AppFailure failure) => latest.copyWith(
-          isBusy: false,
-          message: UiMessage(failure.message, isError: true),
-        ),
-      ),
-    );
-  }
-
-  /// Takes back the grade just applied and returns the card to the session.
-  Future<void> undoLastGrade() async {
-    final ReviewUiState? current = state.valueOrNull;
-    if (current == null || current.isBusy) return;
-    state = AsyncValue<ReviewUiState>.data(current.copyWith(isBusy: true));
-
-    final Result<CardState> result = await ref
-        .read(reviewCommandRunnerProvider)
-        .undoLastReview(
-          UndoLastReview(
-            OperationId(ref.read(idGeneratorProvider).newId()),
-            cardId: current.card.id,
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        );
-    final ReviewUiState latest = state.valueOrNull ?? current;
-    state = AsyncValue<ReviewUiState>.data(
-      result.fold(
-        (CardState restored) => latest.copyWith(
-          cardState: restored,
-          isBusy: false,
-          // Back to before the grade, answer still showing: the user undid a
-          // misclick and should be able to grade again immediately.
-          isDone: false,
-          canUndo: false,
-          isAnswerRevealed: true,
-          message: const UiMessage('Grade taken back'),
         ),
         (AppFailure failure) => latest.copyWith(
           isBusy: false,

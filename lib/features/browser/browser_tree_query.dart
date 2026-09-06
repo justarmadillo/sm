@@ -38,6 +38,7 @@ final class BrowserTreeNode {
     required this.preview,
     required this.children,
     this.parentRef,
+    this.thumbnailSource,
     this.dueDay,
     this.status,
     this.lifecycle,
@@ -48,6 +49,9 @@ final class BrowserTreeNode {
 
   /// A short excerpt, empty when the element has no body worth showing.
   final String preview;
+
+  /// A video's optional remote or embedded preview; null for other elements.
+  final String? thumbnailSource;
 
   /// The element this one is filed under, or null at the top of the tree.
   ///
@@ -134,6 +138,10 @@ final class BrowserTreeQuery {
     final List<Source> sources = await _content.listSources();
     final List<Extract> extracts = await _content.listExtracts();
     final List<VideoElement> videoElements = await _videos.listVideoElements();
+    final List<Video> videos = await _videos.listVideos();
+    final Map<String, Video> videosById = <String, Video>{
+      for (final Video video in videos) video.id: video,
+    };
     final List<Card> cards = await _content.listCards();
 
     final List<_Element> elements = <_Element>[];
@@ -167,6 +175,7 @@ final class BrowserTreeQuery {
           preview: element.note.trim().isEmpty
               ? element.rangeLabel
               : _excerpt(element.note),
+          thumbnailSource: videosById[element.videoId]?.thumbnailUrl,
           provenanceParentId: element.parentVideoElementId,
           fallbackIndex: elements.length,
         ),
@@ -253,6 +262,7 @@ final class BrowserTreeQuery {
           ref: element.ref,
           title: element.title,
           preview: element.preview,
+          thumbnailSource: element.thumbnailSource,
           parentRef: parentRef,
           dueDay: schedule?.dueDay,
           status: statuses[element.ref],
@@ -319,11 +329,13 @@ final class _Element {
     required this.preview,
     required this.provenanceParentId,
     required this.fallbackIndex,
+    this.thumbnailSource,
   });
 
   final ElementRef ref;
   final String title;
   final String preview;
+  final String? thumbnailSource;
 
   /// The element this was cut or written from. Used only when nothing has been
   /// filed yet; a move never writes it.

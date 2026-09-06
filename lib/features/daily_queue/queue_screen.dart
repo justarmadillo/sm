@@ -4,7 +4,6 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/features/browser/add_element_flow.dart';
 import 'package:incremental_reader/features/browser/browser_screen.dart';
@@ -57,16 +56,7 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
       model.shouldClearMessage();
     });
 
-    return CallbackShortcuts(
-      bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
-            model.undoLastGrade,
-      },
-      child: Focus(
-        autofocus: true,
-        child: _buildScaffold(context, state, model),
-      ),
-    );
+    return Focus(autofocus: true, child: _buildScaffold(context, state, model));
   }
 
   Widget _buildScaffold(
@@ -149,14 +139,6 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
           ),
           const SizedBox(width: 4),
         ],
-        IconButton(
-          // Undo lives here rather than on the review screen: that screen
-          // closes the moment a grade commits, and the session is what the
-          // user is actually in the middle of.
-          onPressed: _isOpeningRoutes ? null : model.undoLastGrade,
-          icon: const Icon(Icons.undo),
-          tooltip: 'Undo last grade (Ctrl+Z)',
-        ),
         // Deciding what matters is part of studying, not housekeeping, so
         // this one keeps its place on the bar at every width rather than
         // costing a menu tap on the screen it is used from most.

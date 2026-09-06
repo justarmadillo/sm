@@ -179,10 +179,6 @@ class _ReviewBody extends ConsumerWidget {
   }
 
   /// Space or Enter reveals; 1-4 grade, on both the number row and the numpad.
-  ///
-  /// Undo-last-grade and edit-during-review are both one key away: a misgraded
-  /// card and a badly worded one are the two things that go wrong mid-session,
-  /// and neither should cost a trip to another screen.
   Map<ShortcutActivator, VoidCallback> _keyboardShortcuts(
     BuildContext context,
     WidgetRef ref,
@@ -206,8 +202,6 @@ class _ReviewBody extends ConsumerWidget {
           model.grade(CardRating.good),
       const SingleActivator(LogicalKeyboardKey.numpad4): () =>
           model.grade(CardRating.easy),
-      const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
-          model.undoLastGrade,
       const SingleActivator(LogicalKeyboardKey.keyE): () =>
           unawaited(_editCard(context, ref)),
       kPriorityShortcut: () => _openPriority(context, ref),
@@ -348,7 +342,7 @@ class _ReviewStatus extends StatelessWidget {
         if (!isCompactWidth(context))
           const Flexible(
             child: Text(
-              'Space: reveal · 1–4 grade · Ctrl+Z undo · E edit · Alt+P priority',
+              'Space: reveal · 1–4 grade · E edit · Alt+P priority',
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 11, color: AppColors.muted),
             ),
@@ -435,12 +429,6 @@ class _ReviewActions extends StatelessWidget {
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
                 children: <Widget>[
-                  if (state.canUndo)
-                    TextButton.icon(
-                      onPressed: state.isBusy ? null : model.undoLastGrade,
-                      icon: const Icon(Icons.undo, size: 16),
-                      label: const Text('Undo'),
-                    ),
                   _RatingButton(
                     number: 1,
                     label: 'Again',

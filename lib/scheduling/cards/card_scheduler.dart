@@ -833,48 +833,6 @@ final class CardScheduler {
   bool isLeech(CardMemory memory) =>
       settings.leechLapses > 0 && memory.lapses >= settings.leechLapses;
 
-  /// Restores the exact state a review was applied on top of.
-  ///
-  /// Undo is a state restore, not an inverse calculation: FSRS is not
-  /// invertible, so the only trustworthy way back is the pre-review snapshot
-  /// the review event carries. The caller removes the event in the same
-  /// transaction.
-  CardState undo(CardState current, ReviewRecord record) {
-    if (record.cardId != current.ref.id) {
-      throw ArgumentError('that review belongs to a different card');
-    }
-    final CardMemory prior = record.preState;
-    // Revisions are concurrency tokens, not FSRS memory. Preserve the exact
-    // prior scheduler fields while advancing the token to avoid ABA writes.
-    final CardMemory restored = CardMemory(
-      cardId: prior.cardId,
-      state: prior.state,
-      step: prior.step,
-      stability: prior.stability,
-      difficulty: prior.difficulty,
-      repetitionCount: prior.repetitionCount,
-      lapses: prior.lapses,
-      lastReviewAtUtc: prior.lastReviewAtUtc,
-      dueAtUtc: prior.dueAtUtc,
-      originalDueAtUtc: prior.originalDueAtUtc,
-      schedulerVersion: prior.schedulerVersion,
-      parametersVersion: prior.parametersVersion,
-      postponeCount: prior.postponeCount,
-      scheduledDays: prior.scheduledDays,
-      schedulerName: prior.schedulerName,
-      revision: current.memory.revision + 1,
-    );
-    final StudyDay dueDay = calendar.dayOf(restored.dueAtUtc);
-    return CardState(
-      schedule: current.schedule.copyWith(
-        dueDay: dueDay,
-        originalDueDay: calendar.dayOf(restored.originalDueAtUtc),
-        revision: current.schedule.revision + 1,
-      ),
-      memory: restored,
-    );
-  }
-
   /// Predicted probability that [memory] is currently recallable.
   ///
   /// A card with no review behind it reads as 0: nothing has been learned yet,

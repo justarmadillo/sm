@@ -9,8 +9,6 @@ library;
 
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
-import 'package:incremental_reader/features/review/review_commands.dart';
-import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
@@ -267,26 +265,6 @@ void main() {
         hasLength(1),
       );
     });
-
-    test(
-      'a failure is reported to diagnostics with its operation id',
-      () async {
-        final Result<CardState> undone = await harness.review.undoLastReview(
-          UndoLastReview(harness.operation(), timestampUtc: clock.nowUtc()),
-        );
-        expect(undone.failureOrNull, isA<ConflictFailure>());
-
-        // The conflict is an expected outcome rather than a crash, so the
-        // command returns it instead of throwing — the log stays for the
-        // unexpected ones.
-        expect(
-          harness.diagnostics.events.where(
-            (e) => e.failure is UnexpectedFailure,
-          ),
-          isEmpty,
-        );
-      },
-    );
 
     test(
       'an unexpected error is wrapped, logged, and does not escape',

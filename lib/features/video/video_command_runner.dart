@@ -102,15 +102,19 @@ final class VideoCommandRunner {
         ValidationFailure('a video needs a title'),
       );
     }
-    final Uri? thumbnailUri = thumbnailUrl == null
+    final bool isEmbeddedImage =
+        thumbnailUrl?.startsWith('data:image/') ?? false;
+    final Uri? thumbnailUri = thumbnailUrl == null || isEmbeddedImage
         ? null
         : Uri.tryParse(thumbnailUrl);
     if (thumbnailUrl != null &&
         thumbnailUrl.isNotEmpty &&
-        (thumbnailUri?.hasScheme != true ||
+        !isEmbeddedImage &&
+        ((thumbnailUri?.scheme == 'http' || thumbnailUri?.scheme == 'https') !=
+                true ||
             thumbnailUri?.host.isEmpty != false)) {
       return const Err<VideoElement>(
-        ValidationFailure('the thumbnail needs a complete link'),
+        ValidationFailure('the thumbnail needs an http or https link'),
       );
     }
     final Result<Unit> range = _validateRange(

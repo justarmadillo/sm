@@ -13,9 +13,6 @@ import 'package:incremental_reader/features/daily_queue/mercy_command_runner.dar
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/features/daily_queue/queue_providers.dart';
 import 'package:incremental_reader/features/daily_queue/queue_query.dart';
-import 'package:incremental_reader/features/review/review_commands.dart';
-import 'package:incremental_reader/features/review/review_providers.dart';
-import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
@@ -372,43 +369,6 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
             'Mercy undone; $restored element'
             '${restored == 1 ? '' : 's'} restored',
           ),
-          (AppFailure failure) => UiMessage(failure.message, isError: true),
-        ),
-      ),
-    );
-  }
-
-  /// Takes back the most recent grade, whichever card it was on.
-  ///
-  /// The review screen closes the moment a grade commits, so the session — not
-  /// that screen — is where undo has to live. The restored card becomes due
-  /// again immediately and reappears at the head of the queue.
-  Future<void> undoLastGrade() async {
-    final QueueUiState? current = state.valueOrNull;
-    if (current == null || current.isBusy) return;
-    state = AsyncValue<QueueUiState>.data(current.copyWith(isBusy: true));
-
-    final Result<CardState> result = await ref
-        .read(reviewCommandRunnerProvider)
-        .undoLastReview(
-          UndoLastReview(
-            OperationId(ref.read(idGeneratorProvider).newId()),
-            timestampUtc: ref.read(clockProvider).nowUtc(),
-          ),
-        );
-    final QueueProjection projection = await ref
-        .read(queueQueryProvider)
-        .load();
-
-    state = AsyncValue<QueueUiState>.data(
-      current.copyWith(
-        projection: projection,
-        isBusy: false,
-        completedThisSession: result.isOk && current.completedThisSession > 0
-            ? current.completedThisSession - 1
-            : current.completedThisSession,
-        message: result.fold(
-          (CardState _) => const UiMessage('Grade taken back'),
           (AppFailure failure) => UiMessage(failure.message, isError: true),
         ),
       ),

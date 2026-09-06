@@ -8,6 +8,7 @@ library;
 
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/video.dart';
+import 'package:incremental_reader/features/browser/browser_tree_query.dart';
 import 'package:incremental_reader/features/daily_queue/queue_query.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
@@ -76,6 +77,16 @@ void main() {
     expect(talk.rangeSeconds, 1200);
     final video = await harness.videos.findVideo(talk.videoId);
     expect(video?.thumbnailUrl, 'https://example.com/retina.jpg');
+  });
+
+  test('the Browser receives the video thumbnail for its row', () async {
+    final VideoElement talk = await harness.addTalk();
+
+    final node = (await harness.browserTree.load()).singleWhere(
+      (BrowserTreeNode node) => node.ref.id == talk.id,
+    );
+
+    expect(node.thumbnailSource, 'https://example.com/retina.jpg');
   });
 
   test('a second range over the same talk reuses the one video row', () async {

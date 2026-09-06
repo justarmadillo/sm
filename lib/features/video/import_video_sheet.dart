@@ -1,12 +1,20 @@
 /// Adding a video: its link, title, duration, and optional thumbnail.
 library;
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/documents/video.dart';
 import 'package:incremental_reader/documents/video_link.dart';
 import 'package:incremental_reader/documents/video_time.dart';
+import 'package:incremental_reader/features/reader/reader_commands.dart';
+import 'package:incremental_reader/features/reader/reader_image_input.dart';
+import 'package:incremental_reader/features/reader/reader_providers.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
+import 'package:incremental_reader/shared/ui/toast_message.dart';
+import 'package:incremental_reader/shared/ui/video_thumbnail.dart';
 
 /// What the user asked to import.
 @immutable
@@ -25,14 +33,19 @@ final class VideoImportRequest {
 }
 
 /// Shows the import dialog and returns what the user entered, or null.
-Future<VideoImportRequest?> showImportVideoSheet(BuildContext context) =>
-    showDialog<VideoImportRequest>(
-      context: context,
-      builder: (BuildContext context) => const _ImportVideoDialog(),
-    );
+Future<VideoImportRequest?> showImportVideoSheet(
+  BuildContext context,
+  WidgetRef ref,
+) => showDialog<VideoImportRequest>(
+  context: context,
+  builder: (BuildContext context) =>
+      _ImportVideoDialog(imageInput: ref.read(readerImageInputProvider)),
+);
 
 class _ImportVideoDialog extends StatefulWidget {
-  const _ImportVideoDialog();
+  const _ImportVideoDialog({required this.imageInput});
+
+  final ReaderImageInput imageInput;
 
   @override
   State<_ImportVideoDialog> createState() => _ImportVideoDialogState();
@@ -43,6 +56,8 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
   final TextEditingController _title = TextEditingController();
   final TextEditingController _length = TextEditingController();
   final TextEditingController _thumbnail = TextEditingController();
+  SourceImageImport? _thumbnailImage;
+  bool _isChoosingThumbnail = false;
 
   @override
   void initState() {
@@ -88,12 +103,14 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
     if (_durationSeconds == null || _durationSeconds! <= 0) {
       return 'Give the video’s full duration, for example 1:04:12.';
     }
-    final String thumbnail = _thumbnail.text.trim();
+    final String thumbnail = _thumbnailSource ?? '';
     final Uri? thumbnailUri = Uri.tryParse(thumbnail);
     if (thumbnail.isNotEmpty &&
-        (thumbnailUri?.hasScheme != true ||
+        !thumbnail.startsWith('data:image/') &&
+        ((thumbnailUri?.scheme == 'http' || thumbnailUri?.scheme == 'https') !=
+                true ||
             thumbnailUri?.host.isEmpty != false)) {
-      return 'The thumbnail needs a complete link.';
+      return 'The thumbnail needs a complete http:// or https:// link.';
     }
     return null;
   }
@@ -104,6 +121,13 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
       _durationSeconds != null &&
       _problem == null;
 
+  String? get _thumbnailSource {
+    final SourceImageImport? image = _thumbnailImage;
+    if (image != null) return videoThumbnailDataUrl(image);
+    final String link = _thumbnail.text.trim();
+    return link.isEmpty ? null : link;
+  }
+
   void _import() {
     if (!_canImport) return;
     Navigator.of(context).pop(
@@ -111,9 +135,7 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
         url: _url.text.trim(),
         title: _title.text.trim(),
         durationSeconds: _durationSeconds!,
-        thumbnailUrl: _thumbnail.text.trim().isEmpty
-            ? null
-            : _thumbnail.text.trim(),
+        thumbnailUrl: _thumbnailSource,
       ),
     );
   }
@@ -141,6 +163,12 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
               'Thumbnail link (optional)',
               'https://…/preview.jpg',
             ),
+            const SizedBox(height: 8),
+            _thumbnailButtons(),
+            if (_thumbnailSource case final String thumbnailSource) ...<Widget>[
+              const SizedBox(height: 10),
+              VideoThumbnail(source: thumbnailSource, width: 180, height: 101),
+            ],
             const SizedBox(height: 6),
             _problemLine(),
           ],
@@ -213,4 +241,66 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
       ),
     );
   }
+
+  Widget _thumbnailButtons() => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: <Widget>[
+      OutlinedButton.icon(
+        onPressed: _isChoosingThumbnail ? null : _chooseThumbnail,
+        icon: const Icon(Icons.folder_open_outlined, size: 18),
+        label: const Text('Choose image'),
+      ),
+      OutlinedButton.icon(
+        onPressed: _isChoosingThumbnail ? null : _pasteThumbnail,
+        icon: const Icon(Icons.content_paste_outlined, size: 18),
+        label: const Text('Paste image'),
+      ),
+      if (_thumbnailImage != null)
+        TextButton(
+          onPressed: _clearChosenThumbnail,
+          child: const Text('Clear'),
+        ),
+    ],
+  );
+
+  Future<void> _chooseThumbnail() async {
+    await _readThumbnail(() => widget.imageInput.chooseImages());
+  }
+
+  Future<void> _pasteThumbnail() async {
+    await _readThumbnail(widget.imageInput.readClipboardImage);
+  }
+
+  /// Keeps a valid first image even when a multi-file selection also failed.
+  Future<void> _readThumbnail(
+    Future<List<SourceImageImport>> Function() readImages,
+  ) async {
+    setState(() => _isChoosingThumbnail = true);
+    SourceImageImport? image;
+    try {
+      image = (await readImages()).firstOrNull;
+    } on ReaderImageInputException catch (failure) {
+      image = failure.validImages.firstOrNull;
+      if (mounted) showToast(context, failure.message, isError: true);
+    } on Object {
+      if (mounted) {
+        showToast(context, 'The image could not be read.', isError: true);
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _isChoosingThumbnail = false;
+      if (image != null) {
+        _thumbnailImage = image;
+        _thumbnail.clear();
+      }
+    });
+  }
+
+  void _clearChosenThumbnail() => setState(() => _thumbnailImage = null);
 }
+
+/// Embeds a chosen image so it remains portable across devices and backups.
+String videoThumbnailDataUrl(SourceImageImport image) =>
+    'data:${image.mime};base64,${base64Encode(image.bytes)}';

@@ -53,7 +53,10 @@ final class Video {
   /// the API terms it exists to avoid.
   final int? durationSeconds;
 
-  /// Optional preview image supplied by the user; never fetched or inferred.
+  /// Optional remote or embedded preview supplied by the user.
+  ///
+  /// The database name predates local thumbnails and remains frozen for
+  /// compatibility with existing collections.
   final String? thumbnailUrl;
 
   final DateTime addedAtUtc;

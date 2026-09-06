@@ -3,8 +3,8 @@
 /// Four things happen around a grade, and keeping them straight is the point
 /// of this file:
 ///
-/// * The grade itself, applied by the pinned FSRS adapter, recorded losslessly
-///   with a pre-review snapshot so it can be undone and later re-optimized.
+/// * The grade itself, applied by the pinned FSRS adapter and recorded
+///   losslessly so it can later be re-optimized.
 /// * **Sibling burying.** Three clozes cut from one sentence give each other
 ///   away, so answering one pushes the rest off today. Logged as a deferral,
 ///   never as a review.
@@ -39,9 +39,6 @@ import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 /// Activity kind recorded when a card is graded.
 const String kCardReviewedType = 'card.reviewed';
 
-/// Activity kind recorded when a grade is taken back.
-const String kReviewUndoneType = 'card.review_undone';
-
 /// Activity kind recorded when a card's text is edited.
 const String kCardEditedType = 'card.edited';
 
@@ -69,14 +66,7 @@ final class ReviewOutcome {
   final bool isLeech;
 }
 
-final class _SiblingBuryUndo {
-  const _SiblingBuryUndo({required this.current, required this.restored});
-
-  final CardState current;
-  final CardState restored;
-}
-
-/// Runs the commands for grading, undoing, editing, and deferring cards.
+/// Runs the commands for grading, editing, and deferring cards.
 final class ReviewCommandRunner {
   ReviewCommandRunner({
     required ContentRepository content,
@@ -328,228 +318,6 @@ final class ReviewCommandRunner {
         isLeech: !command.isPractice && scheduler.isLeech(memory),
       ),
     );
-  }
-
-  /// Restores the state the last grade was applied on top of.
-  Future<Result<CardState>> undoLastReview(UndoLastReview command) async {
-    try {
-      return await _transactions.run<Result<CardState>>(() async {
-        final SchedulerEvent? priorUndo = await _learning
-            .findSchedulerEventByOperationId(
-              command.operationId.value,
-              eventType: SchedulerEventType.cardReviewUndone,
-            );
-        if (priorUndo != null && priorUndo.element != null) {
-          final CardState? replayed = await _learning.findCardState(
-            priorUndo.element!.id,
-          );
-          if (replayed != null) return Ok<CardState>(replayed);
-        }
-        final ReviewRecord? record = command.cardId == null
-            ? await _learning.findLastReviewInCollection()
-            : await _learning.findLastReview(command.cardId!);
-        if (record == null) {
-          return const Err<CardState>(
-            ConflictFailure('there is no grade to take back'),
-          );
-        }
-        final CardState? current = await _learning.findCardState(record.cardId);
-        if (current == null) {
-          return Err<CardState>(
-            NotFoundFailure(
-              'no memory state for that card',
-              entity: 'card_memory',
-              id: record.cardId,
-            ),
-          );
-        }
-
-        final CardScheduler scheduler = await _context.cardScheduler();
-        final SchedulerEvent? originalEvent = await _learning
-            .findSchedulerEventByOperationId(
-              record.operationId,
-              eventType: SchedulerEventType.cardReviewed,
-            );
-        if (originalEvent == null) {
-          return const Err<CardState>(
-            ConflictFailure('that legacy review has no complete undo snapshot'),
-          );
-        }
-        if (current.memory.canonicalFsrsJson() !=
-            record.postState.canonicalFsrsJson()) {
-          return const Err<CardState>(
-            ConflictFailure('the card changed after that review'),
-          );
-        }
-        final List<_SiblingBuryUndo>? siblingBuries =
-            await _siblingBuriesForUndo(record);
-        if (siblingBuries == null) {
-          return const Err<CardState>(
-            ConflictFailure(
-              'a sibling changed after it was buried by that review',
-            ),
-          );
-        }
-        final CardState restored = scheduler.undo(current, record);
-        final StudyDayCalendar calendar = await _context.calendar();
-        if (!await _learning.compareAndSwapCardState(
-          expected: current,
-          replacement: restored,
-        )) {
-          return const Err<CardState>(
-            ConflictFailure('the card changed before undo committed'),
-          );
-        }
-        for (final _SiblingBuryUndo sibling in siblingBuries) {
-          if (!await _learning.compareAndSwapCardState(
-            expected: sibling.current,
-            replacement: sibling.restored,
-          )) {
-            throw StateError('a buried sibling changed before undo committed');
-          }
-        }
-        await _journal.append(
-          operationId: command.operationId.value,
-          ref: ElementRef(id: record.cardId, type: ElementType.card),
-          eventType: ReviewLogEventType.undo,
-          atUtc: command.timestampUtc,
-          before: _journal.cardSnapshot(current),
-          after: _journal.cardSnapshot(restored),
-          metadata: <String, Object?>{
-            'undone_operation': record.operationId,
-            'undone_grade': record.rating.value,
-          },
-        );
-        await _journal.appendScheduler(
-          operationId: command.operationId.value,
-          ref: current.ref,
-          eventType: SchedulerEventType.cardReviewUndone,
-          atUtc: command.timestampUtc,
-          studyDay: calendar.dayOf(command.timestampUtc),
-          policyVersion: 'card_review_policy_v1',
-          schedulerName: restored.memory.schedulerName,
-          schedulerVersion: restored.memory.schedulerVersion,
-          stateBefore: current.memory.canonicalFsrsJson(),
-          stateAfter: restored.memory.canonicalFsrsJson(),
-          algorithmicDueBefore: SchedulerEvent.encodeUtcDue(
-            current.memory.dueAtUtc,
-          ),
-          algorithmicDueAfter: SchedulerEvent.encodeUtcDue(
-            restored.memory.dueAtUtc,
-          ),
-          undoesEventId: originalEvent.id,
-          metadata: <String, Object?>{
-            'undone_operation': record.operationId,
-            'undone_grade': record.rating.value,
-            'restored_siblings': siblingBuries.length,
-          },
-        );
-        for (final _SiblingBuryUndo sibling in siblingBuries) {
-          await _journal.append(
-            operationId: command.operationId.value,
-            ref: sibling.current.ref,
-            eventType: ReviewLogEventType.undo,
-            atUtc: command.timestampUtc,
-            before: _journal.cardSnapshot(sibling.current),
-            after: _journal.cardSnapshot(sibling.restored),
-            metadata: <String, Object?>{
-              'undone_operation': record.operationId,
-              'undone_event': ReviewLogEventType.bury.name,
-            },
-          );
-        }
-        await _learning.appendActivity(
-          ActivityRecord(
-            id: _ids.newId(),
-            operationId: command.operationId.value,
-            type: kReviewUndoneType,
-            atUtc: command.timestampUtc,
-            ref: ElementRef(id: record.cardId, type: ElementType.card),
-            metadata: <String, Object?>{'rating': record.rating.value},
-          ),
-        );
-        await _restoreToOutstanding(restored);
-        for (final _SiblingBuryUndo sibling in siblingBuries) {
-          await _restoreToOutstanding(sibling.restored);
-        }
-        await _transfer.advanceGeneration();
-        return Ok<CardState>(restored);
-      });
-    } on Object catch (error, stackTrace) {
-      return Err<CardState>(
-        recordCommandException(
-          operationId: command.operationId,
-          activityType: kReviewUndoneType,
-          clock: _clock,
-          diagnostics: _diagnostics,
-          error: error,
-          stackTrace: stackTrace,
-        ),
-      );
-    }
-  }
-
-  Future<List<_SiblingBuryUndo>?> _siblingBuriesForUndo(
-    ReviewRecord review,
-  ) async {
-    final entries = await _learning.listReviewLogForOperation(
-      review.operationId,
-    );
-    final buries = entries.where(
-      (ReviewLogEntry entry) => entry.eventType == ReviewLogEventType.bury,
-    );
-    final result = <_SiblingBuryUndo>[];
-    for (final ReviewLogEntry entry in buries) {
-      final metadata = entry.metadata;
-      final String? beforeJson = metadata?['state_before'] as String?;
-      final String? afterJson = metadata?['state_after'] as String?;
-      final String? dueDay = metadata?['due_day_before'] as String?;
-      final String? originalDueDay =
-          metadata?['original_due_day_before'] as String?;
-      if (beforeJson == null ||
-          afterJson == null ||
-          dueDay == null ||
-          originalDueDay == null) {
-        return null;
-      }
-      final CardState? current = await _learning.findCardState(entry.ref.id);
-      if (current == null || current.memory.toJson() != afterJson) return null;
-      final CardMemory before = CardMemory.fromJson(beforeJson);
-      final CardMemory restoredMemory = CardMemory(
-        cardId: before.cardId,
-        state: before.state,
-        step: before.step,
-        stability: before.stability,
-        difficulty: before.difficulty,
-        repetitionCount: before.repetitionCount,
-        lapses: before.lapses,
-        lastReviewAtUtc: before.lastReviewAtUtc,
-        dueAtUtc: before.dueAtUtc,
-        originalDueAtUtc: before.originalDueAtUtc,
-        schedulerVersion: before.schedulerVersion,
-        parametersVersion: before.parametersVersion,
-        postponeCount: before.postponeCount,
-        scheduledDays: before.scheduledDays,
-        schedulerName: before.schedulerName,
-        revision: current.memory.revision + 1,
-      );
-      final CardState restored = CardState(
-        schedule: current.schedule.copyWith(
-          dueDay: StudyDay.parse(
-            dueDay,
-            zoneId: current.schedule.dueDay.zoneId,
-          ),
-          originalDueDay: StudyDay.parse(
-            originalDueDay,
-            zoneId: current.schedule.originalDueDay.zoneId,
-          ),
-          revision: current.schedule.revision + 1,
-        ),
-        memory: restoredMemory,
-      );
-      result.add(_SiblingBuryUndo(current: current, restored: restored));
-    }
-    return result;
   }
 
   /// Rewrites a card's text. Never reschedules.
@@ -940,32 +708,6 @@ final class ReviewCommandRunner {
     }
     await _context.saveRuntimeState(
       runtime.copyWith(outstanding: outstanding, outstandingItems: items),
-    );
-  }
-
-  Future<void> _restoreToOutstanding(CardState state) async {
-    if (!state.memory.isNew) {
-      await _placeInOutstanding(
-        state.ref,
-        shouldInclude: true,
-        shouldInsertAtFront: true,
-      );
-      return;
-    }
-    final runtime = await _context.runtimeState();
-    final List<ElementRef> pending =
-        runtime.pending.where((ElementRef value) => value != state.ref).toList()
-          ..insert(0, state.ref);
-    await _context.saveRuntimeState(
-      runtime.copyWith(
-        pending: pending,
-        outstanding: runtime.outstanding
-            .where((ElementRef value) => value != state.ref)
-            .toList(),
-        outstandingItems: runtime.outstandingItems
-            .where((ElementRef value) => value != state.ref)
-            .toList(),
-      ),
     );
   }
 }

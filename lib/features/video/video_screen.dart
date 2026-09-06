@@ -24,6 +24,7 @@ import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/status_pill.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
+import 'package:incremental_reader/shared/ui/video_thumbnail.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Opens the video screen for browsing.
@@ -232,7 +233,15 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
     padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
     children: <Widget>[
       if (state.video.thumbnailUrl case final thumbnailUrl?) ...<Widget>[
-        _VideoThumbnail(url: thumbnailUrl),
+        Center(
+          child: VideoThumbnail(
+            source: thumbnailUrl,
+            width: 498,
+            height: 280,
+            borderRadius: 10,
+            fit: BoxFit.contain,
+          ),
+        ),
         const SizedBox(height: 16),
       ],
       _openRow(state),
@@ -345,26 +354,6 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
             ),
           ),
     ],
-  );
-}
-
-/// A failed remote preview never prevents the saved video from opening.
-class _VideoThumbnail extends StatelessWidget {
-  const _VideoThumbnail({required this.url});
-
-  final String url;
-
-  @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(10),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 280),
-      child: Image.network(
-        url,
-        fit: BoxFit.contain,
-        errorBuilder: (_, _, _) => const SizedBox.shrink(),
-      ),
-    ),
   );
 }
 

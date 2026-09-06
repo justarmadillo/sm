@@ -223,15 +223,6 @@ abstract interface class LearningRepository {
   /// How many entries of each event type were written on [day].
   Future<Map<ReviewLogEventType, int>> countReviewLogEventsOn(StudyDay day);
 
-  /// The most recent non-practice review of [cardId], or null.
-  Future<ReviewRecord?> findLastReview(String cardId);
-
-  /// The most recent non-practice review in the collection, or null.
-  ///
-  /// Undo-last-grade is a session affordance, so it works on whatever was
-  /// graded last rather than only on the card currently open.
-  Future<ReviewRecord?> findLastReviewInCollection();
-
   /// Priority keys of every non-deleted learning element, ascending.
   ///
   /// This is the input to [PriorityScale]: percentiles are derived from the

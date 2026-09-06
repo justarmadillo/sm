@@ -45,6 +45,7 @@ import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/element_type_badge.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
+import 'package:incremental_reader/shared/ui/video_thumbnail.dart';
 
 /// Opens the knowledge tree.
 Future<void> openBrowser(BuildContext context, WidgetRef ref) async {
@@ -381,7 +382,10 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     BuildContext context,
     BrowserTreeNode? under,
   ) async {
-    final VideoImportRequest? request = await showImportVideoSheet(context);
+    final VideoImportRequest? request = await showImportVideoSheet(
+      context,
+      ref,
+    );
     if (request == null || !context.mounted) return;
 
     final BrowserViewModel model = ref.read(browserViewModelProvider.notifier);
@@ -884,6 +888,16 @@ class _NodeRow extends StatelessWidget {
           _leadingControl(node),
           _expandArrow(hasChildren),
           ElementTypeBadge(type: node.ref.type),
+          if (node.thumbnailSource
+              case final String thumbnailSource) ...<Widget>[
+            const SizedBox(width: 8),
+            VideoThumbnail(
+              source: thumbnailSource,
+              width: 64,
+              height: 36,
+              borderRadius: 4,
+            ),
+          ],
           const SizedBox(width: 8),
           Expanded(child: _titleSection(node)),
           if (hasChildren) ...<Widget>[
@@ -909,6 +923,16 @@ class _NodeRow extends StatelessWidget {
             _leadingControl(node),
             _expandArrow(hasChildren),
             ElementTypeBadge(type: node.ref.type, shouldShowLabel: false),
+            if (node.thumbnailSource
+                case final String thumbnailSource) ...<Widget>[
+              const SizedBox(width: 8),
+              VideoThumbnail(
+                source: thumbnailSource,
+                width: 56,
+                height: 32,
+                borderRadius: 4,
+              ),
+            ],
             const SizedBox(width: 8),
             Expanded(child: _titleSection(node)),
           ],

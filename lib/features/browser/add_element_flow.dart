@@ -93,7 +93,7 @@ Future<void> _addTopic(
 }
 
 Future<void> _addVideo(BuildContext context, WidgetRef ref) async {
-  final request = await showImportVideoSheet(context);
+  final request = await showImportVideoSheet(context, ref);
   if (request == null || !context.mounted) return;
   final elementId = await ref
       .read(browserViewModelProvider.notifier)

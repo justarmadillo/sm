@@ -582,40 +582,6 @@ final class DriftLearningRepository implements LearningRepository {
   }
 
   @override
-  Future<ReviewRecord?> findLastReview(String cardId) =>
-      _findLastUnundoneReview(cardId);
-
-  @override
-  Future<ReviewRecord?> findLastReviewInCollection() =>
-      _findLastUnundoneReview(null);
-
-  Future<ReviewRecord?> _findLastUnundoneReview(String? cardId) async {
-    final String cardPredicate = cardId == null ? '' : 'AND r.card_id = ? ';
-    final rows = await _database
-        .customSelect(
-          'SELECT r.* FROM review_events r '
-          'WHERE r.is_practice = 0 $cardPredicate'
-          'AND NOT EXISTS (SELECT 1 FROM scheduler_events original '
-          'JOIN scheduler_events inverse '
-          'ON inverse.undoes_event_id = original.id '
-          'WHERE original.operation_id = r.operation_id '
-          "AND original.event_type = 'card_reviewed' "
-          "AND inverse.event_type = 'card_review_undone') "
-          'ORDER BY r.reviewed_at_utc DESC, r.id DESC LIMIT 1',
-          variables: <Variable<Object>>[
-            if (cardId != null) Variable<String>(cardId),
-          ],
-          readsFrom: <ResultSetImplementation<Table, Object?>>{
-            _database.reviewEvents,
-            _database.schedulerEvents,
-          },
-        )
-        .get();
-    if (rows.isEmpty) return null;
-    return reviewRecordFromRow(_database.reviewEvents.map(rows.single.data));
-  }
-
-  @override
   Future<void> saveMercyBatch(StoredMercyBatch batch) => _database
       .into(_database.mercyBatches)
       .insertOnConflictUpdate(

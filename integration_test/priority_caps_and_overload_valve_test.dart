@@ -1,5 +1,5 @@
 /// M4 end to end on native Windows: priority, caps, the overload valve,
-/// Study More, undo-last-grade, and search.
+/// Study More, and search.
 ///
 /// Everything below is driven through the real widgets, because the point of
 /// this milestone is that the scheduling machinery is *reachable* — a cap the
@@ -75,7 +75,7 @@ void main() {
     }
   }
 
-  testWidgets('priority, caps, the valve, Study More, undo, and search', (
+  testWidgets('priority, caps, the valve, Study More, and search', (
     WidgetTester tester,
   ) async {
     final (AppDatabase database, ProviderContainer container, _) = await boot(
@@ -171,22 +171,24 @@ void main() {
       reason: 'what the valve shed has to be visible and recoverable',
     );
 
-    final int deferred = (await database
-            .customSelect(
-              'SELECT COUNT(*) AS n FROM revlog_entries '
-              'WHERE event_type = 4',
-            )
-            .getSingle())
-        .read<int>('n');
+    final int deferred =
+        (await database
+                .customSelect(
+                  'SELECT COUNT(*) AS n FROM revlog_entries '
+                  'WHERE event_type = 4',
+                )
+                .getSingle())
+            .read<int>('n');
     expect(deferred, 2, reason: 'two articles were deferred, and logged as it');
 
-    final int encounters = (await database
-            .customSelect(
-              'SELECT COUNT(*) AS n FROM revlog_entries '
-              'WHERE event_type = 2',
-            )
-            .getSingle())
-        .read<int>('n');
+    final int encounters =
+        (await database
+                .customSelect(
+                  'SELECT COUNT(*) AS n FROM revlog_entries '
+                  'WHERE event_type = 2',
+                )
+                .getSingle())
+            .read<int>('n');
     expect(
       encounters,
       0,
@@ -196,124 +198,5 @@ void main() {
     await tester.tap(find.text('Study more').first);
     await tester.pumpAndSettle();
     expect(find.text('3 items ready'), findsOneWidget);
-  });
-
-  testWidgets('a grade can be taken back and the card graded again', (
-    WidgetTester tester,
-  ) async {
-    final (AppDatabase database, ProviderContainer container, _) = await boot(
-      tester,
-    );
-    addTearDown(() async {
-      container.dispose();
-      await database.close();
-    });
-
-    // Importing leaves the Reader open in scheduled mode, which is where
-    // SuperMemo's Alt+Z lives: a card straight from the article, no extract
-    // in between.
-    await _openBrowser(tester);
-    await tester.tap(find.text('Import markdown').first);
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, 'Recall');
-    await tester.enterText(
-      find.byType(TextField).last,
-      '''
-# Recall
-
-Working memory holds about four items.''',
-    );
-    await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Import'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Formulate'));
-    await tester.pumpAndSettle();
-
-    // Fill the dialog's own fields, found through the dialog rather than by
-    // key, so this stays valid if the form is rearranged.
-    final Finder dialogFields = find.descendant(
-      of: find.byType(AlertDialog),
-      matching: find.byType(TextField),
-    );
-    await tester.enterText(
-      dialogFields.at(0),
-      'How many items does working memory hold?',
-    );
-    await tester.pump();
-    await tester.enterText(dialogFields.at(1), 'About four.');
-    await tester.pump();
-    await tester.tap(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byType(FilledButton),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    // Take the article itself out of the queue so the card is the only thing
-    // due, and the queue opens straight onto the review screen.
-    await tester.tap(find.widgetWithText(TextButton, 'Finish source'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.textContaining('Study').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Start'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Review'), findsOneWidget);
-    await tester.tap(find.text('Show answer  (Space)'));
-    await tester.pump();
-
-    final String beforeState = (await database
-            .customSelect(
-              'SELECT state, reps, due_at_utc FROM card_memories LIMIT 1',
-            )
-            .getSingle())
-        .data
-        .toString();
-
-    await tester.tap(find.text('3  Good'));
-    await tester.pumpAndSettle();
-
-    expect(
-      (await database
-              .customSelect('SELECT COUNT(*) AS n FROM review_events')
-              .getSingle())
-          .read<int>('n'),
-      1,
-    );
-
-    // The review screen closes the moment a grade commits, so undo lives on
-    // the queue — which is where the session actually is.
-    expect(find.text('Queue complete'), findsOneWidget);
-    await tester.tap(find.byTooltip('Undo last grade (Ctrl+Z)'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('1 item ready'),
-      findsOneWidget,
-      reason: 'the restored card is due again immediately',
-    );
-
-    final String afterState = (await database
-            .customSelect(
-              'SELECT state, reps, due_at_utc FROM card_memories LIMIT 1',
-            )
-            .getSingle())
-        .data
-        .toString();
-    expect(
-      afterState,
-      beforeState,
-      reason: 'undo restores the pre-review snapshot exactly',
-    );
-    expect(
-      (await database
-              .customSelect('SELECT COUNT(*) AS n FROM review_events')
-              .getSingle())
-          .read<int>('n'),
-      0,
-      reason: 'the grade whose effect no longer exists must not linger',
-    );
   });
 }

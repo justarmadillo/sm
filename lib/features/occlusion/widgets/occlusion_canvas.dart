@@ -36,6 +36,12 @@ class _OcclusionCanvasState extends State<OcclusionCanvas> {
   String? _selectedId;
   Offset? _dragStart;
   Offset? _dragCurrent;
+  OcclusionRegion? _transformStartRegion;
+  OcclusionRegion? _transformReplacement;
+  Offset _transformDelta = Offset.zero;
+  _RegionInteraction? _transformInteraction;
+  String? _hoveredRegionId;
+  _RegionInteraction? _hoveredInteraction;
 
   @override
   void dispose() {
@@ -84,7 +90,8 @@ class _OcclusionCanvasState extends State<OcclusionCanvas> {
                       setState(() => _dragCurrent = details.localPosition),
                   onPanEnd: (_) => _finishDrawing(size),
                 ),
-                for (final region in widget.regions) _regionBox(region, size),
+                for (final region in widget.regions)
+                  _regionBox(_displayRegion(region), size),
                 if (_draftRect case final Rect draft)
                   Positioned.fromRect(
                     rect: draft,
@@ -113,64 +120,71 @@ class _OcclusionCanvasState extends State<OcclusionCanvas> {
         : Rect.fromPoints(start, current);
   }
 
+  OcclusionRegion _displayRegion(OcclusionRegion region) {
+    final OcclusionRegion? replacement = _transformReplacement;
+    return replacement?.id == region.id ? replacement! : region;
+  }
+
   Widget _regionBox(OcclusionRegion region, Size size) {
-    final isSelected = region.id == _selectedId;
+    final bool isSelected = region.id == _selectedId;
+    final Size regionSize = Size(
+      region.width * size.width,
+      region.height * size.height,
+    );
     return Positioned(
       left: region.left * size.width,
       top: region.top * size.height,
       width: region.width * size.width,
       height: region.height * size.height,
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedId = region.id),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xFF242A32),
-            border: Border.all(
-              color: isSelected ? Colors.tealAccent : Colors.white70,
-              width: isSelected ? 3 : 1,
+      child: MouseRegion(
+        cursor: _cursorFor(region.id),
+        onHover: (PointerHoverEvent event) =>
+            _updateHover(region.id, event.localPosition, regionSize),
+        onExit: (_) => _clearHover(region.id),
+        child: Listener(
+          key: ValueKey<String>('occlusion-region-${region.id}'),
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (PointerDownEvent event) =>
+              _startTransform(region, event.localPosition, regionSize),
+          onPointerMove: (PointerMoveEvent event) =>
+              _updateTransform(event.delta, size),
+          onPointerUp: (_) => _finishTransform(),
+          onPointerCancel: (_) => _finishTransform(),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFF242A32),
+              border: Border.all(
+                color: isSelected ? Colors.tealAccent : Colors.white70,
+                width: isSelected ? 3 : 1,
+              ),
             ),
-          ),
-          child: isSelected
-              ? Stack(
-                  clipBehavior: Clip.none,
-                  children: <Widget>[
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      child: IconButton(
-                        tooltip: 'Delete mask',
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(
-                          width: 32,
-                          height: 32,
-                        ),
-                        color: Colors.white,
-                        onPressed: _deleteSelected,
-                        icon: const Icon(Icons.close, size: 20),
-                      ),
-                    ),
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Listener(
-                        behavior: HitTestBehavior.opaque,
-                        onPointerMove: (PointerMoveEvent event) =>
-                            _resize(region, event.delta, size),
-                        child: const SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: Icon(
-                            Icons.open_in_full,
-                            size: 20,
-                            color: Colors.white,
+            child: isSelected
+                ? Stack(
+                    clipBehavior: Clip.none,
+                    children: <Widget>[
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        child: IconButton(
+                          tooltip: 'Delete mask',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 18,
+                            height: 18,
                           ),
+                          style: IconButton.styleFrom(
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          color: Colors.white,
+                          onPressed: _deleteSelected,
+                          icon: const Icon(Icons.close, size: 14),
                         ),
                       ),
-                    ),
-                  ],
-                )
-              : null,
+                    ],
+                  )
+                : null,
+          ),
         ),
       ),
     );
@@ -194,26 +208,139 @@ class _OcclusionCanvasState extends State<OcclusionCanvas> {
     widget.onChanged(<OcclusionRegion>[...widget.regions, region]);
   }
 
-  void _resize(OcclusionRegion region, Offset delta, Size size) {
-    final maximumWidth = 1 - region.left;
-    final maximumHeight = 1 - region.top;
-    final replacement = OcclusionRegion(
-      id: region.id,
-      left: region.left,
-      top: region.top,
-      width: math.max(
-        0.01,
-        math.min(maximumWidth, region.width + delta.dx / size.width),
-      ),
-      height: math.max(
-        0.01,
-        math.min(maximumHeight, region.height + delta.dy / size.height),
-      ),
+  void _startTransform(
+    OcclusionRegion region,
+    Offset localPosition,
+    Size regionSize,
+  ) {
+    _focus.requestFocus();
+    setState(() => _selectedId = region.id);
+    _transformStartRegion = region;
+    _transformReplacement = null;
+    _transformDelta = Offset.zero;
+    _transformInteraction = _interactionAt(localPosition, regionSize);
+  }
+
+  void _updateTransform(Offset delta, Size canvasSize) {
+    final OcclusionRegion? start = _transformStartRegion;
+    final _RegionInteraction? interaction = _transformInteraction;
+    if (start == null || interaction == null) return;
+    _transformDelta += delta;
+    final double horizontalDelta = _transformDelta.dx / canvasSize.width;
+    final double verticalDelta = _transformDelta.dy / canvasSize.height;
+    final double minimumWidth = math.min(0.01, start.width);
+    final double minimumHeight = math.min(0.01, start.height);
+    double left = start.left;
+    double top = start.top;
+    double right = start.left + start.width;
+    double bottom = start.top + start.height;
+
+    if (interaction == _RegionInteraction.move) {
+      left = (start.left + horizontalDelta)
+          .clamp(0.0, 1.0 - start.width)
+          .toDouble();
+      top = (start.top + verticalDelta)
+          .clamp(0.0, 1.0 - start.height)
+          .toDouble();
+      right = left + start.width;
+      bottom = top + start.height;
+    } else {
+      if (interaction.movesLeft) {
+        left = (start.left + horizontalDelta)
+            .clamp(0.0, right - minimumWidth)
+            .toDouble();
+      }
+      if (interaction.movesRight) {
+        right = (right + horizontalDelta)
+            .clamp(left + minimumWidth, 1.0)
+            .toDouble();
+      }
+      if (interaction.movesTop) {
+        top = (start.top + verticalDelta)
+            .clamp(0.0, bottom - minimumHeight)
+            .toDouble();
+      }
+      if (interaction.movesBottom) {
+        bottom = (bottom + verticalDelta)
+            .clamp(top + minimumHeight, 1.0)
+            .toDouble();
+      }
+    }
+
+    final OcclusionRegion replacement = OcclusionRegion(
+      id: start.id,
+      left: left,
+      top: top,
+      width: right - left,
+      height: bottom - top,
     );
+    setState(() => _transformReplacement = replacement);
+  }
+
+  void _finishTransform() {
+    final OcclusionRegion? replacement = _transformReplacement;
+    _transformStartRegion = null;
+    _transformReplacement = null;
+    _transformDelta = Offset.zero;
+    _transformInteraction = null;
+    if (replacement == null) return;
     widget.onChanged(<OcclusionRegion>[
       for (final existing in widget.regions)
-        existing.id == region.id ? replacement : existing,
+        existing.id == replacement.id ? replacement : existing,
     ]);
+  }
+
+  void _updateHover(String regionId, Offset position, Size regionSize) {
+    final _RegionInteraction interaction = _interactionAt(position, regionSize);
+    if (_hoveredRegionId == regionId && _hoveredInteraction == interaction) {
+      return;
+    }
+    setState(() {
+      _hoveredRegionId = regionId;
+      _hoveredInteraction = interaction;
+    });
+  }
+
+  void _clearHover(String regionId) {
+    if (_hoveredRegionId != regionId) return;
+    setState(() {
+      _hoveredRegionId = null;
+      _hoveredInteraction = null;
+    });
+  }
+
+  MouseCursor _cursorFor(String regionId) {
+    if (_hoveredRegionId != regionId) return SystemMouseCursors.click;
+    return switch (_hoveredInteraction) {
+      _RegionInteraction.left ||
+      _RegionInteraction.right => SystemMouseCursors.resizeColumn,
+      _RegionInteraction.top ||
+      _RegionInteraction.bottom => SystemMouseCursors.resizeRow,
+      _RegionInteraction.topLeft || _RegionInteraction.bottomRight =>
+        SystemMouseCursors.resizeUpLeftDownRight,
+      _RegionInteraction.topRight ||
+      _RegionInteraction.bottomLeft => SystemMouseCursors.resizeUpRightDownLeft,
+      _ => SystemMouseCursors.move,
+    };
+  }
+
+  /// Treats a narrow strip inside every border as its resize grip.
+  _RegionInteraction _interactionAt(Offset position, Size regionSize) {
+    final double horizontalGrip = math.min(10, regionSize.width / 3);
+    final double verticalGrip = math.min(10, regionSize.height / 3);
+    final bool isAtLeft = position.dx <= horizontalGrip;
+    final bool isAtRight = position.dx >= regionSize.width - horizontalGrip;
+    final bool isAtTop = position.dy <= verticalGrip;
+    final bool isAtBottom = position.dy >= regionSize.height - verticalGrip;
+    if (isAtLeft && isAtTop) return _RegionInteraction.topLeft;
+    if (isAtRight && isAtTop) return _RegionInteraction.topRight;
+    if (isAtLeft && isAtBottom) return _RegionInteraction.bottomLeft;
+    if (isAtRight && isAtBottom) return _RegionInteraction.bottomRight;
+    if (isAtLeft) return _RegionInteraction.left;
+    if (isAtRight) return _RegionInteraction.right;
+    if (isAtTop) return _RegionInteraction.top;
+    if (isAtBottom) return _RegionInteraction.bottom;
+    return _RegionInteraction.move;
   }
 
   void _deleteSelected() {
@@ -226,4 +353,23 @@ class _OcclusionCanvasState extends State<OcclusionCanvas> {
     );
     setState(() => _selectedId = null);
   }
+}
+
+enum _RegionInteraction {
+  move,
+  left,
+  right,
+  top,
+  bottom,
+  topLeft,
+  topRight,
+  bottomLeft,
+  bottomRight;
+
+  bool get movesLeft => this == left || this == topLeft || this == bottomLeft;
+  bool get movesRight =>
+      this == right || this == topRight || this == bottomRight;
+  bool get movesTop => this == top || this == topLeft || this == topRight;
+  bool get movesBottom =>
+      this == bottom || this == bottomLeft || this == bottomRight;
 }

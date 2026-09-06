@@ -29,19 +29,6 @@ final class ReviewCard extends AppCommand {
   final bool isPractice;
 }
 
-/// Take back the most recent grade.
-///
-/// A state restore, not an inverse calculation: FSRS is not invertible, so the
-/// only trustworthy way back is the pre-review snapshot the review event
-/// carries. The event is removed in the same transaction, which is the one
-/// place the append-only log is allowed to shrink.
-final class UndoLastReview extends AppCommand {
-  UndoLastReview(super.operationId, {this.cardId, super.timestampUtc});
-
-  /// Restrict the undo to one card, or null for whatever was graded last.
-  final String? cardId;
-}
-
 /// Fix a card's wording without leaving the review flow.
 ///
 /// Never reschedules. A typo found mid-review is not new evidence about
