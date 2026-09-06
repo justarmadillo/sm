@@ -39,13 +39,43 @@ Future<StudyRouteResult> openReview(
     ) ??
     StudyRouteResult.canceled;
 
-class ReviewScreen extends ConsumerWidget {
+class ReviewScreen extends ConsumerStatefulWidget {
   const ReviewScreen({required this.cardId, super.key});
 
   final String cardId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ReviewScreen> createState() => _ReviewScreenState();
+}
+
+class _ReviewScreenState extends ConsumerState<ReviewScreen> {
+  /// Whether this visit has already dropped the previous one's state.
+  bool _hasDiscardedLastVisit = false;
+
+  /// Starts every opening from the collection rather than from the last visit.
+  ///
+  /// The ViewModel is a keyed family and is not autoDispose, so the state a
+  /// finished review left behind — answer revealed, `isDone` set, the memory
+  /// state as it stood before grading — is handed straight back the next time
+  /// the queue serves the same card. That card then opens with its answer
+  /// already showing and refuses every grade, because grading is guarded on
+  /// `isDone`; the pop below never fires again either, since it listens for
+  /// changes and nothing changes. Dropping the old state makes each visit a
+  /// fresh recall of what the collection currently says.
+  ///
+  /// Here rather than in `initState`, which runs before the provider scope is
+  /// reachable, and guarded because dependencies can change again later.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_hasDiscardedLastVisit) return;
+    _hasDiscardedLastVisit = true;
+    ref.invalidate(reviewViewModelProvider(widget.cardId));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String cardId = widget.cardId;
     final state = ref.watch(reviewViewModelProvider(cardId));
     final model = ref.read(reviewViewModelProvider(cardId).notifier);
 

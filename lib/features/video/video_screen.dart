@@ -71,6 +71,29 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
   /// overwritten by whatever this screen happened to have on screen.
   String _loadedNote = '';
 
+  /// Whether this visit has already dropped the previous one's state.
+  bool _hasDiscardedLastVisit = false;
+
+  /// Starts every opening from the collection rather than from the last visit.
+  ///
+  /// The ViewModel is a keyed family and is not autoDispose, so the state a
+  /// finished sitting left behind — `isDone` above all — is handed straight
+  /// back the next time the queue serves the same element. The completion
+  /// listener below runs on changes, so that stale flag sits armed until the
+  /// first toast fires it, closing the screen and counting a repetition that
+  /// never happened. Dropping the old state makes each visit a fresh sitting
+  /// over what the collection currently says.
+  ///
+  /// Here rather than in `initState`, which runs before the provider scope is
+  /// reachable, and guarded because dependencies can change again later.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_hasDiscardedLastVisit) return;
+    _hasDiscardedLastVisit = true;
+    ref.invalidate(videoViewModelProvider(widget.request));
+  }
+
   @override
   void dispose() {
     _note.dispose();
