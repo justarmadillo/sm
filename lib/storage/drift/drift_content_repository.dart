@@ -165,16 +165,10 @@ final class DriftContentRepository implements ContentRepository {
     // A resent command replays its recorded outcome rather than applying the
     // splice twice. The journal row is the record, so this needs no separate
     // bookkeeping table.
-    final SourceEditRow? already = await _sourceEditByOperation(operationId);
-    if (already != null) {
-      final Source? current = await findSource(already.sourceId);
-      if (current != null) {
-        return SourceEditReplayed(
-          source: current,
-          edit: sourceEditFromRow(already),
-        );
-      }
-    }
+    final SourceEditReplayed? replayed = await _findReplayedSourceEdit(
+      operationId,
+    );
+    if (replayed != null) return replayed;
 
     final SourceRow? row = await (_database.select(
       _database.sources,
@@ -193,49 +187,18 @@ final class DriftContentRepository implements ContentRepository {
 
     final Source before = sourceFromRow(row);
     final List<Extract> children = await listExtractsOfParent(sourceId);
-
-    final SourceEditOutcome outcome = applySourceEditToText(
-      markdown: before.markdown,
-      contentRevision: before.contentRevision,
-      splice: splice,
-      marker: before.resume.marker,
-      softPosition: before.resume.softPosition,
-      children: <ChildProvenance>[
-        for (final Extract extract in children)
-          ChildProvenance(
-            extractId: extract.id,
-            provenance: extract.provenance,
-          ),
-      ],
+    final SourceEditOutcome outcome = _calculateSourceEdit(
+      before,
+      splice,
+      children,
     );
 
-    // What this edit displaces, captured before it happens. Migration cannot
-    // be inverted — a position collapsed onto the start of an edit no longer
-    // remembers where it was — so undo restores from this rather than trying
-    // to compute its way back.
-    final SourceEditRestore displaced = SourceEditRestore(
-      markerUtf8: before.resume.marker?.utf8Offset,
-      softUtf8: before.resume.softPosition?.utf8Offset,
-      provenance: <ProvenanceSnapshot>[
-        for (final Extract extract in children)
-          ProvenanceSnapshot(
-            extractId: extract.id,
-            startUtf8: extract.provenance.startUtf8,
-            endUtf8: extract.provenance.endUtf8,
-            state: extract.provenance.state,
-          ),
-      ],
-    );
-
-    final SourceEdit edit = SourceEdit(
-      // Unique by construction: the schema already requires one edit per
-      // source per revision, so no identifier generator is needed here.
-      id: '$sourceId#${outcome.contentRevision}',
+    final SourceEditRestore displaced = _captureRestore(before, children);
+    final SourceEdit edit = _newSourceEdit(
       sourceId: sourceId,
-      contentRevision: outcome.contentRevision,
       splice: splice,
-      removedText: outcome.removedText,
-      appliedAtUtc: nowUtc.toUtc(),
+      outcome: outcome,
+      nowUtc: nowUtc,
       operationId: operationId,
       isUndo: isUndo,
       restore: displaced,
@@ -244,6 +207,93 @@ final class DriftContentRepository implements ContentRepository {
         .into(_database.sourceEdits)
         .insert(sourceEditToCompanion(edit));
 
+    final Source after = _sourceAfterEdit(before, outcome, restore);
+    await _updateEditedSource(after);
+    await _updateExtractProvenance(outcome, restore);
+    await _replaceDerivedBlocks(after);
+
+    return SourceEditApplied(source: after, edit: edit, outcome: outcome);
+  });
+
+  /// Uses the edit journal itself as the idempotency record for a retry.
+  Future<SourceEditReplayed?> _findReplayedSourceEdit(
+    String operationId,
+  ) async {
+    final SourceEditRow? recorded = await _sourceEditByOperation(operationId);
+    if (recorded == null) return null;
+    final Source? current = await findSource(recorded.sourceId);
+    return current == null
+        ? null
+        : SourceEditReplayed(
+            source: current,
+            edit: sourceEditFromRow(recorded),
+          );
+  }
+
+  /// Adapts stored children to the lightweight provenance migration input.
+  static SourceEditOutcome _calculateSourceEdit(
+    Source source,
+    TextSplice splice,
+    List<Extract> children,
+  ) => applySourceEditToText(
+    markdown: source.markdown,
+    contentRevision: source.contentRevision,
+    splice: splice,
+    marker: source.resume.marker,
+    softPosition: source.resume.softPosition,
+    children: <ChildProvenance>[
+      for (final Extract extract in children)
+        ChildProvenance(extractId: extract.id, provenance: extract.provenance),
+    ],
+  );
+
+  /// Captures state that deterministic position migration cannot reconstruct.
+  static SourceEditRestore _captureRestore(
+    Source source,
+    List<Extract> children,
+  ) => SourceEditRestore(
+    markerUtf8: source.resume.marker?.utf8Offset,
+    softUtf8: source.resume.softPosition?.utf8Offset,
+    provenance: <ProvenanceSnapshot>[
+      for (final Extract extract in children)
+        ProvenanceSnapshot(
+          extractId: extract.id,
+          startUtf8: extract.provenance.startUtf8,
+          endUtf8: extract.provenance.endUtf8,
+          state: extract.provenance.state,
+        ),
+    ],
+  );
+
+  /// Builds the durable journal row whose id is fixed by source revision.
+  static SourceEdit _newSourceEdit({
+    required String sourceId,
+    required TextSplice splice,
+    required SourceEditOutcome outcome,
+    required DateTime nowUtc,
+    required String operationId,
+    required bool isUndo,
+    required SourceEditRestore restore,
+  }) => SourceEdit(
+    // Unique by construction: the schema already requires one edit per source
+    // per revision, so no identifier generator is needed here.
+    id: '$sourceId#${outcome.contentRevision}',
+    sourceId: sourceId,
+    contentRevision: outcome.contentRevision,
+    splice: splice,
+    removedText: outcome.removedText,
+    appliedAtUtc: nowUtc.toUtc(),
+    operationId: operationId,
+    isUndo: isUndo,
+    restore: restore,
+  );
+
+  /// Applies migrated positions, except where undo supplied recorded offsets.
+  static Source _sourceAfterEdit(
+    Source before,
+    SourceEditOutcome outcome,
+    SourceEditRestore? restore,
+  ) {
     // Undo is the one caller allowed to overwrite migration's answer, because
     // it is restoring a recorded state rather than deriving a new one.
     final ReaderAnchor? marker = _restoredAnchor(
@@ -256,8 +306,7 @@ final class DriftContentRepository implements ContentRepository {
       outcome.softPosition,
       outcome.contentRevision,
     );
-
-    final Source after = before
+    return before
         .withMarkdown(
           outcome.markdown,
           contentRevision: outcome.contentRevision,
@@ -265,32 +314,37 @@ final class DriftContentRepository implements ContentRepository {
         .copyWith(
           resume: ResumePosition(marker: marker, softPosition: soft),
         );
+  }
 
-    await _database.customStatement(
-      'UPDATE sources SET markdown = ?, content_hash = ?, word_count = ?, '
-      'content_revision = ?, marker_utf8 = ?, marker_revision = ?, '
-      'soft_utf8 = ?, soft_revision = ?, revision = revision + 1 '
-      'WHERE id = ?',
-      <Object?>[
-        after.markdown,
-        after.contentHash,
-        after.wordCount,
-        after.contentRevision,
-        after.resume.marker?.utf8Offset,
-        after.resume.marker?.contentRevision,
-        after.resume.softPosition?.utf8Offset,
-        after.resume.softPosition?.contentRevision,
-        sourceId,
-      ],
-    );
+  Future<void> _updateEditedSource(Source source) => _database.customStatement(
+    'UPDATE sources SET markdown = ?, content_hash = ?, word_count = ?, '
+    'content_revision = ?, marker_utf8 = ?, marker_revision = ?, '
+    'soft_utf8 = ?, soft_revision = ?, revision = revision + 1 '
+    'WHERE id = ?',
+    <Object?>[
+      source.markdown,
+      source.contentHash,
+      source.wordCount,
+      source.contentRevision,
+      source.resume.marker?.utf8Offset,
+      source.resume.marker?.contentRevision,
+      source.resume.softPosition?.utf8Offset,
+      source.resume.softPosition?.contentRevision,
+      source.id,
+    ],
+  );
 
+  /// Saves only changed migration results or explicit undo restorations.
+  Future<void> _updateExtractProvenance(
+    SourceEditOutcome outcome,
+    SourceEditRestore? restore,
+  ) async {
     final Map<String, ProvenanceSnapshot> restored =
         <String, ProvenanceSnapshot>{
           if (restore != null)
             for (final ProvenanceSnapshot snapshot in restore.provenance)
               snapshot.extractId: snapshot,
         };
-
     for (final ProvenanceUpdate update in outcome.provenanceUpdates) {
       final ProvenanceSnapshot? recorded = restored[update.extractId];
       if (recorded == null && !update.hasChanged) continue;
@@ -306,7 +360,10 @@ final class DriftContentRepository implements ContentRepository {
         ],
       );
     }
+  }
 
+  /// Rebuilds the cache because no persisted record points to a block id.
+  Future<void> _replaceDerivedBlocks(Source source) async {
     // Blocks are a derived cache and nothing persisted refers to their ids, so
     // the whole set is rebuilt rather than patched. A windowed re-parse would
     // have to reason about blank lines merging and splitting neighbours, and
@@ -314,20 +371,18 @@ final class DriftContentRepository implements ContentRepository {
     // per-save cost measured in milliseconds.
     await (_database.delete(
       _database.blocks,
-    )..where(($BlocksTable t) => t.sourceId.equals(sourceId))).go();
+    )..where(($BlocksTable table) => table.sourceId.equals(source.id))).go();
     final Document document = Document.parse(
-      sourceId: sourceId,
-      markdown: after.markdown,
-      contentRevision: after.contentRevision,
+      sourceId: source.id,
+      markdown: source.markdown,
+      contentRevision: source.contentRevision,
     );
     await _database.batch((Batch batch) {
       batch.insertAll(_database.blocks, <BlocksCompanion>[
-        for (final block in document.blocks) blockToCompanion(block, sourceId),
+        for (final block in document.blocks) blockToCompanion(block, source.id),
       ]);
     });
-
-    return SourceEditApplied(source: after, edit: edit, outcome: outcome);
-  });
+  }
 
   @override
   Future<List<SourceEdit>> listSourceEdits(String sourceId) async {
@@ -387,37 +442,30 @@ final class DriftContentRepository implements ContentRepository {
   }
 
   @override
-  Future<List<Extract>> listExtractsOfParent(String parentId) async {
-    final rows =
-        await (_database.select(_database.extracts)
-              ..where(($ExtractsTable t) => t.parentId.equals(parentId))
-              ..orderBy(<OrderClauseGenerator<$ExtractsTable>>[
-                ($ExtractsTable t) => OrderingTerm.asc(t.createdAtUtc),
-              ]))
-            .get();
-    return <Extract>[for (final row in rows) extractFromRow(row)];
-  }
+  Future<List<Extract>> listExtractsOfParent(String parentId) =>
+      _listExtractsMatching(
+        ($ExtractsTable table) => table.parentId.equals(parentId),
+      );
 
   @override
-  Future<List<Extract>> listExtractsOfSource(String sourceId) async {
-    final rows =
-        await (_database.select(_database.extracts)
-              ..where(($ExtractsTable t) => t.sourceId.equals(sourceId))
-              ..orderBy(<OrderClauseGenerator<$ExtractsTable>>[
-                ($ExtractsTable t) => OrderingTerm.asc(t.createdAtUtc),
-              ]))
-            .get();
-    return <Extract>[for (final row in rows) extractFromRow(row)];
-  }
+  Future<List<Extract>> listExtractsOfSource(String sourceId) =>
+      _listExtractsMatching(
+        ($ExtractsTable table) => table.sourceId.equals(sourceId),
+      );
 
   @override
-  Future<List<Extract>> listExtracts() async {
-    final rows =
-        await (_database.select(_database.extracts)
-              ..orderBy(<OrderClauseGenerator<$ExtractsTable>>[
-                ($ExtractsTable t) => OrderingTerm.asc(t.createdAtUtc),
-              ]))
-            .get();
+  Future<List<Extract>> listExtracts() => _listExtractsMatching(null);
+
+  /// Keeps every extract list on the same deterministic creation order.
+  Future<List<Extract>> _listExtractsMatching(
+    Expression<bool> Function($ExtractsTable table)? rowMatches,
+  ) async {
+    final query = _database.select(_database.extracts);
+    if (rowMatches != null) query.where(rowMatches);
+    query.orderBy(<OrderClauseGenerator<$ExtractsTable>>[
+      ($ExtractsTable table) => OrderingTerm.asc(table.createdAtUtc),
+    ]);
+    final rows = await query.get();
     return <Extract>[for (final row in rows) extractFromRow(row)];
   }
 
@@ -488,52 +536,26 @@ final class DriftContentRepository implements ContentRepository {
   }
 
   @override
-  Future<List<Card>> listCardsOfExtract(String extractId) async {
-    final rows =
-        await (_database.select(_database.cards)
-              ..where(
-                ($CardsTable t) =>
-                    t.parentElementId.equals(extractId) &
-                    t.parentElementType.equals(ElementType.extract.index),
-              )
-              ..orderBy(<OrderClauseGenerator<$CardsTable>>[
-                ($CardsTable t) => OrderingTerm.asc(t.createdAtUtc),
-              ]))
-            .get();
-    return <Card>[for (final row in rows) cardFromRow(row)];
-  }
+  Future<List<Card>> listCardsOfExtract(String extractId) => _listCardsMatching(
+    ($CardsTable table) =>
+        table.parentElementId.equals(extractId) &
+        table.parentElementType.equals(ElementType.extract.index),
+  );
 
   @override
-  Future<List<Card>> listCardsOfSource(String sourceId) async {
-    final rows =
-        await (_database.select(_database.cards)
-              ..where(
-                ($CardsTable t) =>
-                    t.parentElementId.equals(sourceId) &
-                    t.parentElementType.equals(ElementType.source.index),
-              )
-              ..orderBy(<OrderClauseGenerator<$CardsTable>>[
-                ($CardsTable t) => OrderingTerm.asc(t.createdAtUtc),
-              ]))
-            .get();
-    return <Card>[for (final row in rows) cardFromRow(row)];
-  }
+  Future<List<Card>> listCardsOfSource(String sourceId) => _listCardsMatching(
+    ($CardsTable table) =>
+        table.parentElementId.equals(sourceId) &
+        table.parentElementType.equals(ElementType.source.index),
+  );
 
   @override
-  Future<List<Card>> listCardsOfVideo(String videoElementId) async {
-    final rows =
-        await (_database.select(_database.cards)
-              ..where(
-                ($CardsTable t) =>
-                    t.parentElementId.equals(videoElementId) &
-                    t.parentElementType.equals(ElementType.video.index),
-              )
-              ..orderBy(<OrderClauseGenerator<$CardsTable>>[
-                ($CardsTable t) => OrderingTerm.asc(t.createdAtUtc),
-              ]))
-            .get();
-    return <Card>[for (final row in rows) cardFromRow(row)];
-  }
+  Future<List<Card>> listCardsOfVideo(String videoElementId) =>
+      _listCardsMatching(
+        ($CardsTable table) =>
+            table.parentElementId.equals(videoElementId) &
+            table.parentElementType.equals(ElementType.video.index),
+      );
 
   @override
   Future<void> updateCard(Card card) async {
@@ -553,13 +575,18 @@ final class DriftContentRepository implements ContentRepository {
   }
 
   @override
-  Future<List<Card>> listCards() async {
-    final rows =
-        await (_database.select(_database.cards)
-              ..orderBy(<OrderClauseGenerator<$CardsTable>>[
-                ($CardsTable t) => OrderingTerm.asc(t.createdAtUtc),
-              ]))
-            .get();
+  Future<List<Card>> listCards() => _listCardsMatching(null);
+
+  /// Keeps every card list on the same deterministic creation order.
+  Future<List<Card>> _listCardsMatching(
+    Expression<bool> Function($CardsTable table)? rowMatches,
+  ) async {
+    final query = _database.select(_database.cards);
+    if (rowMatches != null) query.where(rowMatches);
+    query.orderBy(<OrderClauseGenerator<$CardsTable>>[
+      ($CardsTable table) => OrderingTerm.asc(table.createdAtUtc),
+    ]);
+    final rows = await query.get();
     return <Card>[for (final row in rows) cardFromRow(row)];
   }
 
@@ -573,9 +600,8 @@ final class DriftContentRepository implements ContentRepository {
   @override
   Future<List<Card>> listSiblingCards(String cardId) async {
     // Siblings share the same typed provenance group. A standalone card has
-    // no siblings.
-    // A card with no parent has no siblings, which is why the query is keyed
-    // on the parent rather than on a shared source.
+    // no siblings, which is why the query is keyed on the parent rather than
+    // on a shared source.
     final rows = await _database
         .customSelect(
           'SELECT c.* FROM cards c '

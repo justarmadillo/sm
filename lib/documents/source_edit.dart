@@ -5,10 +5,8 @@
 /// row, so the journal is always a complete forward history and replaying it
 /// is total.
 ///
-/// The journal is what makes a position written against an older revision
-/// recoverable instead of merely suspect: it can be migrated forward through
-/// the intervening splices and land exactly where eager migration would have
-/// put it.
+/// Each row also keeps the positions displaced by its splice, so undo can
+/// restore exact coordinates instead of trying to invert a lossy migration.
 ///
 /// See `plans/reader/EDITABLE_READER.md` §6.1 and §9.3.
 library;
@@ -16,8 +14,6 @@ library;
 import 'dart:convert';
 
 import 'package:incremental_reader/documents/extract.dart';
-import 'package:incremental_reader/documents/position_migration.dart';
-import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/documents/text_splice.dart';
 import 'package:meta/meta.dart';
 
@@ -72,8 +68,8 @@ final class SourceEditRestore {
         markerUtf8: json['marker'] as int?,
         softUtf8: json['soft'] as int?,
         provenance: <ProvenanceSnapshot>[
-          for (final entry in (json['provenance'] as List<Object?>? ??
-              const <Object?>[]))
+          for (final entry
+              in (json['provenance'] as List<Object?>? ?? const <Object?>[]))
             ProvenanceSnapshot.fromJson(entry! as Map<String, Object?>),
         ],
       );
@@ -157,104 +153,4 @@ final class SourceEdit {
   @override
   String toString() =>
       'SourceEdit($sourceId r$contentRevision $splice${isUndo ? ' undo' : ''})';
-}
-
-/// Replays journal entries over positions written against older revisions.
-///
-/// Entries may be supplied in any order; they are sorted by revision, because
-/// migration is only associative when applied in the order the edits happened.
-final class SourceEditJournal {
-  SourceEditJournal(Iterable<SourceEdit> edits)
-    : _edits = List<SourceEdit>.unmodifiable(
-        edits.toList()
-          ..sort(
-            (SourceEdit a, SourceEdit b) =>
-                a.contentRevision.compareTo(b.contentRevision),
-          ),
-      );
-
-  /// An empty journal, for a source that has never been edited.
-  static final SourceEditJournal empty = SourceEditJournal(
-    const <SourceEdit>[],
-  );
-
-  final List<SourceEdit> _edits;
-
-  List<SourceEdit> get edits => _edits;
-
-  /// Highest revision recorded, or null when nothing has been edited.
-  int? get latestRevision =>
-      _edits.isEmpty ? null : _edits.last.contentRevision;
-
-  /// Edits that produced a revision after [contentRevision].
-  Iterable<SourceEdit> after(int contentRevision) =>
-      _edits.where((SourceEdit edit) => edit.contentRevision > contentRevision);
-
-  /// Brings [anchor] forward to [currentRevision].
-  ///
-  /// Returns the anchor unchanged when it is already current. A gap in the
-  /// journal cannot be bridged, so a missing entry yields null rather than a
-  /// position that only looks plausible.
-  ReaderAnchor? migrateAnchorForward(
-    ReaderAnchor anchor, {
-    required int currentRevision,
-    PositionGravity gravity = PositionGravity.left,
-  }) {
-    if (anchor.contentRevision >= currentRevision) return anchor;
-    final pending = after(anchor.contentRevision).toList();
-    if (!_isContiguous(pending, anchor.contentRevision, currentRevision)) {
-      return null;
-    }
-    var offset = anchor.utf8Offset;
-    for (final edit in pending) {
-      offset = migrateOffset(offset, edit.splice, gravity: gravity).utf8Offset;
-    }
-    return ReaderAnchor(utf8Offset: offset, contentRevision: currentRevision);
-  }
-
-  /// Brings the byte range `[startUtf8, endUtf8)` forward to [currentRevision].
-  ///
-  /// [MigratedRange.wasTouchedByEdit] is true when *any* replayed splice touched
-  /// the range, so a caller re-verifies provenance exactly when it must.
-  MigratedRange? migrateRangeForward(
-    int startUtf8,
-    int endUtf8, {
-    required int fromRevision,
-    required int currentRevision,
-  }) {
-    if (fromRevision >= currentRevision) {
-      return MigratedRange(
-        startUtf8: startUtf8,
-        endUtf8: endUtf8,
-        wasTouchedByEdit: false,
-      );
-    }
-    final pending = after(fromRevision).toList();
-    if (!_isContiguous(pending, fromRevision, currentRevision)) return null;
-    var start = startUtf8;
-    var end = endUtf8;
-    var touched = false;
-    for (final edit in pending) {
-      final migrated = migrateRange(start, end, edit.splice);
-      start = migrated.startUtf8;
-      end = migrated.endUtf8;
-      touched = touched || migrated.wasTouchedByEdit;
-    }
-    return MigratedRange(
-      startUtf8: start,
-      endUtf8: end,
-      wasTouchedByEdit: touched,
-    );
-  }
-
-  /// Whether [pending] covers every revision from [from] up to [to].
-  static bool _isContiguous(List<SourceEdit> pending, int from, int to) {
-    if (pending.length != to - from) return false;
-    var expected = from + 1;
-    for (final edit in pending) {
-      if (edit.contentRevision != expected) return false;
-      expected++;
-    }
-    return true;
-  }
 }

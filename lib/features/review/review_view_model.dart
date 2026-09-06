@@ -58,32 +58,9 @@ final class ReviewUiState {
   final bool isEditing;
   final CardOcclusion? occlusion;
 
-  String get question => switch (card.type) {
-    CardType.qa => card.front,
-    CardType.cloze => renderClozeQuestion(card.front, card.clozeOrdinal!),
-    CardType.clozeOverlapper => renderOverlapQuestion(
-      card.front,
-      card.clozeOrdinal!,
-      before: card.contextBefore!,
-      after: card.contextAfter!,
-    ),
-    CardType.imageOcclusion => card.front,
-  };
+  String get question => cardQuestionText(card);
 
-  String get answer => switch (card.type) {
-    CardType.qa => card.back,
-    CardType.cloze => renderClozeAnswer(
-      card.front,
-      ordinal: card.clozeOrdinal!,
-    ),
-    CardType.clozeOverlapper => renderOverlapAnswer(
-      card.front,
-      card.clozeOrdinal!,
-      before: card.contextBefore!,
-      after: card.contextAfter!,
-    ),
-    CardType.imageOcclusion => card.back,
-  };
+  String get answer => cardAnswerText(card);
 
   /// The element this card was formulated from, when it has one.
   CardParent? get parent => card.parent;

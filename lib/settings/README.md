@@ -32,5 +32,8 @@ to its default the next time the app starts.
 
 Add the field to its group's file, give it a default, map it to a new key in
 `app_settings.dart` (both directions — writing and reading back), and add the
-control to `features/settings/settings_screen.dart`. The round-trip test in
-`test/settings/app_settings_test.dart` will catch a half-finished one.
+labelled control to its named section in
+`features/settings/settings_screen.dart`. Add code to
+`features/settings/settings_controls.dart` only when the screen needs a new
+reusable control shape. The round-trip test in
+`test/settings/app_settings_test.dart` will catch a half-finished setting.

@@ -94,12 +94,6 @@ sealed class Result<T> {
     Err<T>(:final failure) => Err<R>(failure),
   };
 
-  /// Chains another fallible operation onto a success value.
-  Result<R> flatMap<R>(Result<R> Function(T value) transform) => switch (this) {
-    Ok<T>(:final value) => transform(value),
-    Err<T>(:final failure) => Err<R>(failure),
-  };
-
   /// Collapses both branches into a single value.
   R fold<R>(R Function(T value) onOk, R Function(AppFailure failure) onErr) =>
       switch (this) {

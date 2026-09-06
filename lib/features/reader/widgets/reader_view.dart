@@ -285,9 +285,6 @@ class ReaderViewState extends State<ReaderView> {
     _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
   }
 
-  /// Gives the reading surface keyboard focus.
-  void requestKeyboardFocus() => _keyboardFocus.requestFocus();
-
   /// Handles the keys a reader expects to move the page with.
   ///
   /// Intercepted at the focus node rather than registered as shortcuts so the

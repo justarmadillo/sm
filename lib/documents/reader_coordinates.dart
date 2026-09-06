@@ -38,8 +38,7 @@ final class ReaderCoordinates {
     Block block,
     int renderedIndex, {
     RenderedEdge edge = RenderedEdge.leading,
-  }) =>
-      block.sourceStartUtf8 + block.renderedToUtf8(renderedIndex, edge: edge);
+  }) => block.sourceStartUtf8 + block.renderedToUtf8(renderedIndex, edge: edge);
 
   /// Rendered index within [block] for [documentUtf8Offset].
   int renderedIndexForDocument(Block block, int documentUtf8Offset) {
@@ -49,16 +48,6 @@ final class ReaderCoordinates {
     );
     return block.utf8ToRendered(relative);
   }
-
-  /// Document byte range covered by rendered `[start, end)` of [block].
-  (int, int) documentRangeForRendered(
-    Block block,
-    int startRendered,
-    int endRendered,
-  ) => (
-    documentOffsetForRendered(block, startRendered),
-    documentOffsetForRendered(block, endRendered, edge: RenderedEdge.trailing),
-  );
 
   /// An anchor at rendered [renderedIndex] of [block].
   ReaderAnchor anchorForRendered(
@@ -70,47 +59,11 @@ final class ReaderCoordinates {
     contentRevision: document.contentRevision,
   );
 
-  /// The selection range covering rendered `[start, end)` across two blocks.
-  ///
-  /// [startBlock] and [endBlock] may be the same block. The hash is taken over
-  /// the exact markdown the range covers, including any block separators, so
-  /// provenance can be re-verified byte for byte after a later edit.
-  SelectionRange rangeForRendered({
-    required Block startBlock,
-    required int startRendered,
-    required Block endBlock,
-    required int endRendered,
-  }) {
-    final start = documentOffsetForRendered(startBlock, startRendered);
-    final end = documentOffsetForRendered(
-      endBlock,
-      endRendered,
-      edge: RenderedEdge.trailing,
-    );
-    final from = start <= end ? start : end;
-    final to = start <= end ? end : start;
-    return SelectionRange.of(
-      startAnchor: ReaderAnchor(
-        utf8Offset: from,
-        contentRevision: document.contentRevision,
-      ),
-      endAnchor: ReaderAnchor(
-        utf8Offset: to,
-        contentRevision: document.contentRevision,
-      ),
-      markdown: document.markdownSlice(from, to),
-    );
-  }
-
   /// Rendered range of [block] covered by the document range `[start, end)`.
   ///
   /// Clamped to the block, so a range spanning several blocks yields the part
   /// this block contributes.
-  (int, int) renderedRangeForDocument(
-    Block block,
-    int startUtf8,
-    int endUtf8,
-  ) {
+  (int, int) renderedRangeForDocument(Block block, int startUtf8, int endUtf8) {
     final from = startUtf8 <= block.sourceStartUtf8
         ? 0
         : renderedIndexForDocument(block, startUtf8);

@@ -50,13 +50,6 @@ enum LearningCommand {
       this == LearningCommand.dismiss ||
       this == LearningCommand.done;
 
-  /// Whether the command cannot run until the user has typed something.
-  bool get needsAnAnswer =>
-      this == LearningCommand.addToOutstanding ||
-      this == LearningCommand.addAll ||
-      this == LearningCommand.setAFactor ||
-      this == LearningCommand.modifyAFactor;
-
   String get warning => switch (this) {
     LearningCommand.forget =>
       'Forget clears the repetition count, interval, and postponement '

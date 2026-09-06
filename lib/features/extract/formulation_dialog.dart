@@ -99,7 +99,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
               _cardTypeSelector(context),
               const SizedBox(height: 16),
               if (_type == _DraftType.qa)
-                ..._questionAndAnswerFields()
+                ..._questionAnswerFields()
               else
                 ..._clozeFields(context, clozeCountInEditor),
               if (_error != null) ..._errorLine(context),
@@ -194,7 +194,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
     );
   }
 
-  List<Widget> _questionAndAnswerFields() => <Widget>[
+  List<Widget> _questionAnswerFields() => <Widget>[
     TextField(
       key: const ValueKey<String>('formulation-question'),
       controller: _question,

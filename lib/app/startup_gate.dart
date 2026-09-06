@@ -20,7 +20,12 @@ enum StartupFailureKind {
 /// A startup failure that recovery can explain without a live database.
 @immutable
 final class StartupFailure extends AppFailure {
-  const StartupFailure(this.kind, super.message, {super.cause});
+  const StartupFailure(
+    this.kind,
+    super.message, {
+    super.cause,
+    super.stackTrace,
+  });
 
   final StartupFailureKind kind;
 }
@@ -30,8 +35,19 @@ Future<Result<AppDatabase>> openCollectionOrFail({
   required File databaseFile,
   required Directory backupDirectory,
 }) async {
-  final bool isFresh =
-      !databaseFile.existsSync() || databaseFile.lengthSync() == 0;
+  late final bool isFresh;
+  try {
+    isFresh = !databaseFile.existsSync() || databaseFile.lengthSync() == 0;
+  } on Object catch (error, stackTrace) {
+    return Err<AppDatabase>(
+      StartupFailure(
+        StartupFailureKind.unreadable,
+        'The collection database could not be inspected.',
+        cause: error,
+        stackTrace: stackTrace,
+      ),
+    );
+  }
   if (!isFresh) {
     final StartupFailure? rawFailure = _inspectExistingDatabase(databaseFile);
     if (rawFailure != null) return Err<AppDatabase>(rawFailure);
@@ -47,6 +63,7 @@ Future<Result<AppDatabase>> openCollectionOrFail({
           StartupFailureKind.backupFailed,
           backup.failureOrNull!.message,
           cause: backup.failureOrNull!.cause,
+          stackTrace: backup.failureOrNull!.stackTrace,
         ),
       );
     }
@@ -57,13 +74,18 @@ Future<Result<AppDatabase>> openCollectionOrFail({
     database = openDatabaseAt(databaseFile);
     await database.customSelect('SELECT 1').get();
     return Ok<AppDatabase>(database);
-  } on Object catch (error) {
-    await database?.close();
+  } on Object catch (error, stackTrace) {
+    try {
+      await database?.close();
+    } on Object {
+      // Preserve the exception that explains why opening failed.
+    }
     return Err<AppDatabase>(
       StartupFailure(
         StartupFailureKind.unreadable,
         'The collection could not be opened.',
         cause: error,
+        stackTrace: stackTrace,
       ),
     );
   }
@@ -73,11 +95,12 @@ StartupFailure? _inspectExistingDatabase(File databaseFile) {
   sqlite.Database? rawDatabase;
   try {
     rawDatabase = sqlite.sqlite3.open(databaseFile.path);
-  } on Object catch (error) {
+  } on Object catch (error, stackTrace) {
     return StartupFailure(
       StartupFailureKind.unreadable,
       'The collection database could not be read.',
       cause: error,
+      stackTrace: stackTrace,
     );
   }
   try {
@@ -98,7 +121,7 @@ StartupFailure? _inspectExistingDatabase(File databaseFile) {
       );
     }
     return null;
-  } on Object catch (error) {
+  } on Object catch (error, stackTrace) {
     final StartupFailureKind kind =
         error is sqlite.SqliteException &&
             error.resultCode == sqlite.SqlError.SQLITE_NOTADB &&
@@ -111,9 +134,14 @@ StartupFailure? _inspectExistingDatabase(File databaseFile) {
           ? 'The collection database could not be read.'
           : 'The collection database is corrupt.',
       cause: error,
+      stackTrace: stackTrace,
     );
   } finally {
-    rawDatabase.close();
+    try {
+      rawDatabase.close();
+    } on Object {
+      // Keep the inspection result; closing the raw connection is cleanup.
+    }
   }
 }
 
@@ -136,15 +164,22 @@ bool _hasSqliteHeader(File file) {
     51,
     0,
   ];
-  final RandomAccessFile openFile = file.openSync();
+  RandomAccessFile? openFile;
   try {
+    openFile = file.openSync();
     final List<int> bytes = openFile.readSync(signature.length);
     if (bytes.length != signature.length) return false;
     for (var index = 0; index < signature.length; index++) {
       if (bytes[index] != signature[index]) return false;
     }
     return true;
+  } on FileSystemException {
+    return false;
   } finally {
-    openFile.closeSync();
+    try {
+      openFile?.closeSync();
+    } on FileSystemException {
+      // This is a best-effort signature check used only for classification.
+    }
   }
 }

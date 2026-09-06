@@ -57,18 +57,9 @@ final class ReaderAnchor implements Comparable<ReaderAnchor> {
 
   /// Content revision of the source this offset was written against.
   ///
-  /// An anchor older than the source's current revision must be migrated
-  /// forward before it is resolved. See `SourceEditJournal`.
+  /// Source edits migrate stored anchors eagerly, before exposing the next
+  /// document revision.
   final int contentRevision;
-
-  /// The same position expressed against a different revision.
-  ReaderAnchor withOffset(int offset, {int? contentRevision}) => ReaderAnchor(
-    utf8Offset: offset,
-    contentRevision: contentRevision ?? this.contentRevision,
-  );
-
-  /// Whether this anchor predates [currentRevision] and needs migrating.
-  bool isStaleAgainst(int currentRevision) => contentRevision < currentRevision;
 
   /// Ordering is by position only; revision is provenance, not order.
   @override

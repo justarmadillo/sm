@@ -1,7 +1,8 @@
 # `scheduling/` — when is something due
 
-Pure Dart arithmetic. No Flutter, no database. A due-date bug can be reproduced
-in a unit test instead of by clicking through the app.
+Pure Dart scheduling, with storage contracts where durable state is needed. No
+Flutter and no concrete database. A due-date bug can be reproduced in a unit
+test instead of by clicking through the app.
 
 | Folder / file | What it decides |
 |---|---|
@@ -21,6 +22,8 @@ in a unit test instead of by clicking through the app.
 | `study_day.dart` | the day boundary everything is expressed in |
 | `priority_rank.dart` | relative importance, as a sortable key |
 | `sm20_numeric.dart` | exact Delphi float maths, to match SuperMemo bit for bit |
+| `sm20_collection_state.dart` | collection-wide queue order and random-number state |
+| `sm20_runtime_store.dart` | reads and writes that state as one versioned settings value |
 | `scheduling_context.dart` | builds the schedulers from the user's current settings |
 | `effective_due_query.dart` | the one answer to "when does this actually come back?" |
 

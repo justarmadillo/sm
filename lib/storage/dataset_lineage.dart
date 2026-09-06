@@ -40,12 +40,6 @@ final class DatasetIdentity {
     ownerDeviceId: ownerDeviceId,
   );
 
-  /// Whether [other] is the same dataset as this one.
-  bool isSameDataset(DatasetIdentity other) => other.datasetId == datasetId;
-
-  /// Whether this copy may be written to by [deviceId].
-  bool isWritableBy(String deviceId) => ownerDeviceId == deviceId;
-
   @override
   bool operator ==(Object other) =>
       other is DatasetIdentity &&

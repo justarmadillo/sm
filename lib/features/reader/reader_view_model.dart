@@ -403,23 +403,32 @@ final class ReaderViewModel
     state = AsyncValue<ReaderUiState>.data(
       current.copyWith(wordsThisSession: words),
     );
-    _positionWrites = _positionWrites.then((_) async {
-      final result = await ref
-          .read(readerCommandRunnerProvider)
-          .saveSoftPosition(
-            SaveSoftPosition(
-              OperationId(ref.read(idGeneratorProvider).newId()),
-              sourceId: current.source.id,
-              anchor: anchor,
-            ),
-          );
-      final latest = state.valueOrNull;
-      if (latest == null || result.isErr) return;
-      state = AsyncValue<ReaderUiState>.data(
-        latest.copyWith(source: result.unwrap()),
-      );
-    });
+    _positionWrites = _savePositionAfter(_positionWrites, current, anchor);
     await _positionWrites;
+  }
+
+  /// Serializes scroll writes so an older position cannot finish last and
+  /// replace a newer one in storage or view state.
+  Future<void> _savePositionAfter(
+    Future<void> previousWrite,
+    ReaderUiState current,
+    ReaderAnchor anchor,
+  ) async {
+    await previousWrite;
+    final Result<Source> result = await ref
+        .read(readerCommandRunnerProvider)
+        .saveSoftPosition(
+          SaveSoftPosition(
+            OperationId(ref.read(idGeneratorProvider).newId()),
+            sourceId: current.source.id,
+            anchor: anchor,
+          ),
+        );
+    final ReaderUiState? latest = state.valueOrNull;
+    if (latest == null || result.isErr) return;
+    state = AsyncValue<ReaderUiState>.data(
+      latest.copyWith(source: result.unwrap()),
+    );
   }
 
   /// Promotes the soft position to the authoritative marker.

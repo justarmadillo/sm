@@ -41,6 +41,7 @@ import 'package:incremental_reader/features/reader/widgets/selection_knobs.dart'
 import 'package:incremental_reader/features/reader/widgets/selection_toolbar.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
+import 'package:incremental_reader/shared/ui/status_pill.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
 /// Light status-bar treatment used while the Reader owns the mobile route.
@@ -275,12 +276,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       AsyncValue<ReaderUiState>? previous,
       AsyncValue<ReaderUiState> next,
     ) {
-      final data = next.valueOrNull;
-      if (data == null) return;
+      final ReaderUiState? readerState = next.valueOrNull;
+      if (readerState == null) return;
 
-      final message = data.message;
+      final message = readerState.message;
       if (message != null) {
-        final undoId = data.lastExtractId;
+        final undoId = readerState.lastExtractId;
         showToast(
           context,
           message.text,
@@ -292,11 +293,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         );
         model.shouldClearMessage();
       }
-      if (data.isDone && Navigator.of(context).canPop()) {
+      if (readerState.isDone && Navigator.of(context).canPop()) {
         // Consume the signal before leaving. It is retained state on a keyed
         // family provider, so an uncleared flag re-fires on the next open of
         // the same source and pops it again instantly.
-        final bool repetition = data.wasRepetition;
+        final bool repetition = readerState.wasRepetition;
         model.clearDone();
         Navigator.of(
           context,
@@ -1036,10 +1037,10 @@ class _StatusBar extends StatelessWidget {
   /// What mode this is, how far the reading has got, and when it returns.
   List<Widget> _statusParts(Object due) => <Widget>[
     if (state.mode == ReaderMode.browse) ...<Widget>[
-      const _StatusPillButton(text: 'Browsing', color: AppColors.softMarker),
+      const StatusPill(text: 'Browsing', color: AppColors.softMarker),
       const Text('Nothing here changes progress or scheduling'),
     ] else ...<Widget>[
-      const _StatusPillButton(text: 'Reading today', color: AppColors.accent),
+      const StatusPill(text: 'Reading today', color: AppColors.accent),
       Text(
         state.marker == null
             ? 'No marker placed yet'
@@ -1085,23 +1086,6 @@ class _StatusToggle extends StatelessWidget {
         ),
       ),
     ),
-  );
-}
-
-class _StatusPillButton extends StatelessWidget {
-  const _StatusPillButton({required this.text, required this.color});
-
-  final String text;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Text(text, style: TextStyle(fontSize: 11, color: color)),
   );
 }
 

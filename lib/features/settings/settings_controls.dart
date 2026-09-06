@@ -95,7 +95,7 @@ class SettingsRow extends StatelessWidget {
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              _labelAndHint(),
+              _settingDescription(),
               const SizedBox(height: 8),
               _control(context),
             ],
@@ -103,7 +103,7 @@ class SettingsRow extends StatelessWidget {
         : Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Expanded(child: _labelAndHint()),
+              Expanded(child: _settingDescription()),
               const SizedBox(width: 18),
               SizedBox(width: controlWidth, child: control),
             ],
@@ -111,7 +111,7 @@ class SettingsRow extends StatelessWidget {
   );
 
   /// What the setting is called, and what changing it does.
-  Widget _labelAndHint() => Column(
+  Widget _settingDescription() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: <Widget>[
       Text(label, style: const TextStyle(fontSize: 13, color: AppColors.text)),

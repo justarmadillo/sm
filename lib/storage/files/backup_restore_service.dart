@@ -58,7 +58,7 @@ final class BackupRestoreService {
       _promoteDatabase(staging);
       return okUnit;
     } on Object catch (error, stackTrace) {
-      _deleteIfPresent(staging);
+      _tryDelete(staging);
       return Err<Unit>(
         StorageFailure(
           'could not restore backup',
@@ -128,23 +128,101 @@ final class BackupRestoreService {
   }
 
   void _promoteDatabase(File staging) {
-    if (_databaseFile.existsSync()) {
-      _databaseFile.renameSync(_availableSupersededPath());
+    final String supersededPath = _availableSupersededPath();
+    final List<_DisplacedFile> displacedSidecars = <_DisplacedFile>[];
+    File? supersededDatabase;
+    try {
+      for (final String suffix in <String>['-wal', '-shm']) {
+        final File sidecar = File('${_databaseFile.path}$suffix');
+        if (!sidecar.existsSync()) continue;
+        displacedSidecars.add(
+          _DisplacedFile(
+            originalPath: sidecar.path,
+            displaced: sidecar.renameSync('$supersededPath$suffix'),
+          ),
+        );
+      }
+      if (_databaseFile.existsSync()) {
+        supersededDatabase = _databaseFile.renameSync(supersededPath);
+      }
+      staging.renameSync(_databaseFile.path);
+    } on Object catch (error, stackTrace) {
+      final Object? rollbackError = _rollbackPromotion(
+        staging: staging,
+        supersededDatabase: supersededDatabase,
+        displacedSidecars: displacedSidecars,
+      );
+      if (rollbackError != null) {
+        throw StateError(
+          'database promotion failed ($error) and rollback failed '
+          '($rollbackError)',
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
     }
-    _deleteIfPresent(File('${_databaseFile.path}-wal'));
-    _deleteIfPresent(File('${_databaseFile.path}-shm'));
-    staging.renameSync(_databaseFile.path);
+    for (final _DisplacedFile sidecar in displacedSidecars) {
+      _tryDelete(sidecar.displaced);
+    }
+  }
+
+  /// Restores displaced database files without abandoning later cleanup when
+  /// one rollback step itself fails.
+  Object? _rollbackPromotion({
+    required File staging,
+    required File? supersededDatabase,
+    required List<_DisplacedFile> displacedSidecars,
+  }) {
+    Object? firstError;
+
+    void attempt(void Function() action) {
+      try {
+        action();
+      } on Object catch (error) {
+        firstError ??= error;
+      }
+    }
+
+    bool exists(File file) {
+      try {
+        return file.existsSync();
+      } on Object catch (error) {
+        firstError ??= error;
+        return false;
+      }
+    }
+
+    if (supersededDatabase != null && exists(_databaseFile)) {
+      attempt(() {
+        _deleteIfPresent(staging);
+        _databaseFile.renameSync(staging.path);
+      });
+    }
+    if (supersededDatabase != null && !exists(_databaseFile)) {
+      attempt(() => supersededDatabase.renameSync(_databaseFile.path));
+    }
+    for (final _DisplacedFile sidecar in displacedSidecars.reversed) {
+      if (!exists(sidecar.displaced) || exists(File(sidecar.originalPath))) {
+        continue;
+      }
+      attempt(() => sidecar.displaced.renameSync(sidecar.originalPath));
+    }
+    return firstError;
   }
 
   String _availableSupersededPath() {
     final String base = '${_databaseFile.path}.superseded';
-    if (!File(base).existsSync()) return base;
+    if (_isSupersededPathAvailable(base)) return base;
     var suffix = 1;
-    while (File('$base.$suffix').existsSync()) {
+    while (!_isSupersededPathAvailable('$base.$suffix')) {
       suffix++;
     }
     return '$base.$suffix';
   }
+
+  bool _isSupersededPathAvailable(String path) =>
+      !File(path).existsSync() &&
+      !File('$path-wal').existsSync() &&
+      !File('$path-shm').existsSync();
 }
 
 ArchiveFile _requiredEntry(Map<String, ArchiveFile> entries, String name) {
@@ -162,6 +240,21 @@ String _stampFromBackup(File file) {
 
 void _deleteIfPresent(File file) {
   if (file.existsSync()) file.deleteSync();
+}
+
+void _tryDelete(File file) {
+  try {
+    _deleteIfPresent(file);
+  } on FileSystemException {
+    // Best-effort cleanup must not mask the restoration result.
+  }
+}
+
+final class _DisplacedFile {
+  const _DisplacedFile({required this.originalPath, required this.displaced});
+
+  final String originalPath;
+  final File displaced;
 }
 
 final class _VerifiedAsset {

@@ -1,12 +1,13 @@
 # `storage/` — the database, files, and folders on disk
 
-| Folder | What it holds |
+| Folder / file | What it holds |
 |---|---|
 | `contracts/` | plain interfaces: what the app promises it can save and load |
 | `database/` | drift table definitions, schema version, migrations |
 | `drift/` | the classes that keep the promises in `contracts/`, using SQL |
 | `files/` | rolling backups, source image blobs, and the rotating diagnostic log |
 | `platform/` | where the app's folders are, and timezone rules |
+| `dataset_lineage.dart` | stable collection identity and future handoff lineage |
 
 One contract, one file, one implementation of the same name:
 `contracts/learning_repository.dart` is kept by `drift/drift_learning_repository.dart`.
@@ -16,6 +17,19 @@ One contract, one file, one implementation of the same name:
 A screen imports the **contract**, never the drift class. That is what lets a
 test hand a screen a hand-written stand-in instead of opening a real database,
 and it is enforced by `test/architecture/folder_rules_test.dart`.
+
+## Where rows become domain values
+
+`database/row_converters.dart` is the only boundary where Drift row shapes,
+frozen storage names, and readable domain names meet. The `tryDecode…`
+functions used by integrity repair turn malformed persisted JSON into a typed
+`StorageFailure` instead of leaking a cast or decoder exception. Rebuilding a
+card's redundant JSON snapshot from typed columns also lives there, rather than
+being reimplemented inside the database check.
+
+Each Drift repository keeps repeated query ordering and multi-step writes in
+named private functions. Public methods therefore read as the storage intent,
+while row mapping and SQL mechanics remain in one discoverable place.
 
 ## Before you rename anything in `database/tables.dart`
 
@@ -60,9 +74,12 @@ images under portable SHA-256 names in private application support.
 per study day, before the day's first write. Pre-migration backups remain a
 database-only snapshot because their one job is to protect the schema upgrade.
 `files/backup_restore_service.dart` is the matching cold reader: it validates
-and restores those files before Drift or the provider graph exists.
+and restores those files before Drift or the provider graph exists. Promotion
+moves the live database and its WAL/SHM sidecars aside first, and restores every
+displaced file if the replacement cannot be promoted.
 
-`contracts/database_check.dart` and `drift/drift_database_check.dart` repair
-logical relationships that SQLite cannot express as foreign keys. Unlike
-ordinary maintenance, that pass may create or delete current-state rows, while
-leaving append-only history untouched.
+`DatabaseCheck.repairIntegrity()` in `contracts/database_check.dart`, implemented
+by `drift/drift_database_check.dart`, repairs logical relationships that SQLite
+cannot express as foreign keys. Unlike ordinary maintenance, that pass may
+create or delete current-state rows, while leaving append-only history
+untouched.

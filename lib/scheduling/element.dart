@@ -157,12 +157,6 @@ final class ElementSchedule {
   /// CardMemory; this day is the day-granular projection of it.
   StudyDay get algorithmicDueDay => dueDay;
 
-  /// How many days late the element is on [today], per its original due day.
-  int overdueDaysOn(StudyDay today) {
-    final days = originalDueDay.daysUntil(today);
-    return days < 0 ? 0 : days;
-  }
-
   ElementSchedule copyWith({
     PriorityRank? priority,
     ElementLifecycle? lifecycle,

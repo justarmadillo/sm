@@ -42,12 +42,6 @@ final class ResumePosition {
   bool get hasUnconfirmedPosition =>
       softPosition != null && softPosition != marker;
 
-  ResumePosition withMarker(ReaderAnchor anchor) =>
-      ResumePosition(marker: anchor, softPosition: softPosition);
-
-  ResumePosition withSoftPosition(ReaderAnchor anchor) =>
-      ResumePosition(marker: marker, softPosition: anchor);
-
   /// Promotes the soft position to the authoritative marker.
   ResumePosition confirmSoftPosition() {
     final soft = softPosition;

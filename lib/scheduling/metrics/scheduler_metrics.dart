@@ -416,7 +416,6 @@ final class BranchWorkloadMetric {
   final int cardForegroundMs;
   final int topicForegroundMs;
 
-  int get totalCount => cardCount + topicCount;
   int get totalForegroundMs => cardForegroundMs + topicForegroundMs;
 }
 

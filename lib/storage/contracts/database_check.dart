@@ -39,5 +39,5 @@ final class DatabaseCheckReport {
 
 abstract interface class DatabaseCheck {
   /// Checks physical health first, then repairs logical damage atomically.
-  Future<DatabaseCheckReport> checkAndRepair();
+  Future<DatabaseCheckReport> repairIntegrity();
 }

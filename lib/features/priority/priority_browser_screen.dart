@@ -12,7 +12,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/features/browser/open_element.dart';
-import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/features/daily_queue/smart_postpone_dialog.dart';
 import 'package:incremental_reader/features/priority/learning_command_menu.dart';
 import 'package:incremental_reader/features/priority/learning_commands.dart';
@@ -212,15 +211,12 @@ class _BrowserBody extends ConsumerWidget {
       showToast(context, 'That element has no article branch', isError: true);
       return;
     }
-    final AppliedSmartPostpone? simulated = await model.smartPostpone(
-      isSimulationOnly: true,
-      branchSourceId: sourceId,
-    );
-    if (simulated == null || !context.mounted) return;
-    if (!await confirmSmartPostpone(context, simulated.result)) return;
-    await model.smartPostpone(
-      isSimulationOnly: false,
-      branchSourceId: sourceId,
+    await runConfirmedSmartPostpone(
+      context,
+      (bool isSimulationOnly) => model.smartPostpone(
+        isSimulationOnly: isSimulationOnly,
+        branchSourceId: sourceId,
+      ),
     );
   }
 
@@ -353,14 +349,12 @@ class _FilterBar extends StatelessWidget {
   }
 
   /// Runs the browser scope over exactly the filtered rows on screen.
-  Future<void> _confirmSmartPostpone(BuildContext context) async {
-    final AppliedSmartPostpone? simulated = await model.smartPostpone(
-      isSimulationOnly: true,
-    );
-    if (simulated == null || !context.mounted) return;
-    if (!await confirmSmartPostpone(context, simulated.result)) return;
-    await model.smartPostpone(isSimulationOnly: false);
-  }
+  Future<void> _confirmSmartPostpone(BuildContext context) =>
+      runConfirmedSmartPostpone(
+        context,
+        (bool isSimulationOnly) =>
+            model.smartPostpone(isSimulationOnly: isSimulationOnly),
+      );
 
   bool _areSetsEqual(Set<ElementType> a, Set<ElementType> b) =>
       a.length == b.length && a.containsAll(b);
@@ -431,7 +425,7 @@ class _ElementRow extends ConsumerWidget {
       _percentCell(),
       _typeBadgeCell(shouldShowLabel: true),
       const SizedBox(width: 8),
-      Expanded(child: _titleAndPreview()),
+      Expanded(child: _titleSection()),
       _Cell(width: _kIntervalWidth, text: '${entry.intervalDays}'),
       _Cell(width: _kCountWidth, text: '${entry.repetitions}'),
       _Cell(width: _kCountWidth, text: '${entry.lapses}'),
@@ -460,7 +454,7 @@ class _ElementRow extends ConsumerWidget {
           _percentCell(),
           _typeBadgeCell(shouldShowLabel: false),
           const SizedBox(width: 6),
-          Expanded(child: _titleAndPreview()),
+          Expanded(child: _titleSection()),
         ],
       ),
       Row(
@@ -518,7 +512,7 @@ class _ElementRow extends ConsumerWidget {
 
   /// The element's title, with the first line of its text beneath when there
   /// is one: two elements can share a title but rarely a first line.
-  Widget _titleAndPreview() {
+  Widget _titleSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[

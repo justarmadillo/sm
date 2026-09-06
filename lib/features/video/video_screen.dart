@@ -22,6 +22,7 @@ import 'package:incremental_reader/features/video/video_clip_dialog.dart';
 import 'package:incremental_reader/features/video/video_view_model.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
+import 'package:incremental_reader/shared/ui/status_pill.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -169,14 +170,14 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
     ref.listen<AsyncValue<VideoUiState>>(
       videoViewModelProvider(widget.request),
       (AsyncValue<VideoUiState>? previous, AsyncValue<VideoUiState> next) {
-        final VideoUiState? value = next.valueOrNull;
-        if (value == null) return;
-        final UiMessage? message = value.message;
+        final VideoUiState? videoState = next.valueOrNull;
+        if (videoState == null) return;
+        final UiMessage? message = videoState.message;
         if (message != null) {
           showToast(context, message.text, isError: message.isError);
           _model.shouldClearMessage();
         }
-        if (value.isDone) _finish(StudyRouteResult.committed);
+        if (videoState.isDone) _finish(StudyRouteResult.committed);
       },
     );
 
@@ -608,7 +609,7 @@ class _VideoStatusBar extends StatelessWidget {
   );
 
   List<Widget> _statusParts() => <Widget>[
-    _StatusPill(
+    StatusPill(
       text: state.canMutate ? 'Processing' : 'Browsing',
       color: state.canMutate ? AppColors.accent : AppColors.softMarker,
     ),
@@ -623,23 +624,6 @@ class _VideoStatusBar extends StatelessWidget {
       style: const TextStyle(fontSize: 12, color: AppColors.muted),
     ),
   ];
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.text, required this.color});
-
-  final String text;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Text(text, style: TextStyle(fontSize: 11, color: color)),
-  );
 }
 
 class _VideoActionBar extends StatelessWidget {

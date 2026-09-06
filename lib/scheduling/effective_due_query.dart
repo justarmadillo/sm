@@ -24,13 +24,6 @@ final class EffectiveDueQuery {
   Future<StudyDay> forTopic(TopicState topic) async =>
       topic.schedule.algorithmicDueDay;
 
-  Future<Map<ElementRef, StudyDay>> forTopics(
-    Iterable<TopicState> topics,
-  ) async => <ElementRef, StudyDay>{
-    for (final TopicState topic in topics)
-      topic.ref: topic.schedule.algorithmicDueDay,
-  };
-
   Future<StudyDay?> forElement(ElementRef ref) async {
     if (ref.type == ElementType.card) {
       final CardState? card = await _learning.findCardState(ref.id);

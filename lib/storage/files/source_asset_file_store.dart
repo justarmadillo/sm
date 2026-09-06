@@ -108,11 +108,6 @@ final class SourceAssetFileStore {
     return await _hashFile(file) == sha256Value;
   }
 
-  /// Removes a blob whose database reference count has already reached zero.
-  Future<void> deleteBlob(String sha256Value) async {
-    await _deleteFileIfPresent(fileForSha256(sha256Value));
-  }
-
   /// Removes writes abandoned by a crash without touching completed blobs.
   Future<int> deletePartialFiles() async {
     if (!_assetDirectory.existsSync()) return 0;

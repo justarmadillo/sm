@@ -28,6 +28,7 @@ import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/shared/command_execution.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/result.dart';
@@ -903,21 +904,16 @@ final class PriorityBrowserCommandRunner {
         },
       );
     } on Object catch (error, stackTrace) {
-      final UnexpectedFailure failure = UnexpectedFailure(
-        'command $type failed',
-        cause: error,
-        stackTrace: stackTrace,
-      );
-      _diagnostics.record(
-        DiagnosticEvent(
-          level: DiagnosticLevel.error,
-          name: type,
-          timestampUtc: _clock.nowUtc(),
+      return Err<PriorityBrowserCommandOutcome>(
+        recordCommandException(
           operationId: command.operationId,
-          failure: failure,
+          activityType: type,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
         ),
       );
-      return Err<PriorityBrowserCommandOutcome>(failure);
     }
   }
 }

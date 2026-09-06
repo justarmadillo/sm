@@ -16,6 +16,7 @@ import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
+import 'package:incremental_reader/shared/text_excerpt.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/video_repository.dart';
@@ -275,43 +276,37 @@ final class PriorityQuery {
     switch (ref.type) {
       case ElementType.source:
         final Source? source = await _content.findSource(ref.id);
-        return (source?.title ?? 'Source', excerptOf(source?.markdown ?? ''));
+        return (
+          source?.title ?? 'Source',
+          singleLineExcerpt(source?.markdown ?? '', maximumCharacters: 140),
+        );
       case ElementType.extract:
         final Extract? extract = await _content.findExtract(ref.id);
         if (extract == null) return ('Extract', '');
         final Source? source = await _content.findSource(
           extract.provenance.sourceId,
         );
-        return (source?.title ?? 'Extract', excerptOf(extract.markdown));
+        return (
+          source?.title ?? 'Extract',
+          singleLineExcerpt(extract.markdown, maximumCharacters: 140),
+        );
       case ElementType.video:
         final VideoElement? element = await _videos.findVideoElement(ref.id);
         if (element == null) return ('Video', '');
-        return (element.displayTitle, excerptOf(element.note));
+        return (
+          element.displayTitle,
+          singleLineExcerpt(element.note, maximumCharacters: 140),
+        );
       case ElementType.card:
         final Card? card = await _content.findCard(ref.id);
         if (card == null) return ('Card', '');
-        final String question = switch (card.type) {
-          CardType.qa => card.front,
-          CardType.cloze => renderClozeQuestion(card.front, card.clozeOrdinal!),
-          CardType.clozeOverlapper => renderOverlapQuestion(
-            card.front,
-            card.clozeOrdinal!,
-            before: card.contextBefore!,
-            after: card.contextAfter!,
-          ),
-          CardType.imageOcclusion =>
-            card.front.isEmpty ? 'Image occlusion' : card.front,
-        };
-        return ('Card', excerptOf(question));
+        final String question = cardQuestionText(
+          card,
+          imageOcclusionFallback: 'Image occlusion',
+        );
+        return ('Card', singleLineExcerpt(question, maximumCharacters: 140));
     }
   }
-}
-
-/// Collapses whitespace and trims [markdown] to a one-line preview.
-String excerptOf(String markdown, {int maximum = 140}) {
-  final String collapsed = markdown.replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (collapsed.length <= maximum) return collapsed;
-  return '${collapsed.substring(0, maximum - 1).trimRight()}…';
 }
 
 /// The counters a browser row shows, whichever engine produced them.

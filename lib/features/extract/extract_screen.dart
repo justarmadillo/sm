@@ -25,6 +25,7 @@ import 'package:incremental_reader/features/reader/widgets/selection_knobs.dart'
 import 'package:incremental_reader/features/reader/widgets/selection_toolbar.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
+import 'package:incremental_reader/shared/ui/status_pill.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
 Future<StudyRouteResult> openExtract(
@@ -508,7 +509,7 @@ class _ExtractStatusBar extends StatelessWidget {
   /// Whether this visit can change anything, what the extract holds, and when
   /// it comes back.
   List<Widget> _statusParts() => <Widget>[
-    _StatusPill(
+    StatusPill(
       text: state.canMutate ? 'Processing' : 'Browsing',
       color: state.canMutate ? AppColors.accent : AppColors.softMarker,
     ),
@@ -522,23 +523,6 @@ class _ExtractStatusBar extends StatelessWidget {
       style: const TextStyle(fontSize: 12, color: AppColors.muted),
     ),
   ];
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.text, required this.color});
-
-  final String text;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Text(text, style: TextStyle(fontSize: 11, color: color)),
-  );
 }
 
 class _ExtractActionBar extends StatelessWidget {

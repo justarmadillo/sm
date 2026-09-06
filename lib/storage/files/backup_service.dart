@@ -61,11 +61,12 @@ final class BackupAssetReference {
 /// Reads the valid asset references from the same collection being backed up.
 typedef BackupAssetLister = Future<List<BackupAssetReference>> Function();
 
-void _safeDeleteFile(File? file) {
+void _safeDelete(File? file) {
   try {
     if (file?.existsSync() ?? false) file!.deleteSync();
   } on FileSystemException {
-    // A leftover staging file is harmless and retried on the next startup.
+    // Cleanup must not hide the result of the backup or recovery operation.
+    // Retention and the next startup will retry files left behind here.
   }
 }
 
@@ -76,23 +77,28 @@ String _basename(File file) => file.path.split(RegExp(r'[/\\]')).last;
 /// This is top-level because recovery runs before there is a live database
 /// from which a [BackupService] could be constructed.
 List<File> listBackupFiles(Directory backupDirectory, {BackupType? type}) {
-  if (!backupDirectory.existsSync()) return <File>[];
-  final List<String> prefixes = type == null
-      ? BackupType.values.map((BackupType kind) => kind.prefix).toList()
-      : <String>[type.prefix];
-  final List<File> files = backupDirectory.listSync().whereType<File>().where((
-    File file,
-  ) {
-    final String name = _basename(file);
-    final bool hasBackupExtension =
-        name.endsWith('.sqlite') || name.endsWith('.irbackup');
-    return hasBackupExtension &&
-        prefixes.any((String prefix) => name.startsWith('$prefix-'));
-  }).toList();
-  files.sort(
-    (File first, File second) => _basename(second).compareTo(_basename(first)),
-  );
-  return files;
+  try {
+    if (!backupDirectory.existsSync()) return <File>[];
+    final List<String> prefixes = type == null
+        ? BackupType.values.map((BackupType kind) => kind.prefix).toList()
+        : <String>[type.prefix];
+    final List<File> files = backupDirectory.listSync().whereType<File>().where(
+      (File file) {
+        final String name = _basename(file);
+        final bool hasBackupExtension =
+            name.endsWith('.sqlite') || name.endsWith('.irbackup');
+        return hasBackupExtension &&
+            prefixes.any((String prefix) => name.startsWith('$prefix-'));
+      },
+    ).toList();
+    files.sort(
+      (File first, File second) =>
+          _basename(second).compareTo(_basename(first)),
+    );
+    return files;
+  } on FileSystemException {
+    return <File>[];
+  }
 }
 
 /// Whether [file] is a readable, uncorrupted database at a known schema.
@@ -100,11 +106,11 @@ List<File> listBackupFiles(Directory backupDirectory, {BackupType? type}) {
 /// Restore uses the same validator as the writer so a package cannot be
 /// accepted under weaker rules than the rules that created it.
 String? validateDatabaseFile(File file) {
-  if (!file.existsSync() || file.lengthSync() == 0) {
-    return 'backup file is empty';
-  }
   sqlite.Database? copy;
   try {
+    if (!file.existsSync() || file.lengthSync() == 0) {
+      return 'backup file is empty';
+    }
     copy = sqlite.sqlite3.open(file.path);
     final sqlite.ResultSet integrity = copy.select('PRAGMA integrity_check');
     if (integrity.length != 1 || integrity.first.values.first != 'ok') {
@@ -145,14 +151,13 @@ Result<File?> createPreMigrationBackupIfNeeded({
   Clock clock = const SystemClock(),
   int retain = 5,
 }) {
-  if (!databaseFile.existsSync() || databaseFile.lengthSync() == 0) {
-    return const Ok<File?>(null);
-  }
-
   sqlite.Database? live;
   sqlite.Database? copy;
   File? staging;
   try {
+    if (!databaseFile.existsSync() || databaseFile.lengthSync() == 0) {
+      return const Ok<File?>(null);
+    }
     live = sqlite.sqlite3.open(databaseFile.path);
     final version = live.userVersion;
     if (version == 0 || version >= targetSchemaVersion) {
@@ -193,11 +198,11 @@ Result<File?> createPreMigrationBackupIfNeeded({
             .toList()
           ..sort((a, b) => _basename(b).compareTo(_basename(a)));
     for (var i = retain; i < backups.length; i++) {
-      _safeDeleteFile(backups[i]);
+      _safeDelete(backups[i]);
     }
     return Ok<File?>(target);
   } on Object catch (error, stackTrace) {
-    _safeDeleteFile(staging);
+    _safeDelete(staging);
     return Err<File?>(
       StorageFailure(
         'could not create the required pre-migration backup',
@@ -250,8 +255,6 @@ final class BackupService {
     OperationId? operationId,
   }) async {
     final startedAt = _clock.nowUtc();
-    _backupDirectory.createSync(recursive: true);
-
     final stamp = _timestamp(startedAt);
     final extension = type == BackupType.daily ? 'irbackup' : 'sqlite';
     final target = File(
@@ -262,6 +265,7 @@ final class BackupService {
     File? manifestFile;
 
     try {
+      _backupDirectory.createSync(recursive: true);
       if (staging.existsSync()) staging.deleteSync();
       databaseSnapshot = type == BackupType.daily
           ? File('${target.path}.database.partial')
@@ -439,10 +443,10 @@ final class BackupService {
   }
 
   String? _validatePackage(File packageFile) {
-    if (!packageFile.existsSync() || packageFile.lengthSync() == 0) {
-      return 'backup package is empty';
-    }
     try {
+      if (!packageFile.existsSync() || packageFile.lengthSync() == 0) {
+        return 'backup package is empty';
+      }
       final input = InputFileStream(packageFile.path);
       try {
         final archive = ZipDecoder().decodeStream(input, verify: true);
@@ -512,17 +516,6 @@ final class BackupService {
     );
   }
 
-  static void _safeDelete(File? file) {
-    try {
-      if (file?.existsSync() ?? false) file!.deleteSync();
-    } on FileSystemException {
-      // A backup that cannot be deleted is not worth failing an operation for;
-      // the next prune will try again.
-    }
-  }
-
-  static String _basename(File file) => file.path.split(RegExp(r'[/\\]')).last;
-
   static String? _backupStampOf(File file) {
     final name = _basename(file);
     final dash = name.indexOf('-');
@@ -530,12 +523,5 @@ final class BackupService {
     if (dash < 0 || dot <= dash) return null;
     final stamp = name.substring(dash + 1, dot);
     return stamp.length == 14 ? stamp : null;
-  }
-
-  static String _timestamp(DateTime instant) {
-    String two(int value) => value.toString().padLeft(2, '0');
-    return '${instant.year.toString().padLeft(4, '0')}'
-        '${two(instant.month)}${two(instant.day)}'
-        '${two(instant.hour)}${two(instant.minute)}${two(instant.second)}';
   }
 }

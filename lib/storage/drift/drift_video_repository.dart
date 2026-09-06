@@ -71,44 +71,38 @@ final class DriftVideoRepository implements VideoRepository {
   }
 
   @override
-  Future<List<VideoElement>> listVideoElementsOfVideo(String videoId) async {
-    final rows =
-        await (_database.select(_database.videoElements)
-              ..where(($VideoElementsTable t) => t.videoId.equals(videoId))
-              ..orderBy(<OrderClauseGenerator<$VideoElementsTable>>[
-                ($VideoElementsTable t) => OrderingTerm.asc(t.startSeconds),
-                ($VideoElementsTable t) => OrderingTerm.asc(t.createdAtUtc),
-              ]))
-            .get();
-    return <VideoElement>[for (final row in rows) videoElementFromRow(row)];
-  }
+  Future<List<VideoElement>> listVideoElementsOfVideo(String videoId) =>
+      _listVideoElementsMatching(
+        ($VideoElementsTable table) => table.videoId.equals(videoId),
+        shouldOrderByPlaybackPosition: true,
+      );
 
   @override
   Future<List<VideoElement>> listVideoElementsOfParent(
     String parentVideoElementId,
-  ) async {
-    final rows =
-        await (_database.select(_database.videoElements)
-              ..where(
-                ($VideoElementsTable t) =>
-                    t.parentVideoElementId.equals(parentVideoElementId),
-              )
-              ..orderBy(<OrderClauseGenerator<$VideoElementsTable>>[
-                ($VideoElementsTable t) => OrderingTerm.asc(t.startSeconds),
-                ($VideoElementsTable t) => OrderingTerm.asc(t.createdAtUtc),
-              ]))
-            .get();
-    return <VideoElement>[for (final row in rows) videoElementFromRow(row)];
-  }
+  ) => _listVideoElementsMatching(
+    ($VideoElementsTable table) =>
+        table.parentVideoElementId.equals(parentVideoElementId),
+    shouldOrderByPlaybackPosition: true,
+  );
 
   @override
-  Future<List<VideoElement>> listVideoElements() async {
-    final rows =
-        await (_database.select(_database.videoElements)
-              ..orderBy(<OrderClauseGenerator<$VideoElementsTable>>[
-                ($VideoElementsTable t) => OrderingTerm.asc(t.createdAtUtc),
-              ]))
-            .get();
+  Future<List<VideoElement>> listVideoElements() =>
+      _listVideoElementsMatching(null);
+
+  /// Uses creation order globally and playback order inside a video branch.
+  Future<List<VideoElement>> _listVideoElementsMatching(
+    Expression<bool> Function($VideoElementsTable table)? rowMatches, {
+    bool shouldOrderByPlaybackPosition = false,
+  }) async {
+    final query = _database.select(_database.videoElements);
+    if (rowMatches != null) query.where(rowMatches);
+    query.orderBy(<OrderClauseGenerator<$VideoElementsTable>>[
+      if (shouldOrderByPlaybackPosition)
+        ($VideoElementsTable table) => OrderingTerm.asc(table.startSeconds),
+      ($VideoElementsTable table) => OrderingTerm.asc(table.createdAtUtc),
+    ]);
+    final rows = await query.get();
     return <VideoElement>[for (final row in rows) videoElementFromRow(row)];
   }
 

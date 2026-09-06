@@ -32,15 +32,6 @@ import 'package:incremental_reader/shared/ui/element_type_badge.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
-Future<void> openStudyQueue(BuildContext context, WidgetRef ref) async {
-  ref.invalidate(queueViewModelProvider);
-  await Navigator.of(context).push<void>(
-    MaterialPageRoute<void>(
-      builder: (BuildContext context) => const QueueScreen(),
-    ),
-  );
-}
-
 class QueueScreen extends ConsumerStatefulWidget {
   const QueueScreen({super.key});
 
@@ -660,19 +651,12 @@ class _LoadPanel extends StatelessWidget {
         '${preview.reschedulingDays == 1 ? 'day' : 'days'}.$placeholders';
   }
 
-  /// Smart Postpone is simulated first, always.
-  ///
-  /// The simulation consumes no randomness and writes nothing, so the list the
-  /// user approves is the engine's own decision set rather than a preview
-  /// built by different code. The real run re-evaluates against live state.
-  Future<void> _confirmSmartPostpone(BuildContext context) async {
-    final AppliedSmartPostpone? simulated = await model.smartPostpone(
-      isSimulationOnly: true,
-    );
-    if (simulated == null || !context.mounted) return;
-    if (!await confirmSmartPostpone(context, simulated.result)) return;
-    await model.smartPostpone(isSimulationOnly: false);
-  }
+  Future<void> _confirmSmartPostpone(BuildContext context) =>
+      runConfirmedSmartPostpone(
+        context,
+        (bool isSimulationOnly) =>
+            model.smartPostpone(isSimulationOnly: isSimulationOnly),
+      );
 }
 
 class _CounterChip extends StatelessWidget {

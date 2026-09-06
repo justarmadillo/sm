@@ -137,8 +137,8 @@ final class Document {
 
   /// Whether [anchor] addresses a place inside this document.
   ///
-  /// Revision is not checked here: a caller holding an older anchor must
-  /// migrate it forward first. See `SourceEditJournal`.
+  /// Revision is not checked here. Source edits eagerly migrate every stored
+  /// anchor before the edited document is exposed.
   bool containsAnchor(ReaderAnchor anchor) =>
       !isEmpty &&
       anchor.utf8Offset >= 0 &&
@@ -226,17 +226,6 @@ final class Document {
       if (fragment.isNotEmpty) fragments.add(fragment);
     }
     return fragments.join('\n\n');
-  }
-
-  /// Blocks touched by the range from [start] to [end], in document order.
-  List<Block> blocksBetween(ReaderAnchor start, ReaderAnchor end) {
-    if (blocks.isEmpty) return const <Block>[];
-    final a = blockIndexAtOffset(start.utf8Offset);
-    final b = blockIndexAtOffset(end.utf8Offset);
-    if (a == null || b == null) return const <Block>[];
-    final from = a <= b ? a : b;
-    final to = a <= b ? b : a;
-    return blocks.sublist(from, to + 1);
   }
 
   /// Words of rendered text between [start] and [end].
@@ -331,33 +320,6 @@ final class Document {
       if (cursor < text.length) words += countWords(text.substring(cursor));
     }
     return words;
-  }
-
-  /// The anchor roughly [words] of rendered text after [from].
-  ///
-  /// Resolves to a block boundary, which is close enough for a words-read
-  /// count and avoids implying a precision the count does not have.
-  ReaderAnchor? anchorAfterWords(ReaderAnchor from, int words) {
-    final startIndex = blockIndexAtOffset(from.utf8Offset);
-    if (startIndex == null) return null;
-    var remaining = words;
-    for (var i = startIndex; i < blocks.length; i++) {
-      final block = blocks[i];
-      final start = i == startIndex
-          ? block.utf8ToRendered(_blockRelative(block, from.utf8Offset))
-          : 0;
-      final text = block.renderedText;
-      if (start >= text.length) continue;
-      final blockWords = countWords(text.substring(start));
-      if (blockWords >= remaining) {
-        return ReaderAnchor(
-          utf8Offset: block.sourceStartUtf8,
-          contentRevision: contentRevision,
-        );
-      }
-      remaining -= blockWords;
-    }
-    return null;
   }
 
   /// [documentUtf8Offset] expressed relative to [block], clamped to it.

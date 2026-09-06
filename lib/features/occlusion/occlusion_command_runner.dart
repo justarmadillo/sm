@@ -9,6 +9,7 @@ import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
 import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/shared/command_execution.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/result.dart';
@@ -76,21 +77,16 @@ final class OcclusionCommandRunner {
         () => _createInsideTransaction(command),
       );
     } on Object catch (error, stackTrace) {
-      final failure = UnexpectedFailure(
-        'command $kOcclusionCardsCreatedType failed',
-        cause: error,
-        stackTrace: stackTrace,
-      );
-      _diagnostics.record(
-        DiagnosticEvent(
-          level: DiagnosticLevel.error,
-          name: kOcclusionCardsCreatedType,
-          timestampUtc: _clock.nowUtc(),
+      return Err<List<Card>>(
+        recordCommandException(
           operationId: command.operationId,
-          failure: failure,
+          activityType: kOcclusionCardsCreatedType,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
         ),
       );
-      return Err<List<Card>>(failure);
     }
   }
 
@@ -104,21 +100,16 @@ final class OcclusionCommandRunner {
         () => _editInsideTransaction(command),
       );
     } on Object catch (error, stackTrace) {
-      final failure = UnexpectedFailure(
-        'command $kOcclusionCardEditedType failed',
-        cause: error,
-        stackTrace: stackTrace,
-      );
-      _diagnostics.record(
-        DiagnosticEvent(
-          level: DiagnosticLevel.error,
-          name: kOcclusionCardEditedType,
-          timestampUtc: _clock.nowUtc(),
+      return Err<Card>(
+        recordCommandException(
           operationId: command.operationId,
-          failure: failure,
+          activityType: kOcclusionCardEditedType,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
         ),
       );
-      return Err<Card>(failure);
     }
   }
 

@@ -27,7 +27,7 @@ import 'package:incremental_reader/scheduling/scheduling_context.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/shared/clock.dart';
-import 'package:incremental_reader/shared/command_base.dart';
+import 'package:incremental_reader/shared/command_execution.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/result.dart';
@@ -267,7 +267,14 @@ final class ReviewCommandRunner {
       return Err<ReviewOutcome>(ConflictFailure(error.message));
     } on Object catch (error, stackTrace) {
       return Err<ReviewOutcome>(
-        _fail(command, kCardReviewedType, error, stackTrace),
+        recordCommandException(
+          operationId: command.operationId,
+          activityType: kCardReviewedType,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }
@@ -470,7 +477,14 @@ final class ReviewCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<CardState>(
-        _fail(command, kReviewUndoneType, error, stackTrace),
+        recordCommandException(
+          operationId: command.operationId,
+          activityType: kReviewUndoneType,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }
@@ -610,7 +624,16 @@ final class ReviewCommandRunner {
         return Ok<Card>(updated);
       });
     } on Object catch (error, stackTrace) {
-      return Err<Card>(_fail(command, kCardEditedType, error, stackTrace));
+      return Err<Card>(
+        recordCommandException(
+          operationId: command.operationId,
+          activityType: kCardEditedType,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
     }
   }
 
@@ -708,7 +731,14 @@ final class ReviewCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<CardState>(
-        _fail(command, kCardPostponedType, error, stackTrace),
+        recordCommandException(
+          operationId: command.operationId,
+          activityType: kCardPostponedType,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }
@@ -937,28 +967,5 @@ final class ReviewCommandRunner {
             .toList(),
       ),
     );
-  }
-
-  UnexpectedFailure _fail(
-    AppCommand command,
-    String type,
-    Object error,
-    StackTrace stackTrace,
-  ) {
-    final UnexpectedFailure failure = UnexpectedFailure(
-      'command $type failed',
-      cause: error,
-      stackTrace: stackTrace,
-    );
-    _diagnostics.record(
-      DiagnosticEvent(
-        level: DiagnosticLevel.error,
-        name: type,
-        timestampUtc: _clock.nowUtc(),
-        operationId: command.operationId,
-        failure: failure,
-      ),
-    );
-    return failure;
   }
 }

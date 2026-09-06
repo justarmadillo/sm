@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/settings_repository.dart';
 
 /// Setting key holding the day of the last successful backup.
@@ -19,6 +20,28 @@ const String kLastBackupDayKey = 'backup.last_day';
 /// session is about to do. A failure is never fatal — the user came here to
 /// read, and a missing backup is reported rather than blocking the app.
 Future<File?> runDailyBackupIfDue(ProviderContainer container) async {
+  try {
+    return await _runDailyBackupIfDue(container);
+  } on Object catch (error, stackTrace) {
+    container
+        .read(diagnosticsProvider)
+        .record(
+          DiagnosticEvent(
+            level: DiagnosticLevel.error,
+            name: 'backup.startup_failed',
+            timestampUtc: container.read(clockProvider).nowUtc(),
+            failure: UnexpectedFailure(
+              'daily backup failed unexpectedly',
+              cause: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        );
+    return null;
+  }
+}
+
+Future<File?> _runDailyBackupIfDue(ProviderContainer container) async {
   final SettingsRepository settings = container.read(
     settingsRepositoryProvider,
   );

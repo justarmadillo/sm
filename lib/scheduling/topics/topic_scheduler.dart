@@ -23,14 +23,7 @@ const int kSm20MaximumStoredInterval = 44530;
 const int kSm20Uint16Maximum = 65535;
 
 /// The four scheduling statuses used by the executable record.
-enum Sm20ElementStatus {
-  pending,
-  memorized,
-  dismissed,
-  deleted;
-
-  bool get isRankable => this != Sm20ElementStatus.deleted;
-}
+enum Sm20ElementStatus { pending, memorized, dismissed, deleted }
 
 /// Browser learning modes that select the topic interval branch.
 enum Sm20ReviewMode {
@@ -215,8 +208,6 @@ final class TopicEncounter {
   final int extractsCreated;
   final bool hasReachedEnd;
   final bool hasUnprocessedText;
-  double get density => wordsRead <= 0 ? 0 : extractsCreated / wordsRead * 1000;
-  bool get isExhausted => hasReachedEnd && !hasUnprocessedText;
 }
 
 /// Observable consequences of one topic transaction.
@@ -386,9 +377,6 @@ final class TopicScheduler {
     final double x = 10000 / utf16CodeUnits;
     return 1.25 + (0.75 * x) / (50 + x);
   }
-
-  static DelphiReal48 textLengthAFactorRaw(int utf16CodeUnits) =>
-      DelphiReal48.fromDouble(textLengthAFactor(utf16CodeUnits));
 
   /// Computes the next automatic interval and consumes exactly two draws.
   int nextAutomaticInterval(
@@ -709,27 +697,6 @@ final class TopicScheduler {
     ], randomNumberState: randomNumbers.state);
   }
 
-  /// Delay Element: derive a factor-scaled interval, then low-level reschedule.
-  TopicTransition delayElement(
-    TopicState state, {
-    required StudyDay today,
-    required double factor,
-  }) {
-    final StudyDay last = state.lastReviewDay ?? today;
-    final int age = math.max(
-      today.epochDay - last.epochDay,
-      state.storedInterval,
-    );
-    var newInterval = sm20RoundEven(age * factor);
-    if (newInterval <= age) newInterval = age + 1;
-    newInterval = math.min(newInterval, kSm20MaximumStoredInterval);
-    return rescheduleElement(
-      state,
-      targetDay: last.addDays(newInterval),
-      today: today,
-    );
-  }
-
   /// Manual Reschedule / Jump Interval, including topic A and priority drift.
   TopicTransition jumpInterval(
     TopicState state, {
@@ -847,12 +814,6 @@ final class TopicScheduler {
 
   TopicState notifyCardCreated(TopicState state) =>
       state.copyWith(encountersSinceLastCard: 0);
-
-  bool shouldPromptFinish(TopicState state, {required bool hasChildItems}) =>
-      state.isExtract &&
-      hasChildItems &&
-      state.status == Sm20ElementStatus.memorized &&
-      state.encountersSinceLastCard >= extractFinishPromptAfter;
 
   /// Forget preserves topic A and priority while clearing repetition state.
   TopicTransition forget(TopicState state, StudyDay today) {

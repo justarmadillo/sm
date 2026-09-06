@@ -612,22 +612,9 @@ final class CardReviewTransition {
   final ReviewRecord record;
 }
 
-/// Pure adapter around the versioned dart-fsrs implementation.
-abstract interface class FsrsAdapter {
-  CardReviewTransition review(
-    CardState state, {
-    required CardRating rating,
-    required DateTime reviewedAtUtc,
-    required String operationId,
-    int? elapsedMs,
-  });
-
-  double retrievability(CardMemory memory, {required DateTime atUtc});
-}
-
 /// The sole dart-fsrs integration boundary used by the application.
 @immutable
-final class CardScheduler implements FsrsAdapter {
+final class CardScheduler {
   const CardScheduler({
     required this.calendar,
     this.settings = const CardSchedulerSettings(),
@@ -641,7 +628,6 @@ final class CardScheduler implements FsrsAdapter {
   /// Fuzzing remains enabled by default, with a stream derived from persistent
   /// card identity and repetition count. Retrying or undoing and re-answering
   /// therefore produces the same due date for the same memory state.
-  @override
   CardReviewTransition review(
     CardState state, {
     required CardRating rating,
@@ -893,7 +879,6 @@ final class CardScheduler implements FsrsAdapter {
   ///
   /// A card with no review behind it reads as 0: nothing has been learned yet,
   /// so there is no memory that could have decayed.
-  @override
   double retrievability(CardMemory memory, {required DateTime atUtc}) {
     _requireUtc(atUtc, 'atUtc');
     return _engineFor(memory).getRetrievability(_toFsrsCard(memory), atUtc);

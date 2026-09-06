@@ -85,9 +85,6 @@ final class Sm20CollectionState {
             entry.key: List<ElementRef>.unmodifiable(entry.value),
         }),
   );
-
-  bool get anythingOutstanding =>
-      outstanding.isNotEmpty || finalDrill.isNotEmpty || pending.isNotEmpty;
 }
 
 const Object _keep = Object();

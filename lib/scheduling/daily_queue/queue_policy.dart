@@ -110,7 +110,6 @@ final class QueueCounters {
   final int admittedTopics;
   final int admittedNewCards;
   int get dueTotal => dueCards + dueTopics;
-  int get admittedTotal => admittedCards + admittedTopics;
 
   Map<String, Object?> toMetadata() => <String, Object?>{
     'due_cards': dueCards,

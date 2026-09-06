@@ -42,9 +42,6 @@ void showToast(
   );
 }
 
-/// Removes any toast currently on screen.
-void hideToast() => _ToastHost.instance.dismiss();
-
 /// Owns the single visible toast.
 final class _ToastHost {
   _ToastHost._();

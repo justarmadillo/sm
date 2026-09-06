@@ -23,7 +23,7 @@ import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/settings/smart_postpone_settings.dart';
 import 'package:incremental_reader/shared/clock.dart';
-import 'package:incremental_reader/shared/command_base.dart';
+import 'package:incremental_reader/shared/command_execution.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/result.dart';
@@ -355,7 +355,14 @@ final class QueueCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<AdmissionOutcome>(
-        _fail(command, kDailyAdmissionType, error, stackTrace),
+        recordCommandException(
+          operationId: command.operationId,
+          activityType: kDailyAdmissionType,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }
@@ -416,7 +423,14 @@ final class QueueCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<Sm20QueueCommandOutcome>(
-        _fail(command, kEnterStageType, error, stackTrace),
+        recordCommandException(
+          operationId: command.operationId,
+          activityType: kEnterStageType,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }
@@ -461,7 +475,14 @@ final class QueueCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<Sm20QueueCommandOutcome>(
-        _fail(command, kCutDrillsType, error, stackTrace),
+        recordCommandException(
+          operationId: command.operationId,
+          activityType: kCutDrillsType,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }
@@ -529,7 +550,14 @@ final class QueueCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<Sm20QueueCommandOutcome>(
-        _fail(command, kRandomizeQueueType, error, stackTrace),
+        recordCommandException(
+          operationId: command.operationId,
+          activityType: kRandomizeQueueType,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }
@@ -637,7 +665,14 @@ final class QueueCommandRunner {
       });
     } on Object catch (error, stackTrace) {
       return Err<AppliedSmartPostpone>(
-        _fail(command, kSmartPostponeType, error, stackTrace),
+        recordCommandException(
+          operationId: command.operationId,
+          activityType: kSmartPostponeType,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }
@@ -1001,28 +1036,5 @@ final class QueueCommandRunner {
       }
     }
     return result;
-  }
-
-  UnexpectedFailure _fail(
-    AppCommand command,
-    String type,
-    Object error,
-    StackTrace stackTrace,
-  ) {
-    final UnexpectedFailure failure = UnexpectedFailure(
-      'command $type failed',
-      cause: error,
-      stackTrace: stackTrace,
-    );
-    _diagnostics.record(
-      DiagnosticEvent(
-        level: DiagnosticLevel.error,
-        name: type,
-        timestampUtc: _clock.nowUtc(),
-        operationId: command.operationId,
-        failure: failure,
-      ),
-    );
-    return failure;
   }
 }

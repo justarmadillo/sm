@@ -301,10 +301,6 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
     );
   }
 
-  /// Live defaults for the Mercy capacity and ordering dialog.
-  Future<MercySettings> mercySettings() async =>
-      (await ref.read(schedulingContextProvider).settings()).mercy;
-
   /// Commits a previewed batch the user confirmed.
   Future<void> applyMercy(StoredMercyBatch batch) async {
     final QueueUiState? current = state.valueOrNull;
@@ -344,7 +340,9 @@ final class QueueViewModel extends AsyncNotifier<QueueUiState> {
   Future<void> undoMercy() async {
     final QueueUiState? current = state.valueOrNull;
     if (current == null || current.isBusy) return;
-    final MercyCommandRunner commandRunner = ref.read(mercyCommandRunnerProvider);
+    final MercyCommandRunner commandRunner = ref.read(
+      mercyCommandRunnerProvider,
+    );
     final StoredMercyBatch? batch = await commandRunner.lastAppliedBatch();
     if (batch == null) {
       state = AsyncValue<QueueUiState>.data(

@@ -339,18 +339,6 @@ final class ReaderSelectionController extends ChangeNotifier {
     ];
   }
 
-  /// Anchor at the exact start of the current selection, or null.
-  ///
-  /// Used by the selection toolbar to place the resume marker where the user
-  /// actually pointed, rather than rounding to the start of the block.
-  ReaderAnchor? selectionStartAnchor() {
-    final selection = _selection;
-    if (selection == null) return null;
-    final block = _document.blockById(selection.startBlockId);
-    if (block == null) return null;
-    return _coordinates.anchorForRendered(block, selection.startRendered);
-  }
-
   /// Screen rectangle covering the current selection, or null.
   ///
   /// Only mounted blocks contribute: a selection that scrolled off screen has

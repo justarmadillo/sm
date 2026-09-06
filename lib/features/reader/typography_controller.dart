@@ -88,18 +88,26 @@ final class ReaderTypographyNotifier extends Notifier<ReaderTypography> {
   void _apply(ReaderTypography next) {
     _wasChangedLocally = true;
     state = next;
-    _writes = _writes.then((_) async {
-      final settings = ref.read(settingsRepositoryProvider);
-      // A failed preference write must not interrupt reading.
-      try {
-        await settings.saveValue(kFontSizeKey, '${next.fontSize}');
-        await settings.saveValue(kColumnWidthKey, '${next.columnWidth}');
-        await settings.saveValue(kLineHeightKey, '${next.lineHeight}');
-      } on Object {
-        return;
-      }
-    });
+    _writes = _saveAfter(_writes, next);
     unawaited(_writes);
+  }
+
+  /// Waits for the previous preference write so rapid slider changes cannot
+  /// finish out of order and restore an older value.
+  Future<void> _saveAfter(
+    Future<void> previousWrite,
+    ReaderTypography next,
+  ) async {
+    await previousWrite;
+    final settings = ref.read(settingsRepositoryProvider);
+    // A failed preference write must not interrupt reading.
+    try {
+      await settings.saveValue(kFontSizeKey, '${next.fontSize}');
+      await settings.saveValue(kColumnWidthKey, '${next.columnWidth}');
+      await settings.saveValue(kLineHeightKey, '${next.lineHeight}');
+    } on Object {
+      return;
+    }
   }
 }
 

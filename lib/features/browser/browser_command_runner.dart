@@ -25,6 +25,7 @@ import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
 import 'package:incremental_reader/scheduling/sm20_collection_state.dart';
 import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/shared/command_execution.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
@@ -311,21 +312,16 @@ final class BrowserCommandRunner {
         );
       });
     } on Object catch (error, stackTrace) {
-      final UnexpectedFailure failure = UnexpectedFailure(
-        'command $kBrowserDeletedType failed',
-        cause: error,
-        stackTrace: stackTrace,
-      );
-      _diagnostics.record(
-        DiagnosticEvent(
-          level: DiagnosticLevel.error,
-          name: kBrowserDeletedType,
-          timestampUtc: _clock.nowUtc(),
+      return Err<BrowserDeletionOutcome>(
+        recordCommandException(
           operationId: operationId,
-          failure: failure,
+          activityType: kBrowserDeletedType,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
         ),
       );
-      return Err<BrowserDeletionOutcome>(failure);
     }
   }
 
@@ -541,21 +537,16 @@ final class BrowserCommandRunner {
         );
       });
     } on Object catch (error, stackTrace) {
-      final UnexpectedFailure failure = UnexpectedFailure(
-        'command $type failed',
-        cause: error,
-        stackTrace: stackTrace,
-      );
-      _diagnostics.record(
-        DiagnosticEvent(
-          level: DiagnosticLevel.error,
-          name: type,
-          timestampUtc: _clock.nowUtc(),
+      return Err<BrowserFilingOutcome>(
+        recordCommandException(
           operationId: command.operationId,
-          failure: failure,
+          activityType: type,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
         ),
       );
-      return Err<BrowserFilingOutcome>(failure);
     }
   }
 

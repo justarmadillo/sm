@@ -305,6 +305,38 @@ List<int> clozeOrdinals(String text) {
   return ordinals;
 }
 
+/// The question text shown for [card], independent of the screen showing it.
+///
+/// Image occlusions may have no textual header. List screens can supply a
+/// short [imageOcclusionFallback], while the review screen leaves the text
+/// empty because the masked image itself is the question.
+String cardQuestionText(Card card, {String imageOcclusionFallback = ''}) =>
+    switch (card.type) {
+      CardType.qa => card.front,
+      CardType.cloze => renderClozeQuestion(card.front, card.clozeOrdinal!),
+      CardType.clozeOverlapper => renderOverlapQuestion(
+        card.front,
+        card.clozeOrdinal!,
+        before: card.contextBefore!,
+        after: card.contextAfter!,
+      ),
+      CardType.imageOcclusion =>
+        card.front.isEmpty ? imageOcclusionFallback : card.front,
+    };
+
+/// The revealed answer text shown for [card].
+String cardAnswerText(Card card) => switch (card.type) {
+  CardType.qa => card.back,
+  CardType.cloze => renderClozeAnswer(card.front, ordinal: card.clozeOrdinal!),
+  CardType.clozeOverlapper => renderOverlapAnswer(
+    card.front,
+    card.clozeOrdinal!,
+    before: card.contextBefore!,
+    after: card.contextAfter!,
+  ),
+  CardType.imageOcclusion => card.back,
+};
+
 /// [text] with deletion [ordinal] hidden and the others revealed.
 String renderClozeQuestion(String text, int ordinal, {String blank = '[...]'}) {
   final buffer = StringBuffer();

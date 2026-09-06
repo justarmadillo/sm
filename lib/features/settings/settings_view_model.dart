@@ -182,7 +182,7 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
     try {
       final DatabaseCheckReport report = await ref
           .read(databaseCheckProvider)
-          .checkAndRepair();
+          .repairIntegrity();
       if (report.outcome != DatabaseCheckOutcome.corrupt) {
         await ref.read(databaseMaintenanceProvider).optimize();
       }

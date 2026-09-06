@@ -33,7 +33,7 @@ void main() {
       RecordingDiagnosticSink(),
     );
 
-    final DatabaseCheckReport report = await check.checkAndRepair();
+    final DatabaseCheckReport report = await check.repairIntegrity();
 
     expect(report.outcome, DatabaseCheckOutcome.sound);
     expect(report.findings, isEmpty);
@@ -56,8 +56,8 @@ INSERT INTO element_schedules (
       RecordingDiagnosticSink(),
     );
 
-    final DatabaseCheckReport first = await check.checkAndRepair();
-    final DatabaseCheckReport second = await check.checkAndRepair();
+    final DatabaseCheckReport first = await check.repairIntegrity();
+    final DatabaseCheckReport second = await check.repairIntegrity();
 
     expect(
       first.findings
@@ -90,7 +90,7 @@ INSERT INTO element_schedules (
       RecordingDiagnosticSink(),
     );
 
-    await expectLater(check.checkAndRepair(), throwsA(isA<Object>()));
+    await expectLater(check.repairIntegrity(), throwsA(isA<Object>()));
 
     expect(
       await database.select(database.elementSchedules).get(),

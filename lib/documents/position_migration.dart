@@ -40,33 +40,13 @@ final class MigratedPosition {
       'MigratedPosition($utf8Offset${wasInsideEdit ? ' inside' : ''})';
 }
 
-/// Moves [offset] across [splice].
-///
-/// The three rules, for a splice replacing `[a, b)` with `n` bytes:
-///
-/// * `offset < a` — unchanged; the edit happened after it.
-/// * `offset > editEnd` — shifted by `n - (editEnd - editStart)`; the edit
-///   happened before it.
-/// * `editStart <= offset <= editEnd` — a boundary, resolved below.
-///
-/// The boundaries:
-///
-/// * `editStart < offset < editEnd` — the text it pointed at was removed.
-///   Collapses to `editStart` and reports [MigratedPosition.wasInsideEdit].
-/// * `offset == editStart == editEnd` (a pure insertion at the position) —
-///   ambiguous by definition, so [gravity] decides: [PositionGravity.left]
-///   stays at `editStart`, [PositionGravity.right] moves to `editStart + n`.
-/// * `offset == editStart < editEnd` — stays at `editStart`, the surviving
-///   text before the edit.
-/// * `offset == editEnd > editStart` — moves to `editStart + n`, immediately
-///   after the new text.
-int migrateOffsetSimple(
-  int offset,
-  TextSplice splice, {
-  PositionGravity gravity = PositionGravity.left,
-}) => migrateOffset(offset, splice, gravity: gravity).utf8Offset;
-
 /// Moves [offset] across [splice], reporting whether it was inside the edit.
+///
+/// Positions before the splice stay put; positions after it shift by the byte
+/// delta; positions in replaced text collapse to the edit start. Boundaries
+/// are deliberately not treated as deleted text: the start stays before the
+/// replacement and the end follows the inserted text. For a pure insertion,
+/// [gravity] chooses which side owns a position exactly at the insertion.
 MigratedPosition migrateOffset(
   int offset,
   TextSplice splice, {
@@ -94,21 +74,6 @@ MigratedPosition migrateOffset(
   }
   return MigratedPosition(editStart, wasInsideEdit: true);
 }
-
-/// Moves [anchor] across [splice] and stamps it with [contentRevision].
-ReaderAnchor migrateAnchor(
-  ReaderAnchor anchor,
-  TextSplice splice, {
-  required int contentRevision,
-  PositionGravity gravity = PositionGravity.left,
-}) => ReaderAnchor(
-  utf8Offset: migrateOffset(
-    anchor.utf8Offset,
-    splice,
-    gravity: gravity,
-  ).utf8Offset,
-  contentRevision: contentRevision,
-);
 
 /// The result of moving a byte range across a splice.
 @immutable

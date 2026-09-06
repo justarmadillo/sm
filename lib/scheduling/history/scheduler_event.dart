@@ -111,8 +111,6 @@ final class SchedulerEvent {
   final String? batchId;
   final Map<String, Object?>? metadata;
 
-  bool get isGenuineCardReview => eventType == SchedulerEventType.cardReviewed;
-
   static String encodeUtcDue(DateTime value) {
     if (!value.isUtc) {
       throw ArgumentError.value(value, 'value', 'must be UTC');

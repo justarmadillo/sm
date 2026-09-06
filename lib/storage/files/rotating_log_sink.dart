@@ -77,29 +77,32 @@ final class RotatingLogSink implements DiagnosticSink {
   }
 
   Future<void> _append(String line) {
-    _pending = _pending
-        .then((_) async {
-          if (_isDisabled) return;
-          if (!_directory.existsSync()) {
-            _directory.createSync(recursive: true);
-          }
-          final File target = file;
-          if (target.existsSync() && target.lengthSync() >= _maxBytes) {
-            _rotate();
-          }
-          await target.writeAsString(
-            '$line\n',
-            mode: FileMode.append,
-            flush: false,
-          );
-        })
-        .catchError((Object _) {
-          // One failure is enough: if the log directory is unwritable it will
-          // stay unwritable, and retrying on every event would turn a
-          // diagnostic into a performance problem.
-          _isDisabled = true;
-        });
+    _pending = _appendAfter(_pending, line);
     return _pending;
+  }
+
+  Future<void> _appendAfter(Future<void> previousWrite, String line) async {
+    try {
+      await previousWrite;
+      if (_isDisabled) return;
+      if (!_directory.existsSync()) {
+        _directory.createSync(recursive: true);
+      }
+      final File target = file;
+      if (target.existsSync() && target.lengthSync() >= _maxBytes) {
+        _rotate();
+      }
+      await target.writeAsString(
+        '$line\n',
+        mode: FileMode.append,
+        flush: false,
+      );
+    } on Object {
+      // One failure is enough: if the log directory is unwritable it will
+      // stay unwritable, and retrying on every event would turn a diagnostic
+      // into a performance problem.
+      _isDisabled = true;
+    }
   }
 
   /// Rotation is synchronous so a concurrent append cannot land between the

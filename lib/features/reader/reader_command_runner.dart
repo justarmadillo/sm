@@ -42,6 +42,7 @@ import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/command_base.dart';
+import 'package:incremental_reader/shared/command_execution.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/result.dart';
@@ -1241,21 +1242,16 @@ final class ReaderCommandRunner {
         }
       });
     } on Object catch (error, stackTrace) {
-      final UnexpectedFailure failure = UnexpectedFailure(
-        'command $type failed',
-        cause: error,
-        stackTrace: stackTrace,
-      );
-      _diagnostics.record(
-        DiagnosticEvent(
-          level: DiagnosticLevel.error,
-          name: type,
-          timestampUtc: _clock.nowUtc(),
+      return Err<SourceEdited>(
+        recordCommandException(
           operationId: command.operationId,
-          failure: failure,
+          activityType: type,
+          clock: _clock,
+          diagnostics: _diagnostics,
+          error: error,
+          stackTrace: stackTrace,
         ),
       );
-      return Err<SourceEdited>(failure);
     }
   }
 
@@ -1271,57 +1267,37 @@ final class ReaderCommandRunner {
     AppCommand command,
     String type,
     Future<Result<T>> Function() body,
-  ) async {
-    try {
-      return await _transactions.run<Result<T>>(() async {
-        if (await _learning.hasActivity(command.operationId.value, type)) {
-          final ElementRef? topicRef = switch (command) {
-            CompleteTopicEncounter(:final ref) ||
-            PostponeElement(:final ref) ||
-            RescheduleTopic(:final ref) ||
-            DismissElement(:final ref) ||
-            UndismissSource(:final ref) => ref,
-            DeleteSource(:final sourceId) => ElementRef(
-              id: sourceId,
-              type: ElementType.source,
-            ),
-            _ => null,
-          };
-          if (topicRef != null) {
-            final TopicState? replayed = await _learning.findTopic(topicRef);
-            if (replayed is T) return Ok<T>(replayed as T);
-          }
-          return Err<T>(
-            ConflictFailure('operation ${command.operationId} already applied'),
-          );
-        }
-        final Result<T> result = await body();
-        if (result.isOk) {
-          // One generation bump per successful domain transaction, so a copy
-          // of the dataset can always be placed relative to another.
-          await _transfer.advanceGeneration();
-        }
-        _record(command, type, result);
-        return result;
-      });
-    } on Object catch (error, stackTrace) {
-      final UnexpectedFailure failure = UnexpectedFailure(
-        'command $type failed',
-        cause: error,
-        stackTrace: stackTrace,
-      );
-      _diagnostics.record(
-        DiagnosticEvent(
-          level: DiagnosticLevel.error,
-          name: type,
-          timestampUtc: _clock.nowUtc(),
-          operationId: command.operationId,
-          failure: failure,
+  ) => executeCommand<T>(
+    command: command,
+    activityType: type,
+    clock: _clock,
+    diagnostics: _diagnostics,
+    withinTransaction: (Future<Result<T>> Function() changes) =>
+        _transactions.run<Result<T>>(changes),
+    wasAlreadyApplied: () =>
+        _learning.hasActivity(command.operationId.value, type),
+    replay: () async {
+      final ElementRef? topicRef = switch (command) {
+        CompleteTopicEncounter(:final ref) ||
+        PostponeElement(:final ref) ||
+        RescheduleTopic(:final ref) ||
+        DismissElement(:final ref) ||
+        UndismissSource(:final ref) => ref,
+        DeleteSource(:final sourceId) => ElementRef(
+          id: sourceId,
+          type: ElementType.source,
         ),
-      );
-      return Err<T>(failure);
-    }
-  }
+        _ => null,
+      };
+      if (topicRef == null) return null;
+      final TopicState? replayed = await _learning.findTopic(topicRef);
+      return replayed is T ? Ok<T>(replayed as T) : null;
+    },
+    changes: body,
+    // One generation bump per successful domain transaction lets a copy of
+    // the dataset always be placed relative to another.
+    advanceDatasetGeneration: _transfer.advanceGeneration,
+  );
 
   String _topicStateJson(TopicState state) => jsonEncode(<String, Object?>{
     'element_id': state.ref.id,
@@ -1370,19 +1346,6 @@ final class ReaderCommandRunner {
       metadata: metadata,
     ),
   );
-
-  void _record<T>(AppCommand command, String type, Result<T> result) {
-    _diagnostics.record(
-      DiagnosticEvent(
-        level: result.isOk ? DiagnosticLevel.info : DiagnosticLevel.warning,
-        name: type,
-        timestampUtc: _clock.nowUtc(),
-        operationId: command.operationId,
-        fields: <String, Object?>{'ok': result.isOk},
-        failure: result.failureOrNull,
-      ),
-    );
-  }
 
   Map<String, Object?>? _metadataFor(TopicEvent event) => switch (event) {
     TopicRepetitionCommitted(

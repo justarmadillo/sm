@@ -404,16 +404,7 @@ final class DriftLearningRepository implements LearningRepository {
   Future<List<ElementSchedule>> listSchedulesByPriority({
     int? limit,
     int? offset,
-  }) async {
-    final query = _database.select(_database.elementSchedules)
-      ..orderBy(<OrderClauseGenerator<$ElementSchedulesTable>>[
-        ($ElementSchedulesTable t) => OrderingTerm.asc(t.priorityKey),
-        ($ElementSchedulesTable t) => OrderingTerm.asc(t.elementId),
-      ]);
-    if (limit != null) query.limit(limit, offset: offset);
-    final rows = await query.get();
-    return <ElementSchedule>[for (final row in rows) scheduleFromRow(row)];
-  }
+  }) => _listSchedulesMatching(limit: limit, offset: offset);
 
   @override
   Future<void> appendActivity(ActivityRecord record) => _database
@@ -841,20 +832,41 @@ final class DriftLearningRepository implements LearningRepository {
     int? offset,
   }) async {
     if (types.isEmpty) return <ElementSchedule>[];
-    final query = _database.select(_database.elementSchedules)
-      ..where(
-        ($ElementSchedulesTable t) =>
-            t.elementType.isIn(types.map((ElementType e) => e.index).toList()) &
-            (lifecycles == null
-                ? const CustomExpression<bool>('1')
-                : t.lifecycle.isIn(
-                    lifecycles.map((ElementLifecycle l) => l.index).toList(),
-                  )),
-      )
-      ..orderBy(<OrderClauseGenerator<$ElementSchedulesTable>>[
-        ($ElementSchedulesTable t) => OrderingTerm.asc(t.priorityKey),
-        ($ElementSchedulesTable t) => OrderingTerm.asc(t.elementId),
-      ]);
+    final List<int> typeIndexes = <int>[
+      for (final ElementType type in types) type.index,
+    ];
+    final List<int>? lifecycleIndexes = lifecycles == null
+        ? null
+        : <int>[
+            for (final ElementLifecycle lifecycle in lifecycles)
+              lifecycle.index,
+          ];
+    return _listSchedulesMatching(
+      rowMatches: ($ElementSchedulesTable table) {
+        final Expression<bool> hasRequestedType = table.elementType.isIn(
+          typeIndexes,
+        );
+        return lifecycleIndexes == null
+            ? hasRequestedType
+            : hasRequestedType & table.lifecycle.isIn(lifecycleIndexes);
+      },
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  /// Applies one stable priority order before optional pagination.
+  Future<List<ElementSchedule>> _listSchedulesMatching({
+    Expression<bool> Function($ElementSchedulesTable table)? rowMatches,
+    int? limit,
+    int? offset,
+  }) async {
+    final query = _database.select(_database.elementSchedules);
+    if (rowMatches != null) query.where(rowMatches);
+    query.orderBy(<OrderClauseGenerator<$ElementSchedulesTable>>[
+      ($ElementSchedulesTable table) => OrderingTerm.asc(table.priorityKey),
+      ($ElementSchedulesTable table) => OrderingTerm.asc(table.elementId),
+    ]);
     if (limit != null) query.limit(limit, offset: offset);
     final rows = await query.get();
     return <ElementSchedule>[for (final row in rows) scheduleFromRow(row)];

@@ -5,7 +5,6 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:incremental_reader/documents/occlusion.dart';
-import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
 import 'package:incremental_reader/scheduling/sm20_numeric.dart';
 import 'package:incremental_reader/shared/clock.dart';
@@ -39,7 +38,7 @@ final class DriftDatabaseCheck implements DatabaseCheck {
   final Clock _clock;
 
   @override
-  Future<DatabaseCheckReport> checkAndRepair() async {
+  Future<DatabaseCheckReport> repairIntegrity() async {
     final List<String> corruption = await _database.quickCheck();
     if (corruption.length != 1 || corruption.single != 'ok') {
       return DatabaseCheckReport(
@@ -298,8 +297,9 @@ WHERE $where''');
     var count = 0;
     for (final QueryRow queryRow in rows) {
       final CardMemoryRow row = _database.cardMemories.map(queryRow.data);
-      final CardMemory memory = _cardMemoryIgnoringStoredJson(row);
-      final String canonical = memory.canonicalFsrsJson();
+      final String canonical = cardMemoryFromRowIgnoringStoredJson(
+        row,
+      ).canonicalFsrsJson();
       final String? stored = row.fsrsStateJson;
       bool disagrees;
       try {
@@ -327,27 +327,6 @@ WHERE $where''');
       );
     }
   }
-
-  CardMemory _cardMemoryIgnoringStoredJson(CardMemoryRow row) => CardMemory(
-    cardId: row.cardId,
-    state: CardLearningState.fromValue(row.state),
-    step: row.step,
-    stability: row.stability,
-    difficulty: row.difficulty,
-    repetitionCount: row.reps,
-    lapses: row.lapses,
-    lastReviewAtUtc: row.lastReviewUtc == null
-        ? null
-        : fromEpochMs(row.lastReviewUtc!),
-    dueAtUtc: fromEpochMs(row.dueAtUtc),
-    originalDueAtUtc: fromEpochMs(row.originalDueAtUtc),
-    schedulerVersion: row.schedulerVersion,
-    parametersVersion: row.parametersVersion,
-    postponeCount: row.postponeCount,
-    scheduledDays: row.scheduledDays,
-    schedulerName: row.schedulerName,
-    revision: row.revision,
-  );
 
   Future<void> _repairLastReviewInstants(
     List<DatabaseCheckFinding> findings,

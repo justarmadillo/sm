@@ -6,9 +6,29 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/scheduling/postpone/sm20_postpone.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
+
+/// Runs either the write-free simulation or the confirmed Smart Postpone.
+typedef SmartPostponeRun =
+    Future<AppliedSmartPostpone?> Function(bool isSimulationOnly);
+
+/// Simulates Smart Postpone, shows its own decision set, then applies it.
+///
+/// The real run re-evaluates live state only after confirmation. Keeping that
+/// sequence here prevents entry points from accidentally showing an estimate
+/// produced by logic different from the logic that writes.
+Future<void> runConfirmedSmartPostpone(
+  BuildContext context,
+  SmartPostponeRun runSmartPostpone,
+) async {
+  final AppliedSmartPostpone? simulated = await runSmartPostpone(true);
+  if (simulated == null || !context.mounted) return;
+  if (!await confirmSmartPostpone(context, simulated.result)) return;
+  await runSmartPostpone(false);
+}
 
 /// Shows [result] and answers whether the user wants it applied.
 ///

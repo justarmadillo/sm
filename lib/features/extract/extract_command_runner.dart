@@ -25,6 +25,7 @@ import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/command_base.dart';
+import 'package:incremental_reader/shared/command_execution.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/result.dart';
@@ -396,46 +397,18 @@ final class ExtractCommandRunner {
     AppCommand command,
     String type,
     Future<Result<T>> Function() body,
-  ) async {
-    try {
-      return await _transactions.run<Result<T>>(() async {
-        if (await _learning.hasActivity(command.operationId.value, type)) {
-          return Err<T>(
-            ConflictFailure('operation ${command.operationId} already applied'),
-          );
-        }
-        final result = await body();
-        if (result.isOk) await _transfer.advanceGeneration();
-        _diagnostics.record(
-          DiagnosticEvent(
-            level: result.isOk ? DiagnosticLevel.info : DiagnosticLevel.warning,
-            name: type,
-            timestampUtc: _clock.nowUtc(),
-            operationId: command.operationId,
-            fields: <String, Object?>{'ok': result.isOk},
-            failure: result.failureOrNull,
-          ),
-        );
-        return result;
-      });
-    } on Object catch (error, stackTrace) {
-      final failure = UnexpectedFailure(
-        'command $type failed',
-        cause: error,
-        stackTrace: stackTrace,
-      );
-      _diagnostics.record(
-        DiagnosticEvent(
-          level: DiagnosticLevel.error,
-          name: type,
-          timestampUtc: _clock.nowUtc(),
-          operationId: command.operationId,
-          failure: failure,
-        ),
-      );
-      return Err<T>(failure);
-    }
-  }
+  ) => executeCommand<T>(
+    command: command,
+    activityType: type,
+    clock: _clock,
+    diagnostics: _diagnostics,
+    withinTransaction: (Future<Result<T>> Function() changes) =>
+        _transactions.run<Result<T>>(changes),
+    wasAlreadyApplied: () =>
+        _learning.hasActivity(command.operationId.value, type),
+    changes: body,
+    advanceDatasetGeneration: _transfer.advanceGeneration,
+  );
 
   Future<void> _log(
     AppCommand command,

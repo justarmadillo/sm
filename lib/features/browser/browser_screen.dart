@@ -154,7 +154,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
             Center(child: Text('Could not load the tree.\n$error')),
-        data: _filterAndTree,
+        data: _browserBody,
       ),
     );
   }
@@ -337,7 +337,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   }
 
   /// The type filter above the tree.
-  Widget _filterAndTree(List<BrowserTreeNode> roots) => Column(
+  Widget _browserBody(List<BrowserTreeNode> roots) => Column(
     children: <Widget>[
       _TypeFilter(
         selected: _types,
@@ -885,7 +885,7 @@ class _NodeRow extends StatelessWidget {
           _expandArrow(hasChildren),
           ElementTypeBadge(type: node.ref.type),
           const SizedBox(width: 8),
-          Expanded(child: _titleAndPreview(node)),
+          Expanded(child: _titleSection(node)),
           if (hasChildren) ...<Widget>[
             // How many elements this branch holds, itself excluded.
             _mutedLabel('${node.subtreeSize - 1}'),
@@ -910,7 +910,7 @@ class _NodeRow extends StatelessWidget {
             _expandArrow(hasChildren),
             ElementTypeBadge(type: node.ref.type, shouldShowLabel: false),
             const SizedBox(width: 8),
-            Expanded(child: _titleAndPreview(node)),
+            Expanded(child: _titleSection(node)),
           ],
         ),
         Row(
@@ -994,7 +994,7 @@ class _NodeRow extends StatelessWidget {
 
   /// A dismissed element keeps normal readable text. Its yellow row wash is
   /// the familiar "suspended" signal and makes clear the content still exists.
-  Widget _titleAndPreview(BrowserTreeNode node) {
+  Widget _titleSection(BrowserTreeNode node) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[

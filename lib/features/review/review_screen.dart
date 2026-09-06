@@ -53,13 +53,13 @@ class ReviewScreen extends ConsumerWidget {
       AsyncValue<ReviewUiState>? previous,
       AsyncValue<ReviewUiState> next,
     ) {
-      final data = next.valueOrNull;
-      if (data == null) return;
-      if (data.message case final message?) {
+      final ReviewUiState? reviewState = next.valueOrNull;
+      if (reviewState == null) return;
+      if (reviewState.message case final message?) {
         showToast(context, message.text, isError: message.isError);
         model.shouldClearMessage();
       }
-      if (data.isDone && Navigator.of(context).canPop()) {
+      if (reviewState.isDone && Navigator.of(context).canPop()) {
         Navigator.of(context).pop(StudyRouteResult.committed);
       }
     });

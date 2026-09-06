@@ -233,8 +233,3 @@ final class UndoMercy extends AppCommand {
   final StudyDay day;
   final String batchId;
 }
-
-/// Rebuild the full-text index from the materialized documents.
-final class RebuildSearchIndex extends AppCommand {
-  RebuildSearchIndex(super.operationId, {super.timestampUtc});
-}

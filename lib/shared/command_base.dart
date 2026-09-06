@@ -1,6 +1,7 @@
 /// The base of every application command.
 library;
 
+import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:meta/meta.dart';
 
@@ -14,7 +15,7 @@ import 'package:meta/meta.dart';
 @immutable
 abstract base class AppCommand {
   AppCommand(this.operationId, {DateTime? timestampUtc})
-    : timestampUtc = (timestampUtc ?? DateTime.now()).toUtc();
+    : timestampUtc = (timestampUtc ?? const SystemClock().nowUtc()).toUtc();
 
   /// Correlates every row and log line this command produces.
   final OperationId operationId;

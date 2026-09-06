@@ -7,6 +7,7 @@ If you can point at it in the running app, its code is in one of these folders.
 | `browser/` | Browser | the knowledge tree: making elements, and filing them |
 | `reader/` | Reader | reading a document and making extracts from it |
 | `extract/` | Extract | working one extract over, turning it into cards |
+| `video/` | Video | watching incrementally and making timed clips |
 | `review/` | Review | showing a card, revealing it, grading it |
 | `occlusion/` | Image occlusion | drawing masks and creating image cards |
 | `daily_queue/` | Today | the day's study session, and the ways to relieve it |
@@ -32,6 +33,14 @@ Not every feature has all of them, but the names always mean the same thing.
 
 Commands change things. Queries never do. That split is why you can read a
 query without worrying that it moved someone's schedule.
+
+Command runners keep the feature-specific steps. The transaction, duplicate-
+operation check, dataset generation, and diagnostic result are shared through
+`shared/command_execution.dart`, so those guarantees have one implementation.
+
+A view model is optional when it would only mirror private widget state. Local
+editor state stays with its screen; that is why `occlusion/` has no
+`occlusion_view_model.dart`.
 
 ## Adding a screen
 

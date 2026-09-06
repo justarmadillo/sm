@@ -120,39 +120,26 @@ List<Utf16Span> decodeContentSpans(String json) {
 /// Attempts to decode derived block spans so a database check can identify a
 /// damaged payload without throwing away the rest of its scan.
 Result<List<Utf16Span>> tryDecodeContentSpans(String json) {
-  try {
-    final List<Object?> decoded = jsonDecode(json) as List<Object?>;
-    return Ok<List<Utf16Span>>(<Utf16Span>[
-      for (final Object? entry in decoded)
+  return _tryDecodeJson<List<Utf16Span>>(
+    json,
+    failureMessage: 'content spans are undecodable',
+    convert: (Object? decoded) => <Utf16Span>[
+      for (final Object? entry in decoded! as List<Object?>)
         Utf16Span(
           (entry! as List<Object?>)[0]! as int,
           (entry as List<Object?>)[1]! as int,
         ),
-    ]);
-  } on Object catch (error, stackTrace) {
-    return Err<List<Utf16Span>>(
-      StorageFailure(
-        'content spans are undecodable',
-        cause: error,
-        stackTrace: stackTrace,
-      ),
-    );
-  }
+    ],
+  );
 }
 
 /// Attempts to decode a stored JSON object used by an audit row.
 Result<Map<String, Object?>> tryDecodeStoredJsonObject(String json) {
-  try {
-    return Ok<Map<String, Object?>>(jsonDecode(json) as Map<String, Object?>);
-  } on Object catch (error, stackTrace) {
-    return Err<Map<String, Object?>>(
-      StorageFailure(
-        'stored JSON object is undecodable',
-        cause: error,
-        stackTrace: stackTrace,
-      ),
-    );
-  }
+  return _tryDecodeJson<Map<String, Object?>>(
+    json,
+    failureMessage: 'stored JSON object is undecodable',
+    convert: (Object? decoded) => decoded! as Map<String, Object?>,
+  );
 }
 
 /// Attempts to decode optional metadata on the append-only review log.
@@ -165,15 +152,24 @@ Result<Object?> tryDecodeSchedulerState(String json) =>
 
 /// Attempts to decode any stored JSON payload while retaining its shape.
 Result<Object?> tryDecodeStoredJson(String json) {
+  return _tryDecodeJson<Object?>(
+    json,
+    failureMessage: 'stored JSON is undecodable',
+    convert: (Object? decoded) => decoded,
+  );
+}
+
+/// Gives every repair-time JSON decoder the same typed failure boundary.
+Result<T> _tryDecodeJson<T>(
+  String json, {
+  required String failureMessage,
+  required T Function(Object? decoded) convert,
+}) {
   try {
-    return Ok<Object?>(jsonDecode(json));
+    return Ok<T>(convert(jsonDecode(json)));
   } on Object catch (error, stackTrace) {
-    return Err<Object?>(
-      StorageFailure(
-        'stored JSON is undecodable',
-        cause: error,
-        stackTrace: stackTrace,
-      ),
+    return Err<T>(
+      StorageFailure(failureMessage, cause: error, stackTrace: stackTrace),
     );
   }
 }
@@ -622,26 +618,7 @@ RevlogEntriesCompanion reviewLogToCompanion(ReviewLogEntry entry) =>
 
 /// Domain FSRS memory from its row.
 CardMemory cardMemoryFromRow(CardMemoryRow row) {
-  final memory = CardMemory(
-    cardId: row.cardId,
-    state: CardLearningState.fromValue(row.state),
-    step: row.step,
-    stability: row.stability,
-    difficulty: row.difficulty,
-    repetitionCount: row.reps,
-    lapses: row.lapses,
-    lastReviewAtUtc: row.lastReviewUtc == null
-        ? null
-        : fromEpochMs(row.lastReviewUtc!),
-    dueAtUtc: fromEpochMs(row.dueAtUtc),
-    originalDueAtUtc: fromEpochMs(row.originalDueAtUtc),
-    schedulerVersion: row.schedulerVersion,
-    parametersVersion: row.parametersVersion,
-    postponeCount: row.postponeCount,
-    scheduledDays: row.scheduledDays,
-    schedulerName: row.schedulerName,
-    revision: row.revision,
-  );
+  final memory = cardMemoryFromRowIgnoringStoredJson(row);
   final String? storedState = row.fsrsStateJson;
   if (storedState != null) {
     final Result<Object?> decodedResult = tryDecodeStoredJson(storedState);
@@ -655,6 +632,31 @@ CardMemory cardMemoryFromRow(CardMemoryRow row) {
   }
   return memory;
 }
+
+/// Domain FSRS memory reconstructed from typed columns only.
+///
+/// Database repair uses this path when the redundant JSON snapshot is damaged;
+/// ordinary reads must use [cardMemoryFromRow] so disagreement is detected.
+CardMemory cardMemoryFromRowIgnoringStoredJson(CardMemoryRow row) => CardMemory(
+  cardId: row.cardId,
+  state: CardLearningState.fromValue(row.state),
+  step: row.step,
+  stability: row.stability,
+  difficulty: row.difficulty,
+  repetitionCount: row.reps,
+  lapses: row.lapses,
+  lastReviewAtUtc: row.lastReviewUtc == null
+      ? null
+      : fromEpochMs(row.lastReviewUtc!),
+  dueAtUtc: fromEpochMs(row.dueAtUtc),
+  originalDueAtUtc: fromEpochMs(row.originalDueAtUtc),
+  schedulerVersion: row.schedulerVersion,
+  parametersVersion: row.parametersVersion,
+  postponeCount: row.postponeCount,
+  scheduledDays: row.scheduledDays,
+  schedulerName: row.schedulerName,
+  revision: row.revision,
+);
 
 /// Row companion for inserting or replacing a card's FSRS memory.
 CardMemoriesCompanion cardMemoryToCompanion(CardMemory memory) =>

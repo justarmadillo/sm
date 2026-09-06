@@ -34,10 +34,11 @@ Take "the user presses Later" on the Reader:
 1. `features/reader/reader_screen.dart` — the button.
 2. `features/reader/reader_view_model.dart` — the screen's state; builds a command.
 3. `features/reader/reader_commands.dart` — `PostponeElement`, a plain description of the intent.
-4. `features/reader/reader_command_runner.dart` — opens a transaction and carries it out.
-5. `scheduling/topics/topic_scheduler.dart` — works out the new due day.
-6. `storage/contracts/learning_repository.dart` — the promise "this can be saved".
-7. `storage/drift/drift_learning_repository.dart` — the SQL that actually saves it.
+4. `features/reader/reader_command_runner.dart` — defines the domain work needed to carry it out.
+5. `shared/command_execution.dart` — applies the shared transaction, retry, generation, and diagnostic boundary.
+6. `scheduling/topics/topic_scheduler.dart` — works out the new due day.
+7. `storage/contracts/learning_repository.dart` — the promise "this can be saved".
+8. `storage/drift/drift_learning_repository.dart` — the SQL that actually saves it.
 
 Every feature follows that shape. `*_commands.dart` lists what can change;
 `*_command_runner.dart` is the code that changes it; `*_query.dart` only reads.

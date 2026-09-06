@@ -338,18 +338,6 @@ final class ExtractViewModel
     );
   }
 
-  Future<void> refreshCards() async {
-    final current = state.valueOrNull;
-    if (current == null) return;
-    state = AsyncValue<ExtractUiState>.data(
-      current.copyWith(
-        cards: await ref
-            .read(contentRepositoryProvider)
-            .listCardsOfExtract(current.extract.id),
-      ),
-    );
-  }
-
   /// Creates linked cards without advancing or dismissing this extract.
   Future<bool> formulate(List<CardDraft> drafts) async {
     final current = state.valueOrNull;

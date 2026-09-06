@@ -23,6 +23,7 @@ import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
+import 'package:incremental_reader/shared/text_excerpt.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/video_repository.dart';
@@ -131,17 +132,18 @@ final class QueueQuery {
     );
     if (outcome.isErr) return QueueProjection.emptyOn(today);
 
-    final AdmissionOutcome value = outcome.unwrap();
+    final AdmissionOutcome admission = outcome.unwrap();
     // The command runner owns the durable remaining plan. Rebuilding here
     // discard its completion set and merge cursor and reshuffle a live day.
-    final QueuePlan plan = value.plan;
+    final QueuePlan plan = admission.plan;
     final QueueCounters counters = plan.counters;
 
     final PriorityScale scale = await _context.priorityScale();
     final settings = await _context.settings();
     final int leechLapses = settings.cards.leechLapses;
     final Map<ElementRef, QueueLane> lanes = <ElementRef, QueueLane>{
-      for (final ScoredCandidate value in plan.scored) value.ref: value.lane,
+      for (final ScoredCandidate candidate in plan.scored)
+        candidate.ref: candidate.lane,
     };
     final entries = <QueueEntry>[];
     for (final QueueCandidate candidate in plan.entries) {
@@ -165,7 +167,7 @@ final class QueueQuery {
           scale.total > 100 &&
           (entries.firstOrNull?.lane == QueueLane.finalDrill ||
               entries.firstOrNull?.lane == QueueLane.pending),
-      automaticallyPostponedThisRun: value.automaticallyPostponed,
+      automaticallyPostponedThisRun: admission.automaticallyPostponed,
     );
   }
 
@@ -216,7 +218,7 @@ final class QueueQuery {
       lane: lane,
       actionLabel: _actionLabel(lane, 'Read'),
       title: source.title,
-      preview: _excerpt(source.markdown),
+      preview: singleLineExcerpt(source.markdown, maximumCharacters: 180),
       priorityPercent: _percentOf(candidate, scale),
     );
   }
@@ -236,7 +238,7 @@ final class QueueQuery {
       lane: lane,
       actionLabel: _actionLabel(lane, 'Process'),
       title: source?.title ?? 'Extract',
-      preview: _excerpt(extract.markdown),
+      preview: singleLineExcerpt(extract.markdown, maximumCharacters: 180),
       priorityPercent: _percentOf(candidate, scale),
     );
   }
@@ -262,7 +264,7 @@ final class QueueQuery {
       title: element.displayTitle,
       preview: element.note.trim().isEmpty
           ? element.rangeLabel
-          : _excerpt(element.note),
+          : singleLineExcerpt(element.note, maximumCharacters: 180),
       priorityPercent: _percentOf(candidate, scale),
     );
   }
@@ -287,25 +289,17 @@ final class QueueQuery {
     final Card? card = await _content.findCard(candidate.ref.id);
     if (card == null) return null;
     final Source? source = await _sourceOfCard(card);
-    final String question = switch (card.type) {
-      CardType.qa => card.front,
-      CardType.cloze => renderClozeQuestion(card.front, card.clozeOrdinal!),
-      CardType.clozeOverlapper => renderOverlapQuestion(
-        card.front,
-        card.clozeOrdinal!,
-        before: card.contextBefore!,
-        after: card.contextAfter!,
-      ),
-      CardType.imageOcclusion =>
-        card.front.isEmpty ? 'Image occlusion' : card.front,
-    };
+    final String question = cardQuestionText(
+      card,
+      imageOcclusionFallback: 'Image occlusion',
+    );
     final int lapses = candidate.card?.memory.lapses ?? 0;
     return QueueEntry(
       candidate: candidate,
       lane: lane,
       actionLabel: _actionLabel(lane, 'Review'),
       title: source?.title ?? 'Card',
-      preview: _excerpt(question),
+      preview: singleLineExcerpt(question, maximumCharacters: 180),
       priorityPercent: _percentOf(candidate, scale),
       isLeech: leechLapses > 0 && lapses >= leechLapses,
     );
@@ -321,9 +315,3 @@ String _actionLabel(QueueLane lane, String ordinary) => switch (lane) {
   QueueLane.pending => 'Learn',
   _ => ordinary,
 };
-
-String _excerpt(String markdown, {int maximum = 180}) {
-  final String collapsed = markdown.replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (collapsed.length <= maximum) return collapsed;
-  return '${collapsed.substring(0, maximum - 1).trimRight()}…';
-}

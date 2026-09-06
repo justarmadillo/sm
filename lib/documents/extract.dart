@@ -168,26 +168,16 @@ final class Extract {
   bool get isVerbatim => editedAtUtc == null;
 
   Extract withMarkdown(
-    String value,
+    String updatedMarkdown,
     DateTime editedAtUtc, {
     int? contentRevision,
   }) => Extract(
     id: id,
-    markdown: value,
+    markdown: updatedMarkdown,
     provenance: provenance,
     createdAtUtc: createdAtUtc,
     editedAtUtc: editedAtUtc.toUtc(),
     contentRevision: contentRevision ?? this.contentRevision,
-  );
-
-  /// The same extract with a re-evaluated link back to its parent.
-  Extract withProvenance(Provenance value) => Extract(
-    id: id,
-    markdown: markdown,
-    provenance: value,
-    createdAtUtc: createdAtUtc,
-    editedAtUtc: editedAtUtc,
-    contentRevision: contentRevision,
   );
 
   @override
