@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
@@ -434,6 +435,16 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
       context,
       seedText: state.extract.markdown,
       existingCardCount: state.cards.length,
+      overlapContextBefore: ref
+          .read(settingsStoreProvider)
+          .currentOrDefaults
+          .cards
+          .overlapContextBefore,
+      overlapContextAfter: ref
+          .read(settingsStoreProvider)
+          .currentOrDefaults
+          .cards
+          .overlapContextAfter,
     );
     if (drafts != null) await model.formulate(drafts);
   }

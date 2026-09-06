@@ -44,12 +44,14 @@ Future<void> main() async {
   // deleted during an earlier session.
   final sourceAssetFiles = container.read(sourceAssetFileStoreProvider);
   await sourceAssetFiles.deletePartialFiles();
-  await sourceAssetFiles.deleteUnreferencedBlobs(
-    (await container
-            .read(sourceAssetRepositoryProvider)
-            .listAvailableSourceAssetSha256Values())
-        .toSet(),
-  );
+  await sourceAssetFiles.deleteUnreferencedBlobs(<String>{
+    ...await container
+        .read(sourceAssetRepositoryProvider)
+        .listAvailableSourceAssetSha256Values(),
+    ...await container
+        .read(occlusionRepositoryProvider)
+        .listReferencedOcclusionSha256Values(),
+  });
 
   // Settings first: the synchronous providers read a cached configuration,
   // so warming the store before the first frame stops the app rendering

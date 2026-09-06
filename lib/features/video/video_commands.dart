@@ -18,6 +18,7 @@ final class ImportVideo extends AppCommand {
     required this.startSeconds,
     required this.endSeconds,
     this.durationSeconds,
+    this.thumbnailUrl,
     this.priorityPercent,
     super.timestampUtc,
   });
@@ -31,6 +32,7 @@ final class ImportVideo extends AppCommand {
 
   /// Whole-video length, when the user typed it.
   final int? durationSeconds;
+  final String? thumbnailUrl;
 
   /// Where in the collection's order this lands, or null for the middle.
   final double? priorityPercent;

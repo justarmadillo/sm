@@ -104,4 +104,45 @@ void main() {
     expect(find.text('Question and answer are both required.'), findsOneWidget);
     expect(find.byType(AlertDialog), findsOneWidget);
   });
+
+  testWidgets('splits a pasted list into an overlapper draft', (
+    WidgetTester tester,
+  ) async {
+    late Future<List<CardDraft>?> result;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (BuildContext context) => FilledButton(
+            onPressed: () {
+              result = showFormulationDialog(
+                context,
+                seedText: '1. Alpha\n2. Beta\n- Gamma',
+                existingCardCount: 0,
+                overlapContextBefore: 2,
+                overlapContextAfter: 1,
+              );
+            },
+            child: const Text('Open overlapper'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open overlapper'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Overlapper'));
+    await tester.pumpAndSettle();
+    final splitButton = find.byKey(
+      const ValueKey<String>('split-overlapper-items'),
+    );
+    await tester.ensureVisible(splitButton);
+    await tester.tap(splitButton);
+    await tester.pump();
+    await tester.tap(find.text('Create 3 cards'));
+    await tester.pumpAndSettle();
+
+    final draft = (await result)!.single as ClozeOverlapperCardDraft;
+    expect(draft.text, '{{c1::Alpha}}\n{{c2::Beta}}\n{{c3::Gamma}}');
+    expect(draft.contextBefore, 2);
+    expect(draft.contextAfter, 1);
+  });
 }

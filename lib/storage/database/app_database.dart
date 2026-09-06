@@ -16,7 +16,7 @@ import 'package:incremental_reader/storage/database/tables.dart';
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 16;
+const int kSchemaVersion = 17;
 
 /// Name of the external-content FTS5 index over [SearchDocuments].
 const String kSearchIndexTable = 'search_index';
@@ -31,6 +31,7 @@ const String kSearchIndexTable = 'search_index';
     Videos,
     VideoElements,
     Cards,
+    CardOcclusions,
     ElementSchedules,
     TopicStates,
     CardMemories,
@@ -73,6 +74,17 @@ class AppDatabase extends _$AppDatabase {
       // version may run them.
       await _renameColumnIfPresent('cards', 'kind', 'type');
       await _renameColumnIfPresent('activity_events', 'kind', 'type');
+
+      // Historical migrations rebuild `cards` from today's table definition.
+      // Add today's nullable columns before any of those rebuilds tries to
+      // copy them from an older file that did not yet have them.
+      if (from < 17 && await _hasTable('cards')) {
+        await _addColumnIfMissing(m, cards, cards.contextBefore);
+        await _addColumnIfMissing(m, cards, cards.contextAfter);
+      }
+      if (from < 17 && await _hasTable('videos')) {
+        await _addColumnIfMissing(m, videos, videos.thumbnailUrl);
+      }
 
       if (from < 2) {
         // Rebuild both tables so descendant content cannot disappear via
@@ -640,6 +652,16 @@ class AppDatabase extends _$AppDatabase {
           'INSERT INTO $kSearchIndexTable($kSearchIndexTable) '
           "VALUES ('rebuild')",
         );
+      }
+      if (from < 17) {
+        if (!await _hasTable('card_occlusions')) {
+          await m.createTable(cardOcclusions);
+        }
+        await _addColumnIfMissing(m, cards, cards.contextBefore);
+        await _addColumnIfMissing(m, cards, cards.contextAfter);
+        await _addColumnIfMissing(m, videos, videos.thumbnailUrl);
+        await m.alterTable(TableMigration(cards));
+        await _createIndexes(m);
       }
     },
     beforeOpen: (OpeningDetails details) async {

@@ -16,6 +16,12 @@ enum CardType {
   /// A passage with one or more deletions, stored in Anki's `{{c1::...}}`
   /// syntax so the text stays portable and human-readable.
   cloze,
+
+  /// A cloze passage that reveals only nearby deletions.
+  clozeOverlapper,
+
+  /// A card that tests masked regions of an image.
+  imageOcclusion,
 }
 
 /// One deletion inside a cloze card's text.
@@ -125,6 +131,8 @@ final class Card {
     required this.back,
     required this.createdAtUtc,
     this.clozeOrdinal,
+    this.contextBefore,
+    this.contextAfter,
     this.editedAtUtc,
   });
 
@@ -161,6 +169,43 @@ final class Card {
     createdAtUtc: createdAtUtc.toUtc(),
   );
 
+  /// A cloze card that reveals only [contextBefore] and [contextAfter].
+  factory Card.clozeOverlapper({
+    required String id,
+    required CardParent? parent,
+    required String text,
+    required int ordinal,
+    required int contextBefore,
+    required int contextAfter,
+    required DateTime createdAtUtc,
+  }) => Card(
+    id: id,
+    parent: parent,
+    type: CardType.clozeOverlapper,
+    front: text,
+    back: '',
+    clozeOrdinal: ordinal,
+    contextBefore: contextBefore,
+    contextAfter: contextAfter,
+    createdAtUtc: createdAtUtc.toUtc(),
+  );
+
+  /// An image-occlusion card with optional explanatory text.
+  factory Card.imageOcclusion({
+    required String id,
+    required CardParent? parent,
+    required String header,
+    required String remarks,
+    required DateTime createdAtUtc,
+  }) => Card(
+    id: id,
+    parent: parent,
+    type: CardType.imageOcclusion,
+    front: header,
+    back: remarks,
+    createdAtUtc: createdAtUtc.toUtc(),
+  );
+
   final String id;
 
   /// Element this card was formulated from, or null for a standalone item.
@@ -189,23 +234,38 @@ final class Card {
   /// Which deletion this cloze card tests.
   final int? clozeOrdinal;
 
+  /// How many deletions before the tested one stay visible on an overlapper.
+  final int? contextBefore;
+
+  /// How many deletions after the tested one stay visible on an overlapper.
+  final int? contextAfter;
+
   final DateTime createdAtUtc;
 
   /// When the card text was last edited, including edits made during review.
   final DateTime? editedAtUtc;
 
   /// Every deletion in [front], for cloze cards.
-  List<ClozeDeletion> get deletions => type == CardType.cloze
+  List<ClozeDeletion> get deletions =>
+      type == CardType.cloze || type == CardType.clozeOverlapper
       ? parseClozeDeletions(front)
       : const <ClozeDeletion>[];
 
-  Card copyWith({String? front, String? back, DateTime? editedAtUtc}) => Card(
+  Card copyWith({
+    String? front,
+    String? back,
+    int? contextBefore,
+    int? contextAfter,
+    DateTime? editedAtUtc,
+  }) => Card(
     id: id,
     parent: parent,
     type: type,
     front: front ?? this.front,
     back: back ?? this.back,
     clozeOrdinal: clozeOrdinal,
+    contextBefore: contextBefore ?? this.contextBefore,
+    contextAfter: contextAfter ?? this.contextAfter,
     createdAtUtc: createdAtUtc,
     editedAtUtc: (editedAtUtc ?? this.editedAtUtc)?.toUtc(),
   );
@@ -262,15 +322,102 @@ String renderClozeQuestion(String text, int ordinal, {String blank = '[...]'}) {
   return buffer.toString();
 }
 
-/// [text] with every deletion revealed.
-String renderClozeAnswer(String text) {
+/// [text] with every deletion revealed and [ordinal] emphasized.
+String renderClozeAnswer(String text, {int? ordinal}) {
   final buffer = StringBuffer();
   var cursor = 0;
   for (final deletion in parseClozeDeletions(text)) {
     buffer.write(text.substring(cursor, deletion.start));
-    buffer.write(deletion.answer);
+    buffer.write(
+      deletion.ordinal == ordinal
+          ? _emphasizedClozeAnswer(deletion.answer)
+          : deletion.answer,
+    );
     cursor = deletion.end;
   }
   buffer.write(text.substring(cursor));
   return buffer.toString();
 }
+
+/// [text] with [ordinal] hidden, nearby deletions revealed, and others blanked.
+///
+/// A negative window reveals every deletion on that side. Windows count
+/// distinct cloze ordinals, so repeated deletions with one ordinal stay in
+/// sync and reveal together.
+String renderOverlapQuestion(
+  String text,
+  int ordinal, {
+  required int before,
+  required int after,
+  String blank = '[...]',
+}) => _renderOverlap(
+  text,
+  ordinal,
+  before: before,
+  after: after,
+  isAnswer: false,
+  blank: blank,
+);
+
+/// As [renderOverlapQuestion], with [ordinal] itself revealed.
+String renderOverlapAnswer(
+  String text,
+  int ordinal, {
+  required int before,
+  required int after,
+  String blank = '[...]',
+}) => _renderOverlap(
+  text,
+  ordinal,
+  before: before,
+  after: after,
+  isAnswer: true,
+  blank: blank,
+);
+
+String _renderOverlap(
+  String text,
+  int ordinal, {
+  required int before,
+  required int after,
+  required bool isAnswer,
+  required String blank,
+}) {
+  final ordinals = clozeOrdinals(text);
+  final activeIndex = ordinals.indexOf(ordinal);
+  final visibleOrdinals = <int>{};
+  if (activeIndex >= 0) {
+    final firstVisible = before < 0 ? 0 : activeIndex - before;
+    final lastVisible = after < 0 ? ordinals.length - 1 : activeIndex + after;
+    for (var index = 0; index < ordinals.length; index++) {
+      if (index >= firstVisible && index <= lastVisible) {
+        visibleOrdinals.add(ordinals[index]);
+      }
+    }
+  }
+
+  final buffer = StringBuffer();
+  var cursor = 0;
+  for (final deletion in parseClozeDeletions(text)) {
+    buffer.write(text.substring(cursor, deletion.start));
+    final isActive = deletion.ordinal == ordinal;
+    if ((isActive && isAnswer) ||
+        (!isActive && visibleOrdinals.contains(deletion.ordinal))) {
+      buffer.write(
+        isActive && isAnswer
+            ? _emphasizedClozeAnswer(deletion.answer)
+            : deletion.answer,
+      );
+    } else if (isActive && deletion.hint != null) {
+      buffer.write('[${deletion.hint}]');
+    } else {
+      buffer.write(blank);
+    }
+    cursor = deletion.end;
+  }
+  buffer.write(text.substring(cursor));
+  return buffer.toString();
+}
+
+/// Strong Markdown matches Anki's visual distinction while remaining portable.
+String _emphasizedClozeAnswer(String answer) => '**$answer**';

@@ -9,6 +9,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/video.dart';
 import 'package:incremental_reader/documents/video_link.dart';
 import 'package:incremental_reader/documents/video_time.dart';
@@ -95,7 +96,11 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
       mode: LaunchMode.externalApplication,
     );
     if (!mounted || didOpen) return;
-    showToast(context, 'Nothing on this device opens that link.', isError: true);
+    showToast(
+      context,
+      'Nothing on this device opens that link.',
+      isError: true,
+    );
   }
 
   Future<void> _setResume(VideoUiState state) async {
@@ -130,6 +135,16 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
       context,
       seedText: state.element.note,
       existingCardCount: state.cards.length,
+      overlapContextBefore: ref
+          .read(settingsStoreProvider)
+          .currentOrDefaults
+          .cards
+          .overlapContextBefore,
+      overlapContextAfter: ref
+          .read(settingsStoreProvider)
+          .currentOrDefaults
+          .cards
+          .overlapContextAfter,
       parentNoun: 'video',
     );
     if (drafts == null || drafts.isEmpty) return;
@@ -151,19 +166,19 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
     final AsyncValue<VideoUiState> state = ref.watch(
       videoViewModelProvider(widget.request),
     );
-    ref.listen<AsyncValue<VideoUiState>>(videoViewModelProvider(widget.request), (
-      AsyncValue<VideoUiState>? previous,
-      AsyncValue<VideoUiState> next,
-    ) {
-      final VideoUiState? value = next.valueOrNull;
-      if (value == null) return;
-      final UiMessage? message = value.message;
-      if (message != null) {
-        showToast(context, message.text, isError: message.isError);
-        _model.shouldClearMessage();
-      }
-      if (value.isDone) _finish(StudyRouteResult.committed);
-    });
+    ref.listen<AsyncValue<VideoUiState>>(
+      videoViewModelProvider(widget.request),
+      (AsyncValue<VideoUiState>? previous, AsyncValue<VideoUiState> next) {
+        final VideoUiState? value = next.valueOrNull;
+        if (value == null) return;
+        final UiMessage? message = value.message;
+        if (message != null) {
+          showToast(context, message.text, isError: message.isError);
+          _model.shouldClearMessage();
+        }
+        if (value.isDone) _finish(StudyRouteResult.committed);
+      },
+    );
 
     return state.when(
       loading: () =>
@@ -215,6 +230,10 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
   Widget _body(VideoUiState state) => ListView(
     padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
     children: <Widget>[
+      if (state.video.thumbnailUrl case final thumbnailUrl?) ...<Widget>[
+        _VideoThumbnail(url: thumbnailUrl),
+        const SizedBox(height: 16),
+      ],
       _openRow(state),
       const SizedBox(height: 16),
       _resumeRow(state),
@@ -237,9 +256,7 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
         ),
         const SizedBox(width: 12),
         if (!link.hasTimestamp)
-          Expanded(
-            child: _SeekHint(seconds: state.openAtSeconds),
-          )
+          Expanded(child: _SeekHint(seconds: state.openAtSeconds))
         else
           Expanded(
             child: Text(
@@ -327,6 +344,26 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
             ),
           ),
     ],
+  );
+}
+
+/// A failed remote preview never prevents the saved video from opening.
+class _VideoThumbnail extends StatelessWidget {
+  const _VideoThumbnail({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(10),
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 280),
+      child: Image.network(
+        url,
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      ),
+    ),
   );
 }
 
@@ -461,9 +498,8 @@ class _SeekHint extends StatelessWidget {
         tooltip: 'Copy the time',
         visualDensity: VisualDensity.compact,
         icon: const Icon(Icons.copy, size: 14),
-        onPressed: () => Clipboard.setData(
-          ClipboardData(text: formatVideoTime(seconds)),
-        ),
+        onPressed: () =>
+            Clipboard.setData(ClipboardData(text: formatVideoTime(seconds))),
       ),
     ],
   );
@@ -642,7 +678,12 @@ class _VideoActionBar extends StatelessWidget {
                 Align(alignment: Alignment.centerRight, child: _buttons()),
               ],
             )
-          : Row(children: <Widget>[Expanded(child: _hint()), _buttons()]),
+          : Row(
+              children: <Widget>[
+                Expanded(child: _hint()),
+                _buttons(),
+              ],
+            ),
     ),
   );
 

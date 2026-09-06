@@ -13,6 +13,7 @@ import 'package:incremental_reader/documents/block_content.dart';
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
+import 'package:incremental_reader/documents/occlusion.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/documents/source_edit.dart';
@@ -256,6 +257,7 @@ Video videoFromRow(VideoRow row) => Video(
   url: row.url,
   platform: VideoPlatform.values[row.platform],
   durationSeconds: row.durationSeconds,
+  thumbnailUrl: row.thumbnailUrl,
   addedAtUtc: fromEpochMs(row.addedAtUtc),
 );
 
@@ -265,6 +267,7 @@ VideosCompanion videoToCompanion(Video video) => VideosCompanion.insert(
   url: video.url,
   platform: video.platform.index,
   durationSeconds: Value<int?>(video.durationSeconds),
+  thumbnailUrl: Value<String?>(video.thumbnailUrl),
   addedAtUtc: toEpochMs(video.addedAtUtc),
 );
 
@@ -309,6 +312,8 @@ Card cardFromRow(CardRow row) => Card(
   front: row.front,
   back: row.back,
   clozeOrdinal: row.clozeOrdinal,
+  contextBefore: row.contextBefore,
+  contextAfter: row.contextAfter,
   createdAtUtc: fromEpochMs(row.createdAtUtc),
   editedAtUtc: row.editedAtUtc == null ? null : fromEpochMs(row.editedAtUtc!),
 );
@@ -351,11 +356,38 @@ CardsCompanion cardToCompanion(Card card) => CardsCompanion.insert(
   front: card.front,
   back: card.back,
   clozeOrdinal: Value<int?>(card.clozeOrdinal),
+  contextBefore: Value<int?>(card.contextBefore),
+  contextAfter: Value<int?>(card.contextAfter),
   createdAtUtc: toEpochMs(card.createdAtUtc),
   editedAtUtc: Value<int?>(
     card.editedAtUtc == null ? null : toEpochMs(card.editedAtUtc!),
   ),
 );
+
+/// Domain [CardOcclusion] from its row.
+CardOcclusion cardOcclusionFromRow(CardOcclusionRow row) => CardOcclusion(
+  cardId: row.cardId,
+  imageSha256: row.imageSha256,
+  imageMime: row.imageMime,
+  imageWidthPx: row.imageWidthPx,
+  imageHeightPx: row.imageHeightPx,
+  regions: occlusionRegionsFromJson(row.regionsJson),
+  activeRegionId: row.activeRegionId,
+  mode: OcclusionMode.values[row.mode],
+);
+
+/// Row companion for a [CardOcclusion].
+CardOcclusionsCompanion cardOcclusionToCompanion(CardOcclusion occlusion) =>
+    CardOcclusionsCompanion.insert(
+      cardId: occlusion.cardId,
+      imageSha256: occlusion.imageSha256,
+      imageMime: occlusion.imageMime,
+      imageWidthPx: occlusion.imageWidthPx,
+      imageHeightPx: occlusion.imageHeightPx,
+      regionsJson: occlusionRegionsToJson(occlusion.regions),
+      activeRegionId: Value<String?>(occlusion.activeRegionId),
+      mode: occlusion.mode.index,
+    );
 
 /// Domain [ElementSchedule] from its row.
 ElementSchedule scheduleFromRow(ScheduleRow row) => ElementSchedule(

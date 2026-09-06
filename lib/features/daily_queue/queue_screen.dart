@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/features/browser/add_element_flow.dart';
 import 'package:incremental_reader/features/browser/browser_screen.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/features/daily_queue/queue_query.dart';
@@ -113,6 +114,30 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
     return AppBar(
       title: const Text('Study'),
       actions: <Widget>[
+        if (isNarrow)
+          IconButton(
+            onPressed: _isOpeningRoutes
+                ? null
+                : () => _openThenRefresh(
+                    model,
+                    () => showAddElementFlow(context, ref),
+                  ),
+            icon: const Icon(Icons.add),
+            tooltip: 'Add',
+          )
+        else ...<Widget>[
+          TextButton.icon(
+            onPressed: _isOpeningRoutes
+                ? null
+                : () => _openThenRefresh(
+                    model,
+                    () => showAddElementFlow(context, ref),
+                  ),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add'),
+          ),
+          const SizedBox(width: 4),
+        ],
         if (isNarrow)
           IconButton(
             onPressed: _isOpeningRoutes

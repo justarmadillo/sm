@@ -91,7 +91,9 @@ Future<LearningCommandAnswers?> askForLearningCommand(
       final double? multiplier = await _promptForDouble(
         context,
         title: 'Modify A',
-        hint: 'Rescales A around 1.01: A = 1.01 + m × (A − 1.01).',
+        hint:
+            'Below 1 makes future intervals grow more slowly; above 1 makes '
+            'them grow faster. It changes no current interval or due date.',
         initial: 1,
         min: 0.20,
         max: 2,

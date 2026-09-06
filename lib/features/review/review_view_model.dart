@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/card.dart';
+import 'package:incremental_reader/documents/occlusion.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/review/review_command_runner.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
@@ -31,6 +32,7 @@ final class ReviewUiState {
     this.buriedSiblings = 0,
     this.canUndo = false,
     this.isEditing = false,
+    this.occlusion,
   });
 
   final Card card;
@@ -54,15 +56,33 @@ final class ReviewUiState {
 
   /// Whether the inline editor is open.
   final bool isEditing;
+  final CardOcclusion? occlusion;
 
   String get question => switch (card.type) {
     CardType.qa => card.front,
     CardType.cloze => renderClozeQuestion(card.front, card.clozeOrdinal!),
+    CardType.clozeOverlapper => renderOverlapQuestion(
+      card.front,
+      card.clozeOrdinal!,
+      before: card.contextBefore!,
+      after: card.contextAfter!,
+    ),
+    CardType.imageOcclusion => card.front,
   };
 
   String get answer => switch (card.type) {
     CardType.qa => card.back,
-    CardType.cloze => renderClozeAnswer(card.front),
+    CardType.cloze => renderClozeAnswer(
+      card.front,
+      ordinal: card.clozeOrdinal!,
+    ),
+    CardType.clozeOverlapper => renderOverlapAnswer(
+      card.front,
+      card.clozeOrdinal!,
+      before: card.contextBefore!,
+      after: card.contextAfter!,
+    ),
+    CardType.imageOcclusion => card.back,
   };
 
   /// The element this card was formulated from, when it has one.
@@ -82,6 +102,7 @@ final class ReviewUiState {
     int? buriedSiblings,
     bool? canUndo,
     bool? isEditing,
+    CardOcclusion? occlusion,
   }) => ReviewUiState(
     card: card ?? this.card,
     cardState: cardState ?? this.cardState,
@@ -93,6 +114,7 @@ final class ReviewUiState {
     buriedSiblings: buriedSiblings ?? this.buriedSiblings,
     canUndo: canUndo ?? this.canUndo,
     isEditing: isEditing ?? this.isEditing,
+    occlusion: occlusion ?? this.occlusion,
   );
 }
 
@@ -122,6 +144,9 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
     return ReviewUiState(
       card: card,
       cardState: cardState,
+      occlusion: await ref
+          .read(occlusionRepositoryProvider)
+          .findCardOcclusion(card.id),
       isLeech: leechLapses > 0 && cardState.memory.lapses >= leechLapses,
     );
   }
@@ -214,7 +239,11 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
   /// Opens or closes the inline editor.
   void setEditing(bool editing) {
     final ReviewUiState? current = state.valueOrNull;
-    if (current == null || current.isBusy) return;
+    if (current == null ||
+        current.isBusy ||
+        (editing && current.card.type == CardType.imageOcclusion)) {
+      return;
+    }
     state = AsyncValue<ReviewUiState>.data(
       current.copyWith(isEditing: editing),
     );

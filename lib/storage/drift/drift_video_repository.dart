@@ -45,6 +45,7 @@ final class DriftVideoRepository implements VideoRepository {
         url: Value<String>(video.url),
         platform: Value<int>(video.platform.index),
         durationSeconds: Value<int?>(video.durationSeconds),
+        thumbnailUrl: Value<String?>(video.thumbnailUrl),
       ),
     );
   }

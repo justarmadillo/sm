@@ -94,6 +94,7 @@ final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
     required int startSeconds,
     required int endSeconds,
     int? durationSeconds,
+    String? thumbnailUrl,
   }) async {
     final VideoElement? result = await _command<VideoElement>(
       (OperationId operation) => ref
@@ -106,6 +107,7 @@ final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
               startSeconds: startSeconds,
               endSeconds: endSeconds,
               durationSeconds: durationSeconds,
+              thumbnailUrl: thumbnailUrl,
             ),
           ),
       success: (VideoElement element) => 'Added "${element.displayTitle}"',

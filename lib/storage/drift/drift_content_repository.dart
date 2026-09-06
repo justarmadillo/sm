@@ -514,6 +514,8 @@ final class DriftContentRepository implements ContentRepository {
       CardsCompanion(
         front: Value<String>(card.front),
         back: Value<String>(card.back),
+        contextBefore: Value<int?>(card.contextBefore),
+        contextAfter: Value<int?>(card.contextAfter),
         editedAtUtc: Value<int?>(
           card.editedAtUtc == null ? null : toEpochMs(card.editedAtUtc!),
         ),

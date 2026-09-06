@@ -293,6 +293,14 @@ final class PriorityQuery {
         final String question = switch (card.type) {
           CardType.qa => card.front,
           CardType.cloze => renderClozeQuestion(card.front, card.clozeOrdinal!),
+          CardType.clozeOverlapper => renderOverlapQuestion(
+            card.front,
+            card.clozeOrdinal!,
+            before: card.contextBefore!,
+            after: card.contextAfter!,
+          ),
+          CardType.imageOcclusion =>
+            card.front.isEmpty ? 'Image occlusion' : card.front,
         };
         return ('Card', excerptOf(question));
     }

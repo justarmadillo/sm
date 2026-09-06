@@ -524,6 +524,38 @@ class _SettingsBody extends StatelessWidget {
           ),
         ),
       ),
+      SettingsRow(
+        label: 'Overlap context before',
+        hint:
+            'How many earlier list items a new Cloze Overlapper reveals. '
+            'Use -1 to reveal every earlier item.',
+        control: IntField(
+          value: draft.cards.overlapContextBefore,
+          min: -1,
+          max: 99,
+          onChanged: (int value) => model.edit(
+            (AppSettings settings) => settings.copyWith(
+              cards: settings.cards.copyWith(overlapContextBefore: value),
+            ),
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Overlap context after',
+        hint:
+            'How many later list items a new Cloze Overlapper reveals. '
+            'Use -1 to reveal every later item.',
+        control: IntField(
+          value: draft.cards.overlapContextAfter,
+          min: -1,
+          max: 99,
+          onChanged: (int value) => model.edit(
+            (AppSettings settings) => settings.copyWith(
+              cards: settings.cards.copyWith(overlapContextAfter: value),
+            ),
+          ),
+        ),
+      ),
     ],
   );
 

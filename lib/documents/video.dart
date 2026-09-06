@@ -37,6 +37,7 @@ final class Video {
     required this.platform,
     required this.addedAtUtc,
     this.durationSeconds,
+    this.thumbnailUrl,
   });
 
   final String id;
@@ -52,18 +53,23 @@ final class Video {
   /// the API terms it exists to avoid.
   final int? durationSeconds;
 
+  /// Optional preview image supplied by the user; never fetched or inferred.
+  final String? thumbnailUrl;
+
   final DateTime addedAtUtc;
 
   Video copyWith({
     String? url,
     VideoPlatform? platform,
     int? durationSeconds,
+    String? thumbnailUrl,
   }) => Video(
     id: id,
     url: url ?? this.url,
     platform: platform ?? this.platform,
     addedAtUtc: addedAtUtc,
     durationSeconds: durationSeconds ?? this.durationSeconds,
+    thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
   );
 
   @override

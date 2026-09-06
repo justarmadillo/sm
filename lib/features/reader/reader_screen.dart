@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/block.dart';
+import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/inline_markup.dart';
@@ -24,6 +25,7 @@ import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dart';
 import 'package:incremental_reader/features/extract/extract_context_overlay.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
+import 'package:incremental_reader/features/occlusion/occlusion_screen.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/reader_image_input.dart';
@@ -583,6 +585,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             );
             showToast(context, 'Copied');
           },
+          onOcclude: () => _occludeSelection(state),
           // Available while browsing too: correcting the text is not
           // recording a repetition.
           onEditBlock: () {
@@ -596,6 +599,42 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _occludeSelection(ReaderUiState state) async {
+    final markdown = _selection?.resolveSelection()?.markdown.trim();
+    final match = markdown == null
+        ? null
+        : RegExp(
+            r'^!\[[^\]]*\]\((ir-asset:[0-9a-f]{64})\)$',
+          ).firstMatch(markdown);
+    if (match == null) return;
+    final srcRef = match.group(1)!;
+    final asset = state.assets
+        .where((candidate) => candidate.srcRef == srcRef)
+        .firstOrNull;
+    if (asset == null) return;
+    final bytes = await ref
+        .read(sourceAssetFileStoreProvider)
+        .fileForSha256(asset.sha256)
+        .readAsBytes();
+    if (!mounted) return;
+    final created = await openOcclusionScreen(
+      context,
+      ref,
+      image: SourceImageImport(
+        bytes: bytes,
+        altText: 'Image',
+        sha256: asset.sha256,
+        mime: asset.mime,
+        widthPx: asset.widthPx,
+        heightPx: asset.heightPx,
+      ),
+      parent: CardParent.source(state.source.id),
+    );
+    if (created != null) {
+      _selection?.clear();
+    }
   }
 
   Map<String, ReaderImagePresentation> _readerImages(ReaderUiState state) {
@@ -811,6 +850,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       context,
       seedText: resolved?.markdown ?? '',
       existingCardCount: state.cardsFromSource,
+      overlapContextBefore: ref
+          .read(settingsStoreProvider)
+          .currentOrDefaults
+          .cards
+          .overlapContextBefore,
+      overlapContextAfter: ref
+          .read(settingsStoreProvider)
+          .currentOrDefaults
+          .cards
+          .overlapContextAfter,
       parentNoun: 'article',
     );
     if (drafts == null) return;

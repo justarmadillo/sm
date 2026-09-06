@@ -19,6 +19,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/features/browser/browser_providers.dart';
 import 'package:incremental_reader/features/browser/browser_tree_query.dart';
@@ -27,9 +28,11 @@ import 'package:incremental_reader/features/browser/import_sheet.dart';
 import 'package:incremental_reader/features/browser/open_element.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
+import 'package:incremental_reader/features/occlusion/occlusion_screen.dart';
 import 'package:incremental_reader/features/priority/learning_command_menu.dart';
 import 'package:incremental_reader/features/priority/learning_commands.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
+import 'package:incremental_reader/features/reader/reader_image_input.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/features/search/search_screen.dart';
@@ -166,13 +169,6 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     return AppBar(
       title: const Text('Browser'),
       actions: <Widget>[
-        _NewElementMenu(
-          isNarrow: isNarrow,
-          // At the top of the bar the new element has no element to belong to,
-          // so it lands at the top of the tree. The same menu on a row files
-          // it under that row instead.
-          onSelected: (_NewElement choice) => _create(context, choice, null),
-        ),
         IconButton(
           tooltip: 'Select elements',
           onPressed: () => setState(() => _isSelecting = true),
@@ -371,6 +367,8 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         await _createVideo(context, under);
       case _NewElement.card:
         await _createCards(context, under);
+      case _NewElement.imageOcclusion:
+        await _createImageOcclusion(context, under);
     }
   }
 
@@ -390,9 +388,10 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     final String? videoElementId = await model.importVideo(
       url: request.url,
       title: request.title,
-      startSeconds: request.startSeconds,
-      endSeconds: request.endSeconds,
+      startSeconds: 0,
+      endSeconds: request.durationSeconds,
       durationSeconds: request.durationSeconds,
+      thumbnailUrl: request.thumbnailUrl,
     );
     if (videoElementId != null && under != null) {
       await model.fileUnder(
@@ -459,6 +458,16 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
       context,
       seedText: '',
       existingCardCount: under?.children.length ?? 0,
+      overlapContextBefore: ref
+          .read(settingsStoreProvider)
+          .currentOrDefaults
+          .cards
+          .overlapContextBefore,
+      overlapContextAfter: ref
+          .read(settingsStoreProvider)
+          .currentOrDefaults
+          .cards
+          .overlapContextAfter,
       parentNoun: under == null ? 'collection' : 'element',
     );
     if (drafts == null || !context.mounted) return;
@@ -475,6 +484,31 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
       setState(() => _expanded.add(under.ref));
     }
     ref.invalidate(browserTreeProvider);
+  }
+
+  Future<void> _createImageOcclusion(
+    BuildContext context,
+    BrowserTreeNode? under,
+  ) async {
+    try {
+      final image = await chooseOcclusionImage(context, ref);
+      if (image == null || !context.mounted) return;
+      final created = await openOcclusionScreen(
+        context,
+        ref,
+        image: image,
+        parent: _cardParentFor(under),
+      );
+      if (created == null || under == null || !mounted) return;
+      final model = ref.read(browserViewModelProvider.notifier);
+      for (final card in created) {
+        await model.fileUnder(ref_: card, parentRef: under.ref);
+      }
+      setState(() => _expanded.add(under.ref));
+      ref.invalidate(browserTreeProvider);
+    } on ReaderImageInputException catch (failure) {
+      if (context.mounted) showToast(context, failure.message, isError: true);
+    }
   }
 
   /// What a new card is written *from*, which is not the same as where it is
@@ -1054,6 +1088,9 @@ enum _NewElement {
 
   /// One or more cards, through the same formulation dialog the Reader uses.
   card,
+
+  /// Cards made by masking regions of one image.
+  imageOcclusion,
 }
 
 /// The New menu, in the app bar and on every row.
@@ -1063,16 +1100,9 @@ enum _NewElement {
 /// range to record for one typed into a menu, so extracts are still made by
 /// selecting text in the Reader.
 class _NewElementMenu extends StatelessWidget {
-  const _NewElementMenu({
-    required this.onSelected,
-    this.isNarrow = false,
-    this.isRowMenu = false,
-  });
+  const _NewElementMenu({required this.onSelected, this.isRowMenu = false});
 
   final ValueChanged<_NewElement> onSelected;
-
-  /// A narrow window drops the button's label and keeps the icon.
-  final bool isNarrow;
 
   /// A row's menu is smaller and unlabelled whatever the width.
   final bool isRowMenu;
@@ -1081,9 +1111,7 @@ class _NewElementMenu extends StatelessWidget {
   Widget build(BuildContext context) => PopupMenuButton<_NewElement>(
     tooltip: isRowMenu ? 'New element here' : 'New',
     onSelected: onSelected,
-    icon: isRowMenu || isNarrow
-        ? Icon(Icons.add, size: isRowMenu ? 17 : 24)
-        : null,
+    icon: isRowMenu ? const Icon(Icons.add, size: 17) : null,
     itemBuilder: (BuildContext context) => const <PopupMenuEntry<_NewElement>>[
       PopupMenuItem<_NewElement>(
         value: _NewElement.writtenTopic,
@@ -1117,8 +1145,16 @@ class _NewElementMenu extends StatelessWidget {
           title: Text('Cards'),
         ),
       ),
+      PopupMenuItem<_NewElement>(
+        value: _NewElement.imageOcclusion,
+        child: ListTile(
+          dense: true,
+          leading: Icon(Icons.image_outlined),
+          title: Text('Image occlusion'),
+        ),
+      ),
     ],
-    child: isRowMenu || isNarrow
+    child: isRowMenu
         ? null
         : const Padding(
             padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),

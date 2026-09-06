@@ -33,6 +33,7 @@ extension _Fixtures on AppHarness {
       startSeconds: 0,
       endSeconds: 1200,
       durationSeconds: 7200,
+      thumbnailUrl: 'https://example.com/retina.jpg',
       timestampUtc: clock.nowUtc(),
     ),
   )).unwrap();
@@ -73,6 +74,8 @@ void main() {
     expect(topic.schedule.rootId, talk.id, reason: 'a talk is its own root');
     expect(talk.isClip, isFalse);
     expect(talk.rangeSeconds, 1200);
+    final video = await harness.videos.findVideo(talk.videoId);
+    expect(video?.thumbnailUrl, 'https://example.com/retina.jpg');
   });
 
   test('a second range over the same talk reuses the one video row', () async {

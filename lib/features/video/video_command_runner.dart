@@ -87,99 +87,108 @@ final class VideoCommandRunner {
   Future<StudyDay> today() => _context.today();
 
   /// Adds a video and the range to study, in one transaction.
-  Future<Result<VideoElement>> importVideo(ImportVideo command) =>
-      _run<VideoElement>(command, kVideoImportedType, () async {
-        final String url = command.url.trim();
-        final String title = command.title.trim();
-        if (url.isEmpty) {
-          return const Err<VideoElement>(
-            ValidationFailure('a video needs a link'),
-          );
-        }
-        if (title.isEmpty) {
-          return const Err<VideoElement>(
-            ValidationFailure('a video needs a title'),
-          );
-        }
-        final Result<Unit> range = _validateRange(
-          command.startSeconds,
-          command.endSeconds,
-        );
-        if (range case Err<Unit>(:final AppFailure failure)) {
-          return Err<VideoElement>(failure);
-        }
+  Future<Result<VideoElement>> importVideo(
+    ImportVideo command,
+  ) => _run<VideoElement>(command, kVideoImportedType, () async {
+    final String url = command.url.trim();
+    final String title = command.title.trim();
+    final String? thumbnailUrl = command.thumbnailUrl?.trim();
+    if (url.isEmpty) {
+      return const Err<VideoElement>(ValidationFailure('a video needs a link'));
+    }
+    if (title.isEmpty) {
+      return const Err<VideoElement>(
+        ValidationFailure('a video needs a title'),
+      );
+    }
+    final Uri? thumbnailUri = thumbnailUrl == null
+        ? null
+        : Uri.tryParse(thumbnailUrl);
+    if (thumbnailUrl != null &&
+        thumbnailUrl.isNotEmpty &&
+        (thumbnailUri?.hasScheme != true ||
+            thumbnailUri?.host.isEmpty != false)) {
+      return const Err<VideoElement>(
+        ValidationFailure('the thumbnail needs a complete link'),
+      );
+    }
+    final Result<Unit> range = _validateRange(
+      command.startSeconds,
+      command.endSeconds,
+    );
+    if (range case Err<Unit>(:final AppFailure failure)) {
+      return Err<VideoElement>(failure);
+    }
 
-        // One row per URL: a second range over the same talk must not create
-        // a second video, or correcting the link would fix only one of them.
-        final DateTime now = _clock.nowUtc();
-        Video? video = await _videos.findVideoByUrl(url);
-        if (video == null) {
-          video = Video(
-            id: _ids.newId(),
-            url: url,
-            platform: detectVideoPlatform(url),
-            durationSeconds: command.durationSeconds,
-            addedAtUtc: now,
-          );
-          await _videos.insertVideo(video);
-        }
+    // One row per URL: a second range over the same talk must not create
+    // a second video, or correcting the link would fix only one of them.
+    final DateTime now = _clock.nowUtc();
+    Video? video = await _videos.findVideoByUrl(url);
+    if (video == null) {
+      video = Video(
+        id: _ids.newId(),
+        url: url,
+        platform: detectVideoPlatform(url),
+        durationSeconds: command.durationSeconds,
+        thumbnailUrl: thumbnailUrl?.isEmpty == true ? null : thumbnailUrl,
+        addedAtUtc: now,
+      );
+      await _videos.insertVideo(video);
+    }
 
-        final VideoElement element = VideoElement(
-          id: _ids.newId(),
-          videoId: video.id,
-          title: title,
-          startSeconds: command.startSeconds,
-          endSeconds: command.endSeconds,
-          createdAtUtc: now,
-        );
-        final ElementRef ref = ElementRef(
-          id: element.id,
-          type: ElementType.video,
-        );
+    final VideoElement element = VideoElement(
+      id: _ids.newId(),
+      videoId: video.id,
+      title: title,
+      startSeconds: command.startSeconds,
+      endSeconds: command.endSeconds,
+      createdAtUtc: now,
+    );
+    final ElementRef ref = ElementRef(id: element.id, type: ElementType.video);
 
-        // Nothing has been claimed about importance yet, so the middle of the
-        // order the video is about to join — resolved against the collection
-        // rather than a shared constant, because identical keys collapse it.
-        final PriorityScale scale = await _context.priorityScale();
-        final PriorityRank rank = scale.rankAtPercent(
-          command.priorityPercent ?? 50,
-        );
-        final double pressure = scale.including(rank).pressureOf(rank);
+    // Nothing has been claimed about importance yet, so the middle of the
+    // order the video is about to join — resolved against the collection
+    // rather than a shared constant, because identical keys collapse it.
+    final PriorityScale scale = await _context.priorityScale();
+    final PriorityRank rank = scale.rankAtPercent(
+      command.priorityPercent ?? 50,
+    );
+    final double pressure = scale.including(rank).pressureOf(rank);
 
-        final StudyDay day = await today();
-        final TopicScheduler scheduler = await _context.topicScheduler();
-        final TopicState topic = scheduler.createFor(
-          ref: ref,
-          today: day,
-          buildSchedule: (StudyDay due) => ElementSchedule(
-            ref: ref,
-            priority: rank,
-            lifecycle: ElementLifecycle.active,
-            dueDay: due,
-            originalDueDay: due,
-            rootId: element.id,
-            createdAtUtc: now,
-            updatedAtUtc: now,
-          ),
-        );
+    final StudyDay day = await today();
+    final TopicScheduler scheduler = await _context.topicScheduler();
+    final TopicState topic = scheduler.createFor(
+      ref: ref,
+      today: day,
+      buildSchedule: (StudyDay due) => ElementSchedule(
+        ref: ref,
+        priority: rank,
+        lifecycle: ElementLifecycle.active,
+        dueDay: due,
+        originalDueDay: due,
+        rootId: element.id,
+        createdAtUtc: now,
+        updatedAtUtc: now,
+      ),
+    );
 
-        await _videos.insertVideoElement(element);
-        await _learning.insertTopic(topic);
-        await _admitToPending(ref);
-        await _saveSearchDocument(element, title: title, rootId: element.id);
-        await _journalCreation(command, topic, pressure);
-        await _log(
-          command,
-          kVideoImportedType,
-          ref: ref,
-          metadata: <String, Object?>{
-            'platform': video.platform.name,
-            'range_seconds': element.rangeSeconds,
-            'first_interval_days': topic.intervalDays,
-          },
-        );
-        return Ok<VideoElement>(element);
-      });
+    await _videos.insertVideoElement(element);
+    await _learning.insertTopic(topic);
+    await _admitToPending(ref);
+    await _saveSearchDocument(element, title: title, rootId: element.id);
+    await _journalCreation(command, topic, pressure);
+    await _log(
+      command,
+      kVideoImportedType,
+      ref: ref,
+      metadata: <String, Object?>{
+        'platform': video.platform.name,
+        'range_seconds': element.rangeSeconds,
+        'first_interval_days': topic.intervalDays,
+      },
+    );
+    return Ok<VideoElement>(element);
+  });
 
   /// Cuts a narrower range out of a video element, in one transaction.
   Future<Result<VideoElement>> addClip(AddVideoClip command) =>
@@ -353,7 +362,9 @@ final class VideoCommandRunner {
         final VideoElement? element = await _videos.findVideoElement(
           command.videoElementId,
         );
-        if (element == null) return _missingVideo<VideoElement>(command.videoElementId);
+        if (element == null) {
+          return _missingVideo<VideoElement>(command.videoElementId);
+        }
         if (command.resumeSeconds < element.startSeconds ||
             command.resumeSeconds > element.endSeconds) {
           return const Err<VideoElement>(
@@ -381,7 +392,9 @@ final class VideoCommandRunner {
         final VideoElement? element = await _videos.findVideoElement(
           command.videoElementId,
         );
-        if (element == null) return _missingVideo<VideoElement>(command.videoElementId);
+        if (element == null) {
+          return _missingVideo<VideoElement>(command.videoElementId);
+        }
 
         final int start = command.startSeconds ?? element.startSeconds;
         final int end = command.endSeconds ?? element.endSeconds;

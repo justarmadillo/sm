@@ -115,8 +115,15 @@ final class ElementContentQuery {
           // A cloze card's answer is the question with the deletion revealed,
           // so offering it as a second field would invite editing a value
           // nothing reads.
-          back: card.type == CardType.cloze ? null : card.back,
-          isEditable: true,
+          back:
+              card.type == CardType.cloze ||
+                  card.type == CardType.clozeOverlapper
+              ? null
+              : card.back,
+          isEditable: card.type != CardType.imageOcclusion,
+          notEditableReason: card.type == CardType.imageOcclusion
+              ? 'Open the image occlusion editor to change its masks.'
+              : null,
         );
     }
   }

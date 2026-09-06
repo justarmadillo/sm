@@ -1,14 +1,20 @@
 /// Reveal-first review surface for FSRS cards.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/document.dart';
+import 'package:incremental_reader/documents/occlusion.dart';
 import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dart';
 import 'package:incremental_reader/features/extract/extract_screen.dart';
 import 'package:incremental_reader/features/extract/extract_view_model.dart';
+import 'package:incremental_reader/features/occlusion/occlusion_screen.dart';
+import 'package:incremental_reader/features/occlusion/widgets/occlusion_view.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
@@ -111,7 +117,7 @@ class _ReviewBody extends ConsumerWidget {
           tooltip: 'Edit this card (E)',
           onPressed: state.isBusy || state.isEditing
               ? null
-              : () => model.setEditing(true),
+              : () => _editCard(context, ref),
           icon: const Icon(Icons.edit_outlined, size: 18),
         ),
         if (state.card.parent case final CardParent parent)
@@ -119,6 +125,15 @@ class _ReviewBody extends ConsumerWidget {
         const SizedBox(width: 8),
       ],
     );
+  }
+
+  Future<void> _editCard(BuildContext context, WidgetRef ref) async {
+    if (state.card.type != CardType.imageOcclusion) {
+      model.setEditing(true);
+      return;
+    }
+    await openOcclusionCardEditor(context, ref, cardId: state.card.id);
+    ref.invalidate(reviewViewModelProvider(state.card.id));
   }
 
   /// Opens the extract or article this card was formulated from, in browse
@@ -194,7 +209,7 @@ class _ReviewBody extends ConsumerWidget {
       const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
           model.undoLastGrade,
       const SingleActivator(LogicalKeyboardKey.keyE): () =>
-          model.setEditing(true),
+          unawaited(_editCard(context, ref)),
       kPriorityShortcut: () => _openPriority(context, ref),
     };
   }
@@ -212,7 +227,34 @@ class _ReviewBody extends ConsumerWidget {
             children: <Widget>[
               if (state.isEditing)
                 _CardEditor(state: state, model: model)
-              else ...<Widget>[
+              else if (state.occlusion case final occlusion?) ...<Widget>[
+                if (state.question.trim().isNotEmpty) ...<Widget>[
+                  _CardPanel(label: 'QUESTION', markdown: state.question),
+                  const SizedBox(height: 18),
+                ],
+                _OcclusionPanel(
+                  occlusion: occlusion,
+                  isAnswerRevealed: state.isAnswerRevealed,
+                ),
+                if (state.isAnswerRevealed &&
+                    state.answer.trim().isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 18),
+                  _CardPanel(
+                    label: 'ANSWER',
+                    markdown: state.answer,
+                    emphasized: true,
+                  ),
+                ],
+              ] else if (state.card.type == CardType.cloze ||
+                  state.card.type == CardType.clozeOverlapper) ...<Widget>[
+                _CardPanel(
+                  label: 'CLOZE',
+                  markdown: state.isAnswerRevealed
+                      ? state.answer
+                      : state.question,
+                  emphasized: state.isAnswerRevealed,
+                ),
+              ] else ...<Widget>[
                 _CardPanel(label: 'QUESTION', markdown: state.question),
                 if (state.isAnswerRevealed) ...<Widget>[
                   const SizedBox(height: 18),
@@ -233,6 +275,35 @@ class _ReviewBody extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _OcclusionPanel extends ConsumerWidget {
+  const _OcclusionPanel({
+    required this.occlusion,
+    required this.isAnswerRevealed,
+  });
+
+  final CardOcclusion occlusion;
+  final bool isAnswerRevealed;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Container(
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      border: Border.all(color: AppColors.border),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: OcclusionView(
+      imageProvider: FileImage(
+        ref
+            .watch(sourceAssetFileStoreProvider)
+            .fileForSha256(occlusion.imageSha256),
+      ),
+      occlusion: occlusion,
+      isAnswerRevealed: isAnswerRevealed,
+    ),
+  );
 }
 
 class _ReviewStatus extends StatelessWidget {
@@ -445,7 +516,9 @@ class _CardEditorState extends State<_CardEditor> {
     text: widget.state.card.back,
   );
 
-  bool get _isCloze => widget.state.card.type == CardType.cloze;
+  bool get _isCloze =>
+      widget.state.card.type == CardType.cloze ||
+      widget.state.card.type == CardType.clozeOverlapper;
 
   @override
   void dispose() {

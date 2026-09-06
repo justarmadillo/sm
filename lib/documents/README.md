@@ -11,6 +11,7 @@ plain unit test, which is why a parsing bug is cheap to reproduce.
 | `block.dart`, `block_content.dart` | one paragraph, heading, list item, or fence |
 | `extract.dart` | a passage promoted into its own learning object |
 | `card.dart` | a question formulated from an extract |
+| `occlusion.dart` | normalized image masks and their review rules |
 | `markdown_block_parser.dart` | splits markdown into blocks, keeping exact offsets |
 | `markdown_inline_parser.dart` | bold, italics, links — also keeping exact offsets |
 | `inline_markup.dart` | the rendered text, and its map back to the markdown |

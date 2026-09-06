@@ -1,8 +1,4 @@
-/// Adding a video: a link, a name, and the part of it worth studying.
-///
-/// The range defaults to the whole thing from zero, because most videos are
-/// worth starting at the beginning and the two fields are there for the talk
-/// whose first twenty minutes are introductions.
+/// Adding a video: its link, title, duration, and optional thumbnail.
 library;
 
 import 'package:flutter/material.dart';
@@ -18,16 +14,14 @@ final class VideoImportRequest {
   const VideoImportRequest({
     required this.url,
     required this.title,
-    required this.startSeconds,
-    required this.endSeconds,
-    this.durationSeconds,
+    required this.durationSeconds,
+    this.thumbnailUrl,
   });
 
   final String url;
   final String title;
-  final int startSeconds;
-  final int endSeconds;
-  final int? durationSeconds;
+  final int durationSeconds;
+  final String? thumbnailUrl;
 }
 
 /// Shows the import dialog and returns what the user entered, or null.
@@ -48,8 +42,7 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
   final TextEditingController _url = TextEditingController();
   final TextEditingController _title = TextEditingController();
   final TextEditingController _length = TextEditingController();
-  final TextEditingController _start = TextEditingController(text: '0:00');
-  final TextEditingController _end = TextEditingController();
+  final TextEditingController _thumbnail = TextEditingController();
 
   @override
   void initState() {
@@ -67,8 +60,7 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
     _url.dispose();
     _title.dispose();
     _length.dispose();
-    _start.dispose();
-    _end.dispose();
+    _thumbnail.dispose();
     super.dispose();
   }
 
@@ -76,8 +68,7 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
     _url,
     _title,
     _length,
-    _start,
-    _end,
+    _thumbnail,
   ];
 
   void _refresh() => setState(() {});
@@ -87,15 +78,6 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
   int? get _durationSeconds =>
       _length.text.trim().isEmpty ? null : parseVideoTime(_length.text);
 
-  int? get _startSeconds => parseVideoTime(_start.text);
-
-  /// The end of the studied range: what was typed, or the whole length.
-  ///
-  /// Leaving it blank has to mean something, and "all of it" is the only
-  /// reading that does not require the user to know the length twice.
-  int? get _endSeconds =>
-      _end.text.trim().isEmpty ? _durationSeconds : parseVideoTime(_end.text);
-
   String? get _problem {
     if (_url.text.trim().isNotEmpty && Uri.tryParse(_url.text.trim()) == null) {
       return 'That link cannot be read.';
@@ -103,19 +85,15 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
     if (_length.text.trim().isNotEmpty && _durationSeconds == null) {
       return 'The length is not a time. Try 1:04:12.';
     }
-    if (_start.text.trim().isNotEmpty && _startSeconds == null) {
-      return 'The start is not a time. Try 4:12.';
+    if (_durationSeconds == null || _durationSeconds! <= 0) {
+      return 'Give the video’s full duration, for example 1:04:12.';
     }
-    if (_end.text.trim().isNotEmpty && parseVideoTime(_end.text) == null) {
-      return 'The end is not a time. Try 20:00.';
-    }
-    if (_end.text.trim().isEmpty && _durationSeconds == null) {
-      return 'Give an end time, or the video’s full length.';
-    }
-    final int? start = _startSeconds;
-    final int? end = _endSeconds;
-    if (start != null && end != null && end <= start) {
-      return 'The end has to come after the start.';
+    final String thumbnail = _thumbnail.text.trim();
+    final Uri? thumbnailUri = Uri.tryParse(thumbnail);
+    if (thumbnail.isNotEmpty &&
+        (thumbnailUri?.hasScheme != true ||
+            thumbnailUri?.host.isEmpty != false)) {
+      return 'The thumbnail needs a complete link.';
     }
     return null;
   }
@@ -123,8 +101,7 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
   bool get _canImport =>
       _url.text.trim().isNotEmpty &&
       _title.text.trim().isNotEmpty &&
-      _startSeconds != null &&
-      _endSeconds != null &&
+      _durationSeconds != null &&
       _problem == null;
 
   void _import() {
@@ -133,9 +110,10 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
       VideoImportRequest(
         url: _url.text.trim(),
         title: _title.text.trim(),
-        startSeconds: _startSeconds!,
-        endSeconds: _endSeconds!,
-        durationSeconds: _durationSeconds,
+        durationSeconds: _durationSeconds!,
+        thumbnailUrl: _thumbnail.text.trim().isEmpty
+            ? null
+            : _thumbnail.text.trim(),
       ),
     );
   }
@@ -156,7 +134,13 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
             const SizedBox(height: 12),
             _field(_title, 'Title', 'What this talk is'),
             const SizedBox(height: 12),
-            _rangeRow(),
+            _field(_length, 'Duration', '1:04:12'),
+            const SizedBox(height: 12),
+            _field(
+              _thumbnail,
+              'Thumbnail link (optional)',
+              'https://…/preview.jpg',
+            ),
             const SizedBox(height: 6),
             _problemLine(),
           ],
@@ -207,30 +191,17 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
     );
   }
 
-  Widget _rangeRow() => Row(
-    children: <Widget>[
-      Expanded(child: _field(_length, 'Full length', '1:04:12')),
-      const SizedBox(width: 12),
-      Expanded(child: _field(_start, 'Study from', '0:00')),
-      const SizedBox(width: 12),
-      Expanded(child: _field(_end, 'to', 'the end')),
-    ],
-  );
-
-  Widget _field(
-    TextEditingController controller,
-    String label,
-    String hint,
-  ) => TextField(
-    controller: controller,
-    onSubmitted: (_) => _import(),
-    decoration: InputDecoration(
-      labelText: label,
-      hintText: hint,
-      isDense: true,
-      border: const OutlineInputBorder(),
-    ),
-  );
+  Widget _field(TextEditingController controller, String label, String hint) =>
+      TextField(
+        controller: controller,
+        onSubmitted: (_) => _import(),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          isDense: true,
+          border: const OutlineInputBorder(),
+        ),
+      );
 
   Widget _problemLine() {
     final String? problem = _problem;

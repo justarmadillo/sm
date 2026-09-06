@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Incremental Reader — App and Data Flow",
+    "quality_profile": "showcase",
+    "viewBox": [1320, 900]
+  },
+  "stages": [
+    { "label": "Interact" },
+    { "label": "Coordinate" },
+    { "label": "Decide" },
+    { "label": "Persist" },
+    { "label": "Files & trust" }
+  ],
+  "nodes": [
+    { "id": "screens", "type": "frontend", "label": "Screens", "sublabel": "Today · Reader · Browser · Review", "stage": 0, "row": 1, "tag": "Flutter" },
+    { "id": "runtime", "type": "backend", "label": "App Runtime", "sublabel": "main.dart + Riverpod", "stage": 1, "row": 0, "tag": "wiring" },
+    { "id": "features", "type": "backend", "label": "Feature Flow", "sublabel": "queries · commands · runners", "stage": 1, "row": 2, "tag": "read / write" },
+    { "id": "documents", "type": "backend", "label": "Document Model", "sublabel": "markdown · blocks · extracts · cards", "stage": 2, "row": 0, "tag": "pure Dart" },
+    { "id": "scheduling", "type": "backend", "label": "Scheduling Model", "sublabel": "SM20 topics · FSRS cards", "stage": 2, "row": 2, "tag": "pure Dart" },
+    { "id": "repositories", "type": "backend", "label": "Repository Boundary", "sublabel": "contracts → Drift SQL", "stage": 3, "row": 1, "tag": "transactions" },
+    { "id": "content-db", "type": "database", "label": "Content Tables", "sublabel": "sources · blocks · edits · extracts · videos · cards", "stage": 3, "row": 3, "tag": "SQLite" },
+    { "id": "learning-db", "type": "database", "label": "Learning Tables", "sublabel": "schedules · topic states · card memories", "stage": 3, "row": 5, "tag": "SQLite" },
+    { "id": "search-history-db", "type": "database", "label": "Search + History", "sublabel": "FTS5 · revlog · reviews · audit · activity", "stage": 3, "row": 7, "tag": "SQLite" },
+    { "id": "settings-db", "type": "database", "label": "Settings + Lineage", "sublabel": "key/value settings · dataset generation", "stage": 3, "row": 9, "tag": "SQLite" },
+    { "id": "asset-files", "type": "cloud", "label": "Asset Files", "sublabel": "SHA-256 image blobs", "stage": 4, "row": 2, "tag": "app support" },
+    { "id": "backup-files", "type": "cloud", "label": "Backups + Logs", "sublabel": "daily packages · migration snapshots", "stage": 4, "row": 6, "tag": "app support" }
+  ],
+  "flows": [
+    { "id": "screen-actions", "from": "screens", "to": "features", "label": "actions / refresh", "classification": "user input", "variant": "emphasis" },
+    { "id": "runtime-wiring", "from": "runtime", "to": "features", "label": "inject dependencies", "classification": "Riverpod wiring", "variant": "default" },
+    { "id": "feature-content", "from": "features", "to": "documents", "label": "parse / validate", "classification": "content rules", "variant": "default" },
+    { "id": "feature-scheduling", "from": "features", "to": "scheduling", "label": "due / priority", "classification": "learning rules", "variant": "emphasis" },
+    { "id": "content-objects", "from": "documents", "to": "repositories", "label": "domain objects", "classification": "read / write model", "variant": "default" },
+    { "id": "schedule-decisions", "from": "scheduling", "to": "repositories", "label": "new schedule state", "classification": "scheduler output", "variant": "emphasis" },
+    { "id": "feature-repositories", "from": "features", "to": "repositories", "label": "storage intent", "classification": "contract call", "variant": "default" },
+    { "id": "content-sql", "from": "repositories", "to": "content-db", "label": "content rows", "classification": "SQL", "variant": "emphasis" },
+    { "id": "learning-sql", "from": "repositories", "to": "learning-db", "label": "schedule + memory", "classification": "SQL", "variant": "emphasis" },
+    { "id": "history-sql", "from": "repositories", "to": "search-history-db", "label": "search + append logs", "classification": "SQL", "variant": "default" },
+    { "id": "settings-sql", "from": "repositories", "to": "settings-db", "label": "settings + generation", "classification": "SQL", "variant": "default" },
+    { "id": "image-storage", "from": "features", "to": "asset-files", "label": "save image bytes", "classification": "external file", "variant": "security" },
+    { "id": "image-metadata", "from": "asset-files", "to": "content-db", "label": "hash + dimensions", "classification": "asset metadata", "variant": "security" },
+    { "id": "startup-backup", "from": "runtime", "to": "backup-files", "label": "startup backup + diagnostics", "classification": "recovery", "variant": "dashed" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "How to read this map",
+      "items": [
+        "Screens do not write SQLite directly: feature command runners own changes and transactions",
+        "Queries read; commands change — both use repository contracts",
+        "The pure document and scheduling layers contain rules, not Flutter or SQL"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Content vs learning",
+      "items": [
+        "Content tables hold what the user reads, extracts, watches, or answers",
+        "Learning tables hold when each element is due and its scheduler state",
+        "Every element gets a common schedule row; topic and card details live beside it"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Durability boundary",
+      "items": [
+        "Append-only history explains what happened and supports undo or replay",
+        "Images live as hash-named files while SQLite stores their metadata",
+        "Startup makes validated backups before the session begins writing"
+      ]
+    }
+  ]
+}

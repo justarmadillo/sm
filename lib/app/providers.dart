@@ -27,6 +27,7 @@ import 'package:incremental_reader/shared/in_memory_diagnostic_sink.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/database_maintenance.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
+import 'package:incremental_reader/storage/contracts/occlusion_repository.dart';
 import 'package:incremental_reader/storage/contracts/search_repository.dart';
 import 'package:incremental_reader/storage/contracts/settings_repository.dart';
 import 'package:incremental_reader/storage/contracts/source_asset_repository.dart';
@@ -37,6 +38,7 @@ import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/drift/drift_content_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_database_maintenance.dart';
 import 'package:incremental_reader/storage/drift/drift_learning_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_occlusion_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_search_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_settings_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_source_asset_repository.dart';
@@ -180,6 +182,12 @@ final Provider<SourceAssetRepository> sourceAssetRepositoryProvider =
       (Ref ref) => DriftSourceAssetRepository(ref.watch(databaseProvider)),
     );
 
+/// Image metadata and masks owned by occlusion cards.
+final Provider<OcclusionRepository> occlusionRepositoryProvider =
+    Provider<OcclusionRepository>(
+      (Ref ref) => DriftOcclusionRepository(ref.watch(databaseProvider)),
+    );
+
 /// Immutable image blobs in this installation's application-support folder.
 final Provider<SourceAssetFileStore> sourceAssetFileStoreProvider =
     Provider<SourceAssetFileStore>(
@@ -233,6 +241,11 @@ final Provider<BackupService> backupServiceProvider = Provider<BackupService>(
           in await ref
               .read(sourceAssetRepositoryProvider)
               .listAvailableSourceAssetSha256Values())
+        BackupAssetReference(sha256: sha256Value),
+      for (final String sha256Value
+          in await ref
+              .read(occlusionRepositoryProvider)
+              .listReferencedOcclusionSha256Values())
         BackupAssetReference(sha256: sha256Value),
     ],
     clock: ref.watch(clockProvider),

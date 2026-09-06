@@ -569,7 +569,8 @@ final class ReviewCommandRunner {
             ValidationFailure('a Q&A card needs an answer', field: 'back'),
           );
         }
-        if (card.type == CardType.cloze) {
+        if (card.type == CardType.cloze ||
+            card.type == CardType.clozeOverlapper) {
           final List<int> ordinals = clozeOrdinals(front);
           if (!ordinals.contains(card.clozeOrdinal)) {
             // The deletion this card tests has to survive the edit, or the
@@ -586,7 +587,11 @@ final class ReviewCommandRunner {
 
         final Card updated = card.copyWith(
           front: front,
-          back: card.type == CardType.cloze ? front : back,
+          back:
+              card.type == CardType.cloze ||
+                  card.type == CardType.clozeOverlapper
+              ? front
+              : back,
           editedAtUtc: command.timestampUtc,
         );
         await _content.updateCard(updated);

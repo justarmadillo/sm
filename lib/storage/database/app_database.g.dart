@@ -3819,6 +3819,17 @@ class $VideosTable extends Videos with TableInfo<$VideosTable, VideoRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _thumbnailUrlMeta = const VerificationMeta(
+    'thumbnailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> thumbnailUrl = GeneratedColumn<String>(
+    'thumbnail_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _addedAtUtcMeta = const VerificationMeta(
     'addedAtUtc',
   );
@@ -3836,6 +3847,7 @@ class $VideosTable extends Videos with TableInfo<$VideosTable, VideoRow> {
     url,
     platform,
     durationSeconds,
+    thumbnailUrl,
     addedAtUtc,
   ];
   @override
@@ -3880,6 +3892,15 @@ class $VideosTable extends Videos with TableInfo<$VideosTable, VideoRow> {
         ),
       );
     }
+    if (data.containsKey('thumbnail_url')) {
+      context.handle(
+        _thumbnailUrlMeta,
+        thumbnailUrl.isAcceptableOrUnknown(
+          data['thumbnail_url']!,
+          _thumbnailUrlMeta,
+        ),
+      );
+    }
     if (data.containsKey('added_at_utc')) {
       context.handle(
         _addedAtUtcMeta,
@@ -3916,6 +3937,10 @@ class $VideosTable extends Videos with TableInfo<$VideosTable, VideoRow> {
         DriftSqlType.int,
         data['${effectivePrefix}duration_seconds'],
       ),
+      thumbnailUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}thumbnail_url'],
+      ),
       addedAtUtc: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}added_at_utc'],
@@ -3942,12 +3967,14 @@ class VideoRow extends DataClass implements Insertable<VideoRow> {
   /// site for it would put the feature back under the API terms it exists to
   /// avoid.
   final int? durationSeconds;
+  final String? thumbnailUrl;
   final int addedAtUtc;
   const VideoRow({
     required this.id,
     required this.url,
     required this.platform,
     this.durationSeconds,
+    this.thumbnailUrl,
     required this.addedAtUtc,
   });
   @override
@@ -3958,6 +3985,9 @@ class VideoRow extends DataClass implements Insertable<VideoRow> {
     map['platform'] = Variable<int>(platform);
     if (!nullToAbsent || durationSeconds != null) {
       map['duration_seconds'] = Variable<int>(durationSeconds);
+    }
+    if (!nullToAbsent || thumbnailUrl != null) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl);
     }
     map['added_at_utc'] = Variable<int>(addedAtUtc);
     return map;
@@ -3971,6 +4001,9 @@ class VideoRow extends DataClass implements Insertable<VideoRow> {
       durationSeconds: durationSeconds == null && nullToAbsent
           ? const Value.absent()
           : Value(durationSeconds),
+      thumbnailUrl: thumbnailUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(thumbnailUrl),
       addedAtUtc: Value(addedAtUtc),
     );
   }
@@ -3985,6 +4018,7 @@ class VideoRow extends DataClass implements Insertable<VideoRow> {
       url: serializer.fromJson<String>(json['url']),
       platform: serializer.fromJson<int>(json['platform']),
       durationSeconds: serializer.fromJson<int?>(json['durationSeconds']),
+      thumbnailUrl: serializer.fromJson<String?>(json['thumbnailUrl']),
       addedAtUtc: serializer.fromJson<int>(json['addedAtUtc']),
     );
   }
@@ -3996,6 +4030,7 @@ class VideoRow extends DataClass implements Insertable<VideoRow> {
       'url': serializer.toJson<String>(url),
       'platform': serializer.toJson<int>(platform),
       'durationSeconds': serializer.toJson<int?>(durationSeconds),
+      'thumbnailUrl': serializer.toJson<String?>(thumbnailUrl),
       'addedAtUtc': serializer.toJson<int>(addedAtUtc),
     };
   }
@@ -4005,6 +4040,7 @@ class VideoRow extends DataClass implements Insertable<VideoRow> {
     String? url,
     int? platform,
     Value<int?> durationSeconds = const Value.absent(),
+    Value<String?> thumbnailUrl = const Value.absent(),
     int? addedAtUtc,
   }) => VideoRow(
     id: id ?? this.id,
@@ -4013,6 +4049,7 @@ class VideoRow extends DataClass implements Insertable<VideoRow> {
     durationSeconds: durationSeconds.present
         ? durationSeconds.value
         : this.durationSeconds,
+    thumbnailUrl: thumbnailUrl.present ? thumbnailUrl.value : this.thumbnailUrl,
     addedAtUtc: addedAtUtc ?? this.addedAtUtc,
   );
   VideoRow copyWithCompanion(VideosCompanion data) {
@@ -4023,6 +4060,9 @@ class VideoRow extends DataClass implements Insertable<VideoRow> {
       durationSeconds: data.durationSeconds.present
           ? data.durationSeconds.value
           : this.durationSeconds,
+      thumbnailUrl: data.thumbnailUrl.present
+          ? data.thumbnailUrl.value
+          : this.thumbnailUrl,
       addedAtUtc: data.addedAtUtc.present
           ? data.addedAtUtc.value
           : this.addedAtUtc,
@@ -4036,6 +4076,7 @@ class VideoRow extends DataClass implements Insertable<VideoRow> {
           ..write('url: $url, ')
           ..write('platform: $platform, ')
           ..write('durationSeconds: $durationSeconds, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
           ..write('addedAtUtc: $addedAtUtc')
           ..write(')'))
         .toString();
@@ -4043,7 +4084,7 @@ class VideoRow extends DataClass implements Insertable<VideoRow> {
 
   @override
   int get hashCode =>
-      Object.hash(id, url, platform, durationSeconds, addedAtUtc);
+      Object.hash(id, url, platform, durationSeconds, thumbnailUrl, addedAtUtc);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -4052,6 +4093,7 @@ class VideoRow extends DataClass implements Insertable<VideoRow> {
           other.url == this.url &&
           other.platform == this.platform &&
           other.durationSeconds == this.durationSeconds &&
+          other.thumbnailUrl == this.thumbnailUrl &&
           other.addedAtUtc == this.addedAtUtc);
 }
 
@@ -4060,6 +4102,7 @@ class VideosCompanion extends UpdateCompanion<VideoRow> {
   final Value<String> url;
   final Value<int> platform;
   final Value<int?> durationSeconds;
+  final Value<String?> thumbnailUrl;
   final Value<int> addedAtUtc;
   final Value<int> rowid;
   const VideosCompanion({
@@ -4067,6 +4110,7 @@ class VideosCompanion extends UpdateCompanion<VideoRow> {
     this.url = const Value.absent(),
     this.platform = const Value.absent(),
     this.durationSeconds = const Value.absent(),
+    this.thumbnailUrl = const Value.absent(),
     this.addedAtUtc = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -4075,6 +4119,7 @@ class VideosCompanion extends UpdateCompanion<VideoRow> {
     required String url,
     required int platform,
     this.durationSeconds = const Value.absent(),
+    this.thumbnailUrl = const Value.absent(),
     required int addedAtUtc,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -4086,6 +4131,7 @@ class VideosCompanion extends UpdateCompanion<VideoRow> {
     Expression<String>? url,
     Expression<int>? platform,
     Expression<int>? durationSeconds,
+    Expression<String>? thumbnailUrl,
     Expression<int>? addedAtUtc,
     Expression<int>? rowid,
   }) {
@@ -4094,6 +4140,7 @@ class VideosCompanion extends UpdateCompanion<VideoRow> {
       if (url != null) 'url': url,
       if (platform != null) 'platform': platform,
       if (durationSeconds != null) 'duration_seconds': durationSeconds,
+      if (thumbnailUrl != null) 'thumbnail_url': thumbnailUrl,
       if (addedAtUtc != null) 'added_at_utc': addedAtUtc,
       if (rowid != null) 'rowid': rowid,
     });
@@ -4104,6 +4151,7 @@ class VideosCompanion extends UpdateCompanion<VideoRow> {
     Value<String>? url,
     Value<int>? platform,
     Value<int?>? durationSeconds,
+    Value<String?>? thumbnailUrl,
     Value<int>? addedAtUtc,
     Value<int>? rowid,
   }) {
@@ -4112,6 +4160,7 @@ class VideosCompanion extends UpdateCompanion<VideoRow> {
       url: url ?? this.url,
       platform: platform ?? this.platform,
       durationSeconds: durationSeconds ?? this.durationSeconds,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       addedAtUtc: addedAtUtc ?? this.addedAtUtc,
       rowid: rowid ?? this.rowid,
     );
@@ -4132,6 +4181,9 @@ class VideosCompanion extends UpdateCompanion<VideoRow> {
     if (durationSeconds.present) {
       map['duration_seconds'] = Variable<int>(durationSeconds.value);
     }
+    if (thumbnailUrl.present) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl.value);
+    }
     if (addedAtUtc.present) {
       map['added_at_utc'] = Variable<int>(addedAtUtc.value);
     }
@@ -4148,6 +4200,7 @@ class VideosCompanion extends UpdateCompanion<VideoRow> {
           ..write('url: $url, ')
           ..write('platform: $platform, ')
           ..write('durationSeconds: $durationSeconds, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
           ..write('addedAtUtc: $addedAtUtc, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -4917,7 +4970,7 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
     'type',
     aliasedName,
     false,
-    check: () => ComparableExpr(type).isBetweenValues(0, 1),
+    check: () => ComparableExpr(type).isBetweenValues(0, 3),
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
@@ -4945,6 +4998,28 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
   @override
   late final GeneratedColumn<int> clozeOrdinal = GeneratedColumn<int>(
     'cloze_ordinal',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _contextBeforeMeta = const VerificationMeta(
+    'contextBefore',
+  );
+  @override
+  late final GeneratedColumn<int> contextBefore = GeneratedColumn<int>(
+    'context_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _contextAfterMeta = const VerificationMeta(
+    'contextAfter',
+  );
+  @override
+  late final GeneratedColumn<int> contextAfter = GeneratedColumn<int>(
+    'context_after',
     aliasedName,
     true,
     type: DriftSqlType.int,
@@ -4981,6 +5056,8 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
     front,
     back,
     clozeOrdinal,
+    contextBefore,
+    contextAfter,
     createdAtUtc,
     editedAtUtc,
   ];
@@ -5052,6 +5129,24 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
         ),
       );
     }
+    if (data.containsKey('context_before')) {
+      context.handle(
+        _contextBeforeMeta,
+        contextBefore.isAcceptableOrUnknown(
+          data['context_before']!,
+          _contextBeforeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('context_after')) {
+      context.handle(
+        _contextAfterMeta,
+        contextAfter.isAcceptableOrUnknown(
+          data['context_after']!,
+          _contextAfterMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at_utc')) {
       context.handle(
         _createdAtUtcMeta,
@@ -5109,6 +5204,14 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
         DriftSqlType.int,
         data['${effectivePrefix}cloze_ordinal'],
       ),
+      contextBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}context_before'],
+      ),
+      contextAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}context_after'],
+      ),
       createdAtUtc: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at_utc'],
@@ -5144,6 +5247,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
   final String front;
   final String back;
   final int? clozeOrdinal;
+  final int? contextBefore;
+  final int? contextAfter;
   final int createdAtUtc;
   final int? editedAtUtc;
   const CardRow({
@@ -5154,6 +5259,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     required this.front,
     required this.back,
     this.clozeOrdinal,
+    this.contextBefore,
+    this.contextAfter,
     required this.createdAtUtc,
     this.editedAtUtc,
   });
@@ -5172,6 +5279,12 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     map['back'] = Variable<String>(back);
     if (!nullToAbsent || clozeOrdinal != null) {
       map['cloze_ordinal'] = Variable<int>(clozeOrdinal);
+    }
+    if (!nullToAbsent || contextBefore != null) {
+      map['context_before'] = Variable<int>(contextBefore);
+    }
+    if (!nullToAbsent || contextAfter != null) {
+      map['context_after'] = Variable<int>(contextAfter);
     }
     map['created_at_utc'] = Variable<int>(createdAtUtc);
     if (!nullToAbsent || editedAtUtc != null) {
@@ -5195,6 +5308,12 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       clozeOrdinal: clozeOrdinal == null && nullToAbsent
           ? const Value.absent()
           : Value(clozeOrdinal),
+      contextBefore: contextBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contextBefore),
+      contextAfter: contextAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contextAfter),
       createdAtUtc: Value(createdAtUtc),
       editedAtUtc: editedAtUtc == null && nullToAbsent
           ? const Value.absent()
@@ -5215,6 +5334,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       front: serializer.fromJson<String>(json['front']),
       back: serializer.fromJson<String>(json['back']),
       clozeOrdinal: serializer.fromJson<int?>(json['clozeOrdinal']),
+      contextBefore: serializer.fromJson<int?>(json['contextBefore']),
+      contextAfter: serializer.fromJson<int?>(json['contextAfter']),
       createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
       editedAtUtc: serializer.fromJson<int?>(json['editedAtUtc']),
     );
@@ -5230,6 +5351,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       'front': serializer.toJson<String>(front),
       'back': serializer.toJson<String>(back),
       'clozeOrdinal': serializer.toJson<int?>(clozeOrdinal),
+      'contextBefore': serializer.toJson<int?>(contextBefore),
+      'contextAfter': serializer.toJson<int?>(contextAfter),
       'createdAtUtc': serializer.toJson<int>(createdAtUtc),
       'editedAtUtc': serializer.toJson<int?>(editedAtUtc),
     };
@@ -5243,6 +5366,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     String? front,
     String? back,
     Value<int?> clozeOrdinal = const Value.absent(),
+    Value<int?> contextBefore = const Value.absent(),
+    Value<int?> contextAfter = const Value.absent(),
     int? createdAtUtc,
     Value<int?> editedAtUtc = const Value.absent(),
   }) => CardRow(
@@ -5257,6 +5382,10 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     front: front ?? this.front,
     back: back ?? this.back,
     clozeOrdinal: clozeOrdinal.present ? clozeOrdinal.value : this.clozeOrdinal,
+    contextBefore: contextBefore.present
+        ? contextBefore.value
+        : this.contextBefore,
+    contextAfter: contextAfter.present ? contextAfter.value : this.contextAfter,
     createdAtUtc: createdAtUtc ?? this.createdAtUtc,
     editedAtUtc: editedAtUtc.present ? editedAtUtc.value : this.editedAtUtc,
   );
@@ -5275,6 +5404,12 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       clozeOrdinal: data.clozeOrdinal.present
           ? data.clozeOrdinal.value
           : this.clozeOrdinal,
+      contextBefore: data.contextBefore.present
+          ? data.contextBefore.value
+          : this.contextBefore,
+      contextAfter: data.contextAfter.present
+          ? data.contextAfter.value
+          : this.contextAfter,
       createdAtUtc: data.createdAtUtc.present
           ? data.createdAtUtc.value
           : this.createdAtUtc,
@@ -5294,6 +5429,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
           ..write('front: $front, ')
           ..write('back: $back, ')
           ..write('clozeOrdinal: $clozeOrdinal, ')
+          ..write('contextBefore: $contextBefore, ')
+          ..write('contextAfter: $contextAfter, ')
           ..write('createdAtUtc: $createdAtUtc, ')
           ..write('editedAtUtc: $editedAtUtc')
           ..write(')'))
@@ -5309,6 +5446,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     front,
     back,
     clozeOrdinal,
+    contextBefore,
+    contextAfter,
     createdAtUtc,
     editedAtUtc,
   );
@@ -5323,6 +5462,8 @@ class CardRow extends DataClass implements Insertable<CardRow> {
           other.front == this.front &&
           other.back == this.back &&
           other.clozeOrdinal == this.clozeOrdinal &&
+          other.contextBefore == this.contextBefore &&
+          other.contextAfter == this.contextAfter &&
           other.createdAtUtc == this.createdAtUtc &&
           other.editedAtUtc == this.editedAtUtc);
 }
@@ -5335,6 +5476,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
   final Value<String> front;
   final Value<String> back;
   final Value<int?> clozeOrdinal;
+  final Value<int?> contextBefore;
+  final Value<int?> contextAfter;
   final Value<int> createdAtUtc;
   final Value<int?> editedAtUtc;
   final Value<int> rowid;
@@ -5346,6 +5489,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     this.front = const Value.absent(),
     this.back = const Value.absent(),
     this.clozeOrdinal = const Value.absent(),
+    this.contextBefore = const Value.absent(),
+    this.contextAfter = const Value.absent(),
     this.createdAtUtc = const Value.absent(),
     this.editedAtUtc = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -5358,6 +5503,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     required String front,
     required String back,
     this.clozeOrdinal = const Value.absent(),
+    this.contextBefore = const Value.absent(),
+    this.contextAfter = const Value.absent(),
     required int createdAtUtc,
     this.editedAtUtc = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -5374,6 +5521,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     Expression<String>? front,
     Expression<String>? back,
     Expression<int>? clozeOrdinal,
+    Expression<int>? contextBefore,
+    Expression<int>? contextAfter,
     Expression<int>? createdAtUtc,
     Expression<int>? editedAtUtc,
     Expression<int>? rowid,
@@ -5386,6 +5535,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
       if (front != null) 'front': front,
       if (back != null) 'back': back,
       if (clozeOrdinal != null) 'cloze_ordinal': clozeOrdinal,
+      if (contextBefore != null) 'context_before': contextBefore,
+      if (contextAfter != null) 'context_after': contextAfter,
       if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
       if (editedAtUtc != null) 'edited_at_utc': editedAtUtc,
       if (rowid != null) 'rowid': rowid,
@@ -5400,6 +5551,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     Value<String>? front,
     Value<String>? back,
     Value<int?>? clozeOrdinal,
+    Value<int?>? contextBefore,
+    Value<int?>? contextAfter,
     Value<int>? createdAtUtc,
     Value<int?>? editedAtUtc,
     Value<int>? rowid,
@@ -5412,6 +5565,8 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
       front: front ?? this.front,
       back: back ?? this.back,
       clozeOrdinal: clozeOrdinal ?? this.clozeOrdinal,
+      contextBefore: contextBefore ?? this.contextBefore,
+      contextAfter: contextAfter ?? this.contextAfter,
       createdAtUtc: createdAtUtc ?? this.createdAtUtc,
       editedAtUtc: editedAtUtc ?? this.editedAtUtc,
       rowid: rowid ?? this.rowid,
@@ -5442,6 +5597,12 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     if (clozeOrdinal.present) {
       map['cloze_ordinal'] = Variable<int>(clozeOrdinal.value);
     }
+    if (contextBefore.present) {
+      map['context_before'] = Variable<int>(contextBefore.value);
+    }
+    if (contextAfter.present) {
+      map['context_after'] = Variable<int>(contextAfter.value);
+    }
     if (createdAtUtc.present) {
       map['created_at_utc'] = Variable<int>(createdAtUtc.value);
     }
@@ -5464,8 +5625,563 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
           ..write('front: $front, ')
           ..write('back: $back, ')
           ..write('clozeOrdinal: $clozeOrdinal, ')
+          ..write('contextBefore: $contextBefore, ')
+          ..write('contextAfter: $contextAfter, ')
           ..write('createdAtUtc: $createdAtUtc, ')
           ..write('editedAtUtc: $editedAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CardOcclusionsTable extends CardOcclusions
+    with TableInfo<$CardOcclusionsTable, CardOcclusionRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CardOcclusionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _cardIdMeta = const VerificationMeta('cardId');
+  @override
+  late final GeneratedColumn<String> cardId = GeneratedColumn<String>(
+    'card_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES cards (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _imageSha256Meta = const VerificationMeta(
+    'imageSha256',
+  );
+  @override
+  late final GeneratedColumn<String> imageSha256 = GeneratedColumn<String>(
+    'image_sha256',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 64,
+      maxTextLength: 64,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _imageMimeMeta = const VerificationMeta(
+    'imageMime',
+  );
+  @override
+  late final GeneratedColumn<String> imageMime = GeneratedColumn<String>(
+    'image_mime',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(minTextLength: 7),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _imageWidthPxMeta = const VerificationMeta(
+    'imageWidthPx',
+  );
+  @override
+  late final GeneratedColumn<int> imageWidthPx = GeneratedColumn<int>(
+    'image_width_px',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(imageWidthPx).isBiggerThanValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _imageHeightPxMeta = const VerificationMeta(
+    'imageHeightPx',
+  );
+  @override
+  late final GeneratedColumn<int> imageHeightPx = GeneratedColumn<int>(
+    'image_height_px',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(imageHeightPx).isBiggerThanValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _regionsJsonMeta = const VerificationMeta(
+    'regionsJson',
+  );
+  @override
+  late final GeneratedColumn<String> regionsJson = GeneratedColumn<String>(
+    'regions_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _activeRegionIdMeta = const VerificationMeta(
+    'activeRegionId',
+  );
+  @override
+  late final GeneratedColumn<String> activeRegionId = GeneratedColumn<String>(
+    'active_region_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _modeMeta = const VerificationMeta('mode');
+  @override
+  late final GeneratedColumn<int> mode = GeneratedColumn<int>(
+    'mode',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(mode).isBetweenValues(0, 2),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    cardId,
+    imageSha256,
+    imageMime,
+    imageWidthPx,
+    imageHeightPx,
+    regionsJson,
+    activeRegionId,
+    mode,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'card_occlusions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CardOcclusionRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('card_id')) {
+      context.handle(
+        _cardIdMeta,
+        cardId.isAcceptableOrUnknown(data['card_id']!, _cardIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cardIdMeta);
+    }
+    if (data.containsKey('image_sha256')) {
+      context.handle(
+        _imageSha256Meta,
+        imageSha256.isAcceptableOrUnknown(
+          data['image_sha256']!,
+          _imageSha256Meta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_imageSha256Meta);
+    }
+    if (data.containsKey('image_mime')) {
+      context.handle(
+        _imageMimeMeta,
+        imageMime.isAcceptableOrUnknown(data['image_mime']!, _imageMimeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_imageMimeMeta);
+    }
+    if (data.containsKey('image_width_px')) {
+      context.handle(
+        _imageWidthPxMeta,
+        imageWidthPx.isAcceptableOrUnknown(
+          data['image_width_px']!,
+          _imageWidthPxMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_imageWidthPxMeta);
+    }
+    if (data.containsKey('image_height_px')) {
+      context.handle(
+        _imageHeightPxMeta,
+        imageHeightPx.isAcceptableOrUnknown(
+          data['image_height_px']!,
+          _imageHeightPxMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_imageHeightPxMeta);
+    }
+    if (data.containsKey('regions_json')) {
+      context.handle(
+        _regionsJsonMeta,
+        regionsJson.isAcceptableOrUnknown(
+          data['regions_json']!,
+          _regionsJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_regionsJsonMeta);
+    }
+    if (data.containsKey('active_region_id')) {
+      context.handle(
+        _activeRegionIdMeta,
+        activeRegionId.isAcceptableOrUnknown(
+          data['active_region_id']!,
+          _activeRegionIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('mode')) {
+      context.handle(
+        _modeMeta,
+        mode.isAcceptableOrUnknown(data['mode']!, _modeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_modeMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {cardId};
+  @override
+  CardOcclusionRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CardOcclusionRow(
+      cardId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}card_id'],
+      )!,
+      imageSha256: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}image_sha256'],
+      )!,
+      imageMime: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}image_mime'],
+      )!,
+      imageWidthPx: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}image_width_px'],
+      )!,
+      imageHeightPx: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}image_height_px'],
+      )!,
+      regionsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}regions_json'],
+      )!,
+      activeRegionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}active_region_id'],
+      ),
+      mode: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}mode'],
+      )!,
+    );
+  }
+
+  @override
+  $CardOcclusionsTable createAlias(String alias) {
+    return $CardOcclusionsTable(attachedDatabase, alias);
+  }
+}
+
+class CardOcclusionRow extends DataClass
+    implements Insertable<CardOcclusionRow> {
+  final String cardId;
+  final String imageSha256;
+  final String imageMime;
+  final int imageWidthPx;
+  final int imageHeightPx;
+  final String regionsJson;
+  final String? activeRegionId;
+  final int mode;
+  const CardOcclusionRow({
+    required this.cardId,
+    required this.imageSha256,
+    required this.imageMime,
+    required this.imageWidthPx,
+    required this.imageHeightPx,
+    required this.regionsJson,
+    this.activeRegionId,
+    required this.mode,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['card_id'] = Variable<String>(cardId);
+    map['image_sha256'] = Variable<String>(imageSha256);
+    map['image_mime'] = Variable<String>(imageMime);
+    map['image_width_px'] = Variable<int>(imageWidthPx);
+    map['image_height_px'] = Variable<int>(imageHeightPx);
+    map['regions_json'] = Variable<String>(regionsJson);
+    if (!nullToAbsent || activeRegionId != null) {
+      map['active_region_id'] = Variable<String>(activeRegionId);
+    }
+    map['mode'] = Variable<int>(mode);
+    return map;
+  }
+
+  CardOcclusionsCompanion toCompanion(bool nullToAbsent) {
+    return CardOcclusionsCompanion(
+      cardId: Value(cardId),
+      imageSha256: Value(imageSha256),
+      imageMime: Value(imageMime),
+      imageWidthPx: Value(imageWidthPx),
+      imageHeightPx: Value(imageHeightPx),
+      regionsJson: Value(regionsJson),
+      activeRegionId: activeRegionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(activeRegionId),
+      mode: Value(mode),
+    );
+  }
+
+  factory CardOcclusionRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CardOcclusionRow(
+      cardId: serializer.fromJson<String>(json['cardId']),
+      imageSha256: serializer.fromJson<String>(json['imageSha256']),
+      imageMime: serializer.fromJson<String>(json['imageMime']),
+      imageWidthPx: serializer.fromJson<int>(json['imageWidthPx']),
+      imageHeightPx: serializer.fromJson<int>(json['imageHeightPx']),
+      regionsJson: serializer.fromJson<String>(json['regionsJson']),
+      activeRegionId: serializer.fromJson<String?>(json['activeRegionId']),
+      mode: serializer.fromJson<int>(json['mode']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'cardId': serializer.toJson<String>(cardId),
+      'imageSha256': serializer.toJson<String>(imageSha256),
+      'imageMime': serializer.toJson<String>(imageMime),
+      'imageWidthPx': serializer.toJson<int>(imageWidthPx),
+      'imageHeightPx': serializer.toJson<int>(imageHeightPx),
+      'regionsJson': serializer.toJson<String>(regionsJson),
+      'activeRegionId': serializer.toJson<String?>(activeRegionId),
+      'mode': serializer.toJson<int>(mode),
+    };
+  }
+
+  CardOcclusionRow copyWith({
+    String? cardId,
+    String? imageSha256,
+    String? imageMime,
+    int? imageWidthPx,
+    int? imageHeightPx,
+    String? regionsJson,
+    Value<String?> activeRegionId = const Value.absent(),
+    int? mode,
+  }) => CardOcclusionRow(
+    cardId: cardId ?? this.cardId,
+    imageSha256: imageSha256 ?? this.imageSha256,
+    imageMime: imageMime ?? this.imageMime,
+    imageWidthPx: imageWidthPx ?? this.imageWidthPx,
+    imageHeightPx: imageHeightPx ?? this.imageHeightPx,
+    regionsJson: regionsJson ?? this.regionsJson,
+    activeRegionId: activeRegionId.present
+        ? activeRegionId.value
+        : this.activeRegionId,
+    mode: mode ?? this.mode,
+  );
+  CardOcclusionRow copyWithCompanion(CardOcclusionsCompanion data) {
+    return CardOcclusionRow(
+      cardId: data.cardId.present ? data.cardId.value : this.cardId,
+      imageSha256: data.imageSha256.present
+          ? data.imageSha256.value
+          : this.imageSha256,
+      imageMime: data.imageMime.present ? data.imageMime.value : this.imageMime,
+      imageWidthPx: data.imageWidthPx.present
+          ? data.imageWidthPx.value
+          : this.imageWidthPx,
+      imageHeightPx: data.imageHeightPx.present
+          ? data.imageHeightPx.value
+          : this.imageHeightPx,
+      regionsJson: data.regionsJson.present
+          ? data.regionsJson.value
+          : this.regionsJson,
+      activeRegionId: data.activeRegionId.present
+          ? data.activeRegionId.value
+          : this.activeRegionId,
+      mode: data.mode.present ? data.mode.value : this.mode,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CardOcclusionRow(')
+          ..write('cardId: $cardId, ')
+          ..write('imageSha256: $imageSha256, ')
+          ..write('imageMime: $imageMime, ')
+          ..write('imageWidthPx: $imageWidthPx, ')
+          ..write('imageHeightPx: $imageHeightPx, ')
+          ..write('regionsJson: $regionsJson, ')
+          ..write('activeRegionId: $activeRegionId, ')
+          ..write('mode: $mode')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    cardId,
+    imageSha256,
+    imageMime,
+    imageWidthPx,
+    imageHeightPx,
+    regionsJson,
+    activeRegionId,
+    mode,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CardOcclusionRow &&
+          other.cardId == this.cardId &&
+          other.imageSha256 == this.imageSha256 &&
+          other.imageMime == this.imageMime &&
+          other.imageWidthPx == this.imageWidthPx &&
+          other.imageHeightPx == this.imageHeightPx &&
+          other.regionsJson == this.regionsJson &&
+          other.activeRegionId == this.activeRegionId &&
+          other.mode == this.mode);
+}
+
+class CardOcclusionsCompanion extends UpdateCompanion<CardOcclusionRow> {
+  final Value<String> cardId;
+  final Value<String> imageSha256;
+  final Value<String> imageMime;
+  final Value<int> imageWidthPx;
+  final Value<int> imageHeightPx;
+  final Value<String> regionsJson;
+  final Value<String?> activeRegionId;
+  final Value<int> mode;
+  final Value<int> rowid;
+  const CardOcclusionsCompanion({
+    this.cardId = const Value.absent(),
+    this.imageSha256 = const Value.absent(),
+    this.imageMime = const Value.absent(),
+    this.imageWidthPx = const Value.absent(),
+    this.imageHeightPx = const Value.absent(),
+    this.regionsJson = const Value.absent(),
+    this.activeRegionId = const Value.absent(),
+    this.mode = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CardOcclusionsCompanion.insert({
+    required String cardId,
+    required String imageSha256,
+    required String imageMime,
+    required int imageWidthPx,
+    required int imageHeightPx,
+    required String regionsJson,
+    this.activeRegionId = const Value.absent(),
+    required int mode,
+    this.rowid = const Value.absent(),
+  }) : cardId = Value(cardId),
+       imageSha256 = Value(imageSha256),
+       imageMime = Value(imageMime),
+       imageWidthPx = Value(imageWidthPx),
+       imageHeightPx = Value(imageHeightPx),
+       regionsJson = Value(regionsJson),
+       mode = Value(mode);
+  static Insertable<CardOcclusionRow> custom({
+    Expression<String>? cardId,
+    Expression<String>? imageSha256,
+    Expression<String>? imageMime,
+    Expression<int>? imageWidthPx,
+    Expression<int>? imageHeightPx,
+    Expression<String>? regionsJson,
+    Expression<String>? activeRegionId,
+    Expression<int>? mode,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (cardId != null) 'card_id': cardId,
+      if (imageSha256 != null) 'image_sha256': imageSha256,
+      if (imageMime != null) 'image_mime': imageMime,
+      if (imageWidthPx != null) 'image_width_px': imageWidthPx,
+      if (imageHeightPx != null) 'image_height_px': imageHeightPx,
+      if (regionsJson != null) 'regions_json': regionsJson,
+      if (activeRegionId != null) 'active_region_id': activeRegionId,
+      if (mode != null) 'mode': mode,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CardOcclusionsCompanion copyWith({
+    Value<String>? cardId,
+    Value<String>? imageSha256,
+    Value<String>? imageMime,
+    Value<int>? imageWidthPx,
+    Value<int>? imageHeightPx,
+    Value<String>? regionsJson,
+    Value<String?>? activeRegionId,
+    Value<int>? mode,
+    Value<int>? rowid,
+  }) {
+    return CardOcclusionsCompanion(
+      cardId: cardId ?? this.cardId,
+      imageSha256: imageSha256 ?? this.imageSha256,
+      imageMime: imageMime ?? this.imageMime,
+      imageWidthPx: imageWidthPx ?? this.imageWidthPx,
+      imageHeightPx: imageHeightPx ?? this.imageHeightPx,
+      regionsJson: regionsJson ?? this.regionsJson,
+      activeRegionId: activeRegionId ?? this.activeRegionId,
+      mode: mode ?? this.mode,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (cardId.present) {
+      map['card_id'] = Variable<String>(cardId.value);
+    }
+    if (imageSha256.present) {
+      map['image_sha256'] = Variable<String>(imageSha256.value);
+    }
+    if (imageMime.present) {
+      map['image_mime'] = Variable<String>(imageMime.value);
+    }
+    if (imageWidthPx.present) {
+      map['image_width_px'] = Variable<int>(imageWidthPx.value);
+    }
+    if (imageHeightPx.present) {
+      map['image_height_px'] = Variable<int>(imageHeightPx.value);
+    }
+    if (regionsJson.present) {
+      map['regions_json'] = Variable<String>(regionsJson.value);
+    }
+    if (activeRegionId.present) {
+      map['active_region_id'] = Variable<String>(activeRegionId.value);
+    }
+    if (mode.present) {
+      map['mode'] = Variable<int>(mode.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CardOcclusionsCompanion(')
+          ..write('cardId: $cardId, ')
+          ..write('imageSha256: $imageSha256, ')
+          ..write('imageMime: $imageMime, ')
+          ..write('imageWidthPx: $imageWidthPx, ')
+          ..write('imageHeightPx: $imageHeightPx, ')
+          ..write('regionsJson: $regionsJson, ')
+          ..write('activeRegionId: $activeRegionId, ')
+          ..write('mode: $mode, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -14405,6 +15121,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $VideosTable videos = $VideosTable(this);
   late final $VideoElementsTable videoElements = $VideoElementsTable(this);
   late final $CardsTable cards = $CardsTable(this);
+  late final $CardOcclusionsTable cardOcclusions = $CardOcclusionsTable(this);
   late final $ElementSchedulesTable elementSchedules = $ElementSchedulesTable(
     this,
   );
@@ -14435,6 +15152,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     videos,
     videoElements,
     cards,
+    cardOcclusions,
     elementSchedules,
     topicStates,
     cardMemories,
@@ -14469,6 +15187,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('blocks', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'cards',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('card_occlusions', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -17073,6 +17798,7 @@ typedef $$VideosTableCreateCompanionBuilder =
       required String url,
       required int platform,
       Value<int?> durationSeconds,
+      Value<String?> thumbnailUrl,
       required int addedAtUtc,
       Value<int> rowid,
     });
@@ -17082,6 +17808,7 @@ typedef $$VideosTableUpdateCompanionBuilder =
       Value<String> url,
       Value<int> platform,
       Value<int?> durationSeconds,
+      Value<String?> thumbnailUrl,
       Value<int> addedAtUtc,
       Value<int> rowid,
     });
@@ -17135,6 +17862,11 @@ class $$VideosTableFilterComposer
 
   ColumnFilters<int> get durationSeconds => $composableBuilder(
     column: $table.durationSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -17198,6 +17930,11 @@ class $$VideosTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get addedAtUtc => $composableBuilder(
     column: $table.addedAtUtc,
     builder: (column) => ColumnOrderings(column),
@@ -17224,6 +17961,11 @@ class $$VideosTableAnnotationComposer
 
   GeneratedColumn<int> get durationSeconds => $composableBuilder(
     column: $table.durationSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
     builder: (column) => column,
   );
 
@@ -17290,6 +18032,7 @@ class $$VideosTableTableManager
                 Value<String> url = const Value.absent(),
                 Value<int> platform = const Value.absent(),
                 Value<int?> durationSeconds = const Value.absent(),
+                Value<String?> thumbnailUrl = const Value.absent(),
                 Value<int> addedAtUtc = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => VideosCompanion(
@@ -17297,6 +18040,7 @@ class $$VideosTableTableManager
                 url: url,
                 platform: platform,
                 durationSeconds: durationSeconds,
+                thumbnailUrl: thumbnailUrl,
                 addedAtUtc: addedAtUtc,
                 rowid: rowid,
               ),
@@ -17306,6 +18050,7 @@ class $$VideosTableTableManager
                 required String url,
                 required int platform,
                 Value<int?> durationSeconds = const Value.absent(),
+                Value<String?> thumbnailUrl = const Value.absent(),
                 required int addedAtUtc,
                 Value<int> rowid = const Value.absent(),
               }) => VideosCompanion.insert(
@@ -17313,6 +18058,7 @@ class $$VideosTableTableManager
                 url: url,
                 platform: platform,
                 durationSeconds: durationSeconds,
+                thumbnailUrl: thumbnailUrl,
                 addedAtUtc: addedAtUtc,
                 rowid: rowid,
               ),
@@ -17921,6 +18667,8 @@ typedef $$CardsTableCreateCompanionBuilder =
       required String front,
       required String back,
       Value<int?> clozeOrdinal,
+      Value<int?> contextBefore,
+      Value<int?> contextAfter,
       required int createdAtUtc,
       Value<int?> editedAtUtc,
       Value<int> rowid,
@@ -17934,6 +18682,8 @@ typedef $$CardsTableUpdateCompanionBuilder =
       Value<String> front,
       Value<String> back,
       Value<int?> clozeOrdinal,
+      Value<int?> contextBefore,
+      Value<int?> contextAfter,
       Value<int> createdAtUtc,
       Value<int?> editedAtUtc,
       Value<int> rowid,
@@ -17942,6 +18692,24 @@ typedef $$CardsTableUpdateCompanionBuilder =
 final class $$CardsTableReferences
     extends BaseReferences<_$AppDatabase, $CardsTable, CardRow> {
   $$CardsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$CardOcclusionsTable, List<CardOcclusionRow>>
+  _cardOcclusionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.cardOcclusions,
+    aliasName: 'cards__id__card_occlusions__card_id',
+  );
+
+  $$CardOcclusionsTableProcessedTableManager get cardOcclusionsRefs {
+    final manager = $$CardOcclusionsTableTableManager(
+      $_db,
+      $_db.cardOcclusions,
+    ).filter((f) => f.cardId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_cardOcclusionsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 
   static MultiTypedResultKey<$CardMemoriesTable, List<CardMemoryRow>>
   _cardMemoriesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
@@ -18023,6 +18791,16 @@ class $$CardsTableFilterComposer extends Composer<_$AppDatabase, $CardsTable> {
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get contextBefore => $composableBuilder(
+    column: $table.contextBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get contextAfter => $composableBuilder(
+    column: $table.contextAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get createdAtUtc => $composableBuilder(
     column: $table.createdAtUtc,
     builder: (column) => ColumnFilters(column),
@@ -18032,6 +18810,31 @@ class $$CardsTableFilterComposer extends Composer<_$AppDatabase, $CardsTable> {
     column: $table.editedAtUtc,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> cardOcclusionsRefs(
+    Expression<bool> Function($$CardOcclusionsTableFilterComposer f) f,
+  ) {
+    final $$CardOcclusionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.cardOcclusions,
+      getReferencedColumn: (t) => t.cardId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CardOcclusionsTableFilterComposer(
+            $db: $db,
+            $table: $db.cardOcclusions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 
   Expression<bool> cardMemoriesRefs(
     Expression<bool> Function($$CardMemoriesTableFilterComposer f) f,
@@ -18128,6 +18931,16 @@ class $$CardsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get contextBefore => $composableBuilder(
+    column: $table.contextBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get contextAfter => $composableBuilder(
+    column: $table.contextAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAtUtc => $composableBuilder(
     column: $table.createdAtUtc,
     builder: (column) => ColumnOrderings(column),
@@ -18175,6 +18988,16 @@ class $$CardsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get contextBefore => $composableBuilder(
+    column: $table.contextBefore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get contextAfter => $composableBuilder(
+    column: $table.contextAfter,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get createdAtUtc => $composableBuilder(
     column: $table.createdAtUtc,
     builder: (column) => column,
@@ -18184,6 +19007,31 @@ class $$CardsTableAnnotationComposer
     column: $table.editedAtUtc,
     builder: (column) => column,
   );
+
+  Expression<T> cardOcclusionsRefs<T extends Object>(
+    Expression<T> Function($$CardOcclusionsTableAnnotationComposer a) f,
+  ) {
+    final $$CardOcclusionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.cardOcclusions,
+      getReferencedColumn: (t) => t.cardId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CardOcclusionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.cardOcclusions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 
   Expression<T> cardMemoriesRefs<T extends Object>(
     Expression<T> Function($$CardMemoriesTableAnnotationComposer a) f,
@@ -18249,7 +19097,11 @@ class $$CardsTableTableManager
           $$CardsTableUpdateCompanionBuilder,
           (CardRow, $$CardsTableReferences),
           CardRow,
-          PrefetchHooks Function({bool cardMemoriesRefs, bool reviewEventsRefs})
+          PrefetchHooks Function({
+            bool cardOcclusionsRefs,
+            bool cardMemoriesRefs,
+            bool reviewEventsRefs,
+          })
         > {
   $$CardsTableTableManager(_$AppDatabase db, $CardsTable table)
     : super(
@@ -18271,6 +19123,8 @@ class $$CardsTableTableManager
                 Value<String> front = const Value.absent(),
                 Value<String> back = const Value.absent(),
                 Value<int?> clozeOrdinal = const Value.absent(),
+                Value<int?> contextBefore = const Value.absent(),
+                Value<int?> contextAfter = const Value.absent(),
                 Value<int> createdAtUtc = const Value.absent(),
                 Value<int?> editedAtUtc = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -18282,6 +19136,8 @@ class $$CardsTableTableManager
                 front: front,
                 back: back,
                 clozeOrdinal: clozeOrdinal,
+                contextBefore: contextBefore,
+                contextAfter: contextAfter,
                 createdAtUtc: createdAtUtc,
                 editedAtUtc: editedAtUtc,
                 rowid: rowid,
@@ -18295,6 +19151,8 @@ class $$CardsTableTableManager
                 required String front,
                 required String back,
                 Value<int?> clozeOrdinal = const Value.absent(),
+                Value<int?> contextBefore = const Value.absent(),
+                Value<int?> contextAfter = const Value.absent(),
                 required int createdAtUtc,
                 Value<int?> editedAtUtc = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -18306,6 +19164,8 @@ class $$CardsTableTableManager
                 front: front,
                 back: back,
                 clozeOrdinal: clozeOrdinal,
+                contextBefore: contextBefore,
+                contextAfter: contextAfter,
                 createdAtUtc: createdAtUtc,
                 editedAtUtc: editedAtUtc,
                 rowid: rowid,
@@ -18317,16 +19177,42 @@ class $$CardsTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({cardMemoriesRefs = false, reviewEventsRefs = false}) {
+              ({
+                cardOcclusionsRefs = false,
+                cardMemoriesRefs = false,
+                reviewEventsRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
+                    if (cardOcclusionsRefs) db.cardOcclusions,
                     if (cardMemoriesRefs) db.cardMemories,
                     if (reviewEventsRefs) db.reviewEvents,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
                     return [
+                      if (cardOcclusionsRefs)
+                        await $_getPrefetchedData<
+                          CardRow,
+                          $CardsTable,
+                          CardOcclusionRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$CardsTableReferences
+                              ._cardOcclusionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$CardsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).cardOcclusionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.cardId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (cardMemoriesRefs)
                         await $_getPrefetchedData<
                           CardRow,
@@ -18389,7 +19275,403 @@ typedef $$CardsTableProcessedTableManager =
       $$CardsTableUpdateCompanionBuilder,
       (CardRow, $$CardsTableReferences),
       CardRow,
-      PrefetchHooks Function({bool cardMemoriesRefs, bool reviewEventsRefs})
+      PrefetchHooks Function({
+        bool cardOcclusionsRefs,
+        bool cardMemoriesRefs,
+        bool reviewEventsRefs,
+      })
+    >;
+typedef $$CardOcclusionsTableCreateCompanionBuilder =
+    CardOcclusionsCompanion Function({
+      required String cardId,
+      required String imageSha256,
+      required String imageMime,
+      required int imageWidthPx,
+      required int imageHeightPx,
+      required String regionsJson,
+      Value<String?> activeRegionId,
+      required int mode,
+      Value<int> rowid,
+    });
+typedef $$CardOcclusionsTableUpdateCompanionBuilder =
+    CardOcclusionsCompanion Function({
+      Value<String> cardId,
+      Value<String> imageSha256,
+      Value<String> imageMime,
+      Value<int> imageWidthPx,
+      Value<int> imageHeightPx,
+      Value<String> regionsJson,
+      Value<String?> activeRegionId,
+      Value<int> mode,
+      Value<int> rowid,
+    });
+
+final class $$CardOcclusionsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $CardOcclusionsTable, CardOcclusionRow> {
+  $$CardOcclusionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $CardsTable _cardIdTable(_$AppDatabase db) =>
+      db.cards.createAlias('card_occlusions__card_id__cards__id');
+
+  $$CardsTableProcessedTableManager get cardId {
+    final $_column = $_itemColumn<String>('card_id')!;
+
+    final manager = $$CardsTableTableManager(
+      $_db,
+      $_db.cards,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_cardIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CardOcclusionsTableFilterComposer
+    extends Composer<_$AppDatabase, $CardOcclusionsTable> {
+  $$CardOcclusionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get imageSha256 => $composableBuilder(
+    column: $table.imageSha256,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get imageMime => $composableBuilder(
+    column: $table.imageMime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get imageWidthPx => $composableBuilder(
+    column: $table.imageWidthPx,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get imageHeightPx => $composableBuilder(
+    column: $table.imageHeightPx,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get regionsJson => $composableBuilder(
+    column: $table.regionsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get activeRegionId => $composableBuilder(
+    column: $table.activeRegionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$CardsTableFilterComposer get cardId {
+    final $$CardsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.cardId,
+      referencedTable: $db.cards,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CardsTableFilterComposer(
+            $db: $db,
+            $table: $db.cards,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CardOcclusionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CardOcclusionsTable> {
+  $$CardOcclusionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get imageSha256 => $composableBuilder(
+    column: $table.imageSha256,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get imageMime => $composableBuilder(
+    column: $table.imageMime,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get imageWidthPx => $composableBuilder(
+    column: $table.imageWidthPx,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get imageHeightPx => $composableBuilder(
+    column: $table.imageHeightPx,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get regionsJson => $composableBuilder(
+    column: $table.regionsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get activeRegionId => $composableBuilder(
+    column: $table.activeRegionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$CardsTableOrderingComposer get cardId {
+    final $$CardsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.cardId,
+      referencedTable: $db.cards,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CardsTableOrderingComposer(
+            $db: $db,
+            $table: $db.cards,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CardOcclusionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CardOcclusionsTable> {
+  $$CardOcclusionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get imageSha256 => $composableBuilder(
+    column: $table.imageSha256,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get imageMime =>
+      $composableBuilder(column: $table.imageMime, builder: (column) => column);
+
+  GeneratedColumn<int> get imageWidthPx => $composableBuilder(
+    column: $table.imageWidthPx,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get imageHeightPx => $composableBuilder(
+    column: $table.imageHeightPx,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get regionsJson => $composableBuilder(
+    column: $table.regionsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get activeRegionId => $composableBuilder(
+    column: $table.activeRegionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get mode =>
+      $composableBuilder(column: $table.mode, builder: (column) => column);
+
+  $$CardsTableAnnotationComposer get cardId {
+    final $$CardsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.cardId,
+      referencedTable: $db.cards,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CardsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.cards,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CardOcclusionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CardOcclusionsTable,
+          CardOcclusionRow,
+          $$CardOcclusionsTableFilterComposer,
+          $$CardOcclusionsTableOrderingComposer,
+          $$CardOcclusionsTableAnnotationComposer,
+          $$CardOcclusionsTableCreateCompanionBuilder,
+          $$CardOcclusionsTableUpdateCompanionBuilder,
+          (CardOcclusionRow, $$CardOcclusionsTableReferences),
+          CardOcclusionRow,
+          PrefetchHooks Function({bool cardId})
+        > {
+  $$CardOcclusionsTableTableManager(
+    _$AppDatabase db,
+    $CardOcclusionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CardOcclusionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CardOcclusionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CardOcclusionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> cardId = const Value.absent(),
+                Value<String> imageSha256 = const Value.absent(),
+                Value<String> imageMime = const Value.absent(),
+                Value<int> imageWidthPx = const Value.absent(),
+                Value<int> imageHeightPx = const Value.absent(),
+                Value<String> regionsJson = const Value.absent(),
+                Value<String?> activeRegionId = const Value.absent(),
+                Value<int> mode = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CardOcclusionsCompanion(
+                cardId: cardId,
+                imageSha256: imageSha256,
+                imageMime: imageMime,
+                imageWidthPx: imageWidthPx,
+                imageHeightPx: imageHeightPx,
+                regionsJson: regionsJson,
+                activeRegionId: activeRegionId,
+                mode: mode,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String cardId,
+                required String imageSha256,
+                required String imageMime,
+                required int imageWidthPx,
+                required int imageHeightPx,
+                required String regionsJson,
+                Value<String?> activeRegionId = const Value.absent(),
+                required int mode,
+                Value<int> rowid = const Value.absent(),
+              }) => CardOcclusionsCompanion.insert(
+                cardId: cardId,
+                imageSha256: imageSha256,
+                imageMime: imageMime,
+                imageWidthPx: imageWidthPx,
+                imageHeightPx: imageHeightPx,
+                regionsJson: regionsJson,
+                activeRegionId: activeRegionId,
+                mode: mode,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CardOcclusionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({cardId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (cardId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.cardId,
+                                referencedTable: $$CardOcclusionsTableReferences
+                                    ._cardIdTable(db),
+                                referencedColumn:
+                                    $$CardOcclusionsTableReferences
+                                        ._cardIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CardOcclusionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CardOcclusionsTable,
+      CardOcclusionRow,
+      $$CardOcclusionsTableFilterComposer,
+      $$CardOcclusionsTableOrderingComposer,
+      $$CardOcclusionsTableAnnotationComposer,
+      $$CardOcclusionsTableCreateCompanionBuilder,
+      $$CardOcclusionsTableUpdateCompanionBuilder,
+      (CardOcclusionRow, $$CardOcclusionsTableReferences),
+      CardOcclusionRow,
+      PrefetchHooks Function({bool cardId})
     >;
 typedef $$ElementSchedulesTableCreateCompanionBuilder =
     ElementSchedulesCompanion Function({
@@ -22699,6 +23981,8 @@ class $AppDatabaseManager {
       $$VideoElementsTableTableManager(_db, _db.videoElements);
   $$CardsTableTableManager get cards =>
       $$CardsTableTableManager(_db, _db.cards);
+  $$CardOcclusionsTableTableManager get cardOcclusions =>
+      $$CardOcclusionsTableTableManager(_db, _db.cardOcclusions);
   $$ElementSchedulesTableTableManager get elementSchedules =>
       $$ElementSchedulesTableTableManager(_db, _db.elementSchedules);
   $$TopicStatesTableTableManager get topicStates =>

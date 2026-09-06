@@ -292,6 +292,8 @@ class Videos extends Table {
   IntColumn get durationSeconds =>
       integer().nullable().check(durationSeconds.isBiggerThanValue(0))();
 
+  TextColumn get thumbnailUrl => text().nullable()();
+
   IntColumn get addedAtUtc => integer()();
 
   @override
@@ -380,13 +382,17 @@ class Cards extends Table {
       integer().nullable().check(parentElementType.isIn(<int>[0, 1, 3]))();
 
   /// Index into the CardType enum.
-  IntColumn get type => integer().check(type.isBetweenValues(0, 1))();
+  IntColumn get type => integer().check(type.isBetweenValues(0, 3))();
 
   TextColumn get front => text()();
 
   TextColumn get back => text()();
 
   IntColumn get clozeOrdinal => integer().nullable()();
+
+  IntColumn get contextBefore => integer().nullable()();
+
+  IntColumn get contextAfter => integer().nullable()();
 
   IntColumn get createdAtUtc => integer()();
 
@@ -397,9 +403,44 @@ class Cards extends Table {
 
   @override
   List<String> get customConstraints => <String>[
-    // A cloze card names the deletion it tests; a Q&A card never does.
-    'CHECK ((type = 1) = (cloze_ordinal IS NOT NULL))',
+    // Both cloze forms name the deletion they test; other cards never do.
+    'CHECK ((type IN (1, 2)) = (cloze_ordinal IS NOT NULL))',
+    'CHECK ((type = 2) = (context_before IS NOT NULL))',
+    'CHECK ((type = 2) = (context_after IS NOT NULL))',
     'CHECK ((parent_element_id IS NULL) = (parent_element_type IS NULL))',
+  ];
+}
+
+/// The image and complete rectangle set owned by one occlusion card.
+@DataClassName('CardOcclusionRow')
+class CardOcclusions extends Table {
+  TextColumn get cardId =>
+      text().references(Cards, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get imageSha256 => text().withLength(min: 64, max: 64)();
+
+  TextColumn get imageMime => text().withLength(min: 7)();
+
+  IntColumn get imageWidthPx =>
+      integer().check(imageWidthPx.isBiggerThanValue(0))();
+
+  IntColumn get imageHeightPx =>
+      integer().check(imageHeightPx.isBiggerThanValue(0))();
+
+  TextColumn get regionsJson => text()();
+
+  TextColumn get activeRegionId => text().nullable()();
+
+  IntColumn get mode => integer().check(mode.isBetweenValues(0, 2))();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{cardId};
+
+  @override
+  List<String> get customConstraints => <String>[
+    "CHECK (image_sha256 NOT GLOB '*[^0-9a-f]*')",
+    "CHECK (image_mime LIKE 'image/%' AND length(image_mime) > 6)",
+    'CHECK ((mode = 2) = (active_region_id IS NULL))',
   ];
 }
 

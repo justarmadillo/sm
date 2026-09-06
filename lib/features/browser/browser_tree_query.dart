@@ -176,7 +176,9 @@ final class BrowserTreeQuery {
       elements.add(
         _Element(
           ref: ElementRef(id: card.id, type: ElementType.card),
-          title: _titleOf(card.front),
+          title: card.type == CardType.imageOcclusion && card.front.isEmpty
+              ? 'Image occlusion'
+              : _titleOf(card.front),
           preview: '',
           provenanceParentId: card.parent?.id,
           fallbackIndex: elements.length,

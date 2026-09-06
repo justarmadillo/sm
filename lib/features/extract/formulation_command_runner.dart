@@ -176,6 +176,38 @@ final class FormulationCommandRunner {
                   ),
                 );
               }
+            case ClozeOverlapperCardDraft(
+              :final text,
+              :final contextBefore,
+              :final contextAfter,
+            ):
+              final cleanText = text.trim();
+              final deletions = parseClozeDeletions(cleanText);
+              if (deletions.isEmpty ||
+                  deletions.any(
+                    (deletion) =>
+                        deletion.ordinal < 1 || deletion.answer.trim().isEmpty,
+                  )) {
+                return Err<List<Card>>(
+                  ValidationFailure(
+                    'use canonical cloze text such as {{c1::answer}}',
+                    field: 'drafts[$draftIndex]',
+                  ),
+                );
+              }
+              for (final ordinal in clozeOrdinals(cleanText)) {
+                cards.add(
+                  Card.clozeOverlapper(
+                    id: _ids.newId(),
+                    parent: parent,
+                    text: cleanText,
+                    ordinal: ordinal,
+                    contextBefore: contextBefore,
+                    contextAfter: contextAfter,
+                    createdAtUtc: now,
+                  ),
+                );
+              }
           }
         }
 

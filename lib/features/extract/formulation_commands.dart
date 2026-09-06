@@ -26,6 +26,19 @@ final class ClozeCardDraft extends CardDraft {
   final String text;
 }
 
+/// Canonical cloze text rendered with a limited neighbouring context window.
+final class ClozeOverlapperCardDraft extends CardDraft {
+  const ClozeOverlapperCardDraft({
+    required this.text,
+    required this.contextBefore,
+    required this.contextAfter,
+  });
+
+  final String text;
+  final int contextBefore;
+  final int contextAfter;
+}
+
 /// Creates one or more independently scheduled cards from an element.
 ///
 /// [parent] is an extract, a source, or null for a standalone item. The

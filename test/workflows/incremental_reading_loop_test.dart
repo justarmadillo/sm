@@ -506,6 +506,33 @@ void main() {
       expect(cloze.preview, isNot(contains('four items')));
     },
   );
+
+  test('overlapper formulation keeps its window on every ordinal', () async {
+    final (_, extract) = await harness.createFixture();
+    final result = await harness.formulation.formulate(
+      FormulateCards(
+        harness.operation(),
+        parent: CardParent.extract(extract.id),
+        drafts: const <CardDraft>[
+          ClozeOverlapperCardDraft(
+            text: '{{c1::one}} {{c2::two}} {{c3::three}}',
+            contextBefore: 1,
+            contextAfter: 0,
+          ),
+        ],
+        timestampUtc: clock.nowUtc(),
+      ),
+    );
+
+    final cards = result.unwrap();
+    expect(cards, hasLength(3));
+    expect(
+      cards.every((card) => card.type == CardType.clozeOverlapper),
+      isTrue,
+    );
+    expect(cards.map((card) => card.contextBefore), <int?>[1, 1, 1]);
+    expect(cards.map((card) => card.contextAfter), <int?>[0, 0, 0]);
+  });
 }
 
 (ReaderAnchor, ReaderAnchor) _wholeRenderedBlock(

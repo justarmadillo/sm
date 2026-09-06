@@ -10,13 +10,16 @@
 /// a dialog rather than gaining a third window.
 library;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Card;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/app/providers.dart';
+import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/features/browser/browser_providers.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/browser/element_content_query.dart';
 import 'package:incremental_reader/features/extract/extract_screen.dart';
 import 'package:incremental_reader/features/extract/extract_view_model.dart';
+import 'package:incremental_reader/features/occlusion/occlusion_screen.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/features/video/video_screen.dart';
@@ -65,7 +68,15 @@ Future<void> openElement(
         mode: VideoMode.browse,
       );
     case ElementType.card:
-      await showCardEditor(context, ref, cardRef: elementRef);
+      final Card? card = await ref
+          .read(contentRepositoryProvider)
+          .findCard(elementRef.id);
+      if (!context.mounted) return;
+      if (card?.type == CardType.imageOcclusion) {
+        await openOcclusionCardEditor(context, ref, cardId: elementRef.id);
+      } else {
+        await showCardEditor(context, ref, cardRef: elementRef);
+      }
   }
   if (context.mounted) ref.invalidate(elementContentProvider(elementRef));
 }

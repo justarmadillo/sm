@@ -144,6 +144,18 @@ final class AppSettings {
           stored['card.bury_siblings'],
           fallback.cards.shouldBurySiblings,
         ),
+        overlapContextBefore: _readInt(
+          stored['card.overlap_context_before'],
+          fallback.cards.overlapContextBefore,
+          min: -1,
+          max: 99,
+        ),
+        overlapContextAfter: _readInt(
+          stored['card.overlap_context_after'],
+          fallback.cards.overlapContextAfter,
+          min: -1,
+          max: 99,
+        ),
       ),
       postpone: PostponeSettings(
         isAutomaticPostponeEnabled: _readBool(
@@ -411,6 +423,8 @@ final class AppSettings {
           '${cards.shouldRescheduleAfterSettingsChange}',
       'card.leech_lapses': '${cards.leechLapses}',
       'card.bury_siblings': '${cards.shouldBurySiblings}',
+      'card.overlap_context_before': '${cards.overlapContextBefore}',
+      'card.overlap_context_after': '${cards.overlapContextAfter}',
       'postpone.auto_enabled': '${postpone.isAutomaticPostponeEnabled}',
       'postpone.named_profiles': _encodeNamedProfiles(postpone.namedProfiles),
       'postpone.branch_profiles': _encodeBranchAssignments(

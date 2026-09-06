@@ -20,6 +20,8 @@ final class CardSettings {
     this.shouldRescheduleAfterSettingsChange = true,
     this.leechLapses = 8,
     this.shouldBurySiblings = true,
+    this.overlapContextBefore = 1,
+    this.overlapContextAfter = 0,
   });
 
   final double desiredRetention;
@@ -32,6 +34,8 @@ final class CardSettings {
   final bool shouldRescheduleAfterSettingsChange;
   final int leechLapses;
   final bool shouldBurySiblings;
+  final int overlapContextBefore;
+  final int overlapContextAfter;
 
   CardSettings copyWith({
     double? desiredRetention,
@@ -44,6 +48,8 @@ final class CardSettings {
     bool? shouldRescheduleAfterSettingsChange,
     int? leechLapses,
     bool? shouldBurySiblings,
+    int? overlapContextBefore,
+    int? overlapContextAfter,
   }) => CardSettings(
     desiredRetention: desiredRetention ?? this.desiredRetention,
     fsrsParameters: fsrsParameters ?? this.fsrsParameters,
@@ -57,6 +63,8 @@ final class CardSettings {
         this.shouldRescheduleAfterSettingsChange,
     leechLapses: leechLapses ?? this.leechLapses,
     shouldBurySiblings: shouldBurySiblings ?? this.shouldBurySiblings,
+    overlapContextBefore: overlapContextBefore ?? this.overlapContextBefore,
+    overlapContextAfter: overlapContextAfter ?? this.overlapContextAfter,
   );
 
   @override
@@ -72,7 +80,9 @@ final class CardSettings {
       other.shouldRescheduleAfterSettingsChange ==
           shouldRescheduleAfterSettingsChange &&
       other.leechLapses == leechLapses &&
-      other.shouldBurySiblings == shouldBurySiblings;
+      other.shouldBurySiblings == shouldBurySiblings &&
+      other.overlapContextBefore == overlapContextBefore &&
+      other.overlapContextAfter == overlapContextAfter;
 
   @override
   int get hashCode => Object.hashAll(<Object>[
@@ -86,5 +96,7 @@ final class CardSettings {
     shouldRescheduleAfterSettingsChange,
     leechLapses,
     shouldBurySiblings,
+    overlapContextBefore,
+    overlapContextAfter,
   ]);
 }

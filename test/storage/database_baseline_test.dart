@@ -61,6 +61,7 @@ void main() {
         'activity_events',
         'blocks',
         'card_memories',
+        'card_occlusions',
         'cards',
         'dataset_meta',
         'element_schedules',

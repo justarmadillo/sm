@@ -25,6 +25,7 @@ class SelectionToolbar extends StatelessWidget {
     required this.onExtract,
     required this.onCopy,
     required this.onEditBlock,
+    this.onOcclude,
     required this.canExtract,
     this.onSetMarker,
     this.canSetMarker = false,
@@ -54,6 +55,7 @@ class SelectionToolbar extends StatelessWidget {
   /// Null while editing would be meaningless — browsing a source it does not
   /// own, for instance — so the action disappears rather than failing.
   final VoidCallback? onEditBlock;
+  final VoidCallback? onOcclude;
 
   /// Whether placing a marker is meaningful in the current mode.
   final bool canSetMarker;
@@ -70,7 +72,7 @@ class SelectionToolbar extends StatelessWidget {
     // capped at the viewport so that on a phone the toolbar is pinned inside
     // the screen rather than centred on a selection and hanging off it.
     final double width = math.min(
-      onSetMarker == null ? 290.0 : 380.0,
+      onSetMarker == null ? 380.0 : 470.0,
       math.max(0, viewportSize.width - 24),
     );
     return Positioned(
@@ -157,6 +159,14 @@ class SelectionToolbar extends StatelessWidget {
       label: 'Copy',
       onPressed: onCopy,
     ),
+    if (onOcclude != null) ...<Widget>[
+      const _ToolbarDivider(),
+      _ToolbarButton(
+        icon: Icons.image_outlined,
+        label: 'Occlude',
+        onPressed: onOcclude,
+      ),
+    ],
     const _ToolbarDivider(),
     _ToolbarButton(
       icon: Icons.edit_outlined,
@@ -247,6 +257,7 @@ class SelectionToolbarLayer extends StatelessWidget {
     required this.onExtract,
     required this.onCopy,
     required this.onEditBlock,
+    this.onOcclude,
     this.onSetMarker,
     this.canSetMarker = false,
     this.extractHint,
@@ -266,6 +277,7 @@ class SelectionToolbarLayer extends StatelessWidget {
   final VoidCallback onExtract;
   final VoidCallback onCopy;
   final VoidCallback? onEditBlock;
+  final VoidCallback? onOcclude;
   final VoidCallback? onSetMarker;
   final bool canSetMarker;
   final String? extractHint;
@@ -294,7 +306,14 @@ class SelectionToolbarLayer extends StatelessWidget {
         onSetMarker: onSetMarker,
         onCopy: onCopy,
         onEditBlock: onEditBlock,
+        onOcclude: _isSingleImageSelection(controller) ? onOcclude : null,
       );
     },
   );
+
+  bool _isSingleImageSelection(ReaderSelectionController controller) {
+    final markdown = controller.resolveSelection()?.markdown.trim();
+    return markdown != null &&
+        RegExp(r'^!\[[^\]]*\]\(ir-asset:[0-9a-f]{64}\)$').hasMatch(markdown);
+  }
 }

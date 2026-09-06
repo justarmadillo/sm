@@ -16,6 +16,8 @@ Future<List<CardDraft>?> showFormulationDialog(
   BuildContext context, {
   required String seedText,
   required int existingCardCount,
+  int overlapContextBefore = 1,
+  int overlapContextAfter = 0,
   String parentNoun = 'extract',
 }) => showDialog<List<CardDraft>>(
   context: context,
@@ -24,6 +26,8 @@ Future<List<CardDraft>?> showFormulationDialog(
     seedText: seedText,
     existingCardCount: existingCardCount,
     parentNoun: parentNoun,
+    overlapContextBefore: overlapContextBefore,
+    overlapContextAfter: overlapContextAfter,
   ),
 );
 
@@ -32,23 +36,33 @@ class _FormulationDialog extends StatefulWidget {
     required this.seedText,
     required this.existingCardCount,
     required this.parentNoun,
+    required this.overlapContextBefore,
+    required this.overlapContextAfter,
   });
 
   final String seedText;
   final int existingCardCount;
   final String parentNoun;
+  final int overlapContextBefore;
+  final int overlapContextAfter;
 
   @override
   State<_FormulationDialog> createState() => _FormulationDialogState();
 }
 
-enum _DraftType { qa, cloze }
+enum _DraftType { qa, cloze, clozeOverlapper }
 
 class _FormulationDialogState extends State<_FormulationDialog> {
   final TextEditingController _question = TextEditingController();
   final TextEditingController _answer = TextEditingController();
   late final TextEditingController _cloze = TextEditingController(
     text: widget.seedText,
+  );
+  late final TextEditingController _contextBefore = TextEditingController(
+    text: '${widget.overlapContextBefore}',
+  );
+  late final TextEditingController _contextAfter = TextEditingController(
+    text: '${widget.overlapContextAfter}',
   );
   final List<CardDraft> _queued = <CardDraft>[];
   _DraftType _type = _DraftType.qa;
@@ -59,6 +73,8 @@ class _FormulationDialogState extends State<_FormulationDialog> {
     _question.dispose();
     _answer.dispose();
     _cloze.dispose();
+    _contextBefore.dispose();
+    _contextAfter.dispose();
     super.dispose();
   }
 
@@ -121,6 +137,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
         switch (draft) {
           QaCardDraft() => 1,
           ClozeCardDraft(:final text) => clozeOrdinals(text).length,
+          ClozeOverlapperCardDraft(:final text) => clozeOrdinals(text).length,
         };
   });
 
@@ -132,6 +149,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
             _answer.text.trim().isNotEmpty =>
       1,
     _DraftType.cloze => clozeCountInEditor,
+    _DraftType.clozeOverlapper => clozeCountInEditor,
     _ => 0,
   };
 
@@ -161,6 +179,11 @@ class _FormulationDialogState extends State<_FormulationDialog> {
           value: _DraftType.cloze,
           label: const Text('Cloze'),
           icon: hasRoomForIcons ? const Icon(Icons.short_text) : null,
+        ),
+        ButtonSegment<_DraftType>(
+          value: _DraftType.clozeOverlapper,
+          label: const Text('Overlapper'),
+          icon: hasRoomForIcons ? const Icon(Icons.view_agenda_outlined) : null,
         ),
       ],
       selected: <_DraftType>{_type},
@@ -220,6 +243,13 @@ class _FormulationDialogState extends State<_FormulationDialog> {
               icon: const Icon(Icons.data_object, size: 16),
               label: const Text('Make selection a cloze'),
             ),
+            if (_type == _DraftType.clozeOverlapper)
+              OutlinedButton.icon(
+                key: const ValueKey<String>('split-overlapper-items'),
+                onPressed: _splitIntoItems,
+                icon: const Icon(Icons.format_list_numbered, size: 16),
+                label: const Text('Split into items'),
+              ),
             Text(
               clozeCountInEditor == 0
                   ? 'No valid deletions yet'
@@ -228,6 +258,16 @@ class _FormulationDialogState extends State<_FormulationDialog> {
             ),
           ],
         ),
+        if (_type == _DraftType.clozeOverlapper) ...<Widget>[
+          const SizedBox(height: 10),
+          Row(
+            children: <Widget>[
+              Expanded(child: _contextField(_contextBefore, 'Before')),
+              const SizedBox(width: 12),
+              Expanded(child: _contextField(_contextAfter, 'After')),
+            ],
+          ),
+        ],
         if (clozeCountInEditor > 0) ...<Widget>[
           const SizedBox(height: 10),
           for (final ordinal in clozeOrdinals(_cloze.text))
@@ -305,6 +345,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
         }
         return QaCardDraft(question: question, answer: answer);
       case _DraftType.cloze:
+      case _DraftType.clozeOverlapper:
         final text = _cloze.text.trim();
         if (text.isEmpty && allowEmpty) return null;
         final deletions = parseClozeDeletions(text);
@@ -315,7 +356,18 @@ class _FormulationDialogState extends State<_FormulationDialog> {
           _error = 'Add at least one valid {{c1::answer}} deletion.';
           return null;
         }
-        return ClozeCardDraft(text);
+        if (_type == _DraftType.cloze) return ClozeCardDraft(text);
+        final before = int.tryParse(_contextBefore.text.trim());
+        final after = int.tryParse(_contextAfter.text.trim());
+        if (before == null || after == null) {
+          _error = 'Before and After must be whole numbers.';
+          return null;
+        }
+        return ClozeOverlapperCardDraft(
+          text: text,
+          contextBefore: before,
+          contextAfter: after,
+        );
     }
   }
 
@@ -352,6 +404,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
         _question.clear();
         _answer.clear();
       case _DraftType.cloze:
+      case _DraftType.clozeOverlapper:
         _cloze.clear();
     }
   }
@@ -377,11 +430,46 @@ class _FormulationDialogState extends State<_FormulationDialog> {
     setState(() => _error = null);
   }
 
+  Widget _contextField(TextEditingController controller, String label) =>
+      TextField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(signed: true),
+        decoration: InputDecoration(
+          labelText: label,
+          helperText: '-1 reveals all',
+        ),
+        onChanged: (_) => _clearError(),
+      );
+
+  /// Turns each non-empty pasted line into one portable cloze deletion.
+  void _splitIntoItems() {
+    final lines = _cloze.text
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .map(
+          (line) => line.replaceFirst(RegExp(r'^(?:[-*+]\s+|\d+[.)]\s+)'), ''),
+        )
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    if (lines.isEmpty) {
+      setState(() => _error = 'Paste one or more list items first.');
+      return;
+    }
+    _cloze.text = <String>[
+      for (var index = 0; index < lines.length; index++)
+        '{{c${index + 1}::${lines[index]}}}',
+    ].join('\n');
+    setState(() => _error = null);
+  }
+
   String _draftLabel(CardDraft draft, int index) => switch (draft) {
     QaCardDraft(:final question) =>
       '${index + 1}. Q&A · ${_ellipsize(question)}',
     ClozeCardDraft(:final text) =>
       '${index + 1}. Cloze · ${clozeOrdinals(text).length} cards',
+    ClozeOverlapperCardDraft(:final text) =>
+      '${index + 1}. Overlapper · ${clozeOrdinals(text).length} cards',
   };
 
   String _ellipsize(String value) =>

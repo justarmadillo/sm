@@ -8,6 +8,7 @@ If you can point at it in the running app, its code is in one of these folders.
 | `reader/` | Reader | reading a document and making extracts from it |
 | `extract/` | Extract | working one extract over, turning it into cards |
 | `review/` | Review | showing a card, revealing it, grading it |
+| `occlusion/` | Image occlusion | drawing masks and creating image cards |
 | `daily_queue/` | Today | the day's study session, and the ways to relieve it |
 | `priority/` | Priority browser | the slider, and the whole collection in one list |
 | `search/` | Search | full-text search across everything |
