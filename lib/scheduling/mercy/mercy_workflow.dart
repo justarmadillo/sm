@@ -16,6 +16,7 @@ import 'package:incremental_reader/scheduling/sm20_numeric.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/settings/mercy_settings.dart';
+import 'package:incremental_reader/shared/result.dart';
 import 'package:meta/meta.dart';
 
 const String kSm20MercyPolicyVersion = 'sm20-mercy/1';
@@ -357,6 +358,25 @@ String encodeMercyAppliedBatch(MercyAppliedBatchSnapshot snapshot) =>
     });
 
 MercyAppliedBatchSnapshot decodeMercyAppliedBatch(String source) {
+  return tryDecodeMercyAppliedBatch(source).unwrap();
+}
+
+/// Attempts to decode durable undo state without making a list query fail.
+Result<MercyAppliedBatchSnapshot> tryDecodeMercyAppliedBatch(String source) {
+  try {
+    return Ok<MercyAppliedBatchSnapshot>(_decodeMercyAppliedBatch(source));
+  } on Object catch (error, stackTrace) {
+    return Err<MercyAppliedBatchSnapshot>(
+      StorageFailure(
+        'Mercy applied snapshot is undecodable',
+        cause: error,
+        stackTrace: stackTrace,
+      ),
+    );
+  }
+}
+
+MercyAppliedBatchSnapshot _decodeMercyAppliedBatch(String source) {
   final Map<String, Object?> map = _asJsonMap(
     jsonDecode(source),
     'Mercy batch',

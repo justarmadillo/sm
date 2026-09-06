@@ -14,6 +14,7 @@ If you can point at it in the running app, its code is in one of these folders.
 | `search/` | Search | full-text search across everything |
 | `settings/` | Settings | changing how the app behaves |
 | `diagnostics/` | Diagnostics | what the scheduler has been doing (development aid) |
+| `recovery/` | Collection recovery | restores a backup when the database cannot open |
 
 ## The files inside a feature folder
 

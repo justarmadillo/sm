@@ -71,6 +71,60 @@ void _safeDeleteFile(File? file) {
 
 String _basename(File file) => file.path.split(RegExp(r'[/\\]')).last;
 
+/// Backups in [backupDirectory], newest first.
+///
+/// This is top-level because recovery runs before there is a live database
+/// from which a [BackupService] could be constructed.
+List<File> listBackupFiles(Directory backupDirectory, {BackupType? type}) {
+  if (!backupDirectory.existsSync()) return <File>[];
+  final List<String> prefixes = type == null
+      ? BackupType.values.map((BackupType kind) => kind.prefix).toList()
+      : <String>[type.prefix];
+  final List<File> files = backupDirectory.listSync().whereType<File>().where((
+    File file,
+  ) {
+    final String name = _basename(file);
+    final bool hasBackupExtension =
+        name.endsWith('.sqlite') || name.endsWith('.irbackup');
+    return hasBackupExtension &&
+        prefixes.any((String prefix) => name.startsWith('$prefix-'));
+  }).toList();
+  files.sort(
+    (File first, File second) => _basename(second).compareTo(_basename(first)),
+  );
+  return files;
+}
+
+/// Whether [file] is a readable, uncorrupted database at a known schema.
+///
+/// Restore uses the same validator as the writer so a package cannot be
+/// accepted under weaker rules than the rules that created it.
+String? validateDatabaseFile(File file) {
+  if (!file.existsSync() || file.lengthSync() == 0) {
+    return 'backup file is empty';
+  }
+  sqlite.Database? copy;
+  try {
+    copy = sqlite.sqlite3.open(file.path);
+    final sqlite.ResultSet integrity = copy.select('PRAGMA integrity_check');
+    if (integrity.length != 1 || integrity.first.values.first != 'ok') {
+      return 'integrity_check reported corruption';
+    }
+    if (copy.select('PRAGMA foreign_key_check').isNotEmpty) {
+      return 'foreign keys do not resolve';
+    }
+    final int userVersion = copy.userVersion;
+    if (userVersion > kSchemaVersion) {
+      return 'backup schema $userVersion is newer than $kSchemaVersion';
+    }
+    return null;
+  } on Object catch (error) {
+    return 'could not open backup: $error';
+  } finally {
+    copy?.close();
+  }
+}
+
 String _timestamp(DateTime instant) {
   String two(int value) => value.toString().padLeft(2, '0');
   final utc = instant.toUtc();
@@ -215,7 +269,7 @@ final class BackupService {
       _safeDelete(databaseSnapshot);
       await _createDatabaseSnapshot(databaseSnapshot);
 
-      final validation = await _validateDatabase(databaseSnapshot);
+      final validation = validateDatabaseFile(databaseSnapshot);
       if (validation != null) {
         _safeDelete(databaseSnapshot);
         _record(
@@ -290,51 +344,13 @@ final class BackupService {
 
   /// Backups on disk, newest first.
   List<File> listBackups({BackupType? type}) {
-    if (!_backupDirectory.existsSync()) return <File>[];
-    final prefixes = type == null
-        ? BackupType.values.map((BackupType k) => k.prefix).toList()
-        : <String>[type.prefix];
-    final files = _backupDirectory.listSync().whereType<File>().where((File f) {
-      final name = _basename(f);
-      final isBackupExtension =
-          name.endsWith('.sqlite') || name.endsWith('.irbackup');
-      return isBackupExtension &&
-          prefixes.any((String p) => name.startsWith('$p-'));
-    }).toList()..sort((File a, File b) => _basename(b).compareTo(_basename(a)));
-    return files;
+    return listBackupFiles(_backupDirectory, type: type);
   }
 
   /// Applies the retention policy, deleting whatever falls outside it.
   Future<void> pruneOldBackups() async {
     _prunePreMigration();
     _pruneDaily();
-  }
-
-  /// Whether [file] is a readable, uncorrupted database at a known schema.
-  Future<String?> _validateDatabase(File file) async {
-    if (!file.existsSync() || file.lengthSync() == 0) {
-      return 'backup file is empty';
-    }
-    sqlite.Database? copy;
-    try {
-      copy = sqlite.sqlite3.open(file.path);
-      final integrity = copy.select('PRAGMA integrity_check');
-      if (integrity.length != 1 || integrity.first.values.first != 'ok') {
-        return 'integrity_check reported corruption';
-      }
-      if (copy.select('PRAGMA foreign_key_check').isNotEmpty) {
-        return 'foreign keys do not resolve';
-      }
-      final userVersion = copy.userVersion;
-      if (userVersion > kSchemaVersion) {
-        return 'backup schema $userVersion is newer than $kSchemaVersion';
-      }
-      return null;
-    } on Object catch (error) {
-      return 'could not open backup: $error';
-    } finally {
-      copy?.close();
-    }
   }
 
   Future<void> _createDatabaseSnapshot(File snapshot) async {
@@ -454,7 +470,7 @@ final class BackupService {
     final keptMonths = <String>{};
     final keep = <String>{};
     for (final file in backups) {
-      final stamp = _stampOf(file);
+      final stamp = _backupStampOf(file);
       if (stamp == null) continue;
       final day = stamp.substring(0, 8);
       final month = stamp.substring(0, 6);
@@ -507,8 +523,7 @@ final class BackupService {
 
   static String _basename(File file) => file.path.split(RegExp(r'[/\\]')).last;
 
-  /// The `YYYYMMDDHHMMSS` stamp in a backup file name.
-  static String? _stampOf(File file) {
+  static String? _backupStampOf(File file) {
     final name = _basename(file);
     final dash = name.indexOf('-');
     final dot = name.lastIndexOf('.');

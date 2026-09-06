@@ -15,6 +15,7 @@ import 'package:incremental_reader/features/priority/priority_view_model.dart';
 import 'package:incremental_reader/features/settings/fsrs_settings_rescheduler.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/shared/result.dart';
+import 'package:incremental_reader/storage/contracts/database_check.dart';
 import 'package:incremental_reader/storage/contracts/database_maintenance.dart';
 
 @immutable
@@ -171,6 +172,62 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
         ),
       );
     }
+  }
+
+  /// Repairs logical collection damage, then performs ordinary housekeeping.
+  Future<void> checkDatabase() async {
+    final SettingsUiState? current = state.valueOrNull;
+    if (current == null || current.isBusy) return;
+    state = AsyncValue<SettingsUiState>.data(current.copyWith(isBusy: true));
+    try {
+      final DatabaseCheckReport report = await ref
+          .read(databaseCheckProvider)
+          .checkAndRepair();
+      if (report.outcome != DatabaseCheckOutcome.corrupt) {
+        await ref.read(databaseMaintenanceProvider).optimize();
+      }
+      state = AsyncValue<SettingsUiState>.data(
+        current.copyWith(
+          isBusy: false,
+          message: UiMessage(
+            _databaseCheckMessage(report),
+            isError:
+                report.outcome == DatabaseCheckOutcome.corrupt ||
+                report.findings.any(
+                  (DatabaseCheckFinding finding) => !finding.wasRepaired,
+                ),
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      state = AsyncValue<SettingsUiState>.data(
+        current.copyWith(
+          isBusy: false,
+          message: UiMessage('Could not check database: $error', isError: true),
+        ),
+      );
+    }
+  }
+
+  String _databaseCheckMessage(DatabaseCheckReport report) {
+    if (report.outcome == DatabaseCheckOutcome.corrupt) {
+      return 'The database file is corrupt. Restart the app to restore a backup.';
+    }
+    if (report.findings.isEmpty) return 'Database check found no problems.';
+    final int repaired = report.findings
+        .where((DatabaseCheckFinding finding) => finding.wasRepaired)
+        .fold<int>(
+          0,
+          (int count, DatabaseCheckFinding finding) => count + finding.count,
+        );
+    final int unrepaired = report.findings
+        .where((DatabaseCheckFinding finding) => !finding.wasRepaired)
+        .fold<int>(
+          0,
+          (int count, DatabaseCheckFinding finding) => count + finding.count,
+        );
+    if (unrepaired == 0) return 'Database check repaired $repaired rows.';
+    return 'Database check repaired $repaired rows and found $unrepaired that need attention.';
   }
 
   /// The pass in one sentence.

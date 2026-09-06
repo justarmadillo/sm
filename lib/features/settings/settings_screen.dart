@@ -1203,6 +1203,16 @@ class _SettingsBody extends StatelessWidget {
         'change how it is stored, never what it holds, and never a schedule.',
     children: <Widget>[
       SettingsRow(
+        label: 'Check database',
+        hint:
+            'Checks physical integrity and repairs broken relationships in one '
+            'transaction. Historical logs are reported but never deleted.',
+        control: FilledButton.tonal(
+          onPressed: state.isBusy ? null : model.checkDatabase,
+          child: Text(state.isBusy ? 'Checking…' : 'Check now'),
+        ),
+      ),
+      SettingsRow(
         label: 'Optimize database',
         hint:
             'Checks the collection for damage, rebuilds the search index if '

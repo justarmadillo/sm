@@ -10,10 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/incremental_reader_app.dart';
 import 'package:incremental_reader/app/providers.dart';
+import 'package:incremental_reader/app/startup_gate.dart';
 import 'package:incremental_reader/app/startup_tasks.dart';
+import 'package:incremental_reader/features/recovery/recovery_screen.dart';
+import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
-import 'package:incremental_reader/storage/database/connection.dart';
-import 'package:incremental_reader/storage/files/backup_service.dart';
 import 'package:incremental_reader/storage/platform/app_paths.dart';
 
 Future<void> main() async {
@@ -21,15 +22,17 @@ Future<void> main() async {
 
   final paths = await AppPaths.resolve();
   paths.ensureCreated();
-  final migrationBackup = createPreMigrationBackupIfNeeded(
+  final Result<AppDatabase> openResult = await openCollectionOrFail(
     databaseFile: paths.databaseFile,
     backupDirectory: paths.backupDirectory,
-    targetSchemaVersion: kSchemaVersion,
   );
-  if (migrationBackup.isErr) {
-    throw StateError(migrationBackup.failureOrNull!.message);
+  if (openResult case Err<AppDatabase>(failure: final StartupFailure failure)) {
+    runApp(
+      RecoveryApp(failure: failure, backupDirectory: paths.backupDirectory),
+    );
+    return;
   }
-  final database = openDatabaseAt(paths.databaseFile);
+  final AppDatabase database = openResult.unwrap();
 
   final container = ProviderContainer(
     overrides: <Override>[

@@ -4,6 +4,7 @@
 |---|---|
 | `providers.dart` | builds every object more than one screen needs |
 | `startup_tasks.dart` | work that must finish before the first frame |
+| `startup_gate.dart` | checks and opens the collection, or returns a classified recovery failure |
 | `incremental_reader_app.dart` | the root widget, and which screen opens first |
 
 `lib/main.dart` runs before any of it: find the folders, copy the database if a

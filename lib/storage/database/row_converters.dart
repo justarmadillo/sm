@@ -27,6 +27,7 @@ import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/sm20_numeric.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
+import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 
 /// Milliseconds since the Unix epoch, the storage form for every instant.
@@ -113,14 +114,68 @@ String encodeContentSpans(List<Utf16Span> spans) => jsonEncode(<List<int>>[
 
 /// Decodes content spans written by [encodeContentSpans].
 List<Utf16Span> decodeContentSpans(String json) {
-  final decoded = jsonDecode(json) as List<Object?>;
-  return <Utf16Span>[
-    for (final entry in decoded)
-      Utf16Span(
-        (entry! as List<Object?>)[0]! as int,
-        (entry as List<Object?>)[1]! as int,
+  return tryDecodeContentSpans(json).unwrap();
+}
+
+/// Attempts to decode derived block spans so a database check can identify a
+/// damaged payload without throwing away the rest of its scan.
+Result<List<Utf16Span>> tryDecodeContentSpans(String json) {
+  try {
+    final List<Object?> decoded = jsonDecode(json) as List<Object?>;
+    return Ok<List<Utf16Span>>(<Utf16Span>[
+      for (final Object? entry in decoded)
+        Utf16Span(
+          (entry! as List<Object?>)[0]! as int,
+          (entry as List<Object?>)[1]! as int,
+        ),
+    ]);
+  } on Object catch (error, stackTrace) {
+    return Err<List<Utf16Span>>(
+      StorageFailure(
+        'content spans are undecodable',
+        cause: error,
+        stackTrace: stackTrace,
       ),
-  ];
+    );
+  }
+}
+
+/// Attempts to decode a stored JSON object used by an audit row.
+Result<Map<String, Object?>> tryDecodeStoredJsonObject(String json) {
+  try {
+    return Ok<Map<String, Object?>>(jsonDecode(json) as Map<String, Object?>);
+  } on Object catch (error, stackTrace) {
+    return Err<Map<String, Object?>>(
+      StorageFailure(
+        'stored JSON object is undecodable',
+        cause: error,
+        stackTrace: stackTrace,
+      ),
+    );
+  }
+}
+
+/// Attempts to decode optional metadata on the append-only review log.
+Result<Map<String, Object?>> tryDecodeReviewLogMetadata(String json) =>
+    tryDecodeStoredJsonObject(json);
+
+/// Attempts to decode a scheduler event's before/after state snapshot.
+Result<Object?> tryDecodeSchedulerState(String json) =>
+    tryDecodeStoredJson(json);
+
+/// Attempts to decode any stored JSON payload while retaining its shape.
+Result<Object?> tryDecodeStoredJson(String json) {
+  try {
+    return Ok<Object?>(jsonDecode(json));
+  } on Object catch (error, stackTrace) {
+    return Err<Object?>(
+      StorageFailure(
+        'stored JSON is undecodable',
+        cause: error,
+        stackTrace: stackTrace,
+      ),
+    );
+  }
 }
 
 /// Domain [Source] from its row.
@@ -589,7 +644,11 @@ CardMemory cardMemoryFromRow(CardMemoryRow row) {
   );
   final String? storedState = row.fsrsStateJson;
   if (storedState != null) {
-    final Object? decoded = jsonDecode(storedState);
+    final Result<Object?> decodedResult = tryDecodeStoredJson(storedState);
+    if (decodedResult.isErr) {
+      throw StateError('card ${row.cardId} has inconsistent FSRS state');
+    }
+    final Object? decoded = decodedResult.unwrap();
     if (jsonEncode(decoded) != memory.canonicalFsrsJson()) {
       throw StateError('card ${row.cardId} has inconsistent FSRS state');
     }

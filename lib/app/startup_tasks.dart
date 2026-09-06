@@ -2,9 +2,11 @@
 library;
 
 import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/storage/contracts/settings_repository.dart';
 
 /// Setting key holding the day of the last successful backup.
@@ -24,6 +26,23 @@ Future<File?> runDailyBackupIfDue(ProviderContainer container) async {
       .toString();
 
   if (await settings.findValue(kLastBackupDayKey) == today) return null;
+
+  final List<String> quickCheck = await container
+      .read(databaseProvider)
+      .quickCheck();
+  if (quickCheck.length != 1 || quickCheck.single != 'ok') {
+    container
+        .read(diagnosticsProvider)
+        .record(
+          DiagnosticEvent(
+            level: DiagnosticLevel.error,
+            name: 'backup.skipped_corrupt_database',
+            timestampUtc: container.read(clockProvider).nowUtc(),
+            fields: <String, Object?>{'quickCheck': quickCheck},
+          ),
+        );
+    return null;
+  }
 
   final result = await container.read(backupServiceProvider).createBackup();
   if (result.isErr) return null;

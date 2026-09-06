@@ -7,6 +7,7 @@
 library;
 
 import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
@@ -16,15 +17,24 @@ import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
+import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/row_converters.dart';
 
 /// Learning aggregate: schedules, pacing, priority, activity.
 final class DriftLearningRepository implements LearningRepository {
-  const DriftLearningRepository(this._database);
+  const DriftLearningRepository(
+    this._database, {
+    DiagnosticSink diagnostics = const NullDiagnosticSink(),
+    Clock clock = const SystemClock(),
+  }) : _diagnostics = diagnostics,
+       _clock = clock;
 
   final AppDatabase _database;
+  final DiagnosticSink _diagnostics;
+  final Clock _clock;
 
   @override
   Future<void> insertTopic(TopicState topic) => saveTopic(topic);
@@ -469,7 +479,7 @@ final class DriftLearningRepository implements LearningRepository {
       ]);
     if (limit != null) query.limit(limit);
     final rows = await query.get();
-    return <ReviewLogEntry>[for (final row in rows) reviewLogFromRow(row)];
+    return _decodeReviewLogRows(rows);
   }
 
   @override
@@ -486,7 +496,7 @@ final class DriftLearningRepository implements LearningRepository {
                 ($RevlogEntriesTable t) => OrderingTerm.asc(t.id),
               ]))
             .get();
-    return <ReviewLogEntry>[for (final row in rows) reviewLogFromRow(row)];
+    return _decodeReviewLogRows(rows);
   }
 
   @override
@@ -498,7 +508,7 @@ final class DriftLearningRepository implements LearningRepository {
               ])
               ..limit(limit))
             .get();
-    return <ReviewLogEntry>[for (final row in rows) reviewLogFromRow(row)];
+    return _decodeReviewLogRows(rows);
   }
 
   @override
@@ -555,7 +565,7 @@ final class DriftLearningRepository implements LearningRepository {
       ]);
     if (limit != null) query.limit(limit);
     final rows = await query.get();
-    return <SchedulerEvent>[for (final row in rows) schedulerEventFromRow(row)];
+    return _decodeSchedulerEventRows(rows);
   }
 
   @override
@@ -677,7 +687,10 @@ final class DriftLearningRepository implements LearningRepository {
                     OrderingTerm.desc(table.appliedAtUtc),
               ]))
             .get();
-    return <StoredMercyBatch>[for (final row in rows) _toMercyBatch(row)];
+    return <StoredMercyBatch>[
+      for (final MercyBatchRow row in rows)
+        if (_isMercyBatchDecodable(row)) _toMercyBatch(row),
+    ];
   }
 
   @override
@@ -711,6 +724,67 @@ final class DriftLearningRepository implements LearningRepository {
         : fromEpochMs(row.appliedAtUtc!),
     undoneAtUtc: row.undoneAtUtc == null ? null : fromEpochMs(row.undoneAtUtc!),
   );
+
+  List<ReviewLogEntry> _decodeReviewLogRows(List<RevlogRow> rows) {
+    final List<ReviewLogEntry> decoded = <ReviewLogEntry>[];
+    for (final RevlogRow row in rows) {
+      final String? metadata = row.metadataJson;
+      if (metadata != null && tryDecodeReviewLogMetadata(metadata).isErr) {
+        _recordQuarantine('revlog_entries', row.id, 'metadata is undecodable');
+        continue;
+      }
+      decoded.add(reviewLogFromRow(row));
+    }
+    return decoded;
+  }
+
+  List<SchedulerEvent> _decodeSchedulerEventRows(List<SchedulerEventRow> rows) {
+    final List<SchedulerEvent> decoded = <SchedulerEvent>[];
+    for (final SchedulerEventRow row in rows) {
+      final bool hasBadState = <String?>[row.stateBefore, row.stateAfter]
+          .whereType<String>()
+          .any((String json) => tryDecodeSchedulerState(json).isErr);
+      final bool hasBadMetadata =
+          row.metadataJson != null &&
+          tryDecodeStoredJsonObject(row.metadataJson!).isErr;
+      if (hasBadState || hasBadMetadata) {
+        _recordQuarantine(
+          'scheduler_events',
+          row.id,
+          'state or metadata is undecodable',
+        );
+        continue;
+      }
+      decoded.add(schedulerEventFromRow(row));
+    }
+    return decoded;
+  }
+
+  bool _isMercyBatchDecodable(MercyBatchRow row) {
+    final String? snapshot = row.appliedSnapshotJson;
+    if (snapshot == null || tryDecodeMercyAppliedBatch(snapshot).isOk) {
+      return true;
+    }
+    _recordQuarantine(
+      'mercy_batches',
+      row.batchId,
+      'applied snapshot is undecodable',
+    );
+    return false;
+  }
+
+  /// Quarantine is per-query and in-memory: persisting it would make a read
+  /// write, duplicate a rediscoverable fact, and leave a stale repair marker.
+  void _recordQuarantine(String table, String key, String reason) {
+    _diagnostics.record(
+      DiagnosticEvent(
+        level: DiagnosticLevel.error,
+        name: 'decode.quarantined',
+        timestampUtc: _clock.nowUtc(),
+        fields: <String, Object?>{'table': table, 'key': key, 'reason': reason},
+      ),
+    );
+  }
 
   @override
   Future<List<PriorityRank>> listActivePriorities() async {

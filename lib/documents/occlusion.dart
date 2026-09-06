@@ -3,6 +3,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:incremental_reader/shared/result.dart';
 import 'package:meta/meta.dart';
 
 /// How masks are applied while an image-occlusion card is reviewed.
@@ -102,11 +103,27 @@ String occlusionRegionsToJson(List<OcclusionRegion> regions) =>
 
 /// Decodes a mask set previously written by [occlusionRegionsToJson].
 List<OcclusionRegion> occlusionRegionsFromJson(String encoded) {
-  final decoded = jsonDecode(encoded) as List<Object?>;
-  return <OcclusionRegion>[
-    for (final entry in decoded)
-      _occlusionRegionFromMap(entry! as Map<String, Object?>),
-  ];
+  return tryDecodeOcclusionRegions(encoded).unwrap();
+}
+
+/// Attempts to decode a mask set without making one damaged row fatal to a
+/// list query.
+Result<List<OcclusionRegion>> tryDecodeOcclusionRegions(String encoded) {
+  try {
+    final List<Object?> decoded = jsonDecode(encoded) as List<Object?>;
+    return Ok<List<OcclusionRegion>>(<OcclusionRegion>[
+      for (final Object? entry in decoded)
+        _occlusionRegionFromMap(entry! as Map<String, Object?>),
+    ]);
+  } on Object catch (error, stackTrace) {
+    return Err<List<OcclusionRegion>>(
+      StorageFailure(
+        'occlusion regions are undecodable',
+        cause: error,
+        stackTrace: stackTrace,
+      ),
+    );
+  }
 }
 
 OcclusionRegion _occlusionRegionFromMap(Map<String, Object?> fields) =>

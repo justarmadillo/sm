@@ -1248,6 +1248,17 @@ class AppDatabase extends _$AppDatabase {
     return rows.map((QueryRow r) => r.data.values.first.toString()).toList();
   }
 
+  /// Runs SQLite's inexpensive page check used on every startup.
+  ///
+  /// Unlike `integrity_check`, `quick_check` skips index/row cross-checking,
+  /// which makes it suitable for the startup path of a large collection.
+  Future<List<String>> quickCheck() async {
+    final rows = await customSelect('PRAGMA quick_check').get();
+    return rows
+        .map((QueryRow row) => row.data.values.first.toString())
+        .toList();
+  }
+
   /// Whether the database reports no corruption.
   Future<bool> isHealthy() async {
     final result = await integrityCheck();

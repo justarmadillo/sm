@@ -10,7 +10,7 @@ import 'package:meta/meta.dart';
 
 /// Base class for every expected failure crossing an application boundary.
 @immutable
-sealed class AppFailure {
+abstract class AppFailure {
   const AppFailure(this.message, {this.cause, this.stackTrace});
 
   /// Human-readable description. Never contains user content.

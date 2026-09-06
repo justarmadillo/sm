@@ -16,15 +16,24 @@ import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/documents/source_edit.dart';
 import 'package:incremental_reader/documents/text_splice.dart';
 import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/row_converters.dart';
 
 /// Content aggregate: sources, blocks, extracts, cards.
 final class DriftContentRepository implements ContentRepository {
-  const DriftContentRepository(this._database);
+  const DriftContentRepository(
+    this._database, {
+    DiagnosticSink diagnostics = const NullDiagnosticSink(),
+    Clock clock = const SystemClock(),
+  }) : _diagnostics = diagnostics,
+       _clock = clock;
 
   final AppDatabase _database;
+  final DiagnosticSink _diagnostics;
+  final Clock _clock;
 
   @override
   Future<void> insertSource(Source source, Document document) async {
@@ -57,7 +66,27 @@ final class DriftContentRepository implements ContentRepository {
                 ($BlocksTable t) => OrderingTerm.asc(t.idx),
               ]))
             .get();
-    return documentFromRows(source, blocks);
+    final List<BlockRow> decodableBlocks = <BlockRow>[];
+    for (final BlockRow block in blocks) {
+      final result = tryDecodeContentSpans(block.contentSpans);
+      if (result.isOk) {
+        decodableBlocks.add(block);
+      } else {
+        _diagnostics.record(
+          DiagnosticEvent(
+            level: DiagnosticLevel.error,
+            name: 'decode.quarantined',
+            timestampUtc: _clock.nowUtc(),
+            fields: <String, Object?>{
+              'table': 'blocks',
+              'key': block.id,
+              'reason': result.failureOrNull!.message,
+            },
+          ),
+        );
+      }
+    }
+    return documentFromRows(source, decodableBlocks);
   }
 
   @override

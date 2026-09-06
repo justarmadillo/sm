@@ -3,15 +3,24 @@ library;
 
 import 'package:drift/drift.dart';
 import 'package:incremental_reader/documents/occlusion.dart';
+import 'package:incremental_reader/shared/clock.dart';
+import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/storage/contracts/occlusion_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/row_converters.dart';
 
 /// Keeps [OcclusionRepository]'s promise in the application database.
 final class DriftOcclusionRepository implements OcclusionRepository {
-  const DriftOcclusionRepository(this._database);
+  const DriftOcclusionRepository(
+    this._database, {
+    DiagnosticSink diagnostics = const NullDiagnosticSink(),
+    Clock clock = const SystemClock(),
+  }) : _diagnostics = diagnostics,
+       _clock = clock;
 
   final AppDatabase _database;
+  final DiagnosticSink _diagnostics;
+  final Clock _clock;
 
   @override
   Future<CardOcclusion?> findCardOcclusion(String cardId) async {
@@ -20,7 +29,13 @@ final class DriftOcclusionRepository implements OcclusionRepository {
               ($CardOcclusionsTable table) => table.cardId.equals(cardId),
             ))
             .getSingleOrNull();
-    return row == null ? null : cardOcclusionFromRow(row);
+    if (row == null) return null;
+    final regions = tryDecodeOcclusionRegions(row.regionsJson);
+    if (regions.isErr) {
+      _recordQuarantine(row.cardId, regions.failureOrNull!.message);
+      return null;
+    }
+    return cardOcclusionFromRow(row);
   }
 
   @override
@@ -31,7 +46,16 @@ final class DriftOcclusionRepository implements OcclusionRepository {
     final rows = await (_database.select(
       _database.cardOcclusions,
     )..where(($CardOcclusionsTable table) => table.cardId.isIn(cardIds))).get();
-    return <CardOcclusion>[for (final row in rows) cardOcclusionFromRow(row)];
+    final List<CardOcclusion> decoded = <CardOcclusion>[];
+    for (final CardOcclusionRow row in rows) {
+      final regions = tryDecodeOcclusionRegions(row.regionsJson);
+      if (regions.isErr) {
+        _recordQuarantine(row.cardId, regions.failureOrNull!.message);
+        continue;
+      }
+      decoded.add(cardOcclusionFromRow(row));
+    }
+    return decoded;
   }
 
   @override
@@ -73,5 +97,24 @@ final class DriftOcclusionRepository implements OcclusionRepository {
     return <String>[
       for (final row in rows) row.read(_database.cardOcclusions.imageSha256)!,
     ]..sort();
+  }
+
+  /// Records quarantine only in memory for the duration of this query.
+  ///
+  /// Persisting a marker would turn a read into a write, duplicate a fact the
+  /// decoder can rediscover, and become stale as soon as the row is repaired.
+  void _recordQuarantine(String key, String reason) {
+    _diagnostics.record(
+      DiagnosticEvent(
+        level: DiagnosticLevel.error,
+        name: 'decode.quarantined',
+        timestampUtc: _clock.nowUtc(),
+        fields: <String, Object?>{
+          'table': 'card_occlusions',
+          'key': key,
+          'reason': reason,
+        },
+      ),
+    );
   }
 }

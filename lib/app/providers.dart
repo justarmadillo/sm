@@ -25,6 +25,7 @@ import 'package:incremental_reader/shared/fan_out_diagnostic_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/in_memory_diagnostic_sink.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
+import 'package:incremental_reader/storage/contracts/database_check.dart';
 import 'package:incremental_reader/storage/contracts/database_maintenance.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/occlusion_repository.dart';
@@ -36,6 +37,7 @@ import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/drift/drift_content_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_database_check.dart';
 import 'package:incremental_reader/storage/drift/drift_database_maintenance.dart';
 import 'package:incremental_reader/storage/drift/drift_learning_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_occlusion_repository.dart';
@@ -167,7 +169,11 @@ final Provider<TransactionRunner> transactionRunnerProvider =
 /// Content aggregate.
 final Provider<ContentRepository> contentRepositoryProvider =
     Provider<ContentRepository>(
-      (Ref ref) => DriftContentRepository(ref.watch(databaseProvider)),
+      (Ref ref) => DriftContentRepository(
+        ref.watch(databaseProvider),
+        diagnostics: ref.watch(diagnosticsProvider),
+        clock: ref.watch(clockProvider),
+      ),
     );
 
 /// Video aggregate: videos and the ranges the user studies over them.
@@ -185,7 +191,11 @@ final Provider<SourceAssetRepository> sourceAssetRepositoryProvider =
 /// Image metadata and masks owned by occlusion cards.
 final Provider<OcclusionRepository> occlusionRepositoryProvider =
     Provider<OcclusionRepository>(
-      (Ref ref) => DriftOcclusionRepository(ref.watch(databaseProvider)),
+      (Ref ref) => DriftOcclusionRepository(
+        ref.watch(databaseProvider),
+        diagnostics: ref.watch(diagnosticsProvider),
+        clock: ref.watch(clockProvider),
+      ),
     );
 
 /// Immutable image blobs in this installation's application-support folder.
@@ -199,7 +209,11 @@ final Provider<SourceAssetFileStore> sourceAssetFileStoreProvider =
 /// Learning aggregate: schedules, pacing, priority, activity, repetition log.
 final Provider<LearningRepository> learningRepositoryProvider =
     Provider<LearningRepository>(
-      (Ref ref) => DriftLearningRepository(ref.watch(databaseProvider)),
+      (Ref ref) => DriftLearningRepository(
+        ref.watch(databaseProvider),
+        diagnostics: ref.watch(diagnosticsProvider),
+        clock: ref.watch(clockProvider),
+      ),
     );
 
 /// Settings aggregate.
@@ -219,6 +233,16 @@ final Provider<DatabaseMaintenance> databaseMaintenanceProvider =
     Provider<DatabaseMaintenance>(
       (Ref ref) => DriftDatabaseMaintenance(ref.watch(databaseProvider)),
     );
+
+/// Logical collection checks whose repairs may create or delete rows.
+final Provider<DatabaseCheck> databaseCheckProvider = Provider<DatabaseCheck>(
+  (Ref ref) => DriftDatabaseCheck(
+    ref.watch(databaseProvider),
+    ref.watch(transactionRunnerProvider),
+    ref.watch(diagnosticsProvider),
+    clock: ref.watch(clockProvider),
+  ),
+);
 
 /// Transfer aggregate.
 final Provider<TransferRepository> transferRepositoryProvider =
