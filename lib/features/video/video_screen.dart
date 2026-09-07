@@ -15,9 +15,9 @@ import 'package:incremental_reader/documents/video_link.dart';
 import 'package:incremental_reader/documents/video_time.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dart';
-import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
+import 'package:incremental_reader/features/tags/tags_picker_dialog.dart';
 import 'package:incremental_reader/features/video/video_clip_dialog.dart';
 import 'package:incremental_reader/features/video/video_view_model.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
@@ -156,8 +156,9 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
   }
 
   Future<void> _formulate(VideoUiState state) async {
-    final List<CardDraft>? drafts = await showFormulationDialog(
+    final FormulationResult? formulation = await showFormulationDialog(
       context,
+      ref: ref,
       seedText: state.element.note,
       existingCardCount: state.cards.length,
       overlapContextBefore: ref
@@ -172,8 +173,8 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
           .overlapContextAfter,
       parentNoun: 'video',
     );
-    if (drafts == null || drafts.isEmpty) return;
-    await _model.formulate(drafts);
+    if (formulation == null || formulation.drafts.isEmpty) return;
+    await _model.formulate(formulation.drafts, tagIds: formulation.tagIds);
   }
 
   Future<void> _saveNote() async {
@@ -243,6 +244,11 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
       style: const TextStyle(fontSize: 16),
     ),
     actions: <Widget>[
+      IconButton(
+        tooltip: 'Tags',
+        icon: const Icon(Icons.label_outline),
+        onPressed: () => editTagsOfElement(context, ref, state.topic.ref),
+      ),
       IconButton(
         tooltip: 'Priority',
         icon: const Icon(Icons.low_priority),
@@ -667,6 +673,7 @@ class _VideoActionBar extends StatelessWidget {
       top: false,
       child: isCompactWidth(context)
           ? Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 _hint(),

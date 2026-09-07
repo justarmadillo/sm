@@ -64,7 +64,7 @@ void main() {
       final version = await upgraded
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.data.values.single, 17);
+      expect(version.data.values.single, kSchemaVersion);
       final old = await upgraded
           .customSelect("SELECT front FROM cards WHERE id = 'old-cloze'")
           .getSingle();

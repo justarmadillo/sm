@@ -2,9 +2,19 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
+import 'package:incremental_reader/storage/contracts/tag_repository.dart';
+
+/// Drafts and the direct tags every new card should carry.
+final class FormulationResult {
+  const FormulationResult({required this.drafts, required this.tagIds});
+  final List<CardDraft> drafts;
+  final Set<String> tagIds;
+}
 
 /// Opens batch formulation over [seedText].
 ///
@@ -12,24 +22,32 @@ import 'package:incremental_reader/shared/ui/screen_width.dart';
 /// extract, from a selection in an article, or from nothing at all, and the
 /// only thing that changes is the text it starts with and what it calls the
 /// element the cards will hang off.
-Future<List<CardDraft>?> showFormulationDialog(
+Future<FormulationResult?> showFormulationDialog(
   BuildContext context, {
+  WidgetRef? ref,
   required String seedText,
   required int existingCardCount,
   int overlapContextBefore = 1,
   int overlapContextAfter = 0,
   String parentNoun = 'extract',
-}) => showDialog<List<CardDraft>>(
-  context: context,
-  barrierDismissible: false,
-  builder: (BuildContext context) => _FormulationDialog(
-    seedText: seedText,
-    existingCardCount: existingCardCount,
-    parentNoun: parentNoun,
-    overlapContextBefore: overlapContextBefore,
-    overlapContextAfter: overlapContextAfter,
-  ),
-);
+}) async {
+  final List<Tag> tags = ref == null
+      ? const <Tag>[]
+      : await ref.read(tagRepositoryProvider).listTags();
+  if (!context.mounted) return null;
+  return showDialog<FormulationResult>(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) => _FormulationDialog(
+      seedText: seedText,
+      existingCardCount: existingCardCount,
+      parentNoun: parentNoun,
+      overlapContextBefore: overlapContextBefore,
+      overlapContextAfter: overlapContextAfter,
+      tags: tags,
+    ),
+  );
+}
 
 class _FormulationDialog extends StatefulWidget {
   const _FormulationDialog({
@@ -38,6 +56,7 @@ class _FormulationDialog extends StatefulWidget {
     required this.parentNoun,
     required this.overlapContextBefore,
     required this.overlapContextAfter,
+    required this.tags,
   });
 
   final String seedText;
@@ -45,6 +64,7 @@ class _FormulationDialog extends StatefulWidget {
   final String parentNoun;
   final int overlapContextBefore;
   final int overlapContextAfter;
+  final List<Tag> tags;
 
   @override
   State<_FormulationDialog> createState() => _FormulationDialogState();
@@ -65,6 +85,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
     text: '${widget.overlapContextAfter}',
   );
   final List<CardDraft> _queued = <CardDraft>[];
+  final Set<String> _tagIds = <String>{};
   _DraftType _type = _DraftType.qa;
   String? _error;
 
@@ -106,6 +127,27 @@ class _FormulationDialogState extends State<_FormulationDialog> {
               const SizedBox(height: 14),
               _stagingRow(stagedCardCount),
               if (_queued.isNotEmpty) ..._stagedCardChips(),
+              if (widget.tags.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 14),
+                const Text('Tags on new cards'),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: <Widget>[
+                    for (final Tag tag in widget.tags)
+                      FilterChip(
+                        label: Text('#${tag.name}'),
+                        selected: _tagIds.contains(tag.id),
+                        onSelected: (bool selected) => setState(() {
+                          selected
+                              ? _tagIds.add(tag.id)
+                              : _tagIds.remove(tag.id);
+                        }),
+                      ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -395,7 +437,11 @@ class _FormulationDialogState extends State<_FormulationDialog> {
       }
       submitted = List<CardDraft>.unmodifiable(drafts);
     });
-    if (submitted != null) Navigator.of(context).pop(submitted);
+    if (submitted != null) {
+      Navigator.of(
+        context,
+      ).pop(FormulationResult(drafts: submitted!, tagIds: Set.of(_tagIds)));
+    }
   }
 
   void _clearCurrent() {

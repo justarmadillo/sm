@@ -201,6 +201,7 @@ final class EditSourceBlock extends AppCommand {
     required this.blockId,
     required this.markdown,
     required this.baseContentRevision,
+    this.images = const <SourceImageImport>[],
     super.timestampUtc,
   });
 
@@ -209,6 +210,9 @@ final class EditSourceBlock extends AppCommand {
 
   /// The block's new markdown. Blank removes the block.
   final String markdown;
+
+  /// Validated image files referenced by newly inserted Markdown.
+  final List<SourceImageImport> images;
 
   final int baseContentRevision;
 }

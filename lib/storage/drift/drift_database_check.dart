@@ -52,6 +52,7 @@ final class DriftDatabaseCheck implements DatabaseCheck {
       () async {
         final List<DatabaseCheckFinding> found = <DatabaseCheckFinding>[];
         await _repairSearchDocumentOrphans(found);
+        await _repairElementTagOrphans(found);
         await _repairSchedulesWithoutElements(found);
         await _repairElementsWithoutSchedules(found);
         await _repairCardParents(found);
@@ -108,6 +109,24 @@ NOT EXISTS (
       countSql:
           '$_elementIdentity SELECT COUNT(*) AS count FROM search_documents WHERE $where',
       repairSql: '$_elementIdentity DELETE FROM search_documents WHERE $where',
+    );
+  }
+
+  Future<void> _repairElementTagOrphans(
+    List<DatabaseCheckFinding> findings,
+  ) async {
+    const String where = '''NOT EXISTS (
+  SELECT 1 FROM element_identity identity
+  WHERE identity.element_id = element_tags.element_id
+    AND identity.element_type = element_tags.element_type
+)''';
+    await _repair(
+      findings,
+      name: 'element_tag_orphan',
+      description: 'Tag links without content were removed.',
+      countSql:
+          '$_elementIdentity SELECT COUNT(*) AS count FROM element_tags WHERE $where',
+      repairSql: '$_elementIdentity DELETE FROM element_tags WHERE $where',
     );
   }
 

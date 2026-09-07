@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/browser/import_sheet.dart';
-import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
 import 'package:incremental_reader/features/occlusion/occlusion_screen.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
@@ -116,18 +115,23 @@ Future<void> _addVideo(BuildContext context, WidgetRef ref) async {
 
 Future<void> _addCards(BuildContext context, WidgetRef ref) async {
   final settings = ref.read(settingsStoreProvider).currentOrDefaults.cards;
-  final List<CardDraft>? drafts = await showFormulationDialog(
+  final FormulationResult? formulation = await showFormulationDialog(
     context,
+    ref: ref,
     seedText: '',
     existingCardCount: 0,
     overlapContextBefore: settings.overlapContextBefore,
     overlapContextAfter: settings.overlapContextAfter,
     parentNoun: 'collection',
   );
-  if (drafts == null || !context.mounted) return;
+  if (formulation == null || !context.mounted) return;
   await ref
       .read(browserViewModelProvider.notifier)
-      .createCards(parent: null, drafts: drafts);
+      .createCards(
+        parent: null,
+        drafts: formulation.drafts,
+        tagIds: formulation.tagIds,
+      );
 }
 
 class _AddChoice extends StatelessWidget {

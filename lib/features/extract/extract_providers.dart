@@ -30,6 +30,7 @@ final Provider<FormulationCommandRunner> formulationCommandRunnerProvider =
         videos: ref.watch(videoRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
         search: ref.watch(searchRepositoryProvider),
+        tags: ref.watch(tagRepositoryProvider),
         transfer: ref.watch(transferRepositoryProvider),
         transactions: ref.watch(transactionRunnerProvider),
         context: ref.watch(schedulingContextProvider),

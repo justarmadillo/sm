@@ -26,6 +26,7 @@ import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
+import 'package:incremental_reader/storage/contracts/tag_repository.dart';
 import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:meta/meta.dart';
 
@@ -37,6 +38,8 @@ final class BrowserTreeNode {
     required this.title,
     required this.preview,
     required this.children,
+    required this.directTagIds,
+    required this.effectiveTagIds,
     this.parentRef,
     this.thumbnailSource,
     this.dueDay,
@@ -61,6 +64,12 @@ final class BrowserTreeNode {
   /// What is filed under this element, in the user's order.
   final List<BrowserTreeNode> children;
 
+  /// Tags written on this row rather than inherited through filing.
+  final Set<String> directTagIds;
+
+  /// Direct tags plus every tag inherited from filed ancestors.
+  final Set<String> effectiveTagIds;
+
   /// Canonical due day, or null for an element with no schedule row.
   final StudyDay? dueDay;
 
@@ -84,13 +93,16 @@ final class BrowserTreeQuery {
     required ContentRepository content,
     required VideoRepository videos,
     required LearningRepository learning,
+    required TagRepository tags,
   }) : _content = content,
        _videos = videos,
-       _learning = learning;
+       _learning = learning,
+       _tags = tags;
 
   final ContentRepository _content;
   final VideoRepository _videos;
   final LearningRepository _learning;
+  final TagRepository _tags;
 
   /// Everything in the collection, nested under whatever it is filed beneath.
   Future<List<BrowserTreeNode>> load() async {
@@ -99,6 +111,8 @@ final class BrowserTreeQuery {
     final Map<ElementRef, Sm20ElementStatus> statuses = await _statuses(
       elements,
     );
+    final Map<ElementRef, Set<String>> tagsByElement = await _tags
+        .listAllElementTags();
 
     final Set<String> presentIds = <String>{
       for (final _Element element in elements) element.ref.id,
@@ -123,6 +137,8 @@ final class BrowserTreeQuery {
       childrenByParent: childrenByParent,
       schedules: schedules,
       statuses: statuses,
+      tagsByElement: tagsByElement,
+      inheritedTagIds: const <String>{},
       alreadyPlaced: <String>{},
     );
   }
@@ -245,6 +261,8 @@ final class BrowserTreeQuery {
     required Map<String, List<_Element>> childrenByParent,
     required Map<String, ElementSchedule> schedules,
     required Map<ElementRef, Sm20ElementStatus> statuses,
+    required Map<ElementRef, Set<String>> tagsByElement,
+    required Set<String> inheritedTagIds,
     required Set<String> alreadyPlaced,
   }) {
     final List<_Element> ordered = <_Element>[...level]
@@ -257,6 +275,11 @@ final class BrowserTreeQuery {
     for (final _Element element in ordered) {
       if (!alreadyPlaced.add(element.ref.id)) continue;
       final ElementSchedule? schedule = schedules[element.ref.id];
+      final Set<String> directTagIds = tagsByElement[element.ref] ?? <String>{};
+      final Set<String> effectiveTagIds = <String>{
+        ...inheritedTagIds,
+        ...directTagIds,
+      };
       nodes.add(
         BrowserTreeNode(
           ref: element.ref,
@@ -267,12 +290,16 @@ final class BrowserTreeQuery {
           dueDay: schedule?.dueDay,
           status: statuses[element.ref],
           lifecycle: schedule?.lifecycle,
+          directTagIds: directTagIds,
+          effectiveTagIds: effectiveTagIds,
           children: _nodesFrom(
             childrenByParent[element.ref.id] ?? const <_Element>[],
             parentRef: element.ref,
             childrenByParent: childrenByParent,
             schedules: schedules,
             statuses: statuses,
+            tagsByElement: tagsByElement,
+            inheritedTagIds: effectiveTagIds,
             alreadyPlaced: alreadyPlaced,
           ),
         ),

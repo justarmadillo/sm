@@ -339,7 +339,10 @@ final class ExtractViewModel
   }
 
   /// Creates linked cards without advancing or dismissing this extract.
-  Future<bool> formulate(List<CardDraft> drafts) async {
+  Future<bool> formulate(
+    List<CardDraft> drafts, {
+    Set<String> tagIds = const <String>{},
+  }) async {
     final current = state.valueOrNull;
     if (current == null || !current.canMutate || current.isBusy) return false;
     state = AsyncValue<ExtractUiState>.data(current.copyWith(isBusy: true));
@@ -350,6 +353,7 @@ final class ExtractViewModel
             OperationId(ref.read(idGeneratorProvider).newId()),
             parent: CardParent.extract(current.extract.id),
             drafts: drafts,
+            tagIds: tagIds,
           ),
         );
     final latest = state.valueOrNull ?? current;

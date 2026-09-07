@@ -1,3 +1,6 @@
+/// Widget tests for staged card formulation and its returned tag selection.
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:incremental_reader/documents/card.dart';
@@ -25,7 +28,7 @@ void main() {
   testWidgets('stages mixed Q&A and multi-ordinal cloze drafts', (
     WidgetTester tester,
   ) async {
-    late Future<List<CardDraft>?> result;
+    late Future<FormulationResult?> result;
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -68,7 +71,7 @@ void main() {
     await tester.tap(find.text('Create 3 cards'));
     await tester.pumpAndSettle();
 
-    final drafts = (await result)!;
+    final drafts = (await result)!.drafts;
     expect(drafts, hasLength(2));
     expect(drafts.first, isA<QaCardDraft>());
     final cloze = drafts.last as ClozeCardDraft;
@@ -108,7 +111,7 @@ void main() {
   testWidgets('splits a pasted list into an overlapper draft', (
     WidgetTester tester,
   ) async {
-    late Future<List<CardDraft>?> result;
+    late Future<FormulationResult?> result;
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -140,7 +143,7 @@ void main() {
     await tester.tap(find.text('Create 3 cards'));
     await tester.pumpAndSettle();
 
-    final draft = (await result)!.single as ClozeOverlapperCardDraft;
+    final draft = (await result)!.drafts.single as ClozeOverlapperCardDraft;
     expect(draft.text, '{{c1::Alpha}}\n{{c2::Beta}}\n{{c3::Gamma}}');
     expect(draft.contextBefore, 2);
     expect(draft.contextAfter, 1);

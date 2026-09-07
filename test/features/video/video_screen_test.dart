@@ -43,20 +43,21 @@ void main() {
       ],
     );
     outcomes = <StudyRouteResult>[];
-    final VideoElement element = (await container
-            .read(videoCommandRunnerProvider)
-            .importVideo(
-              ImportVideo(
-                const OperationId('import-1'),
-                url: 'https://www.youtube.com/watch?v=lecture1',
-                title: 'Retinal detachment',
-                startSeconds: 0,
-                endSeconds: 1200,
-                durationSeconds: 7200,
-                timestampUtc: clock.nowUtc(),
-              ),
-            ))
-        .unwrap();
+    final VideoElement element =
+        (await container
+                .read(videoCommandRunnerProvider)
+                .importVideo(
+                  ImportVideo(
+                    const OperationId('import-1'),
+                    url: 'https://www.youtube.com/watch?v=lecture1',
+                    title: 'Retinal detachment',
+                    startSeconds: 0,
+                    endSeconds: 1200,
+                    durationSeconds: 7200,
+                    timestampUtc: clock.nowUtc(),
+                  ),
+                ))
+            .unwrap();
     elementId = element.id;
   });
 
@@ -69,8 +70,11 @@ void main() {
       VideoRequest(videoElementId: elementId, mode: VideoMode.scheduled);
 
   /// A stand-in for the queue: a screen that opens the same range on demand.
-  Future<void> pumpQueue(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1200, 900);
+  Future<void> pumpQueue(
+    WidgetTester tester, {
+    Size physicalSize = const Size(1200, 900),
+  }) async {
+    tester.view.physicalSize = physicalSize;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -130,5 +134,19 @@ void main() {
       isFalse,
       reason: 'a carried-over isDone closes the screen on the next toast',
     );
+  });
+
+  testWidgets('compact video actions stay at the bottom of the screen', (
+    WidgetTester tester,
+  ) async {
+    await pumpQueue(tester, physicalSize: const Size(360, 800));
+
+    await start(tester);
+
+    final double doneButtonCenter = tester
+        .getCenter(find.widgetWithText(FilledButton, 'Done'))
+        .dy;
+    expect(doneButtonCenter, greaterThan(600));
+    expect(tester.takeException(), isNull);
   });
 }

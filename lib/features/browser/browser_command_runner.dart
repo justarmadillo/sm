@@ -33,6 +33,7 @@ import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/search_repository.dart';
+import 'package:incremental_reader/storage/contracts/tag_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 import 'package:incremental_reader/storage/contracts/video_repository.dart';
@@ -52,6 +53,7 @@ final class BrowserCommandRunner {
     required VideoRepository videos,
     required LearningRepository learning,
     required SearchRepository search,
+    required TagRepository tags,
     required SchedulingContext context,
     required TransferRepository transfer,
     required TransactionRunner transactions,
@@ -63,6 +65,7 @@ final class BrowserCommandRunner {
        _videos = videos,
        _learning = learning,
        _search = search,
+       _tags = tags,
        _context = context,
        _transfer = transfer,
        _transactions = transactions,
@@ -75,6 +78,7 @@ final class BrowserCommandRunner {
   final ContentRepository _content;
   final LearningRepository _learning;
   final SearchRepository _search;
+  final TagRepository _tags;
   final SchedulingContext _context;
   final TransferRepository _transfer;
   final TransactionRunner _transactions;
@@ -335,6 +339,7 @@ final class BrowserCommandRunner {
   Future<void> _erase(Set<ElementRef> doomed) async {
     for (final ElementRef ref in _deletionOrder(doomed)) {
       await _search.deleteDocument(ref);
+      await _tags.deleteTagsOfElement(ref);
       await _learning.deleteSchedule(ref);
       switch (ref.type) {
         case ElementType.card:

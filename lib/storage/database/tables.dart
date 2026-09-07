@@ -888,6 +888,49 @@ class SearchDocuments extends Table {
   };
 }
 
+/// A flat user-defined label used to describe what elements are about.
+@DataClassName('TagRow')
+class Tags extends Table {
+  TextColumn get id => text()();
+
+  /// Exactly as the user typed it, after normalization.
+  TextColumn get name => text().withLength(min: 1, max: 100)();
+
+  /// Case-insensitive identity, so capitalization cannot fork a tag.
+  TextColumn get nameLowercase => text().withLength(min: 1, max: 100)();
+
+  IntColumn get createdAtUtc => integer()();
+  IntColumn get updatedAtUtc => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+
+  @override
+  List<String> get customConstraints => <String>['UNIQUE (name_lowercase)'];
+}
+
+/// The direct tags carried by elements; inherited tags remain derived.
+@DataClassName('ElementTagRow')
+class ElementTags extends Table {
+  TextColumn get tagId =>
+      text().references(Tags, #id, onDelete: KeyAction.cascade)();
+
+  /// No foreign key: SQLite cannot reference four element tables from one row.
+  TextColumn get elementId => text()();
+
+  IntColumn get elementType =>
+      integer().check(elementType.isBetweenValues(0, 3))();
+
+  IntColumn get taggedAtUtc => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{
+    tagId,
+    elementId,
+    elementType,
+  };
+}
+
 /// Append-only activity log for diagnosis and audit.
 @DataClassName('ActivityEventRow')
 class ActivityEvents extends Table {

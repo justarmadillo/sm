@@ -5,10 +5,13 @@
 /// hit-testable while it is gone, and cancelling writes nothing.
 library;
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/document.dart';
+import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/widgets/block_editor.dart';
 import 'package:incremental_reader/features/reader/widgets/block_view.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
@@ -29,9 +32,11 @@ void main() {
     Document document,
     ReaderSelectionController controller, {
     String? editingBlockId,
-    void Function(Block block, String markdown)? onCommit,
+    void Function(Block block, String markdown, List<SourceImageImport> images)?
+    onCommit,
     void Function(Block block)? onCancel,
     void Function(Block block)? onDelete,
+    Future<List<SourceImageImport>> Function()? onChooseImages,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -43,9 +48,11 @@ void main() {
               document: document,
               controller: controller,
               editingBlockId: editingBlockId,
-              onEditCommit: onCommit ?? (Block _, String _) {},
+              onEditCommit:
+                  onCommit ?? (Block _, String _, List<SourceImageImport> _) {},
               onEditCancel: onCancel,
               onEditDelete: onDelete,
+              onEditChooseImages: onChooseImages,
             ),
           ),
         ),
@@ -61,12 +68,7 @@ void main() {
     final controller = ReaderSelectionController(document);
     final target = document.blocks[1];
 
-    await pumpReader(
-      tester,
-      document,
-      controller,
-      editingBlockId: target.id,
-    );
+    await pumpReader(tester, document, controller, editingBlockId: target.id);
 
     expect(find.byType(BlockEditor), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
@@ -85,12 +87,7 @@ void main() {
     final controller = ReaderSelectionController(document);
     final target = document.blocks[1];
 
-    await pumpReader(
-      tester,
-      document,
-      controller,
-      editingBlockId: target.id,
-    );
+    await pumpReader(tester, document, controller, editingBlockId: target.id);
 
     final field = tester.widget<TextField>(find.byType(TextField));
     expect(field.controller!.text, target.raw);
@@ -111,12 +108,7 @@ void main() {
     await pumpReader(tester, document, controller);
     expect(controller.isParagraphMounted(target.id), isTrue);
 
-    await pumpReader(
-      tester,
-      document,
-      controller,
-      editingBlockId: target.id,
-    );
+    await pumpReader(tester, document, controller, editingBlockId: target.id);
 
     // Its paragraph is gone, so nothing may resolve a selection against the
     // layout it used to have.
@@ -142,7 +134,8 @@ void main() {
       document,
       controller,
       editingBlockId: target.id,
-      onCommit: (Block _, String markdown) => committed = markdown,
+      onCommit: (Block _, String markdown, List<SourceImageImport> _) =>
+          committed = markdown,
       onCancel: (Block _) => cancelled = true,
     );
 
@@ -187,6 +180,55 @@ void main() {
     expect(deleted?.id, document.blocks[1].id);
   });
 
+  testWidgets('Insert image adds Markdown at the caret and waits for Save', (
+    WidgetTester tester,
+  ) async {
+    final Document document = Document.parse(
+      sourceId: 's',
+      markdown: _markdown,
+    );
+    final ReaderSelectionController controller = ReaderSelectionController(
+      document,
+    );
+    final Block target = document.blocks[1];
+    String? committed;
+    List<SourceImageImport>? committedImages;
+    final SourceImageImport image = SourceImageImport(
+      bytes: Uint8List.fromList(<int>[1, 2, 3]),
+      altText: 'Diagram',
+      sha256: 'a' * 64,
+      mime: 'image/png',
+      widthPx: 10,
+      heightPx: 10,
+    );
+
+    await pumpReader(
+      tester,
+      document,
+      controller,
+      editingBlockId: target.id,
+      onChooseImages: () async => <SourceImageImport>[image],
+      onCommit: (Block _, String markdown, List<SourceImageImport> images) {
+        committed = markdown;
+        committedImages = images;
+      },
+    );
+
+    await tester.tap(find.text('Insert image'));
+    await tester.pump();
+    expect(committed, isNull, reason: 'choosing remains a cancellable draft');
+    final TextField field = tester.widget<TextField>(find.byType(TextField));
+    expect(
+      field.controller!.text,
+      contains('![Diagram](ir-asset:${'a' * 64})'),
+    );
+
+    await tester.tap(find.text('Save'));
+    await tester.pump();
+    expect(committed, contains('![Diagram](ir-asset:${'a' * 64})'));
+    expect(committedImages, <SourceImageImport>[image]);
+  });
+
   testWidgets('a commit in flight disables the controls', (
     WidgetTester tester,
   ) async {
@@ -204,7 +246,7 @@ void main() {
               controller: controller,
               editingBlockId: document.blocks[1].id,
               isBusy: true,
-              onEditCommit: (Block _, String _) {},
+              onEditCommit: (Block _, String _, List<SourceImageImport> _) {},
               onEditCancel: (Block _) {},
             ),
           ),
@@ -215,7 +257,9 @@ void main() {
 
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
     expect(
-      tester.widget<TextButton>(find.widgetWithText(TextButton, 'Cancel')).onPressed,
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Cancel'))
+          .onPressed,
       isNull,
     );
   });
@@ -238,7 +282,7 @@ void main() {
               controller: controller,
               typography: typography,
               editingBlockId: document.blocks[1].id,
-              onEditCommit: (Block _, String _) {},
+              onEditCommit: (Block _, String _, List<SourceImageImport> _) {},
             ),
           ),
         ),

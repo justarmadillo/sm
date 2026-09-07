@@ -31,7 +31,10 @@ enum VideoMode { scheduled, browse }
 
 @immutable
 final class VideoRequest {
-  const VideoRequest({required this.videoElementId, this.mode = VideoMode.browse});
+  const VideoRequest({
+    required this.videoElementId,
+    this.mode = VideoMode.browse,
+  });
 
   final String videoElementId;
   final VideoMode mode;
@@ -173,7 +176,9 @@ final class VideoViewModel
       cards: await ref
           .read(contentRepositoryProvider)
           .listCardsOfVideo(element.id),
-      effectiveDueDay: await ref.read(effectiveDueQueryProvider).forTopic(topic),
+      effectiveDueDay: await ref
+          .read(effectiveDueQueryProvider)
+          .forTopic(topic),
     );
   }
 
@@ -324,7 +329,10 @@ final class VideoViewModel
   }
 
   /// Creates linked cards without advancing or dismissing this range.
-  Future<bool> formulate(List<CardDraft> drafts) async {
+  Future<bool> formulate(
+    List<CardDraft> drafts, {
+    Set<String> tagIds = const <String>{},
+  }) async {
     final VideoUiState? current = state.valueOrNull;
     if (current == null || !current.canMutate || current.isBusy) return false;
     state = AsyncValue<VideoUiState>.data(current.copyWith(isBusy: true));
@@ -335,6 +343,7 @@ final class VideoViewModel
             OperationId(ref.read(idGeneratorProvider).newId()),
             parent: CardParent.video(current.element.id),
             drafts: drafts,
+            tagIds: tagIds,
           ),
         );
     final VideoUiState latest = state.valueOrNull ?? current;

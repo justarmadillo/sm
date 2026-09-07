@@ -9,6 +9,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/inline_markup.dart';
+import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/widgets/block_editor.dart';
 import 'package:incremental_reader/features/reader/widgets/block_span_builder.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
@@ -108,6 +109,7 @@ class BlockView extends StatefulWidget {
     this.onEditCommit,
     this.onEditCancel,
     this.onEditDelete,
+    this.onEditChooseImages,
     this.images = const <String, ReaderImagePresentation>{},
     this.imageMaxWidth = 560,
     super.key,
@@ -147,11 +149,18 @@ class BlockView extends StatefulWidget {
   final bool isBusy;
 
   /// Called with the block's new raw markdown.
-  final void Function(Block block, String markdown)? onEditCommit;
+  final void Function(
+    Block block,
+    String markdown,
+    List<SourceImageImport> images,
+  )?
+  onEditCommit;
 
   final void Function(Block block)? onEditCancel;
 
   final void Function(Block block)? onEditDelete;
+
+  final Future<List<SourceImageImport>> Function()? onEditChooseImages;
 
   @override
   State<BlockView> createState() => _BlockViewState();
@@ -258,11 +267,13 @@ class _BlockViewState extends State<BlockView> {
         block: block,
         typography: typography,
         isBusy: widget.isBusy,
-        onCommit: (String markdown) => widget.onEditCommit!(block, markdown),
+        onCommit: (String markdown, List<SourceImageImport> images) =>
+            widget.onEditCommit!(block, markdown, images),
         onCancel: () => widget.onEditCancel?.call(block),
         onDelete: widget.onEditDelete == null
             ? null
             : () => widget.onEditDelete!(block),
+        onChooseImages: widget.onEditChooseImages,
       );
     }
 

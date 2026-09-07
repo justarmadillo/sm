@@ -26,7 +26,6 @@ import 'package:incremental_reader/features/browser/browser_tree_query.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/browser/import_sheet.dart';
 import 'package:incremental_reader/features/browser/open_element.dart';
-import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
 import 'package:incremental_reader/features/occlusion/occlusion_screen.dart';
 import 'package:incremental_reader/features/priority/learning_command_menu.dart';
@@ -36,16 +35,22 @@ import 'package:incremental_reader/features/reader/reader_image_input.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/features/search/search_screen.dart';
+import 'package:incremental_reader/features/tags/tags_commands.dart';
+import 'package:incremental_reader/features/tags/tags_picker_dialog.dart';
+import 'package:incremental_reader/features/tags/tags_providers.dart';
+import 'package:incremental_reader/features/tags/tags_screen.dart';
 import 'package:incremental_reader/features/video/import_video_sheet.dart';
 import 'package:incremental_reader/features/video/video_screen.dart';
 import 'package:incremental_reader/features/video/video_view_model.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/element_type_badge.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 import 'package:incremental_reader/shared/ui/video_thumbnail.dart';
+import 'package:incremental_reader/storage/contracts/tag_repository.dart';
 
 /// Opens the knowledge tree.
 Future<void> openBrowser(BuildContext context, WidgetRef ref) async {
@@ -62,6 +67,11 @@ final FutureProvider<List<BrowserTreeNode>> browserTreeProvider =
     FutureProvider<List<BrowserTreeNode>>(
       (Ref ref) => ref.watch(browserTreeQueryProvider).load(),
     );
+
+/// Tag definitions used by the Browser's intersecting filter.
+final FutureProvider<List<Tag>> browserTagsProvider = FutureProvider<List<Tag>>(
+  (Ref ref) => ref.watch(tagRepositoryProvider).listTags(),
+);
 
 /// Horizontal step per level of nesting.
 ///
@@ -93,6 +103,9 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
 
   /// Types the tree is restricted to; empty means everything.
   Set<ElementType> _types = const <ElementType>{};
+
+  /// Every selected tag must be effective on a row for that row to remain.
+  Set<String> _tagIds = const <String>{};
 
   /// Opens every node, once, the first time the tree loads.
   ///
@@ -170,6 +183,11 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     return AppBar(
       title: const Text('Browser'),
       actions: <Widget>[
+        IconButton(
+          tooltip: 'Tags',
+          onPressed: _manageTags,
+          icon: const Icon(Icons.label_outline),
+        ),
         IconButton(
           tooltip: 'Select elements',
           onPressed: () => setState(() => _isSelecting = true),
@@ -267,6 +285,11 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         size: 48,
       ),
       IconButton(
+        tooltip: 'Add or remove tags',
+        onPressed: _selected.isEmpty ? null : _changeSelectedTags,
+        icon: const Icon(Icons.label_outline),
+      ),
+      IconButton(
         tooltip: 'Delete selected elements',
         onPressed: _selected.isEmpty
             ? null
@@ -343,6 +366,12 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
       _TypeFilter(
         selected: _types,
         onChanged: (Set<ElementType> types) => setState(() => _types = types),
+      ),
+      _TagFilter(
+        tags: ref.watch(browserTagsProvider).valueOrNull ?? const <Tag>[],
+        selected: _tagIds,
+        onChanged: (Set<String> tagIds) => setState(() => _tagIds = tagIds),
+        onManage: _manageTags,
       ),
       Expanded(child: _buildBody(roots)),
     ],
@@ -458,8 +487,9 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     BuildContext context,
     BrowserTreeNode? under,
   ) async {
-    final List<CardDraft>? drafts = await showFormulationDialog(
+    final FormulationResult? formulation = await showFormulationDialog(
       context,
+      ref: ref,
       seedText: '',
       existingCardCount: under?.children.length ?? 0,
       overlapContextBefore: ref
@@ -474,12 +504,13 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
           .overlapContextAfter,
       parentNoun: under == null ? 'collection' : 'element',
     );
-    if (drafts == null || !context.mounted) return;
+    if (formulation == null || !context.mounted) return;
 
     final BrowserViewModel model = ref.read(browserViewModelProvider.notifier);
     final List<ElementRef>? created = await model.createCards(
       parent: _cardParentFor(under),
-      drafts: drafts,
+      drafts: formulation.drafts,
+      tagIds: formulation.tagIds,
     );
     if (created != null && under != null) {
       for (final ElementRef card in created) {
@@ -559,6 +590,95 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         if (await _confirmDelete(context, node)) {
           await model.deleteElement(node.ref);
         }
+      case 'tags':
+        await _saveTags(node);
+    }
+    ref.invalidate(browserTreeProvider);
+  }
+
+  Future<void> _saveTags(BrowserTreeNode node) async {
+    final Set<String>? chosen = await showTagsPicker(
+      context,
+      ref,
+      initialTagIds: node.directTagIds,
+      title: 'Tags on ${node.title}',
+    );
+    if (chosen == null || !mounted) return;
+    final result = await ref
+        .read(tagsCommandRunnerProvider)
+        .save(
+          SaveTagsOfElement(
+            OperationId(ref.read(idGeneratorProvider).newId()),
+            ref: node.ref,
+            tagIds: chosen,
+          ),
+        );
+    if (!mounted) return;
+    if (result.isErr) {
+      showToast(context, result.failureOrNull!.message, isError: true);
+    }
+    ref.invalidate(browserTreeProvider);
+  }
+
+  /// Keeps renamed filters selected by stable id and drops only tags that the
+  /// Tags screen deleted while it was open.
+  Future<void> _manageTags() async {
+    await openTags(context);
+    if (!mounted) return;
+    final Set<String> existing = <String>{
+      for (final Tag tag in await ref.read(tagRepositoryProvider).listTags())
+        tag.id,
+    };
+    if (!mounted) return;
+    setState(() => _tagIds = _tagIds.intersection(existing));
+    ref.invalidate(browserTagsProvider);
+    ref.invalidate(browserTreeProvider);
+  }
+
+  Future<void> _changeSelectedTags() async {
+    final bool? shouldInsert = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => SimpleDialog(
+        title: const Text('Change tags on selection'),
+        children: <Widget>[
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const ListTile(
+              leading: Icon(Icons.add),
+              title: Text('Add tags'),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const ListTile(
+              leading: Icon(Icons.remove),
+              title: Text('Remove tags'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (shouldInsert == null || !mounted) return;
+    final Set<String>? chosen = await showTagsPicker(context, ref);
+    if (chosen == null || chosen.isEmpty || !mounted) return;
+    final OperationId operation = OperationId(
+      ref.read(idGeneratorProvider).newId(),
+    );
+    final refs = _selected.toList(growable: false);
+    final result = shouldInsert
+        ? await ref
+              .read(tagsCommandRunnerProvider)
+              .insert(
+                InsertTagsOnElements(operation, refs: refs, tagIds: chosen),
+              )
+        : await ref
+              .read(tagsCommandRunnerProvider)
+              .deleteFromElements(
+                DeleteTagsFromElements(operation, refs: refs, tagIds: chosen),
+              );
+    if (!mounted) return;
+    if (result.isErr) {
+      showToast(context, result.failureOrNull!.message, isError: true);
     }
     ref.invalidate(browserTreeProvider);
   }
@@ -666,10 +786,13 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   /// otherwise hide every card underneath it, which is the opposite of what
   /// filtering to cards means.
   void _flatten(BrowserTreeNode node, int depth, List<_TreeRow> rows) {
-    final bool matches = _types.isEmpty || _types.contains(node.ref.type);
+    final bool matchesType = _types.isEmpty || _types.contains(node.ref.type);
+    final bool matchesTags = node.effectiveTagIds.containsAll(_tagIds);
+    final bool matches = matchesType && matchesTags;
     if (matches) rows.add(_TreeRow(node: node, depth: depth));
     final bool shouldShowChildren =
-        _expanded.contains(node.ref) || (!matches && _types.isNotEmpty);
+        _expanded.contains(node.ref) ||
+        (!matches && (_types.isNotEmpty || _tagIds.isNotEmpty));
     if (!shouldShowChildren) return;
     for (final BrowserTreeNode child in node.children) {
       _flatten(child, matches ? depth + 1 : depth, rows);
@@ -727,6 +850,48 @@ class _TypeFilter extends StatelessWidget {
                 selected.length == types.length && selected.containsAll(types),
             onSelected: (_) => onChanged(types),
           ),
+      ],
+    ),
+  );
+}
+
+class _TagFilter extends StatelessWidget {
+  const _TagFilter({
+    required this.tags,
+    required this.selected,
+    required this.onChanged,
+    required this.onManage,
+  });
+
+  final List<Tag> tags;
+  final Set<String> selected;
+  final ValueChanged<Set<String>> onChanged;
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 48,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      children: <Widget>[
+        for (final Tag tag in tags) ...<Widget>[
+          FilterChip(
+            label: Text('#${tag.name}'),
+            selected: selected.contains(tag.id),
+            onSelected: (bool isSelected) {
+              final Set<String> changed = <String>{...selected};
+              isSelected ? changed.add(tag.id) : changed.remove(tag.id);
+              onChanged(changed);
+            },
+          ),
+          const SizedBox(width: 6),
+        ],
+        ActionChip(
+          avatar: const Icon(Icons.label_outline, size: 16),
+          label: const Text('Tags'),
+          onPressed: onManage,
+        ),
       ],
     ),
   );
@@ -953,6 +1118,7 @@ class _NodeRow extends StatelessWidget {
   /// which is which.
   String _metaLine(BrowserTreeNode node, bool hasChildren) => <String>[
     if (hasChildren) '${node.subtreeSize - 1} inside',
+    if (node.directTagIds.isNotEmpty) '${node.directTagIds.length} tags',
     if (node.dueDay != null) 'due ${node.dueDay}',
   ].join('  ·  ');
 
@@ -1066,6 +1232,7 @@ class _NodeRow extends StatelessWidget {
         itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
           if (isSource)
             const PopupMenuItem<String>(value: 'rename', child: Text('Rename')),
+          const PopupMenuItem<String>(value: 'tags', child: Text('Tags…')),
           if (isDismissed)
             const PopupMenuItem<String>(
               value: 'undismiss',

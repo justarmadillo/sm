@@ -82,5 +82,34 @@ void main() {
     );
     expect(await assets.listSourceAssets(source.id), hasLength(1));
     expect(await assetFiles.hasVerifiedBlob(imageSha256), isTrue);
+
+    final editedDocument = (await harness.content.findDocument(source.id))!;
+    final editedBlock = editedDocument.blocks.first;
+    final Uint8List secondBytes = Uint8List.fromList(<int>[5, 6, 7, 8]);
+    final String secondSha256 = sha256.convert(secondBytes).toString();
+    final SourceImageImport secondImage = SourceImageImport(
+      bytes: secondBytes,
+      altText: 'Inline diagram',
+      sha256: secondSha256,
+      mime: 'image/png',
+      widthPx: 320,
+      heightPx: 240,
+    );
+    final edited = await reader.editSourceBlock(
+      EditSourceBlock(
+        const OperationId('edit-with-image'),
+        sourceId: source.id,
+        blockId: editedBlock.id,
+        markdown:
+            '${editedBlock.raw}\n\n![Inline diagram](${secondImage.srcRef})',
+        images: <SourceImageImport>[secondImage],
+        baseContentRevision: editedDocument.contentRevision,
+      ),
+    );
+
+    expect(edited.isOk, isTrue);
+    expect(edited.unwrap().source.markdown, contains(secondImage.srcRef));
+    expect(await assets.listSourceAssets(source.id), hasLength(2));
+    expect(await assetFiles.hasVerifiedBlob(secondSha256), isTrue);
   });
 }

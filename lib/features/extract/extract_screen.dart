@@ -23,6 +23,7 @@ import 'package:incremental_reader/features/reader/widgets/reader_selection.dart
 import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
 import 'package:incremental_reader/features/reader/widgets/selection_knobs.dart';
 import 'package:incremental_reader/features/reader/widgets/selection_toolbar.dart';
+import 'package:incremental_reader/features/tags/tags_picker_dialog.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/status_pill.dart';
@@ -227,6 +228,11 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
             onPressed: model.continueScheduled,
             child: const Text('Process now'),
           ),
+        IconButton(
+          onPressed: () => editTagsOfElement(context, ref, state.topic.ref),
+          icon: const Icon(Icons.label_outline),
+          tooltip: 'Tags',
+        ),
         IconButton(
           onPressed: () => _openParent(context, state),
           icon: const Icon(Icons.account_tree_outlined),
@@ -455,8 +461,9 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
     ExtractUiState state,
     ExtractViewModel model,
   ) async {
-    final drafts = await showFormulationDialog(
+    final FormulationResult? formulation = await showFormulationDialog(
       context,
+      ref: ref,
       seedText: state.extract.markdown,
       existingCardCount: state.cards.length,
       overlapContextBefore: ref
@@ -470,7 +477,9 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
           .cards
           .overlapContextAfter,
     );
-    if (drafts != null) await model.formulate(drafts);
+    if (formulation != null) {
+      await model.formulate(formulation.drafts, tagIds: formulation.tagIds);
+    }
   }
 
   Future<void> _dismiss(BuildContext context, ExtractViewModel model) async {

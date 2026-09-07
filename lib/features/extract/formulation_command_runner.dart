@@ -19,6 +19,7 @@ import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/search_repository.dart';
+import 'package:incremental_reader/storage/contracts/tag_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 import 'package:incremental_reader/storage/contracts/video_repository.dart';
@@ -31,6 +32,7 @@ final class FormulationCommandRunner {
     required VideoRepository videos,
     required LearningRepository learning,
     required SearchRepository search,
+    required TagRepository tags,
     required TransferRepository transfer,
     required TransactionRunner transactions,
     required SchedulingContext context,
@@ -41,6 +43,7 @@ final class FormulationCommandRunner {
        _videos = videos,
        _learning = learning,
        _search = search,
+       _tags = tags,
        _transfer = transfer,
        _transactions = transactions,
        _context = context,
@@ -53,6 +56,7 @@ final class FormulationCommandRunner {
   final VideoRepository _videos;
   final LearningRepository _learning;
   final SearchRepository _search;
+  final TagRepository _tags;
   final TransferRepository _transfer;
   final TransactionRunner _transactions;
   final SchedulingContext _context;
@@ -302,6 +306,7 @@ final class FormulationCommandRunner {
             await _learning.saveTopic(scheduler.notifyCardCreated(parentTopic));
           }
         }
+        await _saveTagsOfNewCards(command, createdRefs);
         await _learning.appendActivity(
           ActivityRecord(
             id: _ids.newId(),
@@ -340,4 +345,15 @@ final class FormulationCommandRunner {
       );
     }
   }
+
+  /// Writes only direct tags; inherited parent tags remain derived by the
+  /// Browser tree so untagging an ancestor immediately untags its branch.
+  Future<void> _saveTagsOfNewCards(
+    FormulateCards command,
+    List<ElementRef> createdRefs,
+  ) => _tags.insertElementTags(
+    createdRefs,
+    command.tagIds,
+    command.timestampUtc,
+  );
 }

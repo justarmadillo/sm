@@ -16,6 +16,7 @@ import 'package:incremental_reader/features/browser/browser_commands.dart';
 import 'package:incremental_reader/features/browser/browser_tree_query.dart';
 import 'package:incremental_reader/features/extract/extract_commands.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
+import 'package:incremental_reader/features/tags/tags_commands.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/result.dart';
@@ -185,6 +186,40 @@ void main() {
   });
 
   group('what a move must not disturb', () {
+    test(
+      'tags inherit through filing and change when a row is refiled',
+      () async {
+        final tag = (await harness.tagCommands.create(
+          CreateTag(harness.operation(), name: 'cardiology'),
+        )).unwrap().tag;
+        await harness.tagCommands.save(
+          SaveTagsOfElement(
+            harness.operation(),
+            ref: refOf(alpha),
+            tagIds: <String>{tag.id},
+          ),
+        );
+        final ElementRef extractRef = ElementRef(
+          id: alphaExtract.id,
+          type: ElementType.extract,
+        );
+
+        BrowserTreeNode extractNode = await nodeFor(extractRef);
+        expect(extractNode.directTagIds, isEmpty);
+        expect(extractNode.effectiveTagIds, <String>{tag.id});
+
+        await harness.filing.fileUnder(
+          FileElementUnder(
+            harness.operation(),
+            ref: extractRef,
+            parentRef: refOf(beta),
+          ),
+        );
+        extractNode = await nodeFor(extractRef);
+        expect(extractNode.effectiveTagIds, isEmpty);
+      },
+    );
+
     test('an extract filed elsewhere keeps the passage it came from', () async {
       final ElementRef extractRef = ElementRef(
         id: alphaExtract.id,

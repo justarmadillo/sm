@@ -17,6 +17,7 @@ final Provider<BrowserTreeQuery> browserTreeQueryProvider =
         content: ref.watch(contentRepositoryProvider),
         videos: ref.watch(videoRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
+        tags: ref.watch(tagRepositoryProvider),
       ),
     );
 
@@ -30,6 +31,7 @@ final Provider<BrowserCommandRunner> browserCommandRunnerProvider =
         videos: ref.watch(videoRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
         search: ref.watch(searchRepositoryProvider),
+        tags: ref.watch(tagRepositoryProvider),
         context: ref.watch(schedulingContextProvider),
         transfer: ref.watch(transferRepositoryProvider),
         transactions: ref.watch(transactionRunnerProvider),

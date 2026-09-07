@@ -49,9 +49,11 @@ final class FormulateCards extends AppCommand {
     super.operationId, {
     required this.parent,
     required this.drafts,
+    this.tagIds = const <String>{},
     super.timestampUtc,
   });
 
   final CardParent? parent;
   final List<CardDraft> drafts;
+  final Set<String> tagIds;
 }

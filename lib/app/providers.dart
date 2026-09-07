@@ -32,6 +32,7 @@ import 'package:incremental_reader/storage/contracts/occlusion_repository.dart';
 import 'package:incremental_reader/storage/contracts/search_repository.dart';
 import 'package:incremental_reader/storage/contracts/settings_repository.dart';
 import 'package:incremental_reader/storage/contracts/source_asset_repository.dart';
+import 'package:incremental_reader/storage/contracts/tag_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
 import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 import 'package:incremental_reader/storage/contracts/video_repository.dart';
@@ -44,6 +45,7 @@ import 'package:incremental_reader/storage/drift/drift_occlusion_repository.dart
 import 'package:incremental_reader/storage/drift/drift_search_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_settings_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_source_asset_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_tag_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_transaction_runner.dart';
 import 'package:incremental_reader/storage/drift/drift_transfer_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_video_repository.dart';
@@ -227,6 +229,11 @@ final Provider<SearchRepository> searchRepositoryProvider =
     Provider<SearchRepository>(
       (Ref ref) => DriftSearchRepository(ref.watch(databaseProvider)),
     );
+
+/// Flat tags and the direct element links that carry them.
+final Provider<TagRepository> tagRepositoryProvider = Provider<TagRepository>(
+  (Ref ref) => DriftTagRepository(ref.watch(databaseProvider)),
+);
 
 /// Whole-file housekeeping: integrity, the search index, and compaction.
 final Provider<DatabaseMaintenance> databaseMaintenanceProvider =

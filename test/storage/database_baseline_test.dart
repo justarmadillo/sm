@@ -1,3 +1,6 @@
+/// Baseline schema, backup, and connection-policy tests.
+library;
+
 import 'dart:io';
 
 import 'package:archive/archive.dart';
@@ -65,6 +68,7 @@ void main() {
         'cards',
         'dataset_meta',
         'element_schedules',
+        'element_tags',
         'extracts',
         'mercy_batches',
         'review_events',
@@ -75,6 +79,7 @@ void main() {
         'source_assets',
         'source_edits',
         'sources',
+        'tags',
         'topic_states',
         'video_elements',
         'videos',

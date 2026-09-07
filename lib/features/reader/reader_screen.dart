@@ -39,6 +39,7 @@ import 'package:incremental_reader/features/reader/widgets/reader_side_panel.dar
 import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
 import 'package:incremental_reader/features/reader/widgets/selection_knobs.dart';
 import 'package:incremental_reader/features/reader/widgets/selection_toolbar.dart';
+import 'package:incremental_reader/features/tags/tags_picker_dialog.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/status_pill.dart';
@@ -441,6 +442,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             child: const Text('Continue reading'),
           ),
         IconButton(
+          onPressed: () => editTagsOfElement(context, ref, state.topic.ref),
+          icon: const Icon(Icons.label_outline),
+          tooltip: 'Tags',
+        ),
+        IconButton(
           onPressed: () => showDialog<void>(
             context: context,
             builder: (BuildContext context) => const _TypographyDialog(),
@@ -546,10 +552,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           },
           editingBlockId: state.editingBlockId,
           isBusy: state.isBusy,
-          onEditCommit: (Block block, String markdown) =>
-              unawaited(model.commitEdit(block, markdown)),
+          onEditCommit:
+              (Block block, String markdown, List<SourceImageImport> images) =>
+                  unawaited(model.commitEdit(block, markdown, images: images)),
           onEditCancel: (Block _) => model.cancelEditing(),
           onEditDelete: (Block block) => unawaited(model.deleteBlock(block)),
+          onEditChooseImages: _chooseImagesForEditor,
           images: _readerImages(state),
         ),
         // Filled rather than left to size itself: its knobs are positioned,
@@ -671,6 +679,26 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           isError: true,
         );
       }
+    }
+  }
+
+  /// Returns prepared files to the editor, which keeps them pending until the
+  /// same Save that commits their Markdown references.
+  Future<List<SourceImageImport>> _chooseImagesForEditor() async {
+    try {
+      return await ref.read(readerImageInputProvider).chooseImages();
+    } on ReaderImageInputException catch (failure) {
+      if (mounted) showToast(context, failure.message, isError: true);
+      return failure.validImages;
+    } on Object {
+      if (mounted) {
+        showToast(
+          context,
+          'The selected images could not be read',
+          isError: true,
+        );
+      }
+      return const <SourceImageImport>[];
     }
   }
 
@@ -847,8 +875,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Future<void> _formulate(ReaderViewModel model, ReaderUiState state) async {
     if (!state.canCommitProgress || state.isBusy) return;
     final resolved = _selection?.resolveSelection();
-    final drafts = await showFormulationDialog(
+    final FormulationResult? formulation = await showFormulationDialog(
       context,
+      ref: ref,
       seedText: resolved?.markdown ?? '',
       existingCardCount: state.cardsFromSource,
       overlapContextBefore: ref
@@ -863,8 +892,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           .overlapContextAfter,
       parentNoun: 'article',
     );
-    if (drafts == null) return;
-    final created = await model.formulate(drafts);
+    if (formulation == null) return;
+    final created = await model.formulate(
+      formulation.drafts,
+      tagIds: formulation.tagIds,
+    );
     if (created) _selection?.clear();
   }
 

@@ -15,6 +15,7 @@ import 'package:flutter/services.dart';
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/widgets/block_span_builder.dart';
 import 'package:incremental_reader/features/reader/widgets/block_view.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
@@ -48,6 +49,7 @@ class ReaderView extends StatefulWidget {
     this.onEditCommit,
     this.onEditCancel,
     this.onEditDelete,
+    this.onEditChooseImages,
     this.images = const <String, ReaderImagePresentation>{},
     super.key,
   });
@@ -61,9 +63,15 @@ class ReaderView extends StatefulWidget {
   /// Whether a commit is in flight, so the editor can refuse a second one.
   final bool isBusy;
 
-  final void Function(Block block, String markdown)? onEditCommit;
+  final void Function(
+    Block block,
+    String markdown,
+    List<SourceImageImport> images,
+  )?
+  onEditCommit;
   final void Function(Block block)? onEditCancel;
   final void Function(Block block)? onEditDelete;
+  final Future<List<SourceImageImport>> Function()? onEditChooseImages;
   final ReaderTypography typography;
   final Map<String, ReaderImagePresentation> images;
 
@@ -498,6 +506,7 @@ class ReaderViewState extends State<ReaderView> {
       onEditCommit: widget.onEditCommit,
       onEditCancel: widget.onEditCancel,
       onEditDelete: widget.onEditDelete,
+      onEditChooseImages: widget.onEditChooseImages,
       onParagraphMounted: widget.controller.registerParagraph,
       onParagraphUnmounted: widget.controller.unregisterParagraph,
       images: widget.images,

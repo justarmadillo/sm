@@ -14,6 +14,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:incremental_reader/documents/block.dart';
+import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 
 /// A text field holding one block's raw markdown.
@@ -23,6 +24,7 @@ class BlockEditor extends StatefulWidget {
     required this.typography,
     required this.onCommit,
     required this.onCancel,
+    this.onChooseImages,
     this.onDelete,
     this.isBusy = false,
     super.key,
@@ -32,9 +34,12 @@ class BlockEditor extends StatefulWidget {
   final ReaderTypography typography;
 
   /// Called with the new raw markdown. Blank removes the block.
-  final void Function(String markdown) onCommit;
+  final void Function(String markdown, List<SourceImageImport> images) onCommit;
 
   final VoidCallback onCancel;
+
+  /// Opens the platform picker; selected images remain pending until Save.
+  final Future<List<SourceImageImport>> Function()? onChooseImages;
 
   /// Removes the block outright, separator included.
   final VoidCallback? onDelete;
@@ -51,6 +56,7 @@ class _BlockEditorState extends State<BlockEditor> {
     text: widget.block.raw,
   );
   final FocusNode _focus = FocusNode();
+  final List<SourceImageImport> _pendingImages = <SourceImageImport>[];
 
   @override
   void initState() {
@@ -67,11 +73,39 @@ class _BlockEditorState extends State<BlockEditor> {
     super.dispose();
   }
 
-  bool get _isDirty => _controller.text != widget.block.raw;
+  bool get _isDirty =>
+      _controller.text != widget.block.raw || _pendingImages.isNotEmpty;
 
   void _commit() {
     if (widget.isBusy) return;
-    widget.onCommit(_controller.text);
+    widget.onCommit(_controller.text, List.unmodifiable(_pendingImages));
+  }
+
+  /// Inserts references at the caret while retaining the bytes for the one
+  /// transactional Save that follows.
+  Future<void> _insertImages() async {
+    final chooseImages = widget.onChooseImages;
+    if (chooseImages == null || widget.isBusy) return;
+    final List<SourceImageImport> images = await chooseImages();
+    if (images.isEmpty || !mounted) return;
+    final String markdown = images
+        .map(
+          (SourceImageImport image) => '![${image.altText}](${image.srcRef})',
+        )
+        .join('\n\n');
+    final TextSelection selection = _controller.selection;
+    final int start = selection.isValid
+        ? selection.start
+        : _controller.text.length;
+    final int end = selection.isValid ? selection.end : start;
+    setState(() {
+      _controller.text = _controller.text.replaceRange(start, end, markdown);
+      _controller.selection = TextSelection.collapsed(
+        offset: start + markdown.length,
+      );
+      _pendingImages.addAll(images);
+    });
+    _focus.requestFocus();
   }
 
   KeyEventResult _onKeyPressed(FocusNode node, KeyEvent event) {
@@ -189,6 +223,12 @@ class _BlockEditorState extends State<BlockEditor> {
             TextButton(
               onPressed: widget.isBusy ? null : widget.onDelete,
               child: const Text('Delete block'),
+            ),
+          if (widget.onChooseImages != null)
+            TextButton.icon(
+              onPressed: widget.isBusy ? null : _insertImages,
+              icon: const Icon(Icons.image_outlined, size: 18),
+              label: const Text('Insert image'),
             ),
           TextButton(
             onPressed: widget.isBusy ? null : widget.onCancel,

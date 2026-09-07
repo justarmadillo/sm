@@ -22,6 +22,7 @@ import 'package:incremental_reader/features/priority/priority_query.dart';
 import 'package:incremental_reader/features/reader/reader_command_runner.dart';
 import 'package:incremental_reader/features/review/review_command_runner.dart';
 import 'package:incremental_reader/features/search/search_query.dart';
+import 'package:incremental_reader/features/tags/tags_command_runner.dart';
 import 'package:incremental_reader/features/video/video_command_runner.dart';
 import 'package:incremental_reader/scheduling/effective_due_query.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
@@ -39,6 +40,7 @@ import 'package:incremental_reader/storage/drift/drift_content_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_learning_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_search_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_settings_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_tag_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_transaction_runner.dart';
 import 'package:incremental_reader/storage/drift/drift_transfer_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_video_repository.dart';
@@ -57,6 +59,7 @@ final class AppHarness {
     learning = DriftLearningRepository(this.database);
     settings = DriftSettingsRepository(this.database);
     search = DriftSearchRepository(this.database);
+    tags = DriftTagRepository(this.database);
     transfer = DriftTransferRepository(
       this.database,
       FakeIdGenerator(prefix: 'dataset-$operationPrefix'),
@@ -87,6 +90,7 @@ final class AppHarness {
   late final DriftLearningRepository learning;
   late final DriftSettingsRepository settings;
   late final DriftSearchRepository search;
+  late final DriftTagRepository tags;
   late final DriftTransferRepository transfer;
   late final DriftTransactionRunner transactions;
   late final SettingsStore settingsStore;
@@ -109,6 +113,16 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
+  late final TagsCommandRunner tagCommands = TagsCommandRunner(
+    tags: tags,
+    learning: learning,
+    transfer: transfer,
+    transactions: transactions,
+    clock: clock,
+    ids: FakeIdGenerator(prefix: 'tag-$operationPrefix'),
+    diagnostics: diagnostics,
+  );
+
   late final ExtractCommandRunner extraction = ExtractCommandRunner(
     content: content,
     learning: learning,
@@ -126,6 +140,7 @@ final class AppHarness {
     videos: videos,
     learning: learning,
     search: search,
+    tags: tags,
     transfer: transfer,
     transactions: transactions,
     context: context,
@@ -185,6 +200,7 @@ final class AppHarness {
     content: content,
     videos: videos,
     learning: learning,
+    tags: tags,
   );
 
   late final BrowserCommandRunner filing = BrowserCommandRunner(
@@ -193,6 +209,7 @@ final class AppHarness {
     videos: videos,
     learning: learning,
     search: search,
+    tags: tags,
     context: context,
     transfer: transfer,
     transactions: transactions,

@@ -16,7 +16,7 @@ import 'package:incremental_reader/storage/database/tables.dart';
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 17;
+const int kSchemaVersion = 18;
 
 /// Name of the external-content FTS5 index over [SearchDocuments].
 const String kSearchIndexTable = 'search_index';
@@ -40,6 +40,8 @@ const String kSearchIndexTable = 'search_index';
     SchedulerEvents,
     MercyBatches,
     SearchDocuments,
+    Tags,
+    ElementTags,
     ActivityEvents,
     Settings,
     DatasetMeta,
@@ -663,6 +665,13 @@ class AppDatabase extends _$AppDatabase {
         await m.alterTable(TableMigration(cards));
         await _createIndexes(m);
       }
+      if (from < 18) {
+        if (!await _hasTable('tags')) await m.createTable(tags);
+        if (!await _hasTable('element_tags')) {
+          await m.createTable(elementTags);
+        }
+        await _createIndexes(m);
+      }
     },
     beforeOpen: (OpeningDetails details) async {
       // SQLite disables foreign keys per connection by default, so this
@@ -808,6 +817,12 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_blocks_source '
       'ON blocks (source_id, idx)',
     );
+    if (await _hasTable('element_tags')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_element_tags_element '
+        'ON element_tags (element_id, element_type)',
+      );
+    }
     if (await _hasTable('source_assets')) {
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_source_assets_sha256 '

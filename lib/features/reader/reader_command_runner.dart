@@ -912,18 +912,31 @@ final class ReaderCommandRunner {
   /// Editing text is not a repetition. Nothing here reads or writes a
   /// schedule, a priority, a review log entry, or a scheduler event, and the
   /// source's due date is exactly where it was before.
-  Future<Result<SourceEdited>> editSourceBlock(EditSourceBlock command) =>
-      _runEdit(
-        command,
-        kSourceEditedType,
-        (Document document) {
-          final Block? block = document.blockById(command.blockId);
-          if (block == null) return null;
-          return spliceForBlockEdit(document, block, command.markdown);
-        },
-        sourceId: command.sourceId,
-        base: command.baseContentRevision,
+  Future<Result<SourceEdited>> editSourceBlock(EditSourceBlock command) async {
+    if (command.images.isNotEmpty) {
+      final Result<Unit> prepared = await _prepareImageFiles(
+        command.sourceId,
+        command.images,
       );
+      if (prepared case Err<Unit>(:final failure)) {
+        return Err<SourceEdited>(failure);
+      }
+    }
+    return _runEdit(
+      command,
+      kSourceEditedType,
+      (Document document) {
+        final Block? block = document.blockById(command.blockId);
+        if (block == null) return null;
+        return spliceForBlockEdit(document, block, command.markdown);
+      },
+      sourceId: command.sourceId,
+      base: command.baseContentRevision,
+      beforeApply: command.images.isEmpty
+          ? null
+          : () => _insertImageMetadata(command.sourceId, command.images),
+    );
+  }
 
   /// Removes one block, separator included.
   Future<Result<SourceEdited>> deleteSourceBlock(DeleteSourceBlock command) =>
@@ -961,52 +974,17 @@ final class ReaderCommandRunner {
   Future<Result<SourceEdited>> insertSourceImages(
     InsertSourceImages command,
   ) async {
-    final assets = _assets;
-    final findAssetFiles = _assetFiles;
-    if (assets == null || findAssetFiles == null) {
-      return const Err<SourceEdited>(
-        UnexpectedFailure('image storage is not configured'),
-      );
-    }
-    final assetFiles = findAssetFiles();
     if (command.images.isEmpty) {
       return const Err<SourceEdited>(
         ValidationFailure('choose at least one image'),
       );
     }
-    final List<SourceAsset> existingAssets = await assets.listSourceAssets(
+    final Result<Unit> prepared = await _prepareImageFiles(
       command.sourceId,
+      command.images,
     );
-    final Set<String> existingReferences = <String>{
-      for (final SourceAsset asset in existingAssets) asset.srcRef,
-    };
-    final Set<String> newReferences = command.images
-        .map((SourceImageImport image) => image.srcRef)
-        .where((String reference) => !existingReferences.contains(reference))
-        .toSet();
-    if (existingAssets.length + newReferences.length > 2000) {
-      return const Err<SourceEdited>(
-        ValidationFailure('a source can contain at most 2,000 images'),
-      );
-    }
-
-    try {
-      for (final image in command.images) {
-        final stored = await assetFiles.saveBytes(image.bytes);
-        if (stored.sha256 != image.sha256) {
-          return const Err<SourceEdited>(
-            ValidationFailure('an image changed while it was being imported'),
-          );
-        }
-      }
-    } on Object catch (error, stackTrace) {
-      return Err<SourceEdited>(
-        UnexpectedFailure(
-          'image files could not be saved',
-          cause: error,
-          stackTrace: stackTrace,
-        ),
-      );
+    if (prepared case Err<Unit>(:final failure)) {
+      return Err<SourceEdited>(failure);
     }
 
     final markdown = command.images
@@ -1030,32 +1008,86 @@ final class ReaderCommandRunner {
       },
       sourceId: command.sourceId,
       base: command.baseContentRevision,
-      beforeApply: () async {
-        for (final image in command.images) {
-          if (await assets.findSourceAssetByReference(
-                command.sourceId,
-                image.srcRef,
-              ) !=
-              null) {
-            continue;
-          }
-          await assets.insertSourceAsset(
-            SourceAsset(
-              id: _ids.newId(),
-              sourceId: command.sourceId,
-              srcRef: image.srcRef,
-              sha256: image.sha256,
-              mime: image.mime,
-              widthPx: image.widthPx,
-              heightPx: image.heightPx,
-              byteSize: image.bytes.length,
-              state: SourceAssetState.ok,
-              importedAtUtc: _clock.nowUtc(),
-            ),
+      beforeApply: () => _insertImageMetadata(command.sourceId, command.images),
+    );
+  }
+
+  /// Validates the source-wide limit and promotes immutable blobs before the
+  /// database transaction that will expose their references.
+  Future<Result<Unit>> _prepareImageFiles(
+    String sourceId,
+    List<SourceImageImport> images,
+  ) async {
+    final SourceAssetRepository? assets = _assets;
+    final SourceAssetFileStore Function()? findAssetFiles = _assetFiles;
+    if (assets == null || findAssetFiles == null) {
+      return const Err<Unit>(
+        UnexpectedFailure('image storage is not configured'),
+      );
+    }
+    final List<SourceAsset> existingAssets = await assets.listSourceAssets(
+      sourceId,
+    );
+    final Set<String> existingReferences = <String>{
+      for (final SourceAsset asset in existingAssets) asset.srcRef,
+    };
+    final Set<String> newReferences = images
+        .map((SourceImageImport image) => image.srcRef)
+        .where((String reference) => !existingReferences.contains(reference))
+        .toSet();
+    if (existingAssets.length + newReferences.length > 2000) {
+      return const Err<Unit>(
+        ValidationFailure('a source can contain at most 2,000 images'),
+      );
+    }
+    try {
+      for (final SourceImageImport image in images) {
+        final stored = await findAssetFiles().saveBytes(image.bytes);
+        if (stored.sha256 != image.sha256) {
+          return const Err<Unit>(
+            ValidationFailure('an image changed while it was being imported'),
           );
         }
-      },
-    );
+      }
+      return okUnit;
+    } on Object catch (error, stackTrace) {
+      return Err<Unit>(
+        UnexpectedFailure(
+          'image files could not be saved',
+          cause: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
+  }
+
+  /// Inserts only metadata not already owned by this source; repeated image
+  /// references deliberately share one content-addressed asset row.
+  Future<void> _insertImageMetadata(
+    String sourceId,
+    List<SourceImageImport> images,
+  ) async {
+    final SourceAssetRepository assets = _assets!;
+    for (final SourceImageImport image in images) {
+      if (await assets.findSourceAssetByReference(sourceId, image.srcRef) !=
+          null) {
+        continue;
+      }
+      await assets.insertSourceAsset(
+        SourceAsset(
+          id: _ids.newId(),
+          sourceId: sourceId,
+          srcRef: image.srcRef,
+          sha256: image.sha256,
+          mime: image.mime,
+          widthPx: image.widthPx,
+          heightPx: image.heightPx,
+          byteSize: image.bytes.length,
+          state: SourceAssetState.ok,
+          importedAtUtc: _clock.nowUtc(),
+        ),
+      );
+    }
   }
 
   /// Moves a heading and everything under it past its neighbouring section.

@@ -644,7 +644,10 @@ final class ReaderViewModel
   /// SuperMemo allows exactly this — an item can be made from whatever
   /// element is open — and the article is left untouched: no reschedule, no
   /// marker move, no change to its text.
-  Future<bool> formulate(List<CardDraft> drafts) async {
+  Future<bool> formulate(
+    List<CardDraft> drafts, {
+    Set<String> tagIds = const <String>{},
+  }) async {
     final current = state.valueOrNull;
     if (current == null || current.isBusy || !current.canCommitProgress) {
       return false;
@@ -658,6 +661,7 @@ final class ReaderViewModel
             OperationId(ref.read(idGeneratorProvider).newId()),
             parent: CardParent.source(current.source.id),
             drafts: drafts,
+            tagIds: tagIds,
           ),
         );
 
@@ -736,7 +740,11 @@ final class ReaderViewModel
   }
 
   /// Commits [markdown] as the new text of [block].
-  Future<void> commitEdit(Block block, String markdown) => _runEdit(
+  Future<void> commitEdit(
+    Block block,
+    String markdown, {
+    List<SourceImageImport> images = const <SourceImageImport>[],
+  }) => _runEdit(
     (OperationId operation, ReaderUiState current) => ref
         .read(readerCommandRunnerProvider)
         .editSourceBlock(
@@ -745,6 +753,7 @@ final class ReaderViewModel
             sourceId: current.source.id,
             blockId: block.id,
             markdown: markdown,
+            images: images,
             baseContentRevision: current.document.contentRevision,
           ),
         ),

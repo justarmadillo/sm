@@ -14004,6 +14004,727 @@ class SearchDocumentsCompanion extends UpdateCompanion<SearchDocumentRow> {
   }
 }
 
+class $TagsTable extends Tags with TableInfo<$TagsTable, TagRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TagsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 100,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameLowercaseMeta = const VerificationMeta(
+    'nameLowercase',
+  );
+  @override
+  late final GeneratedColumn<String> nameLowercase = GeneratedColumn<String>(
+    'name_lowercase',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 100,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> createdAtUtc = GeneratedColumn<int>(
+    'created_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtUtcMeta = const VerificationMeta(
+    'updatedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAtUtc = GeneratedColumn<int>(
+    'updated_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    nameLowercase,
+    createdAtUtc,
+    updatedAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'tags';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TagRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('name_lowercase')) {
+      context.handle(
+        _nameLowercaseMeta,
+        nameLowercase.isAcceptableOrUnknown(
+          data['name_lowercase']!,
+          _nameLowercaseMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_nameLowercaseMeta);
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtUtcMeta);
+    }
+    if (data.containsKey('updated_at_utc')) {
+      context.handle(
+        _updatedAtUtcMeta,
+        updatedAtUtc.isAcceptableOrUnknown(
+          data['updated_at_utc']!,
+          _updatedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtUtcMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TagRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TagRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      nameLowercase: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name_lowercase'],
+      )!,
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at_utc'],
+      )!,
+      updatedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at_utc'],
+      )!,
+    );
+  }
+
+  @override
+  $TagsTable createAlias(String alias) {
+    return $TagsTable(attachedDatabase, alias);
+  }
+}
+
+class TagRow extends DataClass implements Insertable<TagRow> {
+  final String id;
+
+  /// Exactly as the user typed it, after normalization.
+  final String name;
+
+  /// Case-insensitive identity, so capitalization cannot fork a tag.
+  final String nameLowercase;
+  final int createdAtUtc;
+  final int updatedAtUtc;
+  const TagRow({
+    required this.id,
+    required this.name,
+    required this.nameLowercase,
+    required this.createdAtUtc,
+    required this.updatedAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['name_lowercase'] = Variable<String>(nameLowercase);
+    map['created_at_utc'] = Variable<int>(createdAtUtc);
+    map['updated_at_utc'] = Variable<int>(updatedAtUtc);
+    return map;
+  }
+
+  TagsCompanion toCompanion(bool nullToAbsent) {
+    return TagsCompanion(
+      id: Value(id),
+      name: Value(name),
+      nameLowercase: Value(nameLowercase),
+      createdAtUtc: Value(createdAtUtc),
+      updatedAtUtc: Value(updatedAtUtc),
+    );
+  }
+
+  factory TagRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TagRow(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      nameLowercase: serializer.fromJson<String>(json['nameLowercase']),
+      createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
+      updatedAtUtc: serializer.fromJson<int>(json['updatedAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'nameLowercase': serializer.toJson<String>(nameLowercase),
+      'createdAtUtc': serializer.toJson<int>(createdAtUtc),
+      'updatedAtUtc': serializer.toJson<int>(updatedAtUtc),
+    };
+  }
+
+  TagRow copyWith({
+    String? id,
+    String? name,
+    String? nameLowercase,
+    int? createdAtUtc,
+    int? updatedAtUtc,
+  }) => TagRow(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    nameLowercase: nameLowercase ?? this.nameLowercase,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+    updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+  );
+  TagRow copyWithCompanion(TagsCompanion data) {
+    return TagRow(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      nameLowercase: data.nameLowercase.present
+          ? data.nameLowercase.value
+          : this.nameLowercase,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+      updatedAtUtc: data.updatedAtUtc.present
+          ? data.updatedAtUtc.value
+          : this.updatedAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TagRow(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('nameLowercase: $nameLowercase, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('updatedAtUtc: $updatedAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, name, nameLowercase, createdAtUtc, updatedAtUtc);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TagRow &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.nameLowercase == this.nameLowercase &&
+          other.createdAtUtc == this.createdAtUtc &&
+          other.updatedAtUtc == this.updatedAtUtc);
+}
+
+class TagsCompanion extends UpdateCompanion<TagRow> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> nameLowercase;
+  final Value<int> createdAtUtc;
+  final Value<int> updatedAtUtc;
+  final Value<int> rowid;
+  const TagsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.nameLowercase = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.updatedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TagsCompanion.insert({
+    required String id,
+    required String name,
+    required String nameLowercase,
+    required int createdAtUtc,
+    required int updatedAtUtc,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       nameLowercase = Value(nameLowercase),
+       createdAtUtc = Value(createdAtUtc),
+       updatedAtUtc = Value(updatedAtUtc);
+  static Insertable<TagRow> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? nameLowercase,
+    Expression<int>? createdAtUtc,
+    Expression<int>? updatedAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (nameLowercase != null) 'name_lowercase': nameLowercase,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (updatedAtUtc != null) 'updated_at_utc': updatedAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TagsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? nameLowercase,
+    Value<int>? createdAtUtc,
+    Value<int>? updatedAtUtc,
+    Value<int>? rowid,
+  }) {
+    return TagsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      nameLowercase: nameLowercase ?? this.nameLowercase,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (nameLowercase.present) {
+      map['name_lowercase'] = Variable<String>(nameLowercase.value);
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<int>(createdAtUtc.value);
+    }
+    if (updatedAtUtc.present) {
+      map['updated_at_utc'] = Variable<int>(updatedAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TagsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('nameLowercase: $nameLowercase, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('updatedAtUtc: $updatedAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ElementTagsTable extends ElementTags
+    with TableInfo<$ElementTagsTable, ElementTagRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ElementTagsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _tagIdMeta = const VerificationMeta('tagId');
+  @override
+  late final GeneratedColumn<String> tagId = GeneratedColumn<String>(
+    'tag_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES tags (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _elementIdMeta = const VerificationMeta(
+    'elementId',
+  );
+  @override
+  late final GeneratedColumn<String> elementId = GeneratedColumn<String>(
+    'element_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _elementTypeMeta = const VerificationMeta(
+    'elementType',
+  );
+  @override
+  late final GeneratedColumn<int> elementType = GeneratedColumn<int>(
+    'element_type',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(elementType).isBetweenValues(0, 3),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _taggedAtUtcMeta = const VerificationMeta(
+    'taggedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> taggedAtUtc = GeneratedColumn<int>(
+    'tagged_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    tagId,
+    elementId,
+    elementType,
+    taggedAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'element_tags';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ElementTagRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('tag_id')) {
+      context.handle(
+        _tagIdMeta,
+        tagId.isAcceptableOrUnknown(data['tag_id']!, _tagIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tagIdMeta);
+    }
+    if (data.containsKey('element_id')) {
+      context.handle(
+        _elementIdMeta,
+        elementId.isAcceptableOrUnknown(data['element_id']!, _elementIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_elementIdMeta);
+    }
+    if (data.containsKey('element_type')) {
+      context.handle(
+        _elementTypeMeta,
+        elementType.isAcceptableOrUnknown(
+          data['element_type']!,
+          _elementTypeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_elementTypeMeta);
+    }
+    if (data.containsKey('tagged_at_utc')) {
+      context.handle(
+        _taggedAtUtcMeta,
+        taggedAtUtc.isAcceptableOrUnknown(
+          data['tagged_at_utc']!,
+          _taggedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_taggedAtUtcMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {tagId, elementId, elementType};
+  @override
+  ElementTagRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ElementTagRow(
+      tagId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tag_id'],
+      )!,
+      elementId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}element_id'],
+      )!,
+      elementType: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}element_type'],
+      )!,
+      taggedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}tagged_at_utc'],
+      )!,
+    );
+  }
+
+  @override
+  $ElementTagsTable createAlias(String alias) {
+    return $ElementTagsTable(attachedDatabase, alias);
+  }
+}
+
+class ElementTagRow extends DataClass implements Insertable<ElementTagRow> {
+  final String tagId;
+
+  /// No foreign key: SQLite cannot reference four element tables from one row.
+  final String elementId;
+  final int elementType;
+  final int taggedAtUtc;
+  const ElementTagRow({
+    required this.tagId,
+    required this.elementId,
+    required this.elementType,
+    required this.taggedAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['tag_id'] = Variable<String>(tagId);
+    map['element_id'] = Variable<String>(elementId);
+    map['element_type'] = Variable<int>(elementType);
+    map['tagged_at_utc'] = Variable<int>(taggedAtUtc);
+    return map;
+  }
+
+  ElementTagsCompanion toCompanion(bool nullToAbsent) {
+    return ElementTagsCompanion(
+      tagId: Value(tagId),
+      elementId: Value(elementId),
+      elementType: Value(elementType),
+      taggedAtUtc: Value(taggedAtUtc),
+    );
+  }
+
+  factory ElementTagRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ElementTagRow(
+      tagId: serializer.fromJson<String>(json['tagId']),
+      elementId: serializer.fromJson<String>(json['elementId']),
+      elementType: serializer.fromJson<int>(json['elementType']),
+      taggedAtUtc: serializer.fromJson<int>(json['taggedAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'tagId': serializer.toJson<String>(tagId),
+      'elementId': serializer.toJson<String>(elementId),
+      'elementType': serializer.toJson<int>(elementType),
+      'taggedAtUtc': serializer.toJson<int>(taggedAtUtc),
+    };
+  }
+
+  ElementTagRow copyWith({
+    String? tagId,
+    String? elementId,
+    int? elementType,
+    int? taggedAtUtc,
+  }) => ElementTagRow(
+    tagId: tagId ?? this.tagId,
+    elementId: elementId ?? this.elementId,
+    elementType: elementType ?? this.elementType,
+    taggedAtUtc: taggedAtUtc ?? this.taggedAtUtc,
+  );
+  ElementTagRow copyWithCompanion(ElementTagsCompanion data) {
+    return ElementTagRow(
+      tagId: data.tagId.present ? data.tagId.value : this.tagId,
+      elementId: data.elementId.present ? data.elementId.value : this.elementId,
+      elementType: data.elementType.present
+          ? data.elementType.value
+          : this.elementType,
+      taggedAtUtc: data.taggedAtUtc.present
+          ? data.taggedAtUtc.value
+          : this.taggedAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ElementTagRow(')
+          ..write('tagId: $tagId, ')
+          ..write('elementId: $elementId, ')
+          ..write('elementType: $elementType, ')
+          ..write('taggedAtUtc: $taggedAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(tagId, elementId, elementType, taggedAtUtc);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ElementTagRow &&
+          other.tagId == this.tagId &&
+          other.elementId == this.elementId &&
+          other.elementType == this.elementType &&
+          other.taggedAtUtc == this.taggedAtUtc);
+}
+
+class ElementTagsCompanion extends UpdateCompanion<ElementTagRow> {
+  final Value<String> tagId;
+  final Value<String> elementId;
+  final Value<int> elementType;
+  final Value<int> taggedAtUtc;
+  final Value<int> rowid;
+  const ElementTagsCompanion({
+    this.tagId = const Value.absent(),
+    this.elementId = const Value.absent(),
+    this.elementType = const Value.absent(),
+    this.taggedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ElementTagsCompanion.insert({
+    required String tagId,
+    required String elementId,
+    required int elementType,
+    required int taggedAtUtc,
+    this.rowid = const Value.absent(),
+  }) : tagId = Value(tagId),
+       elementId = Value(elementId),
+       elementType = Value(elementType),
+       taggedAtUtc = Value(taggedAtUtc);
+  static Insertable<ElementTagRow> custom({
+    Expression<String>? tagId,
+    Expression<String>? elementId,
+    Expression<int>? elementType,
+    Expression<int>? taggedAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (tagId != null) 'tag_id': tagId,
+      if (elementId != null) 'element_id': elementId,
+      if (elementType != null) 'element_type': elementType,
+      if (taggedAtUtc != null) 'tagged_at_utc': taggedAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ElementTagsCompanion copyWith({
+    Value<String>? tagId,
+    Value<String>? elementId,
+    Value<int>? elementType,
+    Value<int>? taggedAtUtc,
+    Value<int>? rowid,
+  }) {
+    return ElementTagsCompanion(
+      tagId: tagId ?? this.tagId,
+      elementId: elementId ?? this.elementId,
+      elementType: elementType ?? this.elementType,
+      taggedAtUtc: taggedAtUtc ?? this.taggedAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (tagId.present) {
+      map['tag_id'] = Variable<String>(tagId.value);
+    }
+    if (elementId.present) {
+      map['element_id'] = Variable<String>(elementId.value);
+    }
+    if (elementType.present) {
+      map['element_type'] = Variable<int>(elementType.value);
+    }
+    if (taggedAtUtc.present) {
+      map['tagged_at_utc'] = Variable<int>(taggedAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ElementTagsCompanion(')
+          ..write('tagId: $tagId, ')
+          ..write('elementId: $elementId, ')
+          ..write('elementType: $elementType, ')
+          ..write('taggedAtUtc: $taggedAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $ActivityEventsTable extends ActivityEvents
     with TableInfo<$ActivityEventsTable, ActivityEventRow> {
   @override
@@ -15136,6 +15857,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SearchDocumentsTable searchDocuments = $SearchDocumentsTable(
     this,
   );
+  late final $TagsTable tags = $TagsTable(this);
+  late final $ElementTagsTable elementTags = $ElementTagsTable(this);
   late final $ActivityEventsTable activityEvents = $ActivityEventsTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
   late final $DatasetMetaTable datasetMeta = $DatasetMetaTable(this);
@@ -15161,6 +15884,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     schedulerEvents,
     mercyBatches,
     searchDocuments,
+    tags,
+    elementTags,
     activityEvents,
     settings,
     datasetMeta,
@@ -15194,6 +15919,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('card_occlusions', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'tags',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('element_tags', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -23354,6 +24086,607 @@ typedef $$SearchDocumentsTableProcessedTableManager =
       SearchDocumentRow,
       PrefetchHooks Function()
     >;
+typedef $$TagsTableCreateCompanionBuilder =
+    TagsCompanion Function({
+      required String id,
+      required String name,
+      required String nameLowercase,
+      required int createdAtUtc,
+      required int updatedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$TagsTableUpdateCompanionBuilder =
+    TagsCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> nameLowercase,
+      Value<int> createdAtUtc,
+      Value<int> updatedAtUtc,
+      Value<int> rowid,
+    });
+
+final class $$TagsTableReferences
+    extends BaseReferences<_$AppDatabase, $TagsTable, TagRow> {
+  $$TagsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$ElementTagsTable, List<ElementTagRow>>
+  _elementTagsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.elementTags,
+    aliasName: 'tags__id__element_tags__tag_id',
+  );
+
+  $$ElementTagsTableProcessedTableManager get elementTagsRefs {
+    final manager = $$ElementTagsTableTableManager(
+      $_db,
+      $_db.elementTags,
+    ).filter((f) => f.tagId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_elementTagsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$TagsTableFilterComposer extends Composer<_$AppDatabase, $TagsTable> {
+  $$TagsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nameLowercase => $composableBuilder(
+    column: $table.nameLowercase,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> elementTagsRefs(
+    Expression<bool> Function($$ElementTagsTableFilterComposer f) f,
+  ) {
+    final $$ElementTagsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.elementTags,
+      getReferencedColumn: (t) => t.tagId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ElementTagsTableFilterComposer(
+            $db: $db,
+            $table: $db.elementTags,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$TagsTableOrderingComposer extends Composer<_$AppDatabase, $TagsTable> {
+  $$TagsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nameLowercase => $composableBuilder(
+    column: $table.nameLowercase,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TagsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TagsTable> {
+  $$TagsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get nameLowercase => $composableBuilder(
+    column: $table.nameLowercase,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => column,
+  );
+
+  Expression<T> elementTagsRefs<T extends Object>(
+    Expression<T> Function($$ElementTagsTableAnnotationComposer a) f,
+  ) {
+    final $$ElementTagsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.elementTags,
+      getReferencedColumn: (t) => t.tagId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ElementTagsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.elementTags,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$TagsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TagsTable,
+          TagRow,
+          $$TagsTableFilterComposer,
+          $$TagsTableOrderingComposer,
+          $$TagsTableAnnotationComposer,
+          $$TagsTableCreateCompanionBuilder,
+          $$TagsTableUpdateCompanionBuilder,
+          (TagRow, $$TagsTableReferences),
+          TagRow,
+          PrefetchHooks Function({bool elementTagsRefs})
+        > {
+  $$TagsTableTableManager(_$AppDatabase db, $TagsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TagsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TagsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TagsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> nameLowercase = const Value.absent(),
+                Value<int> createdAtUtc = const Value.absent(),
+                Value<int> updatedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TagsCompanion(
+                id: id,
+                name: name,
+                nameLowercase: nameLowercase,
+                createdAtUtc: createdAtUtc,
+                updatedAtUtc: updatedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required String nameLowercase,
+                required int createdAtUtc,
+                required int updatedAtUtc,
+                Value<int> rowid = const Value.absent(),
+              }) => TagsCompanion.insert(
+                id: id,
+                name: name,
+                nameLowercase: nameLowercase,
+                createdAtUtc: createdAtUtc,
+                updatedAtUtc: updatedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) =>
+                    (e.readTable(table), $$TagsTableReferences(db, table, e)),
+              )
+              .toList(),
+          prefetchHooksCallback: ({elementTagsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (elementTagsRefs) db.elementTags],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (elementTagsRefs)
+                    await $_getPrefetchedData<
+                      TagRow,
+                      $TagsTable,
+                      ElementTagRow
+                    >(
+                      currentTable: table,
+                      referencedTable: $$TagsTableReferences
+                          ._elementTagsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$TagsTableReferences(db, table, p0).elementTagsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.tagId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$TagsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TagsTable,
+      TagRow,
+      $$TagsTableFilterComposer,
+      $$TagsTableOrderingComposer,
+      $$TagsTableAnnotationComposer,
+      $$TagsTableCreateCompanionBuilder,
+      $$TagsTableUpdateCompanionBuilder,
+      (TagRow, $$TagsTableReferences),
+      TagRow,
+      PrefetchHooks Function({bool elementTagsRefs})
+    >;
+typedef $$ElementTagsTableCreateCompanionBuilder =
+    ElementTagsCompanion Function({
+      required String tagId,
+      required String elementId,
+      required int elementType,
+      required int taggedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$ElementTagsTableUpdateCompanionBuilder =
+    ElementTagsCompanion Function({
+      Value<String> tagId,
+      Value<String> elementId,
+      Value<int> elementType,
+      Value<int> taggedAtUtc,
+      Value<int> rowid,
+    });
+
+final class $$ElementTagsTableReferences
+    extends BaseReferences<_$AppDatabase, $ElementTagsTable, ElementTagRow> {
+  $$ElementTagsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $TagsTable _tagIdTable(_$AppDatabase db) =>
+      db.tags.createAlias('element_tags__tag_id__tags__id');
+
+  $$TagsTableProcessedTableManager get tagId {
+    final $_column = $_itemColumn<String>('tag_id')!;
+
+    final manager = $$TagsTableTableManager(
+      $_db,
+      $_db.tags,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_tagIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ElementTagsTableFilterComposer
+    extends Composer<_$AppDatabase, $ElementTagsTable> {
+  $$ElementTagsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get elementId => $composableBuilder(
+    column: $table.elementId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get taggedAtUtc => $composableBuilder(
+    column: $table.taggedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$TagsTableFilterComposer get tagId {
+    final $$TagsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tagId,
+      referencedTable: $db.tags,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TagsTableFilterComposer(
+            $db: $db,
+            $table: $db.tags,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ElementTagsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ElementTagsTable> {
+  $$ElementTagsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get elementId => $composableBuilder(
+    column: $table.elementId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get taggedAtUtc => $composableBuilder(
+    column: $table.taggedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$TagsTableOrderingComposer get tagId {
+    final $$TagsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tagId,
+      referencedTable: $db.tags,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TagsTableOrderingComposer(
+            $db: $db,
+            $table: $db.tags,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ElementTagsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ElementTagsTable> {
+  $$ElementTagsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get elementId =>
+      $composableBuilder(column: $table.elementId, builder: (column) => column);
+
+  GeneratedColumn<int> get elementType => $composableBuilder(
+    column: $table.elementType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get taggedAtUtc => $composableBuilder(
+    column: $table.taggedAtUtc,
+    builder: (column) => column,
+  );
+
+  $$TagsTableAnnotationComposer get tagId {
+    final $$TagsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tagId,
+      referencedTable: $db.tags,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TagsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.tags,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ElementTagsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ElementTagsTable,
+          ElementTagRow,
+          $$ElementTagsTableFilterComposer,
+          $$ElementTagsTableOrderingComposer,
+          $$ElementTagsTableAnnotationComposer,
+          $$ElementTagsTableCreateCompanionBuilder,
+          $$ElementTagsTableUpdateCompanionBuilder,
+          (ElementTagRow, $$ElementTagsTableReferences),
+          ElementTagRow,
+          PrefetchHooks Function({bool tagId})
+        > {
+  $$ElementTagsTableTableManager(_$AppDatabase db, $ElementTagsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ElementTagsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ElementTagsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ElementTagsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> tagId = const Value.absent(),
+                Value<String> elementId = const Value.absent(),
+                Value<int> elementType = const Value.absent(),
+                Value<int> taggedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ElementTagsCompanion(
+                tagId: tagId,
+                elementId: elementId,
+                elementType: elementType,
+                taggedAtUtc: taggedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String tagId,
+                required String elementId,
+                required int elementType,
+                required int taggedAtUtc,
+                Value<int> rowid = const Value.absent(),
+              }) => ElementTagsCompanion.insert(
+                tagId: tagId,
+                elementId: elementId,
+                elementType: elementType,
+                taggedAtUtc: taggedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ElementTagsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({tagId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (tagId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.tagId,
+                                referencedTable: $$ElementTagsTableReferences
+                                    ._tagIdTable(db),
+                                referencedColumn: $$ElementTagsTableReferences
+                                    ._tagIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ElementTagsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ElementTagsTable,
+      ElementTagRow,
+      $$ElementTagsTableFilterComposer,
+      $$ElementTagsTableOrderingComposer,
+      $$ElementTagsTableAnnotationComposer,
+      $$ElementTagsTableCreateCompanionBuilder,
+      $$ElementTagsTableUpdateCompanionBuilder,
+      (ElementTagRow, $$ElementTagsTableReferences),
+      ElementTagRow,
+      PrefetchHooks Function({bool tagId})
+    >;
 typedef $$ActivityEventsTableCreateCompanionBuilder =
     ActivityEventsCompanion Function({
       required String id,
@@ -23999,6 +25332,9 @@ class $AppDatabaseManager {
       $$MercyBatchesTableTableManager(_db, _db.mercyBatches);
   $$SearchDocumentsTableTableManager get searchDocuments =>
       $$SearchDocumentsTableTableManager(_db, _db.searchDocuments);
+  $$TagsTableTableManager get tags => $$TagsTableTableManager(_db, _db.tags);
+  $$ElementTagsTableTableManager get elementTags =>
+      $$ElementTagsTableTableManager(_db, _db.elementTags);
   $$ActivityEventsTableTableManager get activityEvents =>
       $$ActivityEventsTableTableManager(_db, _db.activityEvents);
   $$SettingsTableTableManager get settings =>

@@ -21,6 +21,7 @@ import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/features/reader/typography_controller.dart';
 import 'package:incremental_reader/features/reader/widgets/block_span_builder.dart';
 import 'package:incremental_reader/features/review/review_view_model.dart';
+import 'package:incremental_reader/features/tags/tags_picker_dialog.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
@@ -138,6 +139,17 @@ class _ReviewBody extends ConsumerWidget {
     return AppBar(
       title: const Text('Review'),
       actions: <Widget>[
+        IconButton(
+          tooltip: 'Tags',
+          onPressed: state.isBusy
+              ? null
+              : () => editTagsOfElement(
+                  context,
+                  ref,
+                  ElementRef(id: state.card.id, type: ElementType.card),
+                ),
+          icon: const Icon(Icons.label_outline, size: 18),
+        ),
         IconButton(
           tooltip: 'Priority (Alt+P)',
           onPressed: state.isBusy ? null : () => _openPriority(context, ref),

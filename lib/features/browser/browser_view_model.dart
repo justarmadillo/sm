@@ -247,11 +247,19 @@ final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
   Future<List<ElementRef>?> createCards({
     required CardParent? parent,
     required List<CardDraft> drafts,
+    Set<String> tagIds = const <String>{},
   }) async {
     final List<Card>? created = await _command<List<Card>>(
       (OperationId operation) => ref
           .read(formulationCommandRunnerProvider)
-          .formulate(FormulateCards(operation, parent: parent, drafts: drafts)),
+          .formulate(
+            FormulateCards(
+              operation,
+              parent: parent,
+              drafts: drafts,
+              tagIds: tagIds,
+            ),
+          ),
       success: (List<Card> cards) =>
           '${cards.length} card${cards.length == 1 ? '' : 's'} added',
     );
