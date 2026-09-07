@@ -321,6 +321,8 @@ void main() {
           )
           .state;
       final StudyDay lastReviewDay = calendar.dayOf(start);
+      final DateTime originalDueAtUtc = reviewed.memory.originalDueAtUtc;
+      final StudyDay originalDueDay = reviewed.schedule.originalDueDay;
 
       final CardState movedLater = scheduler.rescheduleElement(
         reviewed,
@@ -329,6 +331,8 @@ void main() {
       );
       expect(movedLater.memory.lastReviewAtUtc, start);
       expect(movedLater.memory.scheduledDays, 20);
+      expect(movedLater.memory.originalDueAtUtc, originalDueAtUtc);
+      expect(movedLater.schedule.originalDueDay, originalDueDay);
       expect(
         calendar.dayOf(movedLater.memory.dueAtUtc),
         movedLater.schedule.dueDay,
@@ -341,10 +345,30 @@ void main() {
       );
       expect(movedBeforeLastReview.memory.lastReviewAtUtc, start);
       expect(movedBeforeLastReview.memory.scheduledDays, 0);
+      expect(movedBeforeLastReview.memory.originalDueAtUtc, originalDueAtUtc);
+      expect(movedBeforeLastReview.schedule.originalDueDay, originalDueDay);
       expect(
         calendar.dayOf(movedBeforeLastReview.memory.dueAtUtc),
         movedBeforeLastReview.schedule.dueDay,
       );
+    });
+
+    test('rescheduling a new card preserves the original FSRS due date', () {
+      const CardScheduler scheduler = CardScheduler(calendar: calendar);
+      final CardState original = newCard();
+      final StudyDay today = calendar.dayOf(start);
+      final StudyDay target = today.addDays(5);
+
+      final CardState moved = scheduler.rescheduleElement(
+        original,
+        targetDay: target,
+        today: today,
+      );
+
+      expect(moved.schedule.dueDay, target);
+      expect(moved.memory.dueAtUtc, calendar.startOfDayUtc(target));
+      expect(moved.schedule.originalDueDay, original.schedule.originalDueDay);
+      expect(moved.memory.originalDueAtUtc, original.memory.originalDueAtUtc);
     });
 
     test('low-level rescheduling refuses to rewrite review history', () {

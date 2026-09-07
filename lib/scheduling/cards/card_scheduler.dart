@@ -353,8 +353,10 @@ final class CardMemory {
   ///
   /// This is the item-side projection of SM20's low-level rescheduler. Memory
   /// strength/difficulty, review counters, and last-review instant are
-  /// preserved. A manual move is not a review and must never invent history
-  /// merely to make an unusual target date look like a positive interval.
+  /// preserved. The FSRS-produced original due instant is preserved as well;
+  /// only a genuine review may replace that diagnostic baseline. A manual
+  /// move is not a review and must never invent history merely to make an
+  /// unusual target date look like a positive interval.
   CardMemory lowLevelRescheduled({
     required DateTime targetDueAtUtc,
     required double actualIntervalDays,
@@ -389,7 +391,7 @@ final class CardMemory {
       lapses: lapses,
       lastReviewAtUtc: lastReviewAtUtc,
       dueAtUtc: targetDueAtUtc,
-      originalDueAtUtc: targetDueAtUtc,
+      originalDueAtUtc: originalDueAtUtc,
       schedulerVersion: schedulerVersion,
       parametersVersion: parametersVersion,
       postponeCount: postponeCount + (didIntervalGrow ? 1 : 0),
@@ -732,7 +734,6 @@ final class CardScheduler {
       return state.copyWith(
         schedule: state.schedule.copyWith(
           dueDay: targetDay,
-          originalDueDay: targetDay,
           revision: state.schedule.revision + 1,
         ),
         memory: state.memory.lowLevelRescheduled(
@@ -755,7 +756,6 @@ final class CardScheduler {
     return state.copyWith(
       schedule: state.schedule.copyWith(
         dueDay: targetDay,
-        originalDueDay: targetDay,
         revision: state.schedule.revision + 1,
       ),
       memory: state.memory.lowLevelRescheduled(
