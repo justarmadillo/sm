@@ -21,6 +21,7 @@ import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/documents/video.dart';
+import 'package:incremental_reader/features/tags/element_tag_name_index.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
@@ -40,6 +41,7 @@ final class BrowserTreeNode {
     required this.children,
     required this.directTagIds,
     required this.effectiveTagIds,
+    this.tagNames = const <String>[],
     this.parentRef,
     this.thumbnailSource,
     this.dueDay,
@@ -69,6 +71,9 @@ final class BrowserTreeNode {
 
   /// Direct tags plus every tag inherited from filed ancestors.
   final Set<String> effectiveTagIds;
+
+  /// Display names of direct and inherited tags, in alphabetic order.
+  final List<String> tagNames;
 
   /// Canonical due day, or null for an element with no schedule row.
   final StudyDay? dueDay;
@@ -111,8 +116,9 @@ final class BrowserTreeQuery {
     final Map<ElementRef, Sm20ElementStatus> statuses = await _statuses(
       elements,
     );
-    final Map<ElementRef, Set<String>> tagsByElement = await _tags
-        .listAllElementTags();
+    final ElementTagNameIndex tagNameIndex = await ElementTagNameIndex.load(
+      _tags,
+    );
 
     final Set<String> presentIds = <String>{
       for (final _Element element in elements) element.ref.id,
@@ -137,7 +143,7 @@ final class BrowserTreeQuery {
       childrenByParent: childrenByParent,
       schedules: schedules,
       statuses: statuses,
-      tagsByElement: tagsByElement,
+      tagNameIndex: tagNameIndex,
       inheritedTagIds: const <String>{},
       alreadyPlaced: <String>{},
     );
@@ -261,7 +267,7 @@ final class BrowserTreeQuery {
     required Map<String, List<_Element>> childrenByParent,
     required Map<String, ElementSchedule> schedules,
     required Map<ElementRef, Sm20ElementStatus> statuses,
-    required Map<ElementRef, Set<String>> tagsByElement,
+    required ElementTagNameIndex tagNameIndex,
     required Set<String> inheritedTagIds,
     required Set<String> alreadyPlaced,
   }) {
@@ -275,7 +281,7 @@ final class BrowserTreeQuery {
     for (final _Element element in ordered) {
       if (!alreadyPlaced.add(element.ref.id)) continue;
       final ElementSchedule? schedule = schedules[element.ref.id];
-      final Set<String> directTagIds = tagsByElement[element.ref] ?? <String>{};
+      final Set<String> directTagIds = tagNameIndex.tagIdsOf(element.ref);
       final Set<String> effectiveTagIds = <String>{
         ...inheritedTagIds,
         ...directTagIds,
@@ -292,13 +298,14 @@ final class BrowserTreeQuery {
           lifecycle: schedule?.lifecycle,
           directTagIds: directTagIds,
           effectiveTagIds: effectiveTagIds,
+          tagNames: tagNameIndex.listNamesFor(effectiveTagIds),
           children: _nodesFrom(
             childrenByParent[element.ref.id] ?? const <_Element>[],
             parentRef: element.ref,
             childrenByParent: childrenByParent,
             schedules: schedules,
             statuses: statuses,
-            tagsByElement: tagsByElement,
+            tagNameIndex: tagNameIndex,
             inheritedTagIds: effectiveTagIds,
             alreadyPlaced: alreadyPlaced,
           ),

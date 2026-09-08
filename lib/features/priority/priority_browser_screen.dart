@@ -22,6 +22,7 @@ import 'package:incremental_reader/features/priority/priority_view_model.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/postpone/sm20_advance.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/colored_tag_list.dart';
 import 'package:incremental_reader/shared/ui/element_type_badge.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
@@ -529,6 +530,10 @@ class _ElementRow extends ConsumerWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 12, color: AppColors.muted),
           ),
+        if (entry.tagNames.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 3),
+          ColoredTagList(tagNames: entry.tagNames, maximumVisibleTags: 3),
+        ],
       ],
     );
   }

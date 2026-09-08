@@ -207,6 +207,7 @@ void main() {
         BrowserTreeNode extractNode = await nodeFor(extractRef);
         expect(extractNode.directTagIds, isEmpty);
         expect(extractNode.effectiveTagIds, <String>{tag.id});
+        expect(extractNode.tagNames, <String>['cardiology']);
 
         await harness.filing.fileUnder(
           FileElementUnder(
@@ -217,6 +218,7 @@ void main() {
         );
         extractNode = await nodeFor(extractRef);
         expect(extractNode.effectiveTagIds, isEmpty);
+        expect(extractNode.tagNames, isEmpty);
       },
     );
 

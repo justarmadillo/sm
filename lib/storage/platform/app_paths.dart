@@ -41,6 +41,10 @@ final class AppPaths {
   /// Directory holding rotating diagnostic logs.
   Directory get logDirectory => Directory(p.join(root.path, 'logs'));
 
+  /// Directory holding short-lived packages selected or created for transfer.
+  Directory get collectionTransferDirectory =>
+      Directory(p.join(root.path, 'collection-transfer'));
+
   /// Creates every directory this installation needs.
   void ensureCreated() {
     for (final directory in <Directory>[
@@ -49,6 +53,7 @@ final class AppPaths {
       backupDirectory,
       assetDirectory,
       logDirectory,
+      collectionTransferDirectory,
     ]) {
       directory.createSync(recursive: true);
     }

@@ -28,6 +28,7 @@ final class BackupRetention {
     this.daily = 30,
     this.monthly = 12,
     this.preMigration = 5,
+    this.preImport = 5,
   });
 
   final int daily;
@@ -37,12 +38,16 @@ final class BackupRetention {
   /// separately so an ordinary daily rotation cannot discard the one copy
   /// that predates a bad upgrade.
   final int preMigration;
+
+  /// Full packages taken before a collection replacement.
+  final int preImport;
 }
 
 /// Why a backup was taken. Determines its file prefix and retention class.
 enum BackupType {
   daily('backup'),
-  preMigration('premigration');
+  preMigration('premigration'),
+  preImport('preimport');
 
   const BackupType(this.prefix);
 
@@ -56,6 +61,19 @@ final class BackupAssetReference {
 
   /// Lowercase content hash and on-disk file name.
   final String sha256;
+}
+
+/// What a completed full-collection package contains.
+final class CollectionExportReport {
+  const CollectionExportReport({
+    required this.file,
+    required this.includedAssetCount,
+    required this.missingAssetCount,
+  });
+
+  final File file;
+  final int includedAssetCount;
+  final int missingAssetCount;
 }
 
 /// Reads the valid asset references from the same collection being backed up.
@@ -120,8 +138,19 @@ String? validateDatabaseFile(File file) {
       return 'foreign keys do not resolve';
     }
     final int userVersion = copy.userVersion;
+    if (userVersion <= 0) {
+      return 'backup has no Incremental Reader schema version';
+    }
     if (userVersion > kSchemaVersion) {
       return 'backup schema $userVersion is newer than $kSchemaVersion';
+    }
+    final Set<String> tableNames = copy
+        .select("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .map((sqlite.Row row) => row['name'] as String)
+        .toSet();
+    const Set<String> requiredTables = <String>{'sources', 'cards', 'settings'};
+    if (!tableNames.containsAll(requiredTables)) {
+      return 'backup is not an Incremental Reader collection';
     }
     return null;
   } on Object catch (error) {
@@ -256,7 +285,8 @@ final class BackupService {
   }) async {
     final startedAt = _clock.nowUtc();
     final stamp = _timestamp(startedAt);
-    final extension = type == BackupType.daily ? 'irbackup' : 'sqlite';
+    final bool isPackage = type != BackupType.preMigration;
+    final extension = isPackage ? 'irbackup' : 'sqlite';
     final target = File(
       '${_backupDirectory.path}/${type.prefix}-$stamp.$extension',
     );
@@ -267,7 +297,7 @@ final class BackupService {
     try {
       _backupDirectory.createSync(recursive: true);
       if (staging.existsSync()) staging.deleteSync();
-      databaseSnapshot = type == BackupType.daily
+      databaseSnapshot = isPackage
           ? File('${target.path}.database.partial')
           : staging;
       _safeDelete(databaseSnapshot);
@@ -288,15 +318,16 @@ final class BackupService {
       }
 
       var missingAssetCount = 0;
-      if (type == BackupType.daily) {
+      if (isPackage) {
         manifestFile = File('${target.path}.manifest.partial');
         _safeDelete(manifestFile);
-        missingAssetCount = await _createDailyPackage(
+        final CollectionExportReport report = await _createCollectionPackage(
           packageFile: staging,
           databaseSnapshot: databaseSnapshot,
           manifestFile: manifestFile,
           createdAtUtc: startedAt,
         );
+        missingAssetCount = report.missingAssetCount;
         final packageProblem = _validatePackage(staging);
         if (packageProblem != null) {
           throw StateError(packageProblem);
@@ -346,6 +377,90 @@ final class BackupService {
     }
   }
 
+  /// Writes a full collection package to a user-selected destination.
+  ///
+  /// Manual exports do not participate in rolling-backup retention.
+  Future<Result<CollectionExportReport>> exportCollection({
+    required File target,
+    OperationId? operationId,
+  }) async {
+    final DateTime startedAt = _clock.nowUtc();
+    final File staging = File('${target.path}.partial');
+    final File databaseSnapshot = File('${target.path}.database.partial');
+    final File manifestFile = File('${target.path}.manifest.partial');
+    try {
+      target.parent.createSync(recursive: true);
+      for (final File file in <File>[staging, databaseSnapshot, manifestFile]) {
+        _safeDelete(file);
+      }
+      await _createDatabaseSnapshot(databaseSnapshot);
+      final String? databaseProblem = validateDatabaseFile(databaseSnapshot);
+      if (databaseProblem != null) throw StateError(databaseProblem);
+      final CollectionExportReport packageReport =
+          await _createCollectionPackage(
+            packageFile: staging,
+            databaseSnapshot: databaseSnapshot,
+            manifestFile: manifestFile,
+            createdAtUtc: startedAt,
+          );
+      final String? packageProblem = _validatePackage(staging);
+      if (packageProblem != null) throw StateError(packageProblem);
+
+      _replaceExportTarget(staging: staging, target: target);
+      _record(
+        DiagnosticLevel.info,
+        'collection_export.created',
+        operationId,
+        <String, Object?>{
+          'bytes': target.lengthSync(),
+          'missingAssets': packageReport.missingAssetCount,
+        },
+      );
+      return Ok<CollectionExportReport>(
+        CollectionExportReport(
+          file: target,
+          includedAssetCount: packageReport.includedAssetCount,
+          missingAssetCount: packageReport.missingAssetCount,
+        ),
+      );
+    } on Object catch (error, stackTrace) {
+      _safeDelete(staging);
+      return Err<CollectionExportReport>(
+        StorageFailure(
+          'could not export collection',
+          cause: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    } finally {
+      _safeDelete(databaseSnapshot);
+      _safeDelete(manifestFile);
+    }
+  }
+
+  /// Replaces an existing export without exposing a half-written package.
+  void _replaceExportTarget({required File staging, required File target}) {
+    File? displacedTarget;
+    try {
+      if (target.existsSync()) {
+        displacedTarget = File('${target.path}.superseded');
+        _safeDelete(displacedTarget);
+        target.renameSync(displacedTarget.path);
+      }
+      staging.renameSync(target.path);
+      _safeDelete(displacedTarget);
+    } on Object catch (error, stackTrace) {
+      if (!target.existsSync() && (displacedTarget?.existsSync() ?? false)) {
+        try {
+          displacedTarget!.renameSync(target.path);
+        } on FileSystemException {
+          // The displaced file remains recoverable beside the destination.
+        }
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
   /// Backups on disk, newest first.
   List<File> listBackups({BackupType? type}) {
     return listBackupFiles(_backupDirectory, type: type);
@@ -354,6 +469,7 @@ final class BackupService {
   /// Applies the retention policy, deleting whatever falls outside it.
   Future<void> pruneOldBackups() async {
     _prunePreMigration();
+    _prunePreImport();
     _pruneDaily();
   }
 
@@ -364,7 +480,7 @@ final class BackupService {
   }
 
   /// Streams a database, manifest, and every verified asset into one package.
-  Future<int> _createDailyPackage({
+  Future<CollectionExportReport> _createCollectionPackage({
     required File packageFile,
     required File databaseSnapshot,
     required File manifestFile,
@@ -392,6 +508,8 @@ final class BackupService {
       });
     }
 
+    final String databaseSha256 =
+        (await sha256.bind(databaseSnapshot.openRead()).first).toString();
     final manifest = <String, Object?>{
       'formatVersion': 1,
       'createdAtUtc': createdAtUtc.toUtc().toIso8601String(),
@@ -399,6 +517,7 @@ final class BackupService {
         'path': 'collection.sqlite',
         'bytes': await databaseSnapshot.length(),
         'schemaVersion': kSchemaVersion,
+        'sha256': databaseSha256,
       },
       'assets': included,
       'missingAssets': missing,
@@ -416,7 +535,11 @@ final class BackupService {
     } finally {
       await encoder.close();
     }
-    return missing.length;
+    return CollectionExportReport(
+      file: packageFile,
+      includedAssetCount: included.length,
+      missingAssetCount: missing.length,
+    );
   }
 
   Future<List<BackupAssetReference>> _listUniqueAssetReferences() async {
@@ -494,6 +617,13 @@ final class BackupService {
     final backups = listBackups(type: BackupType.preMigration);
     for (var i = retention.preMigration; i < backups.length; i++) {
       _safeDelete(backups[i]);
+    }
+  }
+
+  void _prunePreImport() {
+    final backups = listBackups(type: BackupType.preImport);
+    for (var index = retention.preImport; index < backups.length; index++) {
+      _safeDelete(backups[index]);
     }
   }
 

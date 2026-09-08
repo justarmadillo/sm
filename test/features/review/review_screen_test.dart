@@ -15,9 +15,11 @@ import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dar
 import 'package:incremental_reader/features/extract/extract_providers.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/review/review_screen.dart';
+import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
+import 'package:incremental_reader/storage/contracts/tag_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
 
@@ -48,21 +50,22 @@ void main() {
           title: 'Encoding',
           markdown: '# Encoding\n\nWorking memory holds four items.',
         ))!;
-    final List<documents.Card> cards = (await container
-            .read(formulationCommandRunnerProvider)
-            .formulate(
-              FormulateCards(
-                const OperationId('formulate-1'),
-                parent: documents.CardParent.source(sourceId),
-                drafts: const <CardDraft>[
-                  QaCardDraft(
-                    question: 'How many items does working memory hold?',
-                    answer: 'Four.',
+    final List<documents.Card> cards =
+        (await container
+                .read(formulationCommandRunnerProvider)
+                .formulate(
+                  FormulateCards(
+                    const OperationId('formulate-1'),
+                    parent: documents.CardParent.source(sourceId),
+                    drafts: const <CardDraft>[
+                      QaCardDraft(
+                        question: 'How many items does working memory hold?',
+                        answer: 'Four.',
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ))
-        .unwrap();
+                ))
+            .unwrap();
     cardId = cards.single.id;
   });
 
@@ -101,6 +104,31 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> assignCardTag(String name) async {
+    final Tag tag = Tag(
+      id: 'tag-$name',
+      name: name,
+      createdAtUtc: clock.nowUtc(),
+      updatedAtUtc: clock.nowUtc(),
+    );
+    final repository = container.read(tagRepositoryProvider);
+    await repository.insertTag(tag);
+    await repository.saveTagsOfElement(
+      ElementRef(id: cardId, type: ElementType.card),
+      <String>{tag.id},
+      clock.nowUtc(),
+    );
+  }
+
+  testWidgets('shows card tags during review', (WidgetTester tester) async {
+    await assignCardTag('memory');
+    await pumpQueue(tester);
+
+    await start(tester);
+
+    expect(find.text('#memory'), findsOneWidget);
+  });
+
   testWidgets('a card reopened after grading asks before it answers', (
     WidgetTester tester,
   ) async {
@@ -135,14 +163,10 @@ void main() {
     await tester.tap(find.text('3  Good'));
     await tester.pumpAndSettle();
 
-    expect(
-      outcomes,
-      <StudyRouteResult>[
-        StudyRouteResult.committed,
-        StudyRouteResult.committed,
-      ],
-      reason: 'the second grade must commit and leave the screen',
-    );
+    expect(outcomes, <StudyRouteResult>[
+      StudyRouteResult.committed,
+      StudyRouteResult.committed,
+    ], reason: 'the second grade must commit and leave the screen');
     expect(find.widgetWithText(FilledButton, 'Start'), findsOneWidget);
   });
 

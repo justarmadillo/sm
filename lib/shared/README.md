@@ -20,6 +20,7 @@
 | File | What it is |
 |---|---|
 | `app_theme.dart` | the app's colours and typography |
+| `colored_tag_list.dart` | bounded, consistently coloured tag pills |
 | `desktop_scroll_view.dart` | keyboard scrolling with a persistent desktop scrollbar |
 | `element_type_badge.dart` | one icon, colour, and label for each element type |
 | `screen_width.dart` | the shared compact-versus-wide layout decision |

@@ -15,6 +15,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/features/settings/collection_file_dialogs.dart';
 import 'package:incremental_reader/features/settings/settings_controls.dart';
 import 'package:incremental_reader/features/settings/settings_view_model.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
@@ -25,6 +26,7 @@ import 'package:incremental_reader/shared/ui/desktop_scroll_view.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 import 'package:incremental_reader/storage/platform/time_zones.dart';
+import 'package:path/path.dart' as p;
 
 /// Opens Settings.
 Future<void> openSettings(BuildContext context, WidgetRef ref) async {
@@ -85,7 +87,10 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 PopupMenuItem<String>(
                   value: 'discard',
-                  enabled: settingsState != null && settingsState.isDirty,
+                  enabled:
+                      settingsState != null &&
+                      settingsState.isDirty &&
+                      !settingsState.isBusy,
                   child: const Text('Discard'),
                 ),
               ],
@@ -99,7 +104,10 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(width: 6),
             TextButton(
-              onPressed: settingsState == null || !settingsState.isDirty
+              onPressed:
+                  settingsState == null ||
+                      !settingsState.isDirty ||
+                      settingsState.isBusy
                   ? null
                   : model.revert,
               child: const Text('Discard'),
@@ -113,7 +121,11 @@ class SettingsScreen extends ConsumerWidget {
                     settingsState.isBusy
                 ? null
                 : model.save,
-            child: const Text('Save'),
+            child: Text(
+              settingsState?.activeOperation == SettingsOperation.saving
+                  ? 'Saving…'
+                  : 'Save',
+            ),
           ),
           const SizedBox(width: 12),
         ],
@@ -154,6 +166,7 @@ class _SettingsBody extends StatelessWidget {
           _smartPostponeAdjust(),
           _ProfileRegistry(draft: draft, model: model),
           _mercy(),
+          _collectionData(context),
           _maintenance(),
           _diagnostics(),
         ],
@@ -1282,7 +1295,11 @@ class _SettingsBody extends StatelessWidget {
             'transaction. Historical logs are reported but never deleted.',
         control: FilledButton.tonal(
           onPressed: state.isBusy ? null : model.checkDatabase,
-          child: Text(state.isBusy ? 'Checking…' : 'Check now'),
+          child: Text(
+            state.activeOperation == SettingsOperation.checkingDatabase
+                ? 'Checking…'
+                : 'Check now',
+          ),
         ),
       ),
       SettingsRow(
@@ -1292,10 +1309,102 @@ class _SettingsBody extends StatelessWidget {
             'it has drifted, and hands back the space freed by anything you '
             'have deleted. Safe to run at any time; a large collection takes '
             'a moment.',
-        control: _OptimizeButton(isBusy: state.isBusy, model: model),
+        control: _OptimizeButton(
+          isDisabled: state.isBusy,
+          isOptimizing:
+              state.activeOperation == SettingsOperation.optimizingDatabase,
+          model: model,
+        ),
+        controlWidth: 220,
       ),
     ],
   );
+
+  Widget _collectionData(BuildContext context) => SettingsSection(
+    title: 'Collection data',
+    description:
+        'Move a complete collection between installations. Packages contain '
+        'sources, cards, schedules, history, tags, settings, and available '
+        'images.',
+    children: <Widget>[
+      SettingsRow(
+        label: 'Export collection',
+        hint: state.isDirty
+            ? 'Save or discard your settings edits before exporting.'
+            : 'Creates one portable .irbackup package without changing your '
+                  'rolling backups.',
+        control: FilledButton.tonal(
+          onPressed: state.isBusy || state.isDirty
+              ? null
+              : model.exportCollection,
+          child: Text(
+            state.activeOperation == SettingsOperation.exportingCollection
+                ? 'Exporting…'
+                : 'Export…',
+          ),
+        ),
+      ),
+      SettingsRow(
+        label: 'Import collection',
+        hint: state.isDirty
+            ? 'Save or discard your settings edits before importing.'
+            : 'Replaces this collection after creating a safety backup. '
+                  'This does not merge collections.',
+        control: FilledButton.tonal(
+          onPressed: state.isBusy || state.isDirty
+              ? null
+              : () => _chooseAndConfirmImport(context),
+          child: Text(
+            state.activeOperation == SettingsOperation.importingCollection
+                ? 'Importing…'
+                : 'Import…',
+          ),
+        ),
+      ),
+    ],
+  );
+
+  Future<void> _chooseAndConfirmImport(BuildContext context) async {
+    final SelectedCollectionPackage? selected = await model
+        .chooseCollectionPackage();
+    if (selected == null) return;
+    if (!context.mounted) {
+      await model.discardSelectedCollectionPackage(selected);
+      return;
+    }
+    final bool didConfirm =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext dialogContext) => AlertDialog(
+            title: const Text('Replace this collection?'),
+            content: Text(
+              '${p.basename(selected.file.path)} will replace every source, '
+              'card, schedule, history entry, tag, setting, and image in the '
+              'current collection. A safety backup is created first.',
+            ),
+            actions: <Widget>[
+              TextButton(
+                autofocus: true,
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                ),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Replace and import'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!didConfirm) {
+      await model.discardSelectedCollectionPackage(selected);
+      return;
+    }
+    await model.importCollection(selected);
+  }
 
   Widget _diagnostics() => SettingsSection(
     title: 'Diagnostics',
@@ -1626,16 +1735,21 @@ class _ProfileRegistryState extends State<_ProfileRegistry> {
 /// The pass rewrites the whole database file, so on a large collection it is
 /// slow enough that a button which merely greyed out would read as broken.
 class _OptimizeButton extends StatelessWidget {
-  const _OptimizeButton({required this.isBusy, required this.model});
+  const _OptimizeButton({
+    required this.isDisabled,
+    required this.isOptimizing,
+    required this.model,
+  });
 
-  final bool isBusy;
+  final bool isDisabled;
+  final bool isOptimizing;
   final SettingsViewModel model;
 
   @override
   Widget build(BuildContext context) => Row(
     mainAxisAlignment: MainAxisAlignment.end,
     children: <Widget>[
-      if (isBusy) ...<Widget>[
+      if (isOptimizing) ...<Widget>[
         const SizedBox(
           width: 14,
           height: 14,
@@ -1644,8 +1758,8 @@ class _OptimizeButton extends StatelessWidget {
         const SizedBox(width: 10),
       ],
       FilledButton.tonal(
-        onPressed: isBusy ? null : model.optimizeDatabase,
-        child: Text(isBusy ? 'Optimizing…' : 'Optimize now'),
+        onPressed: isDisabled ? null : model.optimizeDatabase,
+        child: Text(isOptimizing ? 'Optimizing…' : 'Optimize now'),
       ),
     ],
   );

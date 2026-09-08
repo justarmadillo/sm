@@ -14,6 +14,7 @@ import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/documents/video.dart';
 import 'package:incremental_reader/features/daily_queue/queue_command_runner.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
+import 'package:incremental_reader/features/tags/element_tag_name_index.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
@@ -26,6 +27,7 @@ import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/shared/text_excerpt.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
+import 'package:incremental_reader/storage/contracts/tag_repository.dart';
 import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:meta/meta.dart';
 
@@ -38,6 +40,7 @@ final class QueueEntry {
     required this.actionLabel,
     required this.title,
     required this.preview,
+    this.tagNames = const <String>[],
     this.priorityPercent,
     this.isLeech = false,
   });
@@ -47,6 +50,7 @@ final class QueueEntry {
   final String actionLabel;
   final String title;
   final String preview;
+  final List<String> tagNames;
 
   /// Where the element sits in the collection, `0` being most important.
   final double? priorityPercent;
@@ -99,12 +103,14 @@ final class QueueQuery {
     required ContentRepository content,
     required VideoRepository videos,
     required LearningRepository learning,
+    required TagRepository tags,
     required QueueCommandRunner commandRunner,
     required SchedulingContext context,
     required Clock clock,
   }) : _content = content,
        _videos = videos,
        _learning = learning,
+       _tags = tags,
        _commandRunner = commandRunner,
        _context = context,
        _clock = clock;
@@ -112,6 +118,7 @@ final class QueueQuery {
   final ContentRepository _content;
   final VideoRepository _videos;
   final LearningRepository _learning;
+  final TagRepository _tags;
   final QueueCommandRunner _commandRunner;
   final SchedulingContext _context;
   final Clock _clock;
@@ -141,6 +148,9 @@ final class QueueQuery {
     final PriorityScale scale = await _context.priorityScale();
     final settings = await _context.settings();
     final int leechLapses = settings.cards.leechLapses;
+    final ElementTagNameIndex tagNameIndex = await ElementTagNameIndex.load(
+      _tags,
+    );
     final Map<ElementRef, QueueLane> lanes = <ElementRef, QueueLane>{
       for (final ScoredCandidate candidate in plan.scored)
         candidate.ref: candidate.lane,
@@ -155,6 +165,7 @@ final class QueueQuery {
                 : QueueLane.outstandingTopic),
         scale,
         leechLapses,
+        tagNameIndex,
       );
       if (entry != null) entries.add(entry);
     }
@@ -196,11 +207,18 @@ final class QueueQuery {
     QueueLane lane,
     PriorityScale scale,
     int leechLapses,
+    ElementTagNameIndex tagNameIndex,
   ) => switch (candidate.ref.type) {
-    ElementType.source => _sourceEntry(candidate, lane, scale),
-    ElementType.extract => _extractEntry(candidate, lane, scale),
-    ElementType.card => _cardEntry(candidate, lane, scale, leechLapses),
-    ElementType.video => _videoEntry(candidate, lane, scale),
+    ElementType.source => _sourceEntry(candidate, lane, scale, tagNameIndex),
+    ElementType.extract => _extractEntry(candidate, lane, scale, tagNameIndex),
+    ElementType.card => _cardEntry(
+      candidate,
+      lane,
+      scale,
+      leechLapses,
+      tagNameIndex,
+    ),
+    ElementType.video => _videoEntry(candidate, lane, scale, tagNameIndex),
   };
 
   double? _percentOf(QueueCandidate candidate, PriorityScale scale) =>
@@ -210,6 +228,7 @@ final class QueueQuery {
     QueueCandidate candidate,
     QueueLane lane,
     PriorityScale scale,
+    ElementTagNameIndex tagNameIndex,
   ) async {
     final Source? source = await _content.findSource(candidate.ref.id);
     if (source == null) return null;
@@ -219,6 +238,7 @@ final class QueueQuery {
       actionLabel: _actionLabel(lane, 'Read'),
       title: source.title,
       preview: singleLineExcerpt(source.markdown, maximumCharacters: 180),
+      tagNames: tagNameIndex.listNamesOf(candidate.ref),
       priorityPercent: _percentOf(candidate, scale),
     );
   }
@@ -227,6 +247,7 @@ final class QueueQuery {
     QueueCandidate candidate,
     QueueLane lane,
     PriorityScale scale,
+    ElementTagNameIndex tagNameIndex,
   ) async {
     final Extract? extract = await _content.findExtract(candidate.ref.id);
     if (extract == null) return null;
@@ -239,6 +260,7 @@ final class QueueQuery {
       actionLabel: _actionLabel(lane, 'Process'),
       title: source?.title ?? 'Extract',
       preview: singleLineExcerpt(extract.markdown, maximumCharacters: 180),
+      tagNames: tagNameIndex.listNamesOf(candidate.ref),
       priorityPercent: _percentOf(candidate, scale),
     );
   }
@@ -252,6 +274,7 @@ final class QueueQuery {
     QueueCandidate candidate,
     QueueLane lane,
     PriorityScale scale,
+    ElementTagNameIndex tagNameIndex,
   ) async {
     final VideoElement? element = await _videos.findVideoElement(
       candidate.ref.id,
@@ -266,6 +289,7 @@ final class QueueQuery {
           ? element.rangeLabel
           : singleLineExcerpt(element.note, maximumCharacters: 180),
       priorityPercent: _percentOf(candidate, scale),
+      tagNames: tagNameIndex.listNamesOf(candidate.ref),
     );
   }
 
@@ -285,6 +309,7 @@ final class QueueQuery {
     QueueLane lane,
     PriorityScale scale,
     int leechLapses,
+    ElementTagNameIndex tagNameIndex,
   ) async {
     final Card? card = await _content.findCard(candidate.ref.id);
     if (card == null) return null;
@@ -301,6 +326,7 @@ final class QueueQuery {
       title: source?.title ?? 'Card',
       preview: singleLineExcerpt(question, maximumCharacters: 180),
       priorityPercent: _percentOf(candidate, scale),
+      tagNames: tagNameIndex.listNamesOf(candidate.ref),
       isLeech: leechLapses > 0 && lapses >= leechLapses,
     );
   }

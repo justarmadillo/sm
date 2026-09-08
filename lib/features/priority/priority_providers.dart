@@ -41,6 +41,7 @@ final Provider<PriorityQuery> priorityQueryProvider = Provider<PriorityQuery>(
     content: ref.watch(contentRepositoryProvider),
     videos: ref.watch(videoRepositoryProvider),
     learning: ref.watch(learningRepositoryProvider),
+    tags: ref.watch(tagRepositoryProvider),
     context: ref.watch(schedulingContextProvider),
   ),
 );

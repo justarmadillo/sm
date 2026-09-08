@@ -9,9 +9,11 @@ import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
+import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/storage/contracts/tag_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
 
@@ -71,6 +73,31 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  Future<void> assignTag(ReaderRequest request, String name) async {
+    final Tag tag = Tag(
+      id: 'tag-$name',
+      name: name,
+      createdAtUtc: DateTime.utc(2026, 3, 5),
+      updatedAtUtc: DateTime.utc(2026, 3, 5),
+    );
+    final repository = container.read(tagRepositoryProvider);
+    await repository.insertTag(tag);
+    await repository.saveTagsOfElement(
+      ElementRef(id: request.sourceId, type: ElementType.source),
+      <String>{tag.id},
+      DateTime.utc(2026, 3, 5),
+    );
+  }
+
+  testWidgets('shows source tags while reading', (WidgetTester tester) async {
+    final ReaderRequest request = await importReaderRequest();
+    await assignTag(request, 'research');
+
+    await pumpReader(tester, request);
+
+    expect(find.text('#research'), findsOneWidget);
+  });
 
   testWidgets('phone status starts collapsed and expands accessibly', (
     WidgetTester tester,

@@ -27,6 +27,7 @@ import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/mercy/mercy.dart';
 import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/colored_tag_list.dart';
 import 'package:incremental_reader/shared/ui/element_type_badge.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
@@ -698,6 +699,13 @@ class _QueueTile extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     _titleRow(context, ref, style.color),
+                    if (entry.tagNames.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 5),
+                      ColoredTagList(
+                        tagNames: entry.tagNames,
+                        maximumVisibleTags: 3,
+                      ),
+                    ],
                     const SizedBox(height: 5),
                     Text(
                       entry.preview,

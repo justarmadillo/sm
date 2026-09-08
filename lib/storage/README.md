@@ -73,10 +73,12 @@ images under portable SHA-256 names in private application support.
 `files/backup_service.dart` packages the database and referenced images once
 per study day, before the day's first write. Pre-migration backups remain a
 database-only snapshot because their one job is to protect the schema upgrade.
-`files/backup_restore_service.dart` is the matching cold reader: it validates
-and restores those files before Drift or the provider graph exists. Promotion
-moves the live database and its WAL/SHM sidecars aside first, and restores every
-displaced file if the replacement cannot be promoted.
+`files/backup_restore_service.dart` is the matching reader. It streams a package
+into app-owned staging, validates and migrates that expendable copy, then
+promotes it only after Drift is closed. Promotion moves the live database and
+its WAL/SHM sidecars aside first, and restores every displaced file if the
+replacement cannot be promoted. Manual exports and pre-import safety backups
+use the same package writer as daily backups.
 
 `DatabaseCheck.repairIntegrity()` in `contracts/database_check.dart`, implemented
 by `drift/drift_database_check.dart`, repairs logical relationships that SQLite

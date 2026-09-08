@@ -25,6 +25,7 @@ import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/reader/reader_command_runner.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/reader_providers.dart';
+import 'package:incremental_reader/features/tags/element_tag_name_index.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
@@ -90,11 +91,13 @@ final class ReaderUiState {
     this.editingBlockId,
     this.canUndoEdit = false,
     this.assets = const <SourceAsset>[],
+    this.tagNames = const <String>[],
   });
 
   final Source source;
   final Document document;
   final List<SourceAsset> assets;
+  final List<String> tagNames;
   final TopicState topic;
   final ReaderMode mode;
 
@@ -241,10 +244,12 @@ final class ReaderUiState {
     bool? canUndoEdit,
     Document? document,
     List<SourceAsset>? assets,
+    List<String>? tagNames,
   }) => ReaderUiState(
     source: source ?? this.source,
     document: document ?? this.document,
     assets: assets ?? this.assets,
+    tagNames: tagNames ?? this.tagNames,
     topic: topic ?? this.topic,
     mode: mode ?? this.mode,
     openedAt: openedAt ?? this.openedAt,
@@ -299,10 +304,14 @@ final class ReaderViewModel
     if (topic == null) {
       throw StateError('source ${arg.sourceId} has no schedule');
     }
+    final ElementTagNameIndex tagNameIndex = await ElementTagNameIndex.load(
+      ref.read(tagRepositoryProvider),
+    );
     return ReaderUiState(
       source: source,
       document: document,
       topic: topic,
+      tagNames: tagNameIndex.listNamesOf(topic.ref),
       mode: mode,
       effectiveDueDay: await ref
           .read(effectiveDueQueryProvider)
@@ -319,6 +328,19 @@ final class ReaderViewModel
       assets: await ref
           .read(sourceAssetRepositoryProvider)
           .listSourceAssets(source.id),
+    );
+  }
+
+  /// Reloads only the labels changed by the tag picker, leaving reading and
+  /// scheduling state untouched.
+  Future<void> refreshTags() async {
+    final ReaderUiState? current = state.valueOrNull;
+    if (current == null) return;
+    final ElementTagNameIndex tagNameIndex = await ElementTagNameIndex.load(
+      ref.read(tagRepositoryProvider),
+    );
+    state = AsyncValue<ReaderUiState>.data(
+      current.copyWith(tagNames: tagNameIndex.listNamesOf(current.topic.ref)),
     );
   }
 

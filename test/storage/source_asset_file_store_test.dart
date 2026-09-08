@@ -61,6 +61,23 @@ void main() {
     expect(() => store.saveBytes(bytes), throwsStateError);
   });
 
+  test('promotes a staged file without retaining the staging copy', () async {
+    final Uint8List bytes = Uint8List.fromList(<int>[4, 3, 2, 1]);
+    final String expectedSha256 = sha256.convert(bytes).toString();
+    final File staged = File('${workspace.path}/staged-image')
+      ..writeAsBytesSync(bytes);
+
+    final StoredSourceAsset saved = await store.saveStagedFile(
+      stagedFile: staged,
+      expectedSha256: expectedSha256,
+      expectedByteLength: bytes.length,
+    );
+
+    expect(saved.wasCreated, isTrue);
+    expect(saved.file.readAsBytesSync(), bytes);
+    expect(staged.existsSync(), isFalse);
+  });
+
   test('startup cleanup removes only partial files', () async {
     store.directory.createSync(recursive: true);
     File(

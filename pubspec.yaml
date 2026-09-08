@@ -50,6 +50,9 @@ dependencies:
   # rules rather than the machine's current offset.
   timezone: 0.11.1
   file_selector: ^1.1.0
+  # Android's document picker can save and open large collection packages by
+  # file path instead of passing the complete archive through a method channel.
+  flutter_file_dialog: ^3.3.2
   # Native clipboard image streams on Windows and Android. Clipboard bitmaps
   # are copied into app-owned storage before their transient handle expires.
   super_clipboard: ^0.9.1

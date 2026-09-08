@@ -88,6 +88,11 @@ ThemeData buildAppTheme() {
         ),
       ),
     ),
+    filledButtonTheme: const FilledButtonThemeData(
+      style: ButtonStyle(
+        foregroundColor: WidgetStatePropertyAll<Color>(Colors.white),
+      ),
+    ),
     snackBarTheme: const SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: AppColors.text,

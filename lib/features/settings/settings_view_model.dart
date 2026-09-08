@@ -6,24 +6,39 @@
 /// and randomization settings remains authoritative until it is rebuilt.
 library;
 
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/daily_queue/queue_view_model.dart';
 import 'package:incremental_reader/features/priority/priority_view_model.dart';
+import 'package:incremental_reader/features/settings/collection_file_dialogs.dart';
 import 'package:incremental_reader/features/settings/fsrs_settings_rescheduler.dart';
+import 'package:incremental_reader/features/settings/settings_providers.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/database_check.dart';
 import 'package:incremental_reader/storage/contracts/database_maintenance.dart';
+import 'package:incremental_reader/storage/files/backup_service.dart';
+import 'package:path/path.dart' as p;
+
+enum SettingsOperation {
+  saving,
+  checkingDatabase,
+  optimizingDatabase,
+  exportingCollection,
+  importingCollection,
+}
 
 @immutable
 final class SettingsUiState {
   const SettingsUiState({
     required this.saved,
     required this.draft,
-    this.isBusy = false,
+    this.activeOperation,
     this.message,
   });
 
@@ -33,7 +48,9 @@ final class SettingsUiState {
   /// What the user is editing.
   final AppSettings draft;
 
-  final bool isBusy;
+  final SettingsOperation? activeOperation;
+
+  bool get isBusy => activeOperation != null;
   final UiMessage? message;
 
   /// Whether there is anything to save.
@@ -42,13 +59,16 @@ final class SettingsUiState {
   SettingsUiState copyWith({
     AppSettings? saved,
     AppSettings? draft,
-    bool? isBusy,
+    SettingsOperation? activeOperation,
+    bool shouldClearOperation = false,
     UiMessage? message,
     bool shouldClearMessage = false,
   }) => SettingsUiState(
     saved: saved ?? this.saved,
     draft: draft ?? this.draft,
-    isBusy: isBusy ?? this.isBusy,
+    activeOperation: shouldClearOperation
+        ? null
+        : (activeOperation ?? this.activeOperation),
     message: shouldClearMessage ? null : (message ?? this.message),
   );
 }
@@ -94,7 +114,9 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
   Future<void> save() async {
     final SettingsUiState? current = state.valueOrNull;
     if (current == null || current.isBusy || !current.isDirty) return;
-    state = AsyncValue<SettingsUiState>.data(current.copyWith(isBusy: true));
+    state = AsyncValue<SettingsUiState>.data(
+      current.copyWith(activeOperation: SettingsOperation.saving),
+    );
 
     final FsrsSettingsSaveResult saveResult = await FsrsSettingsRescheduler(
       settings: ref.read(settingsStoreProvider),
@@ -106,7 +128,7 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
     if (result.isErr) {
       state = AsyncValue<SettingsUiState>.data(
         current.copyWith(
-          isBusy: false,
+          shouldClearOperation: true,
           message: UiMessage(result.failureOrNull!.message, isError: true),
         ),
       );
@@ -149,7 +171,9 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
   Future<void> optimizeDatabase() async {
     final SettingsUiState? current = state.valueOrNull;
     if (current == null || current.isBusy) return;
-    state = AsyncValue<SettingsUiState>.data(current.copyWith(isBusy: true));
+    state = AsyncValue<SettingsUiState>.data(
+      current.copyWith(activeOperation: SettingsOperation.optimizingDatabase),
+    );
 
     try {
       final DatabaseMaintenanceReport report = await ref
@@ -157,7 +181,7 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
           .optimize();
       state = AsyncValue<SettingsUiState>.data(
         current.copyWith(
-          isBusy: false,
+          shouldClearOperation: true,
           message: UiMessage(
             _reportMessage(report),
             isError: !report.isHealthy,
@@ -167,7 +191,7 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
     } on Object catch (error) {
       state = AsyncValue<SettingsUiState>.data(
         current.copyWith(
-          isBusy: false,
+          shouldClearOperation: true,
           message: UiMessage('Could not optimize: $error', isError: true),
         ),
       );
@@ -178,7 +202,9 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
   Future<void> checkDatabase() async {
     final SettingsUiState? current = state.valueOrNull;
     if (current == null || current.isBusy) return;
-    state = AsyncValue<SettingsUiState>.data(current.copyWith(isBusy: true));
+    state = AsyncValue<SettingsUiState>.data(
+      current.copyWith(activeOperation: SettingsOperation.checkingDatabase),
+    );
     try {
       final DatabaseCheckReport report = await ref
           .read(databaseCheckProvider)
@@ -188,7 +214,7 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
       }
       state = AsyncValue<SettingsUiState>.data(
         current.copyWith(
-          isBusy: false,
+          shouldClearOperation: true,
           message: UiMessage(
             _databaseCheckMessage(report),
             isError:
@@ -202,11 +228,224 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
     } on Object catch (error) {
       state = AsyncValue<SettingsUiState>.data(
         current.copyWith(
-          isBusy: false,
+          shouldClearOperation: true,
           message: UiMessage('Could not check database: $error', isError: true),
         ),
       );
     }
+  }
+
+  /// Opens the platform picker without treating cancellation as an error.
+  Future<SelectedCollectionPackage?> chooseCollectionPackage() async {
+    final SettingsUiState? current = state.valueOrNull;
+    if (current == null || current.isBusy || current.isDirty) return null;
+    try {
+      return await ref.read(collectionFileDialogsProvider).pickPackage();
+    } on Object catch (error) {
+      state = AsyncValue<SettingsUiState>.data(
+        current.copyWith(
+          message: UiMessage(
+            'Could not open the collection picker: $error',
+            isError: true,
+          ),
+        ),
+      );
+      return null;
+    }
+  }
+
+  /// Deletes an Android picker cache copy after it is no longer needed.
+  Future<void> discardSelectedCollectionPackage(
+    SelectedCollectionPackage selected,
+  ) async {
+    if (!selected.shouldDeleteAfterUse) return;
+    try {
+      if (selected.file.existsSync()) await selected.file.delete();
+    } on FileSystemException {
+      // Android may still hold the picker copy; its cache policy removes it.
+    }
+  }
+
+  /// Replaces the collection after the screen has obtained confirmation.
+  Future<void> importCollection(SelectedCollectionPackage selected) async {
+    final SettingsUiState? current = state.valueOrNull;
+    if (current == null || current.isBusy || current.isDirty) {
+      await discardSelectedCollectionPackage(selected);
+      return;
+    }
+    final OperationId operationId = OperationId(
+      ref.read(idGeneratorProvider).newId(),
+    );
+    state = AsyncValue<SettingsUiState>.data(
+      current.copyWith(activeOperation: SettingsOperation.importingCollection),
+    );
+    final Result<Unit> result = await ref
+        .read(collectionReplacementProvider)
+        .replaceWithPackage(selected.file, operationId: operationId);
+    await discardSelectedCollectionPackage(selected);
+    if (result.isOk) return;
+    state = AsyncValue<SettingsUiState>.data(
+      current.copyWith(
+        shouldClearOperation: true,
+        message: UiMessage(result.failureOrNull!.message, isError: true),
+      ),
+    );
+  }
+
+  /// Creates a full package and hands it to the platform save dialog.
+  Future<void> exportCollection() async {
+    final SettingsUiState? current = state.valueOrNull;
+    if (current == null || current.isBusy || current.isDirty) return;
+    final CollectionFileDialogs dialogs = ref.read(
+      collectionFileDialogsProvider,
+    );
+    if (!dialogs.isSupported) {
+      state = AsyncValue<SettingsUiState>.data(
+        current.copyWith(
+          message: const UiMessage(
+            'Collection export is available on Windows and Android.',
+            isError: true,
+          ),
+        ),
+      );
+      return;
+    }
+
+    final OperationId operationId = OperationId(
+      ref.read(idGeneratorProvider).newId(),
+    );
+    final String suggestedName = _collectionPackageName(
+      ref.read(clockProvider).nowUtc(),
+    );
+    state = AsyncValue<SettingsUiState>.data(
+      current.copyWith(activeOperation: SettingsOperation.exportingCollection),
+    );
+
+    _CollectionExportDestination? destination;
+    try {
+      destination = await _chooseExportDestination(
+        dialogs: dialogs,
+        suggestedName: suggestedName,
+        operationId: operationId,
+        previous: current,
+      );
+      if (destination == null) {
+        if (state.valueOrNull?.activeOperation ==
+            SettingsOperation.exportingCollection) {
+          _clearOperation(current);
+        }
+        return;
+      }
+      await _createAndSaveExport(
+        destination: destination,
+        dialogs: dialogs,
+        suggestedName: suggestedName,
+        operationId: operationId,
+        previous: current,
+      );
+    } on Object catch (error) {
+      state = AsyncValue<SettingsUiState>.data(
+        current.copyWith(
+          shouldClearOperation: true,
+          message: UiMessage(
+            'Could not export collection: $error',
+            isError: true,
+          ),
+        ),
+      );
+    } finally {
+      if (destination?.shouldDeleteAfterUse ?? false) {
+        await _deleteScratchPackage(destination!.file);
+      }
+    }
+  }
+
+  Future<_CollectionExportDestination?> _chooseExportDestination({
+    required CollectionFileDialogs dialogs,
+    required String suggestedName,
+    required OperationId operationId,
+    required SettingsUiState previous,
+  }) async {
+    if (dialogs.usesAndroidDocumentPicker) {
+      return _CollectionExportDestination(
+        file: File(
+          p.join(
+            ref.read(appPathsProvider).collectionTransferDirectory.path,
+            'collection-${operationId.value}.irbackup',
+          ),
+        ),
+        shouldDeleteAfterUse: true,
+      );
+    }
+    final File? file = await dialogs.chooseWindowsExportFile(suggestedName);
+    if (file == null) return null;
+    if (_isInsideApplicationStorage(file, ref.read(appPathsProvider).root)) {
+      state = AsyncValue<SettingsUiState>.data(
+        previous.copyWith(
+          shouldClearOperation: true,
+          message: const UiMessage(
+            'Choose a folder outside the app’s private storage.',
+            isError: true,
+          ),
+        ),
+      );
+      return null;
+    }
+    return _CollectionExportDestination(
+      file: file,
+      shouldDeleteAfterUse: false,
+    );
+  }
+
+  Future<void> _createAndSaveExport({
+    required _CollectionExportDestination destination,
+    required CollectionFileDialogs dialogs,
+    required String suggestedName,
+    required OperationId operationId,
+    required SettingsUiState previous,
+  }) async {
+    final Result<CollectionExportReport> export = await ref
+        .read(backupServiceProvider)
+        .exportCollection(target: destination.file, operationId: operationId);
+    if (export.isErr) {
+      state = AsyncValue<SettingsUiState>.data(
+        previous.copyWith(
+          shouldClearOperation: true,
+          message: UiMessage(export.failureOrNull!.message, isError: true),
+        ),
+      );
+      return;
+    }
+    if (dialogs.usesAndroidDocumentPicker &&
+        !await dialogs.saveAndroidPackage(destination.file, suggestedName)) {
+      _clearOperation(previous);
+      return;
+    }
+    final int missingAssetCount = export.unwrap().missingAssetCount;
+    final String missing = missingAssetCount == 0
+        ? ''
+        : ' $missingAssetCount missing image '
+              '${missingAssetCount == 1 ? 'was' : 'were'} not included.';
+    state = AsyncValue<SettingsUiState>.data(
+      previous.copyWith(
+        shouldClearOperation: true,
+        message: UiMessage('Collection exported.$missing'),
+      ),
+    );
+  }
+
+  Future<void> _deleteScratchPackage(File packageFile) async {
+    try {
+      if (packageFile.existsSync()) await packageFile.delete();
+    } on FileSystemException {
+      // Startup retries app-owned scratch packages left behind here.
+    }
+  }
+
+  void _clearOperation(SettingsUiState previous) {
+    state = AsyncValue<SettingsUiState>.data(
+      previous.copyWith(shouldClearOperation: true),
+    );
   }
 
   String _databaseCheckMessage(DatabaseCheckReport report) {
@@ -271,6 +510,32 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
       current!.copyWith(shouldClearMessage: true),
     );
   }
+}
+
+String _collectionPackageName(DateTime instant) {
+  String two(int number) => number.toString().padLeft(2, '0');
+  final DateTime utc = instant.toUtc();
+  return 'collection-${utc.year.toString().padLeft(4, '0')}'
+      '${two(utc.month)}${two(utc.day)}${two(utc.hour)}'
+      '${two(utc.minute)}${two(utc.second)}.irbackup';
+}
+
+bool _isInsideApplicationStorage(File file, Directory applicationRoot) {
+  final String filePath = p.normalize(p.absolute(file.path)).toLowerCase();
+  final String rootPath = p
+      .normalize(p.absolute(applicationRoot.path))
+      .toLowerCase();
+  return p.equals(filePath, rootPath) || p.isWithin(rootPath, filePath);
+}
+
+final class _CollectionExportDestination {
+  const _CollectionExportDestination({
+    required this.file,
+    required this.shouldDeleteAfterUse,
+  });
+
+  final File file;
+  final bool shouldDeleteAfterUse;
 }
 
 final AsyncNotifierProvider<SettingsViewModel, SettingsUiState>

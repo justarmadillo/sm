@@ -10,6 +10,7 @@ import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/documents/video.dart';
+import 'package:incremental_reader/features/tags/element_tag_name_index.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
@@ -19,6 +20,7 @@ import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/text_excerpt.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
+import 'package:incremental_reader/storage/contracts/tag_repository.dart';
 import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:meta/meta.dart';
 
@@ -30,6 +32,7 @@ final class PriorityEntry {
     required this.position,
     required this.title,
     required this.preview,
+    this.tagNames = const <String>[],
     this.intervalDays = 0,
     this.repetitions = 0,
     this.lapses = 0,
@@ -45,6 +48,7 @@ final class PriorityEntry {
 
   /// Short excerpt, so the user can recognize the element without opening it.
   final String preview;
+  final List<String> tagNames;
 
   /// Stored interval in days. Cards report their rounded scheduled days.
   final int intervalDays;
@@ -98,15 +102,18 @@ final class PriorityQuery {
     required ContentRepository content,
     required VideoRepository videos,
     required LearningRepository learning,
+    required TagRepository tags,
     required SchedulingContext context,
   }) : _content = content,
        _videos = videos,
        _learning = learning,
+       _tags = tags,
        _context = context;
 
   final ContentRepository _content;
   final VideoRepository _videos;
   final LearningRepository _learning;
+  final TagRepository _tags;
   final SchedulingContext _context;
 
   /// The browser's rows, most important first.
@@ -125,6 +132,9 @@ final class PriorityQuery {
     if (schedules.isEmpty) return const <PriorityEntry>[];
 
     final PriorityScale scale = await _context.priorityScale();
+    final ElementTagNameIndex tagNameIndex = await ElementTagNameIndex.load(
+      _tags,
+    );
     final entries = <PriorityEntry>[];
     for (var index = 0; index < schedules.length; index++) {
       final ElementSchedule schedule = schedules[index];
@@ -141,6 +151,7 @@ final class PriorityQuery {
               ),
           title: title,
           preview: preview,
+          tagNames: tagNameIndex.listNamesOf(schedule.ref),
           intervalDays: counters.intervalDays,
           repetitions: counters.repetitions,
           lapses: counters.lapses,

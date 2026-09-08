@@ -540,6 +540,7 @@ class ChoiceField<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DropdownButtonFormField<T>(
     initialValue: value,
+    isExpanded: true,
     isDense: true,
     decoration: const InputDecoration(
       isDense: true,
@@ -548,7 +549,10 @@ class ChoiceField<T> extends StatelessWidget {
     style: const TextStyle(fontSize: 13, color: AppColors.text),
     items: <DropdownMenuItem<T>>[
       for (final MapEntry<T, String> entry in options.entries)
-        DropdownMenuItem<T>(value: entry.key, child: Text(entry.value)),
+        DropdownMenuItem<T>(
+          value: entry.key,
+          child: Text(entry.value, overflow: TextOverflow.ellipsis),
+        ),
     ],
     onChanged: (T? next) {
       if (next != null) onChanged(next);

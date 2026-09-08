@@ -25,6 +25,7 @@ import 'package:incremental_reader/features/tags/tags_picker_dialog.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/colored_tag_list.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
@@ -143,11 +144,14 @@ class _ReviewBody extends ConsumerWidget {
           tooltip: 'Tags',
           onPressed: state.isBusy
               ? null
-              : () => editTagsOfElement(
-                  context,
-                  ref,
-                  ElementRef(id: state.card.id, type: ElementType.card),
-                ),
+              : () async {
+                  final bool hasChanged = await editTagsOfElement(
+                    context,
+                    ref,
+                    ElementRef(id: state.card.id, type: ElementType.card),
+                  );
+                  if (hasChanged) await model.refreshTags();
+                },
           icon: const Icon(Icons.label_outline, size: 18),
         ),
         IconButton(
@@ -355,42 +359,51 @@ class _ReviewStatus extends StatelessWidget {
       color: AppColors.surface,
       border: Border(bottom: BorderSide(color: AppColors.border)),
     ),
-    child: Row(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Icon(Icons.quiz_outlined, size: 16, color: Colors.teal),
-        const SizedBox(width: 8),
-        Text(
-          state.cardState.memory.isNew
-              ? 'New card'
-              : state.cardState.memory.state.name,
-          style: const TextStyle(fontSize: 12, color: AppColors.text),
-        ),
-        if (state.buriedSiblings > 0) ...<Widget>[
-          const SizedBox(width: 12),
-          Tooltip(
-            message:
-                'Cards cut from the same passage give each other away, so '
-                'they were pushed to tomorrow rather than reviewed now.',
-            child: Text(
-              '${state.buriedSiblings} sibling'
-              '${state.buriedSiblings == 1 ? '' : 's'} buried',
-              style: const TextStyle(fontSize: 12, color: AppColors.muted),
-            ),
-          ),
+        _reviewStateLine(context),
+        if (state.tagNames.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 6),
+          ColoredTagList(tagNames: state.tagNames, maximumVisibleTags: 6),
         ],
-        const Spacer(),
-        // A legend for keys a phone does not have, and the widest thing on
-        // the bar: it is dropped rather than wrapped when there is no room.
-        if (!isCompactWidth(context))
-          const Flexible(
-            child: Text(
-              'Space: reveal · 1–4 grade · E edit · Alt+P priority',
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, color: AppColors.muted),
-            ),
-          ),
       ],
     ),
+  );
+
+  Widget _reviewStateLine(BuildContext context) => Row(
+    children: <Widget>[
+      const Icon(Icons.quiz_outlined, size: 16, color: Colors.teal),
+      const SizedBox(width: 8),
+      Text(
+        state.cardState.memory.isNew
+            ? 'New card'
+            : state.cardState.memory.state.name,
+        style: const TextStyle(fontSize: 12, color: AppColors.text),
+      ),
+      if (state.buriedSiblings > 0) ...<Widget>[
+        const SizedBox(width: 12),
+        Tooltip(
+          message:
+              'Cards cut from the same passage give each other away, so '
+              'they were pushed to tomorrow rather than reviewed now.',
+          child: Text(
+            '${state.buriedSiblings} sibling'
+            '${state.buriedSiblings == 1 ? '' : 's'} buried',
+            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+          ),
+        ),
+      ],
+      const Spacer(),
+      if (!isCompactWidth(context))
+        const Flexible(
+          child: Text(
+            'Space: reveal · 1–4 grade · E edit · Alt+P priority',
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11, color: AppColors.muted),
+          ),
+        ),
+    ],
   );
 }
 

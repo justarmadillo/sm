@@ -13,7 +13,9 @@ import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/review/review_command_runner.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
 import 'package:incremental_reader/features/review/review_providers.dart';
+import 'package:incremental_reader/features/tags/element_tag_name_index.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
+import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 
@@ -30,6 +32,7 @@ final class ReviewUiState {
     this.buriedSiblings = 0,
     this.isEditing = false,
     this.occlusion,
+    this.tagNames = const <String>[],
   });
 
   final Card card;
@@ -51,6 +54,7 @@ final class ReviewUiState {
   /// Whether the inline editor is open.
   final bool isEditing;
   final CardOcclusion? occlusion;
+  final List<String> tagNames;
 
   String get question => cardQuestionText(card);
 
@@ -73,6 +77,7 @@ final class ReviewUiState {
     int? buriedSiblings,
     bool? isEditing,
     CardOcclusion? occlusion,
+    List<String>? tagNames,
   }) => ReviewUiState(
     card: card ?? this.card,
     cardState: cardState ?? this.cardState,
@@ -84,6 +89,7 @@ final class ReviewUiState {
     buriedSiblings: buriedSiblings ?? this.buriedSiblings,
     isEditing: isEditing ?? this.isEditing,
     occlusion: occlusion ?? this.occlusion,
+    tagNames: tagNames ?? this.tagNames,
   );
 }
 
@@ -110,13 +116,35 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
         (await ref.read(schedulingContextProvider).settings())
             .cards
             .leechLapses;
+    final ElementRef cardRef = ElementRef(id: card.id, type: ElementType.card);
+    final ElementTagNameIndex tagNameIndex = await ElementTagNameIndex.load(
+      ref.read(tagRepositoryProvider),
+    );
     return ReviewUiState(
       card: card,
       cardState: cardState,
+      tagNames: tagNameIndex.listNamesOf(cardRef),
       occlusion: await ref
           .read(occlusionRepositoryProvider)
           .findCardOcclusion(card.id),
       isLeech: leechLapses > 0 && cardState.memory.lapses >= leechLapses,
+    );
+  }
+
+  /// Reloads labels after the tag picker without resetting the revealed
+  /// answer, edit state, or elapsed review time.
+  Future<void> refreshTags() async {
+    final ReviewUiState? current = state.valueOrNull;
+    if (current == null) return;
+    final ElementRef cardRef = ElementRef(
+      id: current.card.id,
+      type: ElementType.card,
+    );
+    final ElementTagNameIndex tagNameIndex = await ElementTagNameIndex.load(
+      ref.read(tagRepositoryProvider),
+    );
+    state = AsyncValue<ReviewUiState>.data(
+      current.copyWith(tagNames: tagNameIndex.listNamesOf(cardRef)),
     );
   }
 

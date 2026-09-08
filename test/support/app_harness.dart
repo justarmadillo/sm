@@ -250,6 +250,7 @@ final class AppHarness {
     content: content,
     videos: videos,
     learning: learning,
+    tags: tags,
     commandRunner: queue,
     context: context,
     clock: clock,
@@ -259,6 +260,7 @@ final class AppHarness {
     content: content,
     videos: videos,
     learning: learning,
+    tags: tags,
     context: context,
   );
 

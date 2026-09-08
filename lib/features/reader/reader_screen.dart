@@ -41,6 +41,7 @@ import 'package:incremental_reader/features/reader/widgets/selection_knobs.dart'
 import 'package:incremental_reader/features/reader/widgets/selection_toolbar.dart';
 import 'package:incremental_reader/features/tags/tags_picker_dialog.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/colored_tag_list.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/status_pill.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
@@ -442,7 +443,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             child: const Text('Continue reading'),
           ),
         IconButton(
-          onPressed: () => editTagsOfElement(context, ref, state.topic.ref),
+          onPressed: () async {
+            final bool hasChanged = await editTagsOfElement(
+              context,
+              ref,
+              state.topic.ref,
+            );
+            if (hasChanged) await model.refreshTags();
+          },
           icon: const Icon(Icons.label_outline),
           tooltip: 'Tags',
         ),
@@ -1038,6 +1046,14 @@ class _StatusBar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           _StatusToggle(isExpanded: isExpanded, onPressed: onToggle),
+          if (state.tagNames.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 7),
+              child: ColoredTagList(
+                tagNames: state.tagNames,
+                maximumVisibleTags: 6,
+              ),
+            ),
           if (isExpanded)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),

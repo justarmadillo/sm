@@ -101,6 +101,50 @@ final class SourceAssetFileStore {
     }
   }
 
+  /// Promotes a verified staged blob without loading it into Dart memory.
+  Future<StoredSourceAsset> saveStagedFile({
+    required File stagedFile,
+    required String expectedSha256,
+    required int expectedByteLength,
+  }) async {
+    _requireSha256(expectedSha256);
+    await _requireMatchingFile(stagedFile, expectedSha256, expectedByteLength);
+    final File target = fileForSha256(expectedSha256);
+    await _assetDirectory.create(recursive: true);
+    if (target.existsSync()) {
+      await _requireMatchingFile(target, expectedSha256, expectedByteLength);
+      await _deleteFileIfPresent(stagedFile);
+      return StoredSourceAsset(
+        sha256: expectedSha256,
+        file: target,
+        byteLength: expectedByteLength,
+        wasCreated: false,
+      );
+    }
+
+    final File partial = File('${target.path}.partial');
+    await _deleteFileIfPresent(partial);
+    try {
+      try {
+        await stagedFile.rename(partial.path);
+      } on FileSystemException {
+        await stagedFile.copy(partial.path);
+        await _deleteFileIfPresent(stagedFile);
+      }
+      await _requireMatchingFile(partial, expectedSha256, expectedByteLength);
+      await partial.rename(target.path);
+      return StoredSourceAsset(
+        sha256: expectedSha256,
+        file: target,
+        byteLength: expectedByteLength,
+        wasCreated: true,
+      );
+    } on Object {
+      await _deleteFileIfPresent(partial);
+      rethrow;
+    }
+  }
+
   /// Whether the named blob exists and still has the promised content.
   Future<bool> hasVerifiedBlob(String sha256Value) async {
     final file = fileForSha256(sha256Value);

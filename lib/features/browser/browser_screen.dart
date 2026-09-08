@@ -46,6 +46,7 @@ import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/colored_tag_list.dart';
 import 'package:incremental_reader/shared/ui/element_type_badge.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
@@ -1118,7 +1119,6 @@ class _NodeRow extends StatelessWidget {
   /// which is which.
   String _metaLine(BrowserTreeNode node, bool hasChildren) => <String>[
     if (hasChildren) '${node.subtreeSize - 1} inside',
-    if (node.directTagIds.isNotEmpty) '${node.directTagIds.length} tags',
     if (node.dueDay != null) 'due ${node.dueDay}',
   ].join('  ·  ');
 
@@ -1201,6 +1201,10 @@ class _NodeRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 11, color: AppColors.muted),
           ),
+        if (node.tagNames.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 3),
+          ColoredTagList(tagNames: node.tagNames, maximumVisibleTags: 3),
+        ],
       ],
     );
   }

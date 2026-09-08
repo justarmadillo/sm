@@ -41,6 +41,7 @@ final Provider<QueueQuery> queueQueryProvider = Provider<QueueQuery>(
     content: ref.watch(contentRepositoryProvider),
     videos: ref.watch(videoRepositoryProvider),
     learning: ref.watch(learningRepositoryProvider),
+    tags: ref.watch(tagRepositoryProvider),
     commandRunner: ref.watch(queueCommandRunnerProvider),
     context: ref.watch(schedulingContextProvider),
     clock: ref.watch(clockProvider),
