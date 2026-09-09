@@ -12,6 +12,7 @@ import 'package:fsrs_dart/fsrs.dart' as fsrs;
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/settings/card_settings.dart';
+import 'package:incremental_reader/shared/epoch_milliseconds.dart';
 import 'package:meta/meta.dart';
 
 /// The exact scheduler implementation used to produce a review.
@@ -282,8 +283,10 @@ final class CardMemory {
     repetitionCount: _required<int>(map, 'reps'),
     lapses: _required<int>(map, 'lapses'),
     lastReviewAtUtc: _instantOrNull(map['last_review_at_utc_ms']),
-    dueAtUtc: _instant(_required<int>(map, 'due_at_utc_ms')),
-    originalDueAtUtc: _instant(_required<int>(map, 'original_due_at_utc_ms')),
+    dueAtUtc: fromEpochMs(_required<int>(map, 'due_at_utc_ms')),
+    originalDueAtUtc: fromEpochMs(
+      _required<int>(map, 'original_due_at_utc_ms'),
+    ),
     schedulerVersion: _required<String>(map, 'scheduler_version'),
     parametersVersion: _required<String>(map, 'parameters_version'),
     postponeCount: (map['postpone_count'] as int?) ?? 0,
@@ -948,11 +951,8 @@ void _requireUtc(DateTime instant, String name) {
   }
 }
 
-DateTime _instant(int epochMilliseconds) =>
-    DateTime.fromMillisecondsSinceEpoch(epochMilliseconds, isUtc: true);
-
 DateTime? _instantOrNull(Object? value) =>
-    value == null ? null : _instant(value as int);
+    value == null ? null : fromEpochMs(value as int);
 
 T _required<T>(Map<String, Object?> map, String key) {
   final Object? value = map[key];

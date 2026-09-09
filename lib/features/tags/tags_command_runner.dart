@@ -58,7 +58,7 @@ final class TagsCommandRunner {
           updatedAtUtc: command.timestampUtc,
         );
         await _tags.insertTag(tag);
-        await _appendActivity(command, kTagCreatedType, tagId: tag.id);
+        await _log(command, kTagCreatedType, tagId: tag.id);
         return Ok<TagOutcome>(TagOutcome(tag));
       });
 
@@ -79,7 +79,7 @@ final class TagsCommandRunner {
           updatedAtUtc: command.timestampUtc,
         );
         await _tags.updateTag(tag);
-        await _appendActivity(command, kTagRenamedType, tagId: tag.id);
+        await _log(command, kTagRenamedType, tagId: tag.id);
         return Ok<TagOutcome>(TagOutcome(tag));
       });
 
@@ -88,7 +88,7 @@ final class TagsCommandRunner {
         final Tag? tag = await _tags.findTag(command.tagId);
         if (tag == null) return _missingTag<TagOutcome>(command.tagId);
         await _tags.deleteTag(tag.id);
-        await _appendActivity(command, kTagDeletedType, tagId: tag.id);
+        await _log(command, kTagDeletedType, tagId: tag.id);
         return Ok<TagOutcome>(TagOutcome(tag));
       });
 
@@ -106,8 +106,8 @@ final class TagsCommandRunner {
             return _missingTag<TagOutcome>(sourceId);
           }
         }
-        final Map<ElementRef, Set<String>> links =
-            await _tags.listAllElementTags();
+        final Map<ElementRef, Set<String>> links = await _tags
+            .listAllElementTags();
         for (final MapEntry<ElementRef, Set<String>> entry in links.entries) {
           if (entry.value.intersection(command.sourceTagIds).isEmpty) continue;
           await _tags.insertElementTags(
@@ -119,7 +119,7 @@ final class TagsCommandRunner {
         for (final String sourceId in command.sourceTagIds) {
           await _tags.deleteTag(sourceId);
         }
-        await _appendActivity(command, kTagMergedType, tagId: target.id);
+        await _log(command, kTagMergedType, tagId: target.id);
         return Ok<TagOutcome>(TagOutcome(target));
       });
 
@@ -158,7 +158,7 @@ final class TagsCommandRunner {
       );
     }
     await change();
-    await _appendActivity(command, kElementTagsChangedType, ref: refs.first);
+    await _log(command, kElementTagsChangedType, ref: refs.first);
     return Ok<ElementTagOutcome>(ElementTagOutcome(refs.length));
   });
 
@@ -180,17 +180,16 @@ final class TagsCommandRunner {
     return null;
   }
 
-  Future<void> _appendActivity(
+  Future<void> _log(
     AppCommand command,
     String type, {
     String? tagId,
     ElementRef? ref,
   }) => _learning.appendActivity(
-    ActivityRecord(
+    ActivityRecord.forCommand(
+      command,
+      type,
       id: _ids.newId(),
-      operationId: command.operationId.value,
-      type: type,
-      atUtc: command.timestampUtc,
       ref: ref,
       metadata: <String, Object?>{'tag_id': tagId},
     ),

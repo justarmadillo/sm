@@ -384,11 +384,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   children: <Widget>[
                     Expanded(
                       child: _readingSurface(
-                        context,
-                        state,
-                        model,
-                        typography,
-                        controller,
+                        context: context,
+                        state: state,
+                        model: model,
+                        typography: typography,
+                        controller: controller,
                       ),
                     ),
                     if (hasRoomForDockedPanel && _isPanelOpen)
@@ -533,13 +533,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   ///
   /// Both layers share one [ReaderSelectionController], which is why they are
   /// stacked here rather than built independently.
-  Widget _readingSurface(
-    BuildContext context,
-    ReaderUiState state,
-    ReaderViewModel model,
-    ReaderTypography typography,
-    ReaderSelectionController controller,
-  ) {
+  Widget _readingSurface({
+    required BuildContext context,
+    required ReaderUiState state,
+    required ReaderViewModel model,
+    required ReaderTypography typography,
+    required ReaderSelectionController controller,
+  }) {
     return Stack(
       key: _surfaceKey,
       children: <Widget>[

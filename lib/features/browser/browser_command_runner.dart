@@ -509,11 +509,10 @@ final class BrowserCommandRunner {
         ];
         await _learning.saveSchedules(rewritten);
         await _learning.appendActivity(
-          ActivityRecord(
+          ActivityRecord.forCommand(
+            command,
+            type,
             id: _ids.newId(),
-            operationId: command.operationId.value,
-            type: type,
-            atUtc: command.timestampUtc,
             ref: command.ref,
             metadata: <String, Object?>{
               'parent': placement.parentRef?.id,

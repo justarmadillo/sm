@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/history/review_log.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
 import 'package:incremental_reader/storage/database/row_converters.dart';
@@ -262,7 +263,10 @@ void main() {
       }
 
       final counts = await learning.countReviewLogEventsOn(
-        studyDayFromEpochDay(day.millisecondsSinceEpoch ~/ 86400000, 'UTC'),
+        StudyDay.fromEpochDay(
+          day.millisecondsSinceEpoch ~/ 86400000,
+          zoneId: 'UTC',
+        ),
       );
       expect(counts[ReviewLogEventType.autoPostpone], 3);
     });

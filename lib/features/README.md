@@ -1,6 +1,8 @@
 # `features/` — one folder per screen you can see
 
 If you can point at it in the running app, its code is in one of these folders.
+Each one has its own `README.md` naming every file inside it — open that before
+the code.
 
 | Folder | The screen | What it does |
 |---|---|---|

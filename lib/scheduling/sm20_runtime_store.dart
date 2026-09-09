@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/sm20_collection_state.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
+import 'package:incremental_reader/shared/epoch_milliseconds.dart';
 import 'package:incremental_reader/storage/contracts/settings_repository.dart';
 
 const String kSm20RuntimeSettingKey = 'sm20.runtime.v1';
@@ -79,21 +80,12 @@ final class Sm20RuntimeStore {
     if (value == null) return null;
     final int epoch = _integer(value, -0x7FFFFFFF);
     if (epoch == -0x7FFFFFFF) return null;
-    final DateTime date = DateTime.fromMillisecondsSinceEpoch(
-      epoch * Duration.millisecondsPerDay,
-      isUtc: true,
-    );
-    return StudyDay(
-      year: date.year,
-      month: date.month,
-      day: date.day,
-      zoneId: zoneId,
-    );
+    return StudyDay.fromEpochDay(epoch, zoneId: zoneId);
   }
 
   static DateTime? _instant(Object? value) {
     if (value == null) return null;
-    return DateTime.fromMillisecondsSinceEpoch(_integer(value, 0), isUtc: true);
+    return fromEpochMs(_integer(value, 0));
   }
 
   static List<ElementRef> _refs(Object? value) {

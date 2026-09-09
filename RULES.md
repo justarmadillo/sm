@@ -38,8 +38,14 @@ temporary database. Keep it that way.
 
 ## 2. Where new code goes
 
-Each folder has its own `README.md`. Read the one for the folder you are about
-to touch — it lists every file and what it is for. Start at `lib/README.md`.
+Read the `README.md` of the folder you are about to touch before the code. It
+names every file in that folder and what it is for. Start at `lib/README.md`.
+
+Every folder holding Dart files is covered, but not always by a file of its
+own: `scheduling/` documents its seven subfolders from the parent, and
+`storage/README.md` carries a table per subfolder. A `widgets/` folder is
+described in its screen's README. If you add a file, add its row — a README
+that has fallen behind the folder is worse than none, because it is believed.
 
 **A new screen** → a new folder in `lib/features/<screen>/`, with these names.
 The names always mean the same thing, in every feature:
@@ -58,8 +64,26 @@ The names always mean the same thing, in every feature:
 read without wondering whether it moved someone's schedule. Do not put a write
 in a `_query.dart` file.
 
-**Shared by two screens** → `lib/shared/`, never copied into both.
-**Used by one screen** → that screen's own folder, never `app/providers.dart`.
+### Where shared code goes
+
+| It is shared, and it… | Put it in |
+|---|---|
+| needs nothing but Dart | `lib/shared/` |
+| draws something | `lib/shared/ui/` |
+| needs a repository or a stored type | an extension in `lib/storage/contracts/`, beside the contract it extends |
+| is used by one screen only | that screen's own folder, never `app/providers.dart` |
+
+The third row exists because the first two are impossible for anything that
+touches storage: section 1 forbids `shared/` from importing `storage/`, so
+"shared by two screens → `lib/shared/`" has no answer for a helper that needs
+a repository. `ActivityRecord.forCommand` is the worked example — every command
+runner needed it, and it lives on the type it builds.
+
+**If shared code still has no legal home, stop and say so.** Do not copy it
+into both callers and do not widen the folder test. A duplicate that compiles
+is worse than a question that blocks: the copies drift, and the drift is
+silent. Three names for one operation (`_log`, `_activity`, `_appendActivity`)
+is what that looks like six months later.
 
 ---
 
@@ -73,6 +97,28 @@ context, would they know what it does and where to add something related?*
 - **No vague words.** Never `data`, `item`, `info`, `handle`, `process`,
   `manager`, `util`, `helper`, `temp`, `thing`, `value`, `obj`. Say what it
   actually is.
+- **No synonyms for an operation that already exists.** Before writing a
+  helper, search for what it does — `grep -rn "appendActivity" lib` — and if
+  something already does it, call that. A second name for one operation reads
+  as two different things, and the day they stop agreeing nobody notices,
+  because nobody knew they were the same.
+- **Three or more parameters means named parameters.** `_apply(command,
+  schedule, rank, scale, type)` cannot be read at the call site without opening
+  the function; `_apply(command: …, schedule: …, rank: …)` can. Two positional
+  parameters are fine when the order is obvious from the name (`replace(old,
+  new)`). This is the same rule as "no single letters", applied to the call
+  site instead of the body.
+
+  Two exceptions. An `@override` of a framework signature cannot change shape —
+  `estimateMaxScrollOffset` takes the six positional arguments Flutter passes
+  it. And a parser's inner loop helper (`_emit`, `addBlock`) may stay
+  positional where its arguments are the same cursor triple on every call and
+  naming them at forty call sites would bury the parse.
+
+  **Forty declarations in `lib/` still take three or more positional
+  parameters.** That number may fall and must not rise: converting one when you
+  are already editing it is welcome, converting all forty in one pass is the
+  kind of churn section 10 forbids.
 - **No unexplained abbreviations.** `repetitionCount`, not `reps`.
   `reviewLog`, not `revlog`. `randomNumberSeed`, not `prngSeed`.
   `Sm20RandomNumberGenerator`, not `Sm20Prng`.
@@ -167,14 +213,6 @@ the owner — do not write the migration unprompted.
 
 ## 6. Function size and single responsibility
 
-Current state of `lib/`, which you are expected not to make worse:
-
-| | |
-|---|---|
-| median function | 11 lines |
-| over 60 lines | 32 (3.8%) |
-| over 100 lines | 12 (1.4%) |
-
 - **Aim for under 60 lines.** A function that needs a comment saying "now we do
   the next part" wants to be two functions.
 - **A `build` method should read as a list of named parts**, not a wall of
@@ -191,10 +229,53 @@ Current state of `lib/`, which you are expected not to make worse:
   branch per construct is cohesive at 100+ lines and should not be chopped up.
   If you cannot name the extracted piece, do not extract it.
 
-Still oversized and known: the command runners
-(`MercyCommandRunner.apply`, `runDailyAdmission`, `formulate`, `review`).
-These are single transactions doing many steps. If you touch one, leave it no
-longer than you found it.
+### Where `lib/` actually stands
+
+`python tool/audit_rules.py` prints this, so it can always be rechecked:
+
+| | |
+|---|---:|
+| functions measured | 2013 |
+| median function | 9 lines |
+| over 60 lines | 81 (4.0%) |
+| over 100 lines | 25 (1.2%) |
+| over 200 lines | 6 (0.3%) |
+
+The median is the number that matters and it is healthy. The tail is the
+problem, and the tail is almost entirely command runners.
+
+### The over-budget list
+
+Every function over 150 lines that is **not** a parser loop or a flat decoder.
+Each is one transaction doing many steps, which is why it was allowed; none is
+readable in one sitting, which is why it is written down.
+
+| Function | Lines |
+|---|---:|
+| `MercyCommandRunner.apply` | 289 |
+| `QueueCommandRunner.runDailyAdmission` | 281 |
+| `FormulationCommandRunner.formulate` | 279 |
+| `MercyCommandRunner.undo` | 265 |
+| `PriorityCommandRunner.batch` | 211 |
+| `MercyCommandRunner.preview` | 192 |
+| `ExtractCommandRunner.createExtract` | 180 |
+| `ReviewCommandRunner.review` | 170 |
+| `VideoCommandRunner.addClip` | 164 |
+| `ReaderCommandRunner._runEdit` | 154 |
+
+Exempt, and staying that way: `parseMarkdownBlocks` (247) and `parseRange`
+(142) are parser loops with one branch per construct, and `AppSettings.fromMap`
+is a flat decoder. Splitting those makes them worse.
+
+**A change touching a listed function must not raise its number.** Lowering one
+is always welcome; removing one from the table is better. Nothing may be added
+to this table — a new function over 60 lines is a function to split, not a row
+to append.
+
+The numbers are line spans from the declaration to its closing brace. Recount
+with the tool before editing the table; a number nobody can reproduce is a
+number the next reader has to trust blindly, which is why the unreproducible
+percentages that used to be here were removed.
 
 ---
 
@@ -234,6 +315,24 @@ flutter test
   like a real failure.
 - Report failures honestly, with the output. Never claim a pass you did not see.
 
+### The rules in this file, checked
+
+```bash
+python tool/audit_rules.py
+```
+
+One section per mechanisable rule here: positional parameters, forbidden verbs,
+vague names, missing file doc comments, `DateTime.now()`, hand-rolled failure
+boundaries, swallowed errors, unconstrained enum columns, and writes inside a
+`_query.dart`.
+
+It reads the text of the files, so it finds candidates, not verdicts — read
+every hit before touching it. When I last ran it, twelve of the fourteen
+"swallowed error" hits were correct code whose explanatory comment the checker
+had stripped before looking. Two of its sections are budgets rather than zeros
+(section 3's positional parameters, section 6's over-budget functions): the
+number may fall, never rise.
+
 ### Formatting
 
 Format **only the files you changed**:
@@ -246,11 +345,21 @@ Running `dart format lib test` reformats files you never touched, which buries
 your actual change in noise and can surface pre-existing lint warnings as if
 you caused them.
 
+Then check that the files you touched are actually clean:
+
+```bash
+dart format --output=none --set-exit-if-changed <the files you touched>
+```
+
+It must print nothing but the file count. A file listed as `Changed` is one you
+formatted with a different tool version than the one that wrote it — say so
+rather than reformatting the whole repository to silence it.
+
 ---
 
-## 9. Two ways bulk renames go wrong here
+## 9. Three ways a bulk edit goes wrong here
 
-Both of these have already happened in this repo. Check for them every time.
+All of these have already happened in this repo. Check for them every time.
 
 **1. The rename leaks into a string.** A regex over a `.dart` file will happily
 rewrite `'reps'` inside a persisted JSON key, a `storageName`, or raw SQL in a
@@ -270,6 +379,24 @@ wrong". Grep your own doc comments after renaming any short identifier.
 Prefer renaming with a script that masks string literals, then audit the diff
 anyway. Do not trust the mask.
 
+**3. A move quietly rewrites a sentence the user reads.** Splitting a screen
+into `widgets/` moves hundreds of lines of hint text and button labels, and
+"improving" one of them on the way is invisible in a diff that large. The text
+is the product. Moving code must not change a single word of it.
+
+After moving UI code, compare the visible strings on both sides of the move —
+every long single-line literal in the file you emptied must still exist,
+somewhere, in the files you filled:
+
+```bash
+git show HEAD:<old-file> | grep -oE "'[^']{8,}'" | sort > /tmp/before.txt
+cat <new-files> | grep -oE "'[^']{8,}'" | sort > /tmp/after.txt
+comm -23 /tmp/before.txt /tmp/after.txt
+```
+
+It must print nothing. A line that only appears in `before` is text you lost;
+run the reverse (`comm -13`) for text you invented.
+
 ---
 
 ## 10. Scope
@@ -283,3 +410,84 @@ anyway. Do not trust the mask.
   you left out and why.
 - Anything that changes the database schema, deletes user data, or rewrites
   history is the owner's decision, not yours. Ask first.
+
+---
+
+## 11. One failure boundary, and it already exists
+
+`lib/shared/command_execution.dart` holds `executeCommand`: the transaction,
+the already-applied check, the dataset generation bump, the diagnostic event,
+and the `catch` that turns anything unexpected into a recorded
+`UnexpectedFailure`. Storage arrives as callbacks so the innermost layer stays
+free of database contracts.
+
+- **Every command goes through `executeCommand`.** A runner's own `_run` may
+  wire the callbacks; it must not reimplement the boundary.
+- **Needs a different diagnostic payload? Extend `executeCommand`.** Do not
+  hand-roll `try { transactions.run(...) } catch { recordCommandException }`
+  around a body. Seven runners in this repo did exactly that, and one of them
+  drifted so far that an unexpected Mercy failure records no diagnostic event
+  at all, unlike every other command in the app.
+- **Never invent a local failure message for an unexpected error.** Every
+  `catch (error, stackTrace)` either returns a typed failure the caller
+  already knows how to show (`ValidationFailure`, `NotFoundFailure`,
+  `ConflictFailure`), or goes through `recordCommandException`. An
+  `UnexpectedFailure` built by hand is an error the diagnostics panel will
+  never show you.
+- **An empty `catch` is not allowed.** If there is genuinely nothing to do,
+  the comment has to say why nothing is the right answer.
+
+---
+
+## 12. What the database must guarantee, not the reader
+
+An enum is stored as its index, so a stored number outside the enum is a
+`RangeError` thrown while reading a row — a crash on a screen the user just
+opened, from data that has been on disk for months.
+
+- **A column holding an enum index carries a `CHECK` bounding it to that
+  enum's range.** `IntColumn get lifecycle => integer().check(lifecycle
+  .isBetweenValues(0, 2))();` SQLite then refuses to store a value the app
+  cannot read back, and `Enum.values[row.lifecycle]` is safe by construction.
+- **Where a column cannot carry one — a nullable log column — the reader
+  guards instead.** `ElementType.fromIndexOrNull` is the pattern, and the
+  guard's doc comment says which column it exists for.
+- **Appending an enum value is a migration.** The `CHECK` bounds the old
+  range, so widening the enum without widening the constraint writes rows the
+  database rejects. Section 4 applies: stop and ask.
+- The same holds for an enum index inside a JSON blob, which no constraint can
+  reach. Decode it through a guard with a documented fallback, and choose the
+  pessimistic value — `ProvenanceState.stale` says "this location is no longer
+  trustworthy", which is exactly what an unreadable state means.
+
+---
+
+## 13. What counts as a behavioural change
+
+"No behavioural changes" is a common instruction and it needs one meaning.
+These are behaviour, and changing any of them needs to be asked for:
+
+- **scheduling arithmetic** — any due date, interval, A-factor, priority rank,
+  queue order, or random draw. Including the *number* of random draws: the
+  PRNG is global and shared, so an extra draw shifts every later element.
+- **stored data** — a column's value, a JSON key, an enum index, a revision
+  counter, or whether a row is written at all.
+- **user-visible text** — labels, hints, error messages, empty states.
+- **what the user must click** to reach the same result.
+
+These are *not* behaviour, and may be cleaned up freely:
+
+- moving code between files, renaming private members, extracting a helper;
+- deleting an unused parameter, an unread field, or an unreachable branch;
+- a comment, a doc comment, or a README.
+
+These are **grey — ask before changing**:
+
+- the payload or wording of a diagnostic event, or whether one is recorded;
+- what happens when stored data is damaged (a crash becoming a fallback is a
+  real change, even though healthy data behaves identically);
+- the shape of a public API that only tests call.
+
+When an instruction says "no behavioural changes" and the work needs one from
+the first or grey list, finish everything that does not, then ask. Do not
+decide on the owner's behalf, and do not quietly skip the rest of the task.

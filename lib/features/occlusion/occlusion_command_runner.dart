@@ -178,11 +178,10 @@ final class OcclusionCommandRunner {
 
   Future<void> _recordOcclusionEdit(EditOcclusionCard command, String cardId) =>
       _learning.appendActivity(
-        ActivityRecord(
+        ActivityRecord.forCommand(
+          command,
+          kOcclusionCardEditedType,
           id: _ids.newId(),
-          operationId: command.operationId.value,
-          type: kOcclusionCardEditedType,
-          atUtc: command.timestampUtc,
           ref: ElementRef(id: cardId, type: ElementType.card),
           metadata: <String, Object?>{'masks': command.regions.length},
         ),
@@ -282,11 +281,10 @@ final class OcclusionCommandRunner {
       runtime.copyWith(pending: <ElementRef>[...runtime.pending, ...refs]),
     );
     await _learning.appendActivity(
-      ActivityRecord(
+      ActivityRecord.forCommand(
+        command,
+        kOcclusionCardsCreatedType,
         id: _ids.newId(),
-        operationId: command.operationId.value,
-        type: kOcclusionCardsCreatedType,
-        atUtc: command.timestampUtc,
         ref: command.parent == null
             ? null
             : ElementRef(

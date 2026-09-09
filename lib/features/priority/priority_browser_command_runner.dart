@@ -872,11 +872,10 @@ final class PriorityBrowserCommandRunner {
           }
           final PriorityBrowserCommandOutcome outcome = await body(command.day);
           await _learning.appendActivity(
-            ActivityRecord(
+            ActivityRecord.forCommand(
+              command,
+              type,
               id: _ids.newId(),
-              operationId: command.operationId.value,
-              type: type,
-              atUtc: command.timestampUtc,
               metadata: <String, Object?>{
                 'day': command.day.toString(),
                 'selected': command.refs.length,

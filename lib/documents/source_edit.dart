@@ -32,7 +32,7 @@ final class ProvenanceSnapshot {
         extractId: json['id']! as String,
         startUtf8: json['start']! as int,
         endUtf8: json['end']! as int,
-        state: ProvenanceState.values[json['state']! as int],
+        state: _provenanceStateFromIndex(json['state']),
       );
 
   final String extractId;
@@ -75,11 +75,20 @@ final class SourceEditRestore {
       );
 
   /// Decodes a stored payload, tolerating the empty string.
+  ///
+  /// An unreadable payload decodes to [none] rather than throwing. The journal
+  /// row it came from is still a real edit that still replays; all that is lost
+  /// is the marker and provenance this particular undo would have put back, and
+  /// refusing to undo at all would not put them back either.
   factory SourceEditRestore.decode(String encoded) {
     if (encoded.isEmpty) return none;
-    return SourceEditRestore.fromJson(
-      jsonDecode(encoded) as Map<String, Object?>,
-    );
+    try {
+      final Object? decoded = jsonDecode(encoded);
+      if (decoded is! Map<String, Object?>) return none;
+      return SourceEditRestore.fromJson(decoded);
+    } on FormatException {
+      return none;
+    }
   }
 
   /// Nothing to restore.
@@ -153,4 +162,18 @@ final class SourceEdit {
   @override
   String toString() =>
       'SourceEdit($sourceId r$contentRevision $splice${isUndo ? ' undo' : ''})';
+}
+
+/// The provenance state stored as [raw], or [ProvenanceState.stale] when the
+/// number is not one this build knows.
+///
+/// Unlike the extract table's own column this one lives inside a JSON blob
+/// with no `CHECK` constraint behind it. `stale` is the pessimistic answer:
+/// it says the recorded location is no longer known to show the same passage,
+/// which is exactly what an unreadable state means.
+ProvenanceState _provenanceStateFromIndex(Object? raw) {
+  if (raw is! int || raw < 0 || raw >= ProvenanceState.values.length) {
+    return ProvenanceState.stale;
+  }
+  return ProvenanceState.values[raw];
 }

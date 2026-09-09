@@ -13,7 +13,7 @@ final Provider<SchedulerMetricsQuery> schedulerMetricsQueryProvider =
       (Ref ref) => SchedulerMetricsQuery(
         learning: ref.watch(learningRepositoryProvider),
         context: ref.watch(schedulingContextProvider),
-        queue: ref.watch(queueCommandRunnerProvider),
+        candidates: ref.watch(queueCandidatesQueryProvider),
       ),
     );
 

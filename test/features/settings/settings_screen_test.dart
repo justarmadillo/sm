@@ -37,6 +37,13 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    expect(find.text('Home timezone'), findsNothing);
+    expect(
+      find.textContaining('follows this device\'s timezone'),
+      findsOneWidget,
+    );
+    expect(find.text('Day rollover'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Collection data'),
       600,

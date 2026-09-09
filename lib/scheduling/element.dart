@@ -33,6 +33,20 @@ enum ElementType {
   /// with a parent rather than a different kind of object.
   video;
 
+  /// The type stored as [index], or null when this build has no such type.
+  ///
+  /// Only the two log tables need this. Every other stored element type sits
+  /// in a column with a `CHECK` constraint, so SQLite itself refuses to hold a
+  /// number outside this enum; `scheduler_events.element_type` and
+  /// `activity_events.element_type` are nullable and carry no such constraint.
+  /// A log row naming a type this build does not know is still a readable log
+  /// row — it just is not attached to an element — and that is worth far more
+  /// than failing the whole diagnostics screen over one line of history.
+  static ElementType? fromIndexOrNull(int index) =>
+      index >= 0 && index < ElementType.values.length
+      ? ElementType.values[index]
+      : null;
+
   /// Whether this element is processed rather than recalled.
   bool get isTopic => this != ElementType.card;
 }

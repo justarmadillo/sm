@@ -19,6 +19,7 @@ import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
+import 'package:incremental_reader/shared/epoch_milliseconds.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/row_converters.dart';
@@ -326,10 +327,13 @@ final class DriftLearningRepository implements LearningRepository {
           ref: ref,
           priority: PriorityRank(row.read<String>('priority_key')),
           lifecycle: ElementLifecycle.values[row.read<int>('lifecycle')],
-          dueDay: studyDayFromEpochDay(row.read<int>('due_day'), zoneId),
-          originalDueDay: studyDayFromEpochDay(
+          dueDay: StudyDay.fromEpochDay(
+            row.read<int>('due_day'),
+            zoneId: zoneId,
+          ),
+          originalDueDay: StudyDay.fromEpochDay(
             row.read<int>('original_due_day'),
-            zoneId,
+            zoneId: zoneId,
           ),
           rootId: row.read<String?>('root_id'),
           parentElementId: row.read<String?>('parent_element_id'),
@@ -346,7 +350,7 @@ final class DriftLearningRepository implements LearningRepository {
         storedInterval: row.read<int>('stored_interval'),
         lastReviewDay: lastReview == null
             ? null
-            : studyDayFromEpochDay(lastReview, zoneId),
+            : StudyDay.fromEpochDay(lastReview, zoneId: zoneId),
         aFactorRaw: real48FromHex(row.read<String>('a_factor_raw')),
         lastIntervalRatioRaw: real48FromHex(
           row.read<String>('last_interval_ratio_raw'),
@@ -874,16 +878,9 @@ final class DriftLearningRepository implements LearningRepository {
           operationId: row.operationId,
           type: row.type,
           atUtc: fromEpochMs(row.atUtc),
-          ref: row.elementId == null || row.elementType == null
-              ? null
-              : ElementRef(
-                  id: row.elementId!,
-                  type: ElementType.values[row.elementType!],
-                ),
+          ref: refFromLogRow(row.elementId, row.elementType),
           durationMs: row.durationMs,
-          metadata: row.metadataJson == null
-              ? null
-              : jsonDecode(row.metadataJson!) as Map<String, Object?>,
+          metadata: metadataFromJson(row.metadataJson),
         ),
     ];
   }

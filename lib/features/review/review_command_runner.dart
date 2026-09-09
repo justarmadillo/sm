@@ -212,10 +212,10 @@ final class ReviewCommandRunner {
         );
 
         await _learning.appendActivity(
-          ActivityRecord(
+          ActivityRecord.forCommand(
+            command,
+            kCardReviewedType,
             id: _ids.newId(),
-            operationId: command.operationId.value,
-            type: kCardReviewedType,
             atUtc: reviewedAt,
             ref: ElementRef(id: command.cardId, type: ElementType.card),
             durationMs: command.elapsedMs,
@@ -378,11 +378,10 @@ final class ReviewCommandRunner {
         );
         await _content.updateCard(updated);
         await _learning.appendActivity(
-          ActivityRecord(
+          ActivityRecord.forCommand(
+            command,
+            kCardEditedType,
             id: _ids.newId(),
-            operationId: command.operationId.value,
-            type: kCardEditedType,
-            atUtc: command.timestampUtc,
             ref: ElementRef(id: card.id, type: ElementType.card),
             // Metadata records that an edit happened, never what it said.
             metadata: <String, Object?>{'kind': card.type.name},
@@ -482,11 +481,10 @@ final class ReviewCommandRunner {
           },
         );
         await _learning.appendActivity(
-          ActivityRecord(
+          ActivityRecord.forCommand(
+            command,
+            kCardPostponedType,
             id: _ids.newId(),
-            operationId: command.operationId.value,
-            type: kCardPostponedType,
-            atUtc: command.timestampUtc,
             ref: ElementRef(id: command.cardId, type: ElementType.card),
             metadata: <String, Object?>{
               'until': until.toString(),
@@ -563,10 +561,10 @@ final class ReviewCommandRunner {
       metadata: const <String, Object?>{'practice': true},
     );
     await _learning.appendActivity(
-      ActivityRecord(
+      ActivityRecord.forCommand(
+        command,
+        kCardReviewedType,
         id: _ids.newId(),
-        operationId: command.operationId.value,
-        type: kCardReviewedType,
         atUtc: reviewedAt,
         ref: ElementRef(id: command.cardId, type: ElementType.card),
         durationMs: command.elapsedMs,
@@ -641,11 +639,10 @@ final class ReviewCommandRunner {
 
     await _journal.appendAll(entries);
     await _learning.appendActivity(
-      ActivityRecord(
+      ActivityRecord.forCommand(
+        command,
+        kSiblingsBuriedType,
         id: _ids.newId(),
-        operationId: command.operationId.value,
-        type: kSiblingsBuriedType,
-        atUtc: command.timestampUtc,
         ref: reviewed.ref,
         metadata: <String, Object?>{'buried': entries.length},
       ),

@@ -7,6 +7,7 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:incremental_reader/features/daily_queue/queue_candidates_query.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
@@ -73,7 +74,8 @@ final class QueueCommandRunner {
        _context = context,
        _clock = clock,
        _ids = ids,
-       _diagnostics = diagnostics;
+       _diagnostics = diagnostics,
+       _candidates = QueueCandidatesQuery(learning: learning);
 
   final ContentRepository _content;
   final LearningRepository _learning;
@@ -83,6 +85,7 @@ final class QueueCommandRunner {
   final Clock _clock;
   final IdGenerator _ids;
   final DiagnosticSink _diagnostics;
+  final QueueCandidatesQuery _candidates;
 
   Future<Result<AdmissionOutcome>> runDailyAdmission(
     RunDailyAdmission command,
@@ -93,7 +96,7 @@ final class QueueCommandRunner {
         final Sm20CollectionState before = await _context.runtimeState();
         final Sm20RandomNumberGenerator randomNumbers =
             Sm20RandomNumberGenerator(seed: before.randomNumberSeed);
-        var candidates = await loadCandidates(command.day);
+        var candidates = await _candidates.listCandidates();
         var byRef = <ElementRef, QueueCandidate>{
           for (final QueueCandidate candidate in candidates)
             candidate.ref: candidate,
@@ -151,7 +154,7 @@ final class QueueCommandRunner {
           // Rescheduling changed canonical due state; all queue calculations
           // below must observe the replacements written by the same
           // transaction.
-          candidates = await loadCandidates(command.day);
+          candidates = await _candidates.listCandidates();
           byRef = <ElementRef, QueueCandidate>{
             for (final QueueCandidate candidate in candidates)
               candidate.ref: candidate,
@@ -310,11 +313,10 @@ final class QueueCommandRunner {
         );
         if (!logged) {
           await _learning.appendActivity(
-            ActivityRecord(
+            ActivityRecord.forCommand(
+              command,
+              kDailyAdmissionType,
               id: _ids.newId(),
-              operationId: command.operationId.value,
-              type: kDailyAdmissionType,
-              atUtc: command.timestampUtc,
               metadata: <String, Object?>{
                 'day': command.day.toString(),
                 'stage': learningMode,
@@ -402,11 +404,10 @@ final class QueueCommandRunner {
           runtime.copyWith(learningMode: command.stage.learningMode),
         );
         await _learning.appendActivity(
-          ActivityRecord(
+          ActivityRecord.forCommand(
+            command,
+            kEnterStageType,
             id: _ids.newId(),
-            operationId: command.operationId.value,
-            type: kEnterStageType,
-            atUtc: command.timestampUtc,
             metadata: <String, Object?>{
               'stage': command.stage.name,
               'learning_mode': command.stage.learningMode,
@@ -460,11 +461,10 @@ final class QueueCommandRunner {
           ),
         );
         await _learning.appendActivity(
-          ActivityRecord(
+          ActivityRecord.forCommand(
+            command,
+            kCutDrillsType,
             id: _ids.newId(),
-            operationId: command.operationId.value,
-            type: kCutDrillsType,
-            atUtc: command.timestampUtc,
             metadata: <String, Object?>{'removed': removed},
           ),
         );
@@ -529,11 +529,10 @@ final class QueueCommandRunner {
           next.copyWith(randomNumberSeed: randomNumbers.state.seed),
         );
         await _learning.appendActivity(
-          ActivityRecord(
+          ActivityRecord.forCommand(
+            command,
+            kRandomizeQueueType,
             id: _ids.newId(),
-            operationId: command.operationId.value,
-            type: kRandomizeQueueType,
-            atUtc: command.timestampUtc,
             metadata: <String, Object?>{
               'queue': command.queue.name,
               'count': queue.length,
@@ -592,7 +591,7 @@ final class QueueCommandRunner {
           ];
         }
 
-        final List<QueueCandidate> candidates = await _loadCandidatesForRefs(
+        final List<QueueCandidate> candidates = await _listCandidatesForRefs(
           sourceRefs,
         );
         final Set<ElementRef> outstanding = runtime.outstanding.toSet();
@@ -641,11 +640,10 @@ final class QueueCommandRunner {
           ),
         );
         await _learning.appendActivity(
-          ActivityRecord(
+          ActivityRecord.forCommand(
+            command,
+            kSmartPostponeType,
             id: _ids.newId(),
-            operationId: command.operationId.value,
-            type: kSmartPostponeType,
-            atUtc: command.timestampUtc,
             metadata: <String, Object?>{
               'profile': result.profile.profileName,
               'scope': result.profile.scope.name,
@@ -739,44 +737,13 @@ final class QueueCommandRunner {
     return automatic;
   }
 
-  /// All active topic records and card memories. Due filtering belongs to the
-  /// queue transaction because existing queue membership can intentionally
-  /// contain a future repetition added by a browser command.
-  Future<List<QueueCandidate>> loadCandidates(StudyDay day) async {
-    final List<ElementSchedule> topicSchedules = await _learning.listSchedules(
-      types: const <ElementType>{
-        ElementType.source,
-        ElementType.extract,
-        ElementType.video,
-      },
-      lifecycles: const <ElementLifecycle>{ElementLifecycle.active},
-    );
-    final Map<ElementRef, TopicState> topics = await _learning.findTopics(
-      <ElementRef>[
-        for (final ElementSchedule schedule in topicSchedules) schedule.ref,
-      ],
-    );
-    final List<CardState> cards = await _learning.listCardStates(
-      lifecycles: const <ElementLifecycle>{ElementLifecycle.active},
-    );
-    return <QueueCandidate>[
-      for (final ElementSchedule schedule in topicSchedules)
-        if (topics[schedule.ref] case final TopicState topic)
-          if (topic.status != Sm20ElementStatus.dismissed &&
-              topic.status != Sm20ElementStatus.deleted)
-            QueueCandidate.topic(topic, rootId: schedule.rootId),
-      for (final CardState card in cards)
-        QueueCandidate.card(card, rootId: card.schedule.rootId),
-    ];
-  }
-
   /// Resolves an explicit source population, preserving the caller's order.
   ///
-  /// Unlike [loadCandidates] this keeps non-Active records: a branch or
+  /// Unlike [QueueCandidatesQuery.listCandidates] this keeps non-Active records: a branch or
   /// browser Smart Postpone source legitimately contains dismissed, suspended,
   /// and pending elements, and the postpone engine — not this loader — is what
   /// decides they are ineligible.
-  Future<List<QueueCandidate>> _loadCandidatesForRefs(
+  Future<List<QueueCandidate>> _listCandidatesForRefs(
     List<ElementRef> refs,
   ) async {
     final List<ElementRef> topicRefs = <ElementRef>[];

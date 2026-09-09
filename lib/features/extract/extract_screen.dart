@@ -27,6 +27,8 @@ import 'package:incremental_reader/features/tags/tags_picker_dialog.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/status_pill.dart';
+import 'package:incremental_reader/shared/ui/study_action_bar.dart';
+import 'package:incremental_reader/shared/ui/study_status_bar.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 
 Future<StudyRouteResult> openExtract(
@@ -192,11 +194,11 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
               _ExtractStatusBar(state: state),
               Expanded(
                 child: _extractSurface(
-                  context,
-                  state,
-                  model,
-                  typography,
-                  selection,
+                  context: context,
+                  state: state,
+                  model: model,
+                  typography: typography,
+                  selection: selection,
                 ),
               ),
               _ExtractActionBar(
@@ -275,13 +277,13 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
   /// Selecting inside an extract is how a further extract is cut, so the same
   /// toolbar belongs here. There is no marker: an extract is processed whole
   /// rather than resumed part-way through.
-  Widget _extractSurface(
-    BuildContext context,
-    ExtractUiState state,
-    ExtractViewModel model,
-    ReaderTypography typography,
-    ReaderSelectionController selection,
-  ) {
+  Widget _extractSurface({
+    required BuildContext context,
+    required ExtractUiState state,
+    required ExtractViewModel model,
+    required ReaderTypography typography,
+    required ReaderSelectionController selection,
+  }) {
     return Stack(
       key: _surfaceKey,
       children: <Widget>[
@@ -513,30 +515,7 @@ class _ExtractStatusBar extends StatelessWidget {
   final ExtractUiState state;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-    decoration: const BoxDecoration(
-      color: AppColors.surface,
-      border: Border(bottom: BorderSide(color: AppColors.border)),
-    ),
-    // The same trade the Reader's bar makes: nothing here is droppable, so on
-    // a narrow window the three parts wrap rather than overflow.
-    child: isCompactWidth(context)
-        ? Wrap(
-            spacing: 12,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: _statusParts(),
-          )
-        : Row(
-            children: <Widget>[
-              ..._statusParts().take(2),
-              const Spacer(),
-              ..._statusParts().skip(2),
-            ],
-          ),
-  );
+  Widget build(BuildContext context) => StudyStatusBar(parts: _statusParts());
 
   /// Whether this visit can change anything, what the extract holds, and when
   /// it comes back.
@@ -575,36 +554,24 @@ class _ExtractActionBar extends StatelessWidget {
   final VoidCallback onDone;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
-    decoration: const BoxDecoration(
-      color: AppColors.surface,
-      border: Border(top: BorderSide(color: AppColors.border)),
-    ),
-    // The bar is the last thing above the Android gesture strip, so it has to
-    // give that strip its own space or Done sits under the swipe area.
-    child: SafeArea(
-      top: false,
-      child: ListenableBuilder(
-        listenable: selection,
-        builder: (BuildContext context, Widget? child) =>
-            isCompactWidth(context)
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  _hint(),
-                  const SizedBox(height: 8),
-                  Align(alignment: Alignment.centerRight, child: _buttons()),
-                ],
-              )
-            : Row(
-                children: <Widget>[
-                  Expanded(child: _hint()),
-                  _buttons(),
-                ],
-              ),
-      ),
+  Widget build(BuildContext context) => StudyActionBar(
+    child: ListenableBuilder(
+      listenable: selection,
+      builder: (BuildContext context, Widget? child) => isCompactWidth(context)
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _hint(),
+                const SizedBox(height: 8),
+                Align(alignment: Alignment.centerRight, child: _buttons()),
+              ],
+            )
+          : Row(
+              children: <Widget>[
+                Expanded(child: _hint()),
+                _buttons(),
+              ],
+            ),
     ),
   );
 

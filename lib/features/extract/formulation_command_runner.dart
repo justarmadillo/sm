@@ -308,11 +308,10 @@ final class FormulationCommandRunner {
         }
         await _saveTagsOfNewCards(command, createdRefs);
         await _learning.appendActivity(
-          ActivityRecord(
+          ActivityRecord.forCommand(
+            command,
+            kCardsFormulatedType,
             id: _ids.newId(),
-            operationId: command.operationId.value,
-            type: kCardsFormulatedType,
-            atUtc: command.timestampUtc,
             ref: parentRef,
             metadata: <String, Object?>{'cards': cards.length},
           ),

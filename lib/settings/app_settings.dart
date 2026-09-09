@@ -629,7 +629,7 @@ Map<String, SmartPostponeSettings> _readNamedProfiles(
 ) {
   if (raw == null) return fallback;
   if (raw.trim().isEmpty) return const <String, SmartPostponeSettings>{};
-  final Object? decoded = _tryDecodeJson(raw);
+  final Object? decoded = _decodedJsonOrNull(raw);
   if (decoded is! Map<String, Object?>) return fallback;
   final profiles = <String, SmartPostponeSettings>{};
   for (final MapEntry<String, Object?> entry in decoded.entries) {
@@ -661,7 +661,7 @@ Map<int, String> _readBranchAssignments(
 ) {
   if (raw == null) return fallback;
   if (raw.trim().isEmpty) return const <int, String>{};
-  final Object? decoded = _tryDecodeJson(raw);
+  final Object? decoded = _decodedJsonOrNull(raw);
   if (decoded is! Map<String, Object?>) return fallback;
   final assignments = <int, String>{};
   for (final MapEntry<String, Object?> entry in decoded.entries) {
@@ -674,7 +674,7 @@ Map<int, String> _readBranchAssignments(
   return Map<int, String>.unmodifiable(assignments);
 }
 
-Object? _tryDecodeJson(String raw) {
+Object? _decodedJsonOrNull(String raw) {
   try {
     return jsonDecode(raw);
   } on FormatException {

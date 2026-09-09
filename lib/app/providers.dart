@@ -118,12 +118,12 @@ final Provider<DiagnosticSink> diagnosticsProvider = Provider<DiagnosticSink>((
   ]);
 });
 
-/// Turns a stored zone identifier into offset rules.
+/// Follows the active Windows or Android timezone for every scheduling call.
 ///
-/// Injected as a function so scheduling/ never imports platform timezone
-/// code, and so a test can supply a fake DST transition.
+/// The stored identifier survives only to keep existing StudyDay rows
+/// compatible; it no longer chooses the device's offsets.
 final Provider<TimeZoneResolver> timeZoneResolverProvider =
-    Provider<TimeZoneResolver>((Ref ref) => resolveTimeZone);
+    Provider<TimeZoneResolver>((Ref ref) => resolveSystemTimeZone);
 
 /// Reads and caches the collection's configuration.
 final Provider<SettingsStore> settingsStoreProvider = Provider<SettingsStore>(
@@ -135,7 +135,7 @@ final Provider<Sm20RuntimeStore> sm20RuntimeStoreProvider =
       (Ref ref) => Sm20RuntimeStore(ref.watch(settingsRepositoryProvider)),
     );
 
-/// Builds schedulers, the calendar, and the priority scale from live settings.
+/// Builds schedulers, the system-zone calendar, and the live priority scale.
 final Provider<SchedulingContext> schedulingContextProvider =
     Provider<SchedulingContext>(
       (Ref ref) => SchedulingContext(
@@ -147,7 +147,7 @@ final Provider<SchedulingContext> schedulingContextProvider =
       ),
     );
 
-/// The study-day rules currently in force.
+/// The device timezone and configured rollover currently in force.
 ///
 /// A synchronous convenience for widgets. Anything that decides a schedule
 /// must go through [SchedulingContext] instead, which re-reads settings.

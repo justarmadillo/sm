@@ -416,11 +416,10 @@ final class ExtractCommandRunner {
     ElementRef? ref,
     Map<String, Object?>? metadata,
   }) => _learning.appendActivity(
-    ActivityRecord(
+    ActivityRecord.forCommand(
+      command,
+      type,
       id: _ids.newId(),
-      operationId: command.operationId.value,
-      type: type,
-      atUtc: command.timestampUtc,
       ref: ref,
       metadata: metadata,
     ),

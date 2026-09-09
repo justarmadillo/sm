@@ -13,6 +13,7 @@
 | `command_base.dart` | what every command has: an operation id and a timestamp |
 | `command_execution.dart` | the transaction, retry, generation, and diagnostic boundary every command shares |
 | `utf8_offsets.dart` | Dart string indices to UTF-8 byte offsets, and back |
+| `epoch_milliseconds.dart` | the one storage form for an instant, and the way back |
 | `ui/` | shared visual language, responsive layout rules, and small reusable widgets |
 
 ## `shared/ui/`
@@ -25,7 +26,10 @@
 | `element_type_badge.dart` | one icon, colour, and label for each element type |
 | `screen_width.dart` | the shared compact-versus-wide layout decision |
 | `status_pill.dart` | compact coloured state labels shared by study screens |
+| `study_action_bar.dart` | the surface Done, Later and Dismiss sit on |
+| `study_status_bar.dart` | the strip of status text above a study screen |
 | `toast_message.dart` | small self-dismissing success and error notices |
+| `video_thumbnail.dart` | a video's still image, at a fixed shape |
 
 ## Two rules
 

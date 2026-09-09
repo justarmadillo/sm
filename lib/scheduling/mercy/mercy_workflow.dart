@@ -16,6 +16,7 @@ import 'package:incremental_reader/scheduling/sm20_numeric.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/settings/mercy_settings.dart';
+import 'package:incremental_reader/shared/epoch_milliseconds.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:meta/meta.dart';
 
@@ -126,10 +127,10 @@ final class MercyPreview {
     final Map<String, Object?> map = _asJsonMap(jsonDecode(source), 'preview');
     final String zoneId = map['zone_id']! as String;
     return MercyPreview(
-      today: _day(map['today']! as int, zoneId),
-      collectionLearningStartDay: _day(
+      today: StudyDay.fromEpochDay(map['today']! as int, zoneId: zoneId),
+      collectionLearningStartDay: StudyDay.fromEpochDay(
         map['learning_start_day']! as int,
-        zoneId,
+        zoneId: zoneId,
       ),
       gatheringDays: map['gathering_days']! as int,
       reschedulingDays: map['rescheduling_days']! as int,
@@ -147,8 +148,14 @@ final class MercyPreview {
             final Map<String, Object?> value = _asJsonMap(raw, 'preview item');
             return MercyPlannedMove(
               ref: _ref(value),
-              fromDay: _day(value['from_day']! as int, zoneId),
-              toDay: _day(value['to_day']! as int, zoneId),
+              fromDay: StudyDay.fromEpochDay(
+                value['from_day']! as int,
+                zoneId: zoneId,
+              ),
+              toDay: StudyDay.fromEpochDay(
+                value['to_day']! as int,
+                zoneId: zoneId,
+              ),
               score: value['score']! as int,
               sourceIndex: value['source_index']! as int,
               orderedIndex: value['ordered_index']! as int,
@@ -193,7 +200,7 @@ final class MercyPreview {
     return List<MercyDailyLoad>.unmodifiable(<MercyDailyLoad>[
       for (final int epoch in days)
         MercyDailyLoad(
-          day: _day(epoch, today.zoneId),
+          day: StudyDay.fromEpochDay(epoch, zoneId: today.zoneId),
           cards: counts[epoch]!.cards,
           topics: counts[epoch]!.topics,
         ),
@@ -386,7 +393,7 @@ MercyAppliedBatchSnapshot _decodeMercyAppliedBatch(String source) {
     batchId: map['batch_id']! as String,
     appliedEventId: map['applied_event_id']! as String,
     policyVersion: map['policy_version']! as String,
-    studyDay: _day(map['study_day']! as int, zoneId),
+    studyDay: StudyDay.fromEpochDay(map['study_day']! as int, zoneId: zoneId),
     moves: List<MercyAppliedMove>.unmodifiable(<MercyAppliedMove>[
       for (final Object? raw in map['items']! as List<Object?>)
         (() {
@@ -395,8 +402,14 @@ MercyAppliedBatchSnapshot _decodeMercyAppliedBatch(String source) {
             ref: _ref(value),
             beforeState: value['before_state']! as String,
             afterState: value['after_state']! as String,
-            fromDay: _day(value['from_day']! as int, zoneId),
-            toDay: _day(value['to_day']! as int, zoneId),
+            fromDay: StudyDay.fromEpochDay(
+              value['from_day']! as int,
+              zoneId: zoneId,
+            ),
+            toDay: StudyDay.fromEpochDay(
+              value['to_day']! as int,
+              zoneId: zoneId,
+            ),
             appliedEventId: value['applied_event_id']! as String,
           );
         })(),
@@ -440,7 +453,7 @@ TopicState decodeMercyTopicState(String source) {
     storedInterval: map['stored_interval']! as int,
     lastReviewDay: lastReview == null
         ? null
-        : _day(lastReview, schedule.dueDay.zoneId),
+        : StudyDay.fromEpochDay(lastReview, zoneId: schedule.dueDay.zoneId),
     aFactorRaw: _real48(map['a_factor_raw']! as String),
     lastIntervalRatioRaw: _real48(map['last_interval_ratio_raw']! as String),
     historyBlockId: map['history_block_id']! as int,
@@ -491,17 +504,16 @@ ElementSchedule _schedule(Map<String, Object?> map) {
     ref: _ref(map),
     priority: PriorityRank(map['priority']! as String),
     lifecycle: ElementLifecycle.values[map['lifecycle']! as int],
-    dueDay: _day(map['due_day']! as int, zoneId),
-    originalDueDay: _day(map['original_due_day']! as int, zoneId),
+    dueDay: StudyDay.fromEpochDay(map['due_day']! as int, zoneId: zoneId),
+    originalDueDay: StudyDay.fromEpochDay(
+      map['original_due_day']! as int,
+      zoneId: zoneId,
+    ),
     rootId: map['root_id'] as String?,
     parentElementId: map['parent_element_id'] as String?,
     ordinal: map['ordinal'] as int?,
-    createdAtUtc: created == null
-        ? null
-        : DateTime.fromMillisecondsSinceEpoch(created, isUtc: true),
-    updatedAtUtc: updated == null
-        ? null
-        : DateTime.fromMillisecondsSinceEpoch(updated, isUtc: true),
+    createdAtUtc: created == null ? null : fromEpochMs(created),
+    updatedAtUtc: updated == null ? null : fromEpochMs(updated),
     revision: map['revision']! as int,
     legacyDueProvenance:
         LegacyDueProvenance.values[map['legacy_due_provenance']! as int],
@@ -523,19 +535,6 @@ Map<String, Object?> _asJsonMap(Object? value, String name) {
     throw FormatException('$name must be an object');
   }
   return value.cast<String, Object?>();
-}
-
-StudyDay _day(int epochDay, String zoneId) {
-  final DateTime date = DateTime.fromMillisecondsSinceEpoch(
-    epochDay * Duration.millisecondsPerDay,
-    isUtc: true,
-  );
-  return StudyDay(
-    year: date.year,
-    month: date.month,
-    day: date.day,
-    zoneId: zoneId,
-  );
 }
 
 DelphiReal48 _real48(String hex) {

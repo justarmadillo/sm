@@ -705,7 +705,7 @@ final class Sm20MercyCapacityPlanner {
     var day = math.min(learningStart.epochDay - 1, today.epochDay - 1);
     do {
       day += 1;
-      final StudyDay current = _fromEpochDay(day, today.zoneId);
+      final StudyDay current = StudyDay.fromEpochDay(day, zoneId: today.zoneId);
       final int count = counts.countOn(current);
       if (day >= today.epochDay) {
         allocated += elementsPerDay;
@@ -739,7 +739,7 @@ final class Sm20MercyCapacityPlanner {
     var day = math.min(learningStart.epochDay - 1, today.epochDay - 1);
     do {
       day += 1;
-      final StudyDay current = _fromEpochDay(day, today.zoneId);
+      final StudyDay current = StudyDay.fromEpochDay(day, zoneId: today.zoneId);
       final int count = counts.countOn(current);
       if (day > horizonEnd) balance += count;
       if (day >= today.epochDay) {
@@ -763,7 +763,9 @@ final class Sm20MercyCapacityPlanner {
     if (end < start) return 0;
     var result = 0;
     for (var day = start.epochDay; day <= end.epochDay; day += 1) {
-      result += counts.countOn(_fromEpochDay(day, start.zoneId));
+      result += counts.countOn(
+        StudyDay.fromEpochDay(day, zoneId: start.zoneId),
+      );
     }
     return result;
   }
@@ -781,17 +783,4 @@ void _requireSameZone(StudyDay expected, StudyDay? actual, String name) {
       'must use ${expected.zoneId}',
     );
   }
-}
-
-StudyDay _fromEpochDay(int epochDay, String zoneId) {
-  final DateTime value = DateTime.fromMillisecondsSinceEpoch(
-    epochDay * Duration.millisecondsPerDay,
-    isUtc: true,
-  );
-  return StudyDay(
-    year: value.year,
-    month: value.month,
-    day: value.day,
-    zoneId: zoneId,
-  );
 }

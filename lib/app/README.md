@@ -16,9 +16,10 @@ package validation and file replacement remain storage responsibilities.
 
 ## Why providers.dart exists
 
-It is the one place that chooses the *concrete* database, clock, and timezone
-rules. Everything below it takes those as constructor arguments, so a command
-runner or a repository can be built in a test with no Riverpod at all.
+It is the one place that chooses the *concrete* database, clock, and system
+timezone rules. Everything below it takes those as constructor arguments, so
+a command runner or a repository can be built in a test with no Riverpod at
+all.
 
 Anything only one screen uses is **not** here — it lives in that screen's own
 `features/<screen>/<screen>_providers.dart`. That is also why `app/` no longer

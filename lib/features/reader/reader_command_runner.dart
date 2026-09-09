@@ -619,29 +619,29 @@ final class ReaderCommandRunner {
   /// dismissed, or deleted. Both of those commands only ever meant "stop
   /// scheduling this but keep it", which is exactly Dismiss.
   Future<Result<TopicState>> dismiss(DismissElement command) => _lifecycle(
-    command,
-    command.ref,
-    'topic.dismissed',
-    ReviewLogEventType.dismiss,
-    Sm20ElementStatus.dismissed,
+    command: command,
+    ref: command.ref,
+    type: 'topic.dismissed',
+    eventType: ReviewLogEventType.dismiss,
+    target: Sm20ElementStatus.dismissed,
   );
 
   /// Undismiss: the status byte only, exactly as the executable does it.
   Future<Result<TopicState>> undismiss(UndismissSource command) => _lifecycle(
-    command,
-    command.ref,
-    'topic.undismissed',
-    ReviewLogEventType.resume,
-    Sm20ElementStatus.pending,
+    command: command,
+    ref: command.ref,
+    type: 'topic.undismissed',
+    eventType: ReviewLogEventType.resume,
+    target: Sm20ElementStatus.pending,
   );
 
   /// Soft-deletes a source without touching content or descendant schedules.
   Future<Result<TopicState>> deleteSource(DeleteSource command) => _lifecycle(
-    command,
-    ElementRef(id: command.sourceId, type: ElementType.source),
-    'source.deleted',
-    ReviewLogEventType.dismiss,
-    Sm20ElementStatus.deleted,
+    command: command,
+    ref: ElementRef(id: command.sourceId, type: ElementType.source),
+    type: 'source.deleted',
+    eventType: ReviewLogEventType.dismiss,
+    target: Sm20ElementStatus.deleted,
   );
 
   /// Changes a source's pacing profile without touching position or interval.
@@ -776,13 +776,13 @@ final class ReaderCommandRunner {
     );
   }
 
-  Future<Result<TopicState>> _lifecycle(
-    AppCommand command,
-    ElementRef ref,
-    String type,
-    ReviewLogEventType eventType,
-    Sm20ElementStatus target,
-  ) => _run<TopicState>(command, type, () async {
+  Future<Result<TopicState>> _lifecycle({
+    required AppCommand command,
+    required ElementRef ref,
+    required String type,
+    required ReviewLogEventType eventType,
+    required Sm20ElementStatus target,
+  }) => _run<TopicState>(command, type, () async {
     final TopicState? topic = await _learning.findTopic(ref);
     if (topic == null) return _missingSchedule<TopicState>(ref.id);
 
@@ -1368,11 +1368,10 @@ final class ReaderCommandRunner {
     int? durationMs,
     Map<String, Object?>? metadata,
   }) => _learning.appendActivity(
-    ActivityRecord(
+    ActivityRecord.forCommand(
+      command,
+      type,
       id: _ids.newId(),
-      operationId: command.operationId.value,
-      type: type,
-      atUtc: command.timestampUtc,
       ref: ref,
       durationMs: durationMs,
       metadata: metadata,

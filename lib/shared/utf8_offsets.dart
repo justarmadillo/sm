@@ -8,35 +8,40 @@ library;
 
 import 'dart:typed_data';
 
+/// UTF-8 bytes the code unit at [utf16Index] contributes, and whether it
+/// swallowed the low surrogate following it.
+///
+/// The two answers come from one test and so are returned together: a high
+/// surrogate is four bytes only when a low surrogate follows, and in that case
+/// the pair is a single code point the caller must not count twice. This is the
+/// only statement of the encoding rules in the app — the byte length and the
+/// offset table are both counted with it, so they cannot drift apart.
+({int byteCount, bool didConsumePair}) _encodedWidthAt(
+  String text,
+  int utf16Index,
+) {
+  final unit = text.codeUnitAt(utf16Index);
+  if (unit < 0x80) return (byteCount: 1, didConsumePair: false);
+  if (unit < 0x800) return (byteCount: 2, didConsumePair: false);
+  if (unit >= 0xD800 && unit <= 0xDBFF) {
+    final isPaired =
+        utf16Index + 1 < text.length &&
+        text.codeUnitAt(utf16Index + 1) >= 0xDC00 &&
+        text.codeUnitAt(utf16Index + 1) <= 0xDFFF;
+    if (isPaired) return (byteCount: 4, didConsumePair: true);
+  }
+  // Everything else is three bytes: an ordinary BMP character, and also a
+  // surrogate with no partner, for which encoders emit the 3-byte U+FFFD.
+  return (byteCount: 3, didConsumePair: false);
+}
+
 /// Number of UTF-8 bytes [text] occupies, without allocating an encoded copy.
 int utf8Length(String text) {
   var bytes = 0;
-  for (var i = 0; i < text.length; i++) {
-    final unit = text.codeUnitAt(i);
-    if (unit < 0x80) {
-      bytes += 1;
-    } else if (unit < 0x800) {
-      bytes += 2;
-    } else if (unit >= 0xD800 && unit <= 0xDBFF) {
-      // High surrogate: a surrogate pair is one 4-byte code point. The low
-      // surrogate is skipped so it is not counted twice.
-      final isPaired =
-          i + 1 < text.length &&
-          text.codeUnitAt(i + 1) >= 0xDC00 &&
-          text.codeUnitAt(i + 1) <= 0xDFFF;
-      if (isPaired) {
-        bytes += 4;
-        i++;
-      } else {
-        // Unpaired surrogate: encoders emit U+FFFD, which is 3 bytes.
-        bytes += 3;
-      }
-    } else if (unit >= 0xDC00 && unit <= 0xDFFF) {
-      // Unpaired low surrogate, same replacement rule as above.
-      bytes += 3;
-    } else {
-      bytes += 3;
-    }
+  for (var cursor = 0; cursor < text.length; cursor++) {
+    final width = _encodedWidthAt(text, cursor);
+    bytes += width.byteCount;
+    if (width.didConsumePair) cursor++;
   }
   return bytes;
 }
@@ -49,30 +54,16 @@ final class Utf8OffsetIndex {
   /// Builds the cumulative byte table for [text].
   Utf8OffsetIndex(this.text) : _byteAt = Uint32List(text.length + 1) {
     var bytes = 0;
-    for (var i = 0; i < text.length; i++) {
-      _byteAt[i] = bytes;
-      final unit = text.codeUnitAt(i);
-      if (unit < 0x80) {
-        bytes += 1;
-      } else if (unit < 0x800) {
-        bytes += 2;
-      } else if (unit >= 0xD800 && unit <= 0xDBFF) {
-        final isPaired =
-            i + 1 < text.length &&
-            text.codeUnitAt(i + 1) >= 0xDC00 &&
-            text.codeUnitAt(i + 1) <= 0xDFFF;
-        if (isPaired) {
-          // Both halves of the pair map to the start of the 4-byte sequence;
-          // the pair as a whole advances by 4.
-          _byteAt[i + 1] = bytes;
-          bytes += 4;
-          i++;
-        } else {
-          bytes += 3;
-        }
-      } else {
-        bytes += 3;
+    for (var cursor = 0; cursor < text.length; cursor++) {
+      _byteAt[cursor] = bytes;
+      final width = _encodedWidthAt(text, cursor);
+      if (width.didConsumePair) {
+        // Both halves of the pair map to the start of the 4-byte sequence;
+        // the pair as a whole advances by 4.
+        _byteAt[cursor + 1] = bytes;
+        cursor++;
       }
+      bytes += width.byteCount;
     }
     _byteAt[text.length] = bytes;
   }

@@ -3,7 +3,7 @@ import 'package:incremental_reader/storage/platform/time_zones.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('named home timezone resolution', () {
+  group('legacy named timezone resolution', () {
     test('uses real IANA DST rules instead of one fixed offset', () {
       final TimeZoneRules berlin = resolveTimeZone('Europe/Berlin');
 
@@ -45,11 +45,17 @@ void main() {
       }
     });
 
-    test('offers named IANA zones rather than machine/fixed offsets', () {
-      expect(selectableZoneIds, containsAll(<String>['UTC', 'Europe/Berlin']));
-      expect(selectableZoneIds, isNot(contains('system')));
-      expect(selectableZoneIds, isNot(contains('UTC+01:00')));
-      expect(selectableZoneIds, isNot(contains('Etc/GMT-1')));
+    test('system rules use the OS offset and retain the stored day label', () {
+      final DateTime instant = DateTime.utc(2026, 7, 15, 12);
+      final TimeZoneRules system = resolveSystemTimeZone(
+        'W. Europe Standard Time',
+      );
+
+      expect(system.zoneId, 'Europe/Berlin');
+      expect(
+        system.offsetMinutesAt(instant),
+        instant.toLocal().timeZoneOffset.inMinutes,
+      );
     });
   });
 

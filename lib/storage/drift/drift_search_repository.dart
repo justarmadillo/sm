@@ -8,9 +8,9 @@ library;
 
 import 'package:drift/drift.dart';
 import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/shared/epoch_milliseconds.dart';
 import 'package:incremental_reader/storage/contracts/search_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
-import 'package:incremental_reader/storage/database/row_converters.dart';
 
 /// Full-text search over the materialized documents and their FTS5 index.
 ///

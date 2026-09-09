@@ -92,8 +92,8 @@ final class SchedulerEvent {
   final SchedulerEventType eventType;
   final DateTime occurredAtUtc;
 
-  /// Stored rather than recomputed, so changing home zone never rebuckets
-  /// historical work.
+  /// Stored rather than recomputed, so changing the device zone never
+  /// rebuckets historical work.
   final StudyDay studyDay;
   final String? schedulerName;
   final String? schedulerVersion;

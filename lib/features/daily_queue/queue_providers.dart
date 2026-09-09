@@ -4,8 +4,16 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/daily_queue/mercy_command_runner.dart';
+import 'package:incremental_reader/features/daily_queue/queue_candidates_query.dart';
 import 'package:incremental_reader/features/daily_queue/queue_command_runner.dart';
 import 'package:incremental_reader/features/daily_queue/queue_query.dart';
+
+/// The population every queue calculation starts from.
+final Provider<QueueCandidatesQuery> queueCandidatesQueryProvider =
+    Provider<QueueCandidatesQuery>(
+      (Ref ref) =>
+          QueueCandidatesQuery(learning: ref.watch(learningRepositoryProvider)),
+    );
 
 /// The daily queue transaction, the manual stage commands, and Mercy.
 final Provider<QueueCommandRunner> queueCommandRunnerProvider =
@@ -30,7 +38,7 @@ final Provider<MercyCommandRunner> mercyCommandRunnerProvider =
         transfer: ref.watch(transferRepositoryProvider),
         transactions: ref.watch(transactionRunnerProvider),
         context: ref.watch(schedulingContextProvider),
-        queue: ref.watch(queueCommandRunnerProvider),
+        candidates: ref.watch(queueCandidatesQueryProvider),
         ids: ref.watch(idGeneratorProvider),
       ),
     );
@@ -43,6 +51,7 @@ final Provider<QueueQuery> queueQueryProvider = Provider<QueueQuery>(
     learning: ref.watch(learningRepositoryProvider),
     tags: ref.watch(tagRepositoryProvider),
     commandRunner: ref.watch(queueCommandRunnerProvider),
+    candidates: ref.watch(queueCandidatesQueryProvider),
     context: ref.watch(schedulingContextProvider),
     clock: ref.watch(clockProvider),
   ),

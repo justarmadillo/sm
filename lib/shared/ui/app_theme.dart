@@ -53,9 +53,24 @@ abstract final class AppColors {
 
 /// The single application theme.
 ThemeData buildAppTheme() {
+  // Every "on" colour is spelled out. Material fills selected chips, tonal
+  // buttons and indicators from the secondary and tertiary *container* roles,
+  // and a role left unset keeps Material's own default ink — which is black.
+  // Naming only the green half of each pair is what put black text on a green
+  // chip; the ink has to be named beside the fill it sits on.
   const scheme = ColorScheme.light(
     primary: AppColors.accent,
+    onPrimary: Colors.white,
+    primaryContainer: AppColors.accent,
+    onPrimaryContainer: Colors.white,
     secondary: AppColors.accent,
+    onSecondary: Colors.white,
+    secondaryContainer: AppColors.accent,
+    onSecondaryContainer: Colors.white,
+    tertiary: AppColors.accent,
+    onTertiary: Colors.white,
+    tertiaryContainer: AppColors.accent,
+    onTertiaryContainer: Colors.white,
     surface: AppColors.surface,
     onSurface: AppColors.text,
     outline: AppColors.border,

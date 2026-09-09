@@ -666,7 +666,16 @@ class SchedulerEvents extends Table {
   TextColumn get id => text()();
   TextColumn get operationId => text()();
   TextColumn get elementId => text().nullable()();
+
+  /// Index into `ElementType`, deliberately without a `CHECK`.
+  ///
+  /// Every other stored element type is bounded by the database. This one is
+  /// not, because a log row outlives the element it names and may name a type
+  /// a later version added: constraining it would make an old build refuse to
+  /// open a collection a newer one wrote. `refFromLogRow` guards the read
+  /// instead and leaves the row unattached rather than throwing.
   IntColumn get elementType => integer().nullable()();
+
   TextColumn get eventType => text()();
   IntColumn get occurredAtUtc => integer()();
   IntColumn get studyDay => integer()();
@@ -940,6 +949,13 @@ class ActivityEvents extends Table {
 
   TextColumn get elementId => text().nullable()();
 
+  /// Index into `ElementType`, deliberately without a `CHECK`.
+  ///
+  /// Every other stored element type is bounded by the database. This one is
+  /// not, because a log row outlives the element it names and may name a type
+  /// a later version added: constraining it would make an old build refuse to
+  /// open a collection a newer one wrote. `refFromLogRow` guards the read
+  /// instead and leaves the row unattached rather than throwing.
   IntColumn get elementType => integer().nullable()();
 
   /// Stable dotted event name, for example `reader.done`.

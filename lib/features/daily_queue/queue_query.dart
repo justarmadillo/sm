@@ -12,6 +12,7 @@ import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/documents/video.dart';
+import 'package:incremental_reader/features/daily_queue/queue_candidates_query.dart';
 import 'package:incremental_reader/features/daily_queue/queue_command_runner.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/features/tags/element_tag_name_index.dart';
@@ -105,6 +106,7 @@ final class QueueQuery {
     required LearningRepository learning,
     required TagRepository tags,
     required QueueCommandRunner commandRunner,
+    required QueueCandidatesQuery candidates,
     required SchedulingContext context,
     required Clock clock,
   }) : _content = content,
@@ -112,6 +114,7 @@ final class QueueQuery {
        _learning = learning,
        _tags = tags,
        _commandRunner = commandRunner,
+       _candidates = candidates,
        _context = context,
        _clock = clock;
 
@@ -120,11 +123,16 @@ final class QueueQuery {
   final LearningRepository _learning;
   final TagRepository _tags;
   final QueueCommandRunner _commandRunner;
+  final QueueCandidatesQuery _candidates;
   final SchedulingContext _context;
   final Clock _clock;
 
-  /// Runs admission and projects the resulting queue.
+  /// Runs the day's admission, then projects the queue it produced.
   ///
+  /// The one place in the app where a query starts a write. Admission is the
+  /// day's valve and has to have run before there is a queue to show, so
+  /// opening the screen is what opens the valve; its operation id is derived
+  /// from the day, which is what keeps a refresh from admitting twice.
   Future<QueueProjection> load() async {
     final StudyDay today = await _context.today();
     final Result<AdmissionOutcome>
@@ -140,8 +148,9 @@ final class QueueQuery {
     if (outcome.isErr) return QueueProjection.emptyOn(today);
 
     final AdmissionOutcome admission = outcome.unwrap();
-    // The command runner owns the durable remaining plan. Rebuilding here
-    // discard its completion set and merge cursor and reshuffle a live day.
+    // The command runner owns the durable remaining plan. Rebuilding it here
+    // would discard its completion set and its merge cursor, and reshuffle a
+    // day already under way.
     final QueuePlan plan = admission.plan;
     final QueueCounters counters = plan.counters;
 
@@ -158,14 +167,15 @@ final class QueueQuery {
     final entries = <QueueEntry>[];
     for (final QueueCandidate candidate in plan.entries) {
       final QueueEntry? entry = await _project(
-        candidate,
-        lanes[candidate.ref] ??
+        candidate: candidate,
+        lane:
+            lanes[candidate.ref] ??
             (candidate.isCard
                 ? QueueLane.outstandingItem
                 : QueueLane.outstandingTopic),
-        scale,
-        leechLapses,
-        tagNameIndex,
+        scale: scale,
+        leechLapses: leechLapses,
+        tagNameIndex: tagNameIndex,
       );
       if (entry != null) entries.add(entry);
     }
@@ -189,7 +199,7 @@ final class QueueQuery {
     final runtime = await _context.runtimeState();
     return policy
         .build(
-          candidates: await _commandRunner.loadCandidates(today),
+          candidates: await _candidates.listCandidates(),
           nowUtc: _clock.nowUtc(),
           today: today,
           randomNumbers: Sm20RandomNumberGenerator(
@@ -202,34 +212,49 @@ final class QueueQuery {
         .counters;
   }
 
-  Future<QueueEntry?> _project(
-    QueueCandidate candidate,
-    QueueLane lane,
-    PriorityScale scale,
-    int leechLapses,
-    ElementTagNameIndex tagNameIndex,
-  ) => switch (candidate.ref.type) {
-    ElementType.source => _sourceEntry(candidate, lane, scale, tagNameIndex),
-    ElementType.extract => _extractEntry(candidate, lane, scale, tagNameIndex),
-    ElementType.card => _cardEntry(
-      candidate,
-      lane,
-      scale,
-      leechLapses,
-      tagNameIndex,
+  Future<QueueEntry?> _project({
+    required QueueCandidate candidate,
+    required QueueLane lane,
+    required PriorityScale scale,
+    required int leechLapses,
+    required ElementTagNameIndex tagNameIndex,
+  }) => switch (candidate.ref.type) {
+    ElementType.source => _sourceEntry(
+      candidate: candidate,
+      lane: lane,
+      scale: scale,
+      tagNameIndex: tagNameIndex,
     ),
-    ElementType.video => _videoEntry(candidate, lane, scale, tagNameIndex),
+    ElementType.extract => _extractEntry(
+      candidate: candidate,
+      lane: lane,
+      scale: scale,
+      tagNameIndex: tagNameIndex,
+    ),
+    ElementType.card => _cardEntry(
+      candidate: candidate,
+      lane: lane,
+      scale: scale,
+      leechLapses: leechLapses,
+      tagNameIndex: tagNameIndex,
+    ),
+    ElementType.video => _videoEntry(
+      candidate: candidate,
+      lane: lane,
+      scale: scale,
+      tagNameIndex: tagNameIndex,
+    ),
   };
 
   double? _percentOf(QueueCandidate candidate, PriorityScale scale) =>
       scale.positionOf(candidate.schedule.priority)?.percent;
 
-  Future<QueueEntry?> _sourceEntry(
-    QueueCandidate candidate,
-    QueueLane lane,
-    PriorityScale scale,
-    ElementTagNameIndex tagNameIndex,
-  ) async {
+  Future<QueueEntry?> _sourceEntry({
+    required QueueCandidate candidate,
+    required QueueLane lane,
+    required PriorityScale scale,
+    required ElementTagNameIndex tagNameIndex,
+  }) async {
     final Source? source = await _content.findSource(candidate.ref.id);
     if (source == null) return null;
     return QueueEntry(
@@ -243,12 +268,12 @@ final class QueueQuery {
     );
   }
 
-  Future<QueueEntry?> _extractEntry(
-    QueueCandidate candidate,
-    QueueLane lane,
-    PriorityScale scale,
-    ElementTagNameIndex tagNameIndex,
-  ) async {
+  Future<QueueEntry?> _extractEntry({
+    required QueueCandidate candidate,
+    required QueueLane lane,
+    required PriorityScale scale,
+    required ElementTagNameIndex tagNameIndex,
+  }) async {
     final Extract? extract = await _content.findExtract(candidate.ref.id);
     if (extract == null) return null;
     final Source? source = await _content.findSource(
@@ -270,12 +295,12 @@ final class QueueQuery {
   /// Titled by the clip's own name when it has one and by its times when it
   /// does not, because a queue row that says only the parent's title cannot
   /// be told apart from the four other clips cut from the same talk.
-  Future<QueueEntry?> _videoEntry(
-    QueueCandidate candidate,
-    QueueLane lane,
-    PriorityScale scale,
-    ElementTagNameIndex tagNameIndex,
-  ) async {
+  Future<QueueEntry?> _videoEntry({
+    required QueueCandidate candidate,
+    required QueueLane lane,
+    required PriorityScale scale,
+    required ElementTagNameIndex tagNameIndex,
+  }) async {
     final VideoElement? element = await _videos.findVideoElement(
       candidate.ref.id,
     );
@@ -304,13 +329,13 @@ final class QueueQuery {
     return _content.findSource(extract.provenance.sourceId);
   }
 
-  Future<QueueEntry?> _cardEntry(
-    QueueCandidate candidate,
-    QueueLane lane,
-    PriorityScale scale,
-    int leechLapses,
-    ElementTagNameIndex tagNameIndex,
-  ) async {
+  Future<QueueEntry?> _cardEntry({
+    required QueueCandidate candidate,
+    required QueueLane lane,
+    required PriorityScale scale,
+    required int leechLapses,
+    required ElementTagNameIndex tagNameIndex,
+  }) async {
     final Card? card = await _content.findCard(candidate.ref.id);
     if (card == null) return null;
     final Source? source = await _sourceOfCard(card);

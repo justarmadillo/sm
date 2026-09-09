@@ -1,9 +1,8 @@
-/// Named home-timezone support for scheduling.
+/// System-timezone scheduling and legacy named-zone compatibility.
 ///
-/// Scheduler decisions never consult the machine's current zone. The persisted
-/// home-zone identifier is resolved against the bundled IANA database, which
-/// keeps travel from changing the collection's StudyDay. Windows identifiers
-/// are mapped through Unicode CLDR's territory-independent (`001`) mapping.
+/// The running app follows the machine's current zone. The bundled IANA
+/// database remains here to canonicalize identifiers already stored in a
+/// collection and to support deterministic timezone tests.
 library;
 
 import 'package:incremental_reader/scheduling/study_day.dart';
@@ -11,15 +10,32 @@ import 'package:meta/meta.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
-/// Raised when persisted settings name no bundled IANA zone or known Windows
-/// alias.
+/// Raised when a stored identifier names no bundled IANA zone or known
+/// Windows alias.
 final class UnknownTimeZoneException implements Exception {
   const UnknownTimeZoneException(this.zoneId);
 
   final String zoneId;
 
   @override
-  String toString() => 'Unknown home timezone: "$zoneId"';
+  String toString() => 'Unknown stored timezone: "$zoneId"';
+}
+
+/// Offset rules supplied by the active operating-system timezone.
+///
+/// [zoneId] remains the collection's canonical compatibility label so stored
+/// StudyDays continue to compare safely after this app stops asking the user
+/// to choose a separate home zone.
+@immutable
+final class SystemTimeZone implements TimeZoneRules {
+  const SystemTimeZone._({required this.zoneId});
+
+  @override
+  final String zoneId;
+
+  @override
+  int offsetMinutesAt(DateTime instantUtc) =>
+      instantUtc.toUtc().toLocal().timeZoneOffset.inMinutes;
 }
 
 /// Rules backed by the pinned IANA database bundled with the application.
@@ -50,9 +66,8 @@ void _ensureTimeZonesInitialized() {
 /// Converts either an IANA name or a mapped Windows name to the canonical IANA
 /// identifier used in StudyDay values.
 ///
-/// Unknown identifiers fail closed. In particular, `system` and numeric fixed
-/// offsets are not accepted: either would make DST/travel behavior depend on
-/// something other than the persisted named home zone.
+/// Unknown identifiers fail closed. `system` and numeric fixed offsets are not
+/// accepted as compatibility labels because existing rows carry named zones.
 String canonicalTimeZoneId(String zoneId) {
   _ensureTimeZonesInitialized();
   final String id = zoneId.trim();
@@ -74,29 +89,10 @@ TimeZoneRules resolveTimeZone(String zoneId) {
   return NamedTimeZone._(tz.getLocation(canonical));
 }
 
-/// IANA identifiers offered by Settings. Numeric `Etc/GMT` entries and legacy
-/// aliases are intentionally omitted; persisted Windows identifiers remain
-/// accepted by [resolveTimeZone].
-List<String> get selectableZoneIds {
-  return _selectableZoneIds;
-}
-
-final List<String> _selectableZoneIds = _buildSelectableZoneIds();
-
-List<String> _buildSelectableZoneIds() {
-  _ensureTimeZonesInitialized();
-  final List<String> result = <String>[
-    'UTC',
-    ...tz.timeZoneDatabase.locations.keys.where(
-      (String id) =>
-          id.contains('/') &&
-          !id.startsWith('Etc/') &&
-          !id.startsWith('SystemV/') &&
-          !id.startsWith('US/'),
-    ),
-  ]..sort();
-  return List<String>.unmodifiable(result);
-}
+/// Uses the current OS timezone while retaining the canonical identifier that
+/// existing schedules carry.
+TimeZoneRules resolveSystemTimeZone(String storedZoneId) =>
+    SystemTimeZone._(zoneId: canonicalTimeZoneId(storedZoneId));
 
 /// The CLDR Windows aliases accepted by [resolveTimeZone], exposed so mapping
 /// completeness can be verified against the bundled database.

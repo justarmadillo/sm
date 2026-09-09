@@ -23,6 +23,8 @@ import 'package:incremental_reader/features/video/video_view_model.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/status_pill.dart';
+import 'package:incremental_reader/shared/ui/study_action_bar.dart';
+import 'package:incremental_reader/shared/ui/study_status_bar.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 import 'package:incremental_reader/shared/ui/video_thumbnail.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -603,28 +605,7 @@ class _VideoStatusBar extends StatelessWidget {
   final VideoUiState state;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-    decoration: const BoxDecoration(
-      color: AppColors.surface,
-      border: Border(bottom: BorderSide(color: AppColors.border)),
-    ),
-    child: isCompactWidth(context)
-        ? Wrap(
-            spacing: 12,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: _statusParts(),
-          )
-        : Row(
-            children: <Widget>[
-              ..._statusParts().take(2),
-              const Spacer(),
-              ..._statusParts().skip(2),
-            ],
-          ),
-  );
+  Widget build(BuildContext context) => StudyStatusBar(parts: _statusParts());
 
   List<Widget> _statusParts() => <Widget>[
     StatusPill(
@@ -660,34 +641,23 @@ class _VideoActionBar extends StatelessWidget {
   final VoidCallback onDone;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
-    decoration: const BoxDecoration(
-      color: AppColors.surface,
-      border: Border(top: BorderSide(color: AppColors.border)),
-    ),
-    // The bar is the last thing above the Android gesture strip, so it has to
-    // give that strip its own space or Done sits under the swipe area.
-    child: SafeArea(
-      top: false,
-      child: isCompactWidth(context)
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                _hint(),
-                const SizedBox(height: 8),
-                Align(alignment: Alignment.centerRight, child: _buttons()),
-              ],
-            )
-          : Row(
-              children: <Widget>[
-                Expanded(child: _hint()),
-                _buttons(),
-              ],
-            ),
-    ),
+  Widget build(BuildContext context) => StudyActionBar(
+    child: isCompactWidth(context)
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _hint(),
+              const SizedBox(height: 8),
+              Align(alignment: Alignment.centerRight, child: _buttons()),
+            ],
+          )
+        : Row(
+            children: <Widget>[
+              Expanded(child: _hint()),
+              _buttons(),
+            ],
+          ),
   );
 
   Widget _hint() => Text(

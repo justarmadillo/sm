@@ -5,7 +5,7 @@ back from stored key/value pairs.
 
 | File | Controls |
 |---|---|
-| `study_day_settings.dart` | home timezone, and what hour the day rolls over |
+| `study_day_settings.dart` | what hour the day rolls over, plus the legacy zone label existing schedules require |
 | `queue_settings.dart` | daily caps, and the topic/card mix |
 | `card_settings.dart` | FSRS parameters, leech limits |
 | `remember_settings.dart` | what happens when an element is remembered again |

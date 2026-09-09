@@ -102,7 +102,7 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
   ///
   /// Not written until Save, so "what would the defaults do?" is a question
   /// the user can ask and then back out of.
-  void loadDefaults() {
+  void restoreDefaults() {
     final SettingsUiState? current = state.valueOrNull;
     if (current == null || current.isBusy) return;
     state = AsyncValue<SettingsUiState>.data(

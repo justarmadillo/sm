@@ -9,7 +9,7 @@ library;
 
 import 'package:meta/meta.dart';
 
-/// Offset rules for the user's configured home timezone.
+/// Offset rules supplied by the app for the active scheduling timezone.
 abstract interface class TimeZoneRules {
   /// IANA identifier, for example `Europe/Berlin`.
   String get zoneId;
@@ -37,7 +37,7 @@ final class StudyDayBoundaryException implements Exception {
 
   @override
   String toString() =>
-      '$type StudyDay boundary $localBoundary in home timezone $zoneId';
+      '$type StudyDay boundary $localBoundary in timezone $zoneId';
 }
 
 /// A zone with one fixed offset. Useful for UTC and for deterministic tests.
@@ -81,6 +81,25 @@ final class StudyDay implements Comparable<StudyDay> {
       year: int.parse(parts[0]),
       month: int.parse(parts[1]),
       day: int.parse(parts[2]),
+      zoneId: zoneId,
+    );
+  }
+
+  /// The date [epochDay] days after the Unix epoch, read in [zoneId].
+  ///
+  /// The inverse of [epochDay]. A schedule is stored as a day number rather
+  /// than a date, so the conversion back belongs beside the one that produced
+  /// it — every layer that reads a stored day would otherwise spell the same
+  /// arithmetic out again.
+  factory StudyDay.fromEpochDay(int epochDay, {required String zoneId}) {
+    final DateTime date = DateTime.fromMillisecondsSinceEpoch(
+      epochDay * Duration.millisecondsPerDay,
+      isUtc: true,
+    );
+    return StudyDay(
+      year: date.year,
+      month: date.month,
+      day: date.day,
       zoneId: zoneId,
     );
   }
@@ -147,7 +166,7 @@ final class StudyDayCalendar {
     this.rollover = const Duration(hours: 4),
   });
 
-  /// Zone the user studies in.
+  /// Zone rules currently supplied by the application.
   final TimeZoneRules zone;
 
   /// Time of day at which a new study day begins.

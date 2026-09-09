@@ -27,7 +27,7 @@ import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 
-/// Resolves a stored zone identifier into offset rules.
+/// Resolves a collection-compatible zone label into current offset rules.
 ///
 /// Injected rather than imported so scheduling/ stays free of platform
 /// timezone code, and so a test can hand in a fake zone with
@@ -65,7 +65,7 @@ final class SchedulingContext {
   Future<Result<AppSettings>> saveSettings(AppSettings settings) =>
       _settings.save(settings);
 
-  /// The study-day rules: home zone plus rollover.
+  /// The study-day rules: injected device zone plus configured rollover.
   Future<StudyDayCalendar> calendar() async {
     final AppSettings current = await settings();
     return StudyDayCalendar(

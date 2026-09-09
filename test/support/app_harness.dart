@@ -10,6 +10,7 @@ library;
 import 'package:incremental_reader/features/browser/browser_command_runner.dart';
 import 'package:incremental_reader/features/browser/browser_tree_query.dart';
 import 'package:incremental_reader/features/daily_queue/mercy_command_runner.dart';
+import 'package:incremental_reader/features/daily_queue/queue_candidates_query.dart';
 import 'package:incremental_reader/features/daily_queue/queue_command_runner.dart';
 import 'package:incremental_reader/features/daily_queue/queue_query.dart';
 import 'package:incremental_reader/features/diagnostics/diagnostics_query.dart';
@@ -231,19 +232,24 @@ final class AppHarness {
     diagnostics: diagnostics,
   );
 
+  /// The population every queue calculation starts from.
+  late final QueueCandidatesQuery queueCandidates = QueueCandidatesQuery(
+    learning: learning,
+  );
+
   late final MercyCommandRunner mercy = MercyCommandRunner(
     learning: learning,
     transfer: transfer,
     transactions: transactions,
     context: context,
-    queue: queue,
+    candidates: queueCandidates,
     ids: FakeIdGenerator(prefix: 'mercy-$operationPrefix'),
   );
 
   late final SchedulerMetricsQuery metrics = SchedulerMetricsQuery(
     learning: learning,
     context: context,
-    queue: queue,
+    candidates: queueCandidates,
   );
 
   late final QueueQuery queueQuery = QueueQuery(
@@ -252,6 +258,7 @@ final class AppHarness {
     learning: learning,
     tags: tags,
     commandRunner: queue,
+    candidates: queueCandidates,
     context: context,
     clock: clock,
   );

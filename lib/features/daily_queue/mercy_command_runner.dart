@@ -3,7 +3,7 @@ library;
 
 import 'dart:math' as math;
 
-import 'package:incremental_reader/features/daily_queue/queue_command_runner.dart';
+import 'package:incremental_reader/features/daily_queue/queue_candidates_query.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
@@ -21,6 +21,7 @@ import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/settings/mercy_settings.dart';
+import 'package:incremental_reader/shared/command_base.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
@@ -38,13 +39,13 @@ final class MercyCommandRunner {
     required TransferRepository transfer,
     required TransactionRunner transactions,
     required SchedulingContext context,
-    required QueueCommandRunner queue,
+    required QueueCandidatesQuery candidates,
     required IdGenerator ids,
   }) : _learning = learning,
        _transfer = transfer,
        _transactions = transactions,
        _context = context,
-       _queue = queue,
+       _candidates = candidates,
        _ids = ids,
        _journal = SchedulingJournal(learning: learning, ids: ids);
 
@@ -52,7 +53,7 @@ final class MercyCommandRunner {
   final TransferRepository _transfer;
   final TransactionRunner _transactions;
   final SchedulingContext _context;
-  final QueueCommandRunner _queue;
+  final QueueCandidatesQuery _candidates;
   final IdGenerator _ids;
   final SchedulingJournal _journal;
 
@@ -74,9 +75,7 @@ final class MercyCommandRunner {
         final PriorityScale priorityScale = await _context.priorityScale();
         final Sm20CollectionState runtime = await _context.runtimeState();
         final StudyDay learningStart = runtime.learningStartDay ?? command.day;
-        final List<QueueCandidate> loaded = await _queue.loadCandidates(
-          command.day,
-        );
+        final List<QueueCandidate> loaded = await _candidates.listCandidates();
         final Map<ElementRef, QueueCandidate> byRef =
             <ElementRef, QueueCandidate>{
               for (final QueueCandidate value in loaded) value.ref: value,
@@ -223,11 +222,10 @@ final class MercyCommandRunner {
             },
           ),
         );
-        await _activity(
-          command.operationId.value,
+        await _log(
+          command,
           kMercyPreviewedType,
-          command.timestampUtc,
-          <String, Object?>{
+          metadata: <String, Object?>{
             'batch_id': batch.batchId,
             'selected': preview.selectedCount,
             'gathered': preview.gatheredCount,
@@ -514,11 +512,10 @@ final class MercyCommandRunner {
             appliedAtUtc: command.timestampUtc,
           ),
         );
-        await _activity(
-          command.operationId.value,
+        await _log(
+          command,
           kMercyAppliedType,
-          command.timestampUtc,
-          <String, Object?>{
+          metadata: <String, Object?>{
             'batch_id': stored.batchId,
             'moved': snapshots.length,
           },
@@ -784,11 +781,10 @@ final class MercyCommandRunner {
             undoneAtUtc: command.timestampUtc,
           ),
         );
-        await _activity(
-          command.operationId.value,
+        await _log(
+          command,
           kMercyUndoneType,
-          command.timestampUtc,
-          <String, Object?>{
+          metadata: <String, Object?>{
             'batch_id': applied.batchId,
             'restored': applied.moves.length,
           },
@@ -860,17 +856,15 @@ final class MercyCommandRunner {
     );
   }
 
-  Future<void> _activity(
-    String operationId,
-    String type,
-    DateTime atUtc,
-    Map<String, Object?> metadata,
-  ) => _learning.appendActivity(
-    ActivityRecord(
+  Future<void> _log(
+    AppCommand command,
+    String type, {
+    Map<String, Object?>? metadata,
+  }) => _learning.appendActivity(
+    ActivityRecord.forCommand(
+      command,
+      type,
       id: _ids.newId(),
-      operationId: operationId,
-      type: type,
-      atUtc: atUtc,
       metadata: metadata,
     ),
   );

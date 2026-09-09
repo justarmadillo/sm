@@ -3,6 +3,7 @@ library;
 
 import 'package:drift/drift.dart';
 import 'package:incremental_reader/documents/source_asset.dart';
+import 'package:incremental_reader/shared/epoch_milliseconds.dart';
 import 'package:incremental_reader/storage/contracts/source_asset_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 
@@ -140,8 +141,5 @@ SourceAsset _sourceAssetFromRow(QueryRow row) => SourceAsset(
   heightPx: row.read<int>('height_px'),
   byteSize: row.read<int>('byte_size'),
   state: SourceAssetState.values[row.read<int>('state')],
-  importedAtUtc: DateTime.fromMillisecondsSinceEpoch(
-    row.read<int>('imported_at_utc'),
-    isUtc: true,
-  ),
+  importedAtUtc: fromEpochMs(row.read<int>('imported_at_utc')),
 );

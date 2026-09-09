@@ -12,7 +12,7 @@
 /// steers the thing it measures stops being a measurement.
 library;
 
-import 'package:incremental_reader/features/daily_queue/queue_command_runner.dart';
+import 'package:incremental_reader/features/daily_queue/queue_candidates_query.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
 import 'package:incremental_reader/scheduling/element.dart';
@@ -32,14 +32,14 @@ final class SchedulerMetricsQuery {
   const SchedulerMetricsQuery({
     required LearningRepository learning,
     required SchedulingContext context,
-    required QueueCommandRunner queue,
+    required QueueCandidatesQuery candidates,
   }) : _learning = learning,
        _context = context,
-       _queue = queue;
+       _candidates = candidates;
 
   final LearningRepository _learning;
   final SchedulingContext _context;
-  final QueueCommandRunner _queue;
+  final QueueCandidatesQuery _candidates;
 
   Future<SchedulerMetricsSnapshot> collect() async {
     final StudyDayCalendar calendar = await _context.calendar();
@@ -49,7 +49,7 @@ final class SchedulerMetricsQuery {
       -(kMetricsActivityWindowDays - 1),
     );
 
-    final List<QueueCandidate> candidates = await _queue.loadCandidates(today);
+    final List<QueueCandidate> candidates = await _candidates.listCandidates();
     final List<DueMetricSample> due = <DueMetricSample>[];
     final List<BranchWorkloadMetricSample> workload =
         <BranchWorkloadMetricSample>[];

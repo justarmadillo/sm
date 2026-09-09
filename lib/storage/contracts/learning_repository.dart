@@ -12,6 +12,7 @@ import 'package:incremental_reader/scheduling/mercy/mercy_workflow.dart';
 import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
+import 'package:incremental_reader/shared/command_base.dart';
 import 'package:meta/meta.dart';
 
 /// One appended entry in the activity log.
@@ -30,6 +31,35 @@ final class ActivityRecord {
     this.durationMs,
     this.metadata,
   });
+
+  /// The row recording that [command] ran.
+  ///
+  /// Every command runner writes one of these, and each had grown its own copy
+  /// of the same four lines. Taking the command itself is also what stops a
+  /// runner from reaching for a second operation id part-way through an
+  /// operation: the correlation id can only come from the command that started
+  /// it.
+  ///
+  /// The row id stays a parameter because it must come from the runner's
+  /// `IdGenerator`, which the tests replace. [atUtc] defaults to the command's
+  /// own timestamp; a review passes the moment the answer was actually graded.
+  factory ActivityRecord.forCommand(
+    AppCommand command,
+    String type, {
+    required String id,
+    DateTime? atUtc,
+    ElementRef? ref,
+    int? durationMs,
+    Map<String, Object?>? metadata,
+  }) => ActivityRecord(
+    id: id,
+    operationId: command.operationId.value,
+    type: type,
+    atUtc: atUtc ?? command.timestampUtc,
+    ref: ref,
+    durationMs: durationMs,
+    metadata: metadata,
+  );
 
   final String id;
 

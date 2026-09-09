@@ -1,4 +1,4 @@
-/// Which study day an instant belongs to: home timezone and rollover hour.
+/// The rollover rule plus the compatibility label of stored study days.
 library;
 
 import 'package:meta/meta.dart';
@@ -8,7 +8,10 @@ import 'package:meta/meta.dart';
 final class StudyDaySettings {
   const StudyDaySettings({this.zoneId = 'UTC', this.rolloverMinutes = 240});
 
-  /// IANA identifier of the user's home timezone.
+  /// Legacy identifier retained so existing schedules keep one day identity.
+  ///
+  /// The running app takes actual offsets from the operating system, not from
+  /// this field. Removing its persisted key would strand existing StudyDays.
   final String zoneId;
 
   /// Minutes after local midnight at which the study day rolls over.

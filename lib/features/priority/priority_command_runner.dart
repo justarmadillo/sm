@@ -75,11 +75,11 @@ final class PriorityCommandRunner {
         );
         if (schedule == null) return _missing<ElementSchedule>(command.ref);
         return _apply(
-          command,
-          schedule,
-          command.rank,
-          await _context.priorityScale(),
-          kPrioritySetType,
+          command: command,
+          schedule: schedule,
+          rank: command.rank,
+          scale: await _context.priorityScale(),
+          type: kPrioritySetType,
         );
       });
 
@@ -100,7 +100,13 @@ final class PriorityCommandRunner {
       schedule.priority,
       command.percent,
     );
-    return _apply(command, schedule, rank, scale, kPrioritySetType);
+    return _apply(
+      command: command,
+      schedule: schedule,
+      rank: rank,
+      scale: scale,
+      type: kPrioritySetType,
+    );
   });
 
   /// Moves an element between two neighbours, as a drag does.
@@ -122,7 +128,13 @@ final class PriorityCommandRunner {
           command.after,
           command.before,
         );
-        return _apply(command, schedule, rank, scale, kPrioritySetType);
+        return _apply(
+          command: command,
+          schedule: schedule,
+          rank: rank,
+          scale: scale,
+          type: kPrioritySetType,
+        );
       });
 
   /// Nudges an element past its neighbours.
@@ -143,7 +155,13 @@ final class PriorityCommandRunner {
           schedule.priority,
           target,
         );
-        return _apply(command, schedule, rank, scale, kPrioritySetType);
+        return _apply(
+          command: command,
+          schedule: schedule,
+          rank: rank,
+          scale: scale,
+          type: kPrioritySetType,
+        );
       });
 
   /// Applies Increase, Decrease, Spread, or Adjust exactly in subset order.
@@ -342,10 +360,10 @@ final class PriorityCommandRunner {
       );
     }
     await _learning.appendActivity(
-      ActivityRecord(
+      ActivityRecord.forCommand(
+        command,
+        kPrioritySpreadType,
         id: _ids.newId(),
-        operationId: command.operationId.value,
-        type: kPrioritySpreadType,
         atUtc: now,
         metadata: <String, Object?>{
           'count': schedules.length,
@@ -399,13 +417,13 @@ final class PriorityCommandRunner {
     return target > high ? high : target;
   }
 
-  Future<Result<ElementSchedule>> _apply(
-    AppCommand command,
-    ElementSchedule schedule,
-    PriorityRank rank,
-    PriorityScale scale,
-    String type,
-  ) async {
+  Future<Result<ElementSchedule>> _apply({
+    required AppCommand command,
+    required ElementSchedule schedule,
+    required PriorityRank rank,
+    required PriorityScale scale,
+    required String type,
+  }) async {
     if (rank == schedule.priority) {
       return Ok<ElementSchedule>(schedule);
     }
@@ -433,11 +451,10 @@ final class PriorityCommandRunner {
     );
     await _appendSchedulerPriority(command, schedule, updated);
     await _learning.appendActivity(
-      ActivityRecord(
+      ActivityRecord.forCommand(
+        command,
+        type,
         id: _ids.newId(),
-        operationId: command.operationId.value,
-        type: type,
-        atUtc: command.timestampUtc,
         ref: schedule.ref,
         metadata: <String, Object?>{
           'key': rank.orderKey,

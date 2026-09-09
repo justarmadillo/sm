@@ -6,6 +6,7 @@ library;
 
 import 'package:drift/drift.dart';
 import 'package:incremental_reader/documents/video.dart';
+import 'package:incremental_reader/shared/epoch_milliseconds.dart';
 import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/row_converters.dart';

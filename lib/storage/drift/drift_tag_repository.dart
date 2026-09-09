@@ -3,9 +3,9 @@ library;
 
 import 'package:drift/drift.dart';
 import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/shared/epoch_milliseconds.dart';
 import 'package:incremental_reader/storage/contracts/tag_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
-import 'package:incremental_reader/storage/database/row_converters.dart';
 
 /// Drift implementation of the tag storage contract.
 final class DriftTagRepository implements TagRepository {

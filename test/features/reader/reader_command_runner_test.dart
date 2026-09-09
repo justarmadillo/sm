@@ -59,9 +59,8 @@ extension _Fixtures on AppHarness {
   /// path the queue itself uses.
   Future<bool> isEligibleOn(ElementRef ref, String day) async {
     final StudyDay studyDay = StudyDay.parse(day, zoneId: 'UTC');
-    for (final QueueCandidate candidate in await queue.loadCandidates(
-      studyDay,
-    )) {
+    for (final QueueCandidate candidate
+        in await queueCandidates.listCandidates()) {
       if (candidate.ref != ref) continue;
       return candidate.isDue(
         nowUtc: DateTime.utc(studyDay.year, studyDay.month, studyDay.day, 23),

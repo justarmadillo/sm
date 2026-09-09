@@ -27,29 +27,9 @@ import 'package:incremental_reader/scheduling/priority_rank.dart';
 import 'package:incremental_reader/scheduling/sm20_numeric.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
+import 'package:incremental_reader/shared/epoch_milliseconds.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
-
-/// Milliseconds since the Unix epoch, the storage form for every instant.
-int toEpochMs(DateTime instant) => instant.toUtc().millisecondsSinceEpoch;
-
-/// A UTC instant from stored milliseconds.
-DateTime fromEpochMs(int value) =>
-    DateTime.fromMillisecondsSinceEpoch(value, isUtc: true);
-
-/// A study day from its stored epoch-day number.
-StudyDay studyDayFromEpochDay(int epochDay, String zoneId) {
-  final date = DateTime.fromMillisecondsSinceEpoch(
-    epochDay * 86400000,
-    isUtc: true,
-  );
-  return StudyDay(
-    year: date.year,
-    month: date.month,
-    day: date.day,
-    zoneId: zoneId,
-  );
-}
 
 /// Restores the six Real48 bytes stored as a compact hexadecimal string.
 DelphiReal48 real48FromHex(String value) => DelphiReal48.fromBytes(<int>[
@@ -57,18 +37,41 @@ DelphiReal48 real48FromHex(String value) => DelphiReal48.fromBytes(<int>[
     int.parse(value.substring(offset, offset + 2), radix: 16),
 ]);
 
+/// The element a log row names, or null when it names none this build knows.
+///
+/// The two log tables hold the id and the type as separate nullable columns
+/// with nothing tying them together, and the type carries no `CHECK`
+/// constraint, so a row can hold one without the other or a type number this
+/// build has never heard of. Neither is a reason to lose the row: an activity
+/// line that cannot be attached to an element is still an activity line.
+ElementRef? refFromLogRow(String? elementId, int? elementTypeIndex) {
+  if (elementId == null || elementTypeIndex == null) return null;
+  final ElementType? type = ElementType.fromIndexOrNull(elementTypeIndex);
+  return type == null ? null : ElementRef(id: elementId, type: type);
+}
+
+/// Stored log metadata as a map, or null when the row's JSON cannot be read.
+///
+/// Metadata is diagnostic by design — it records that something happened,
+/// never the content it happened to — so a damaged blob must not take its row,
+/// or the screen listing the row, down with it.
+Map<String, Object?>? metadataFromJson(String? json) {
+  if (json == null) return null;
+  try {
+    final Object? decoded = jsonDecode(json);
+    return decoded is Map<String, Object?> ? decoded : null;
+  } on FormatException {
+    return null;
+  }
+}
+
 SchedulerEvent schedulerEventFromRow(SchedulerEventRow row) => SchedulerEvent(
   id: row.id,
   operationId: row.operationId,
-  element: row.elementId == null
-      ? null
-      : ElementRef(
-          id: row.elementId!,
-          type: ElementType.values[row.elementType!],
-        ),
+  element: refFromLogRow(row.elementId, row.elementType),
   eventType: SchedulerEventType.parse(row.eventType),
   occurredAtUtc: fromEpochMs(row.occurredAtUtc),
-  studyDay: studyDayFromEpochDay(row.studyDay, row.studyDayZoneId),
+  studyDay: StudyDay.fromEpochDay(row.studyDay, zoneId: row.studyDayZoneId),
   schedulerName: row.schedulerName,
   schedulerVersion: row.schedulerVersion,
   policyVersion: row.policyVersion,
@@ -78,9 +81,7 @@ SchedulerEvent schedulerEventFromRow(SchedulerEventRow row) => SchedulerEvent(
   algorithmicDueAfter: row.algorithmicDueAfter,
   undoesEventId: row.undoesEventId,
   batchId: row.batchId,
-  metadata: row.metadataJson == null
-      ? null
-      : jsonDecode(row.metadataJson!) as Map<String, Object?>,
+  metadata: metadataFromJson(row.metadataJson),
 );
 
 SchedulerEventsCompanion schedulerEventToCompanion(SchedulerEvent event) =>
@@ -445,8 +446,8 @@ ElementSchedule scheduleFromRow(ScheduleRow row) => ElementSchedule(
   ref: ElementRef(id: row.elementId, type: ElementType.values[row.elementType]),
   priority: PriorityRank(row.priorityKey),
   lifecycle: ElementLifecycle.values[row.lifecycle],
-  dueDay: studyDayFromEpochDay(row.dueDay, row.zoneId),
-  originalDueDay: studyDayFromEpochDay(row.originalDueDay, row.zoneId),
+  dueDay: StudyDay.fromEpochDay(row.dueDay, zoneId: row.zoneId),
+  originalDueDay: StudyDay.fromEpochDay(row.originalDueDay, zoneId: row.zoneId),
   rootId: row.rootId,
   parentElementId: row.parentElementId,
   ordinal: row.ordinal,
@@ -489,7 +490,10 @@ TopicState topicStateFromRows(TopicStateRow row, ElementSchedule schedule) =>
       storedInterval: row.storedInterval,
       lastReviewDay: row.lastReviewDay == null
           ? null
-          : studyDayFromEpochDay(row.lastReviewDay!, schedule.dueDay.zoneId),
+          : StudyDay.fromEpochDay(
+              row.lastReviewDay!,
+              zoneId: schedule.dueDay.zoneId,
+            ),
       aFactorRaw: real48FromHex(row.aFactorRaw),
       lastIntervalRatioRaw: real48FromHex(row.lastIntervalRatioRaw),
       historyBlockId: row.historyBlockId,
@@ -562,9 +566,7 @@ ReviewLogEntry reviewLogFromRow(RevlogRow row) => ReviewLogEntry(
     readFraction: row.readFractionAfter,
     lifecycle: row.lifecycleAfter,
   ),
-  metadata: row.metadataJson == null
-      ? null
-      : jsonDecode(row.metadataJson!) as Map<String, Object?>,
+  metadata: metadataFromJson(row.metadataJson),
 );
 
 /// Row companion for one repetition-log entry.

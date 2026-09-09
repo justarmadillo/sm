@@ -329,13 +329,8 @@ final class SmartPostponeEngine {
     var delay = sm20RoundEven(2 * rawDelay * math.sqrt(priority / 100));
     delay = math.max(delay, 1);
     if (!isGenericCandidate) {
-      final int minimum = candidate.isItem
-          ? profile.itemMinimumDelayDays
-          : profile.topicMinimumDelayDays;
-      final int maximum = candidate.isItem
-          ? profile.itemMaximumDelayDays
-          : profile.topicMaximumDelayDays;
-      delay = delay.clamp(minimum, maximum);
+      final limits = _delayLimitsFor(candidate, profile);
+      delay = delay.clamp(limits.minimum, limits.maximum);
     }
     final bool warns = delay > 200;
     var randomDraws = 0;
@@ -365,6 +360,25 @@ final class SmartPostponeEngine {
     );
   }
 
+  /// The delay floor and ceiling this candidate's type is held to.
+  ///
+  /// Every SM-20 delay limit is stored as an item/topic pair, and reading the
+  /// wrong half of a pair is a silent scheduling bug rather than a compile
+  /// error. Choosing between them in one place is what keeps the ordinary pass
+  /// and the forced pass from ever disagreeing about a candidate's bounds.
+  ({int minimum, int maximum}) _delayLimitsFor(
+    Sm20PostponeCandidate candidate,
+    SmartPostponeSettings profile,
+  ) => candidate.isItem
+      ? (
+          minimum: profile.itemMinimumDelayDays,
+          maximum: profile.itemMaximumDelayDays,
+        )
+      : (
+          minimum: profile.topicMinimumDelayDays,
+          maximum: profile.topicMaximumDelayDays,
+        );
+
   SmartPostponeDecision _forcedDecision({
     required Sm20PostponeCandidate candidate,
     required SmartPostponeSettings profile,
@@ -373,12 +387,9 @@ final class SmartPostponeEngine {
   }) {
     final int age = candidate.ageOn(today);
     final double priority = priorityScale.percentageOf(candidate.priority);
-    final int minimum = candidate.isItem
-        ? profile.itemMinimumDelayDays
-        : profile.topicMinimumDelayDays;
-    final int maximum = candidate.isItem
-        ? profile.itemMaximumDelayDays
-        : profile.topicMaximumDelayDays;
+    final limits = _delayLimitsFor(candidate, profile);
+    final int minimum = limits.minimum;
+    final int maximum = limits.maximum;
     final int delay =
         minimum + sm20RoundEven((maximum - minimum) * priority / 100);
     return _buildDecision(
