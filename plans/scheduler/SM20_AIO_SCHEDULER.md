@@ -27,12 +27,25 @@ tool, or Mercy calculation.
 1. **Algorithm identity:** implement the operation order, rounding, Real48
    writes, rank quantization, sort ties, and PRNG consumption specified here.
 2. **State identity:** migrate the collection records, all-element priority
-   order, queues/settings, runtime interval-factor matrix, and current PRNG
-   seed. These values are not constants inside `sm20.exe`.
+   order, queues/settings, internal O-Factor optimization state, and current
+   PRNG seed. These values are not constants inside `sm20.exe`.
 
 With only the formulas but not that live state, a port can reproduce SM20's
 rules but cannot continue the same future random sequence or the same rank- and
 collection-dependent results.
+
+SuperMemo 20 has one scheduler, **Algorithm SM-20**. Names like SM-2, SM-15,
+SM-19 and FSRS that appear below are its internal component models, each with
+its own state and its own predicted interval, combined into the weighted
+interval SM20 actually schedules. They are not alternative schedulers a user or
+a clone chooses between.
+
+**Deliberate departures in this repository.** Everything below describes
+`sm20.exe`. Where this repository knowingly does something else, it is stated
+at the point it applies. There is one such departure today: Mercy's investment
+estimate uses a card's measured FSRS stability instead of the §12.1 O-Factor
+matrix product, because the two are the same quantity and this repository
+measures it. Topics keep the matrix product. See §13.8.
 
 ## 2. The central result
 
@@ -274,8 +287,8 @@ Retain all of the following for behavioral identity:
   auto-sort enabled state, and last automatic-sort day;
 - Smart Postpone profiles, branch profile assignments, last automatic-run day,
   and last collection-use time;
-- Mercy settings and the live 20 by 20 interval-factor matrix used by its
-  investment estimate;
+- Mercy settings and the internal per-collection O-Factor optimization record
+  whose live 20 by 20 matrix is used by its investment estimate;
 - the branch tree and any selected subset queues.
 
 Cards cannot simply be removed from the shared priority order when cards are
@@ -1685,15 +1698,44 @@ bin = trunc((clamp(3.0 + 0.000001, 1.2, 10) - 1.2) / 0.3) + 1
     = 7
 ```
 
-Let `M` be the runtime 20 by 20 unsigned-16-bit interval-factor matrix, with
-values scaled by 1000. This matrix is collection/runtime state and must be
-exported; its values are not fixed by the executable.
+Let `M` be the live 20 by 20 unsigned-16-bit O-Factor matrix, with values
+scaled by 1000. It is internal, collection-owned optimizer state, not a user
+preference. The executable contains no path that treats its 400 cells as Mercy
+settings or as a manually editable custom matrix.
 
-A newly created collection's matrix is nevertheless deterministic, and is the
-first 800 bytes of `info/sm8opt.dat`. Two collections created independently by
-this executable ship that file byte-identical, which makes the starting table a
-property of the program rather than of one collection. Outside column zero
-every cell is:
+SM20 persists the matrix inside the fixed-size `info/sm8opt.dat` optimization
+record. The binary expects `0x49BC` (18,876) bytes. The relevant beginning of
+that record is:
+
+| File range | Size | Meaning |
+|---|---:|---|
+| `0x000..0x31F` | 800 bytes | live O-Factor matrix `M` |
+| `0x320..0x63F` | 800 bytes | empirical/learned O-Factor matrix |
+| `0x640..0x95F` | 800 bytes | unsigned-16-bit observation counts |
+
+The verified lifecycle is:
+
+1. New-record routine `0xCFA330` visits all 400 cells, obtains the starting
+   factor from `0xCF29D0`, writes it to both matrices, and zeroes the matching
+   observation count.
+2. Collection-open routine `0xD6FB10` reads `\info\sm8opt.dat`; `0xCF26F0`
+   attaches the persisted record and allocates a same-sized working record.
+3. For an eligible item repetition, `0xCFA570` updates the working record.
+   `0xCFC9E0` increments the cell count at `+0x640` and updates its empirical
+   factor at `+0x320`. `0xCF43E0` then recomputes the live matrix at `+0x000`
+   from the accumulated evidence and fitted curves. Section 13 gives the
+   formulas.
+4. Only the commit path `0xCF9A80`/`0xCF2560` copies the working record into
+   the persisted record. `0xD54110` writes that record back to
+   `\info\sm8opt.dat`. The working-copy boundary prevents an abandoned or
+   failed repetition from changing the live optimizer state.
+
+A newly created collection's matrix is deterministic. Two collections created
+independently by this executable contain a byte-identical initial record. In
+both, the live and empirical matrices are equal and all 400 observation counts
+are zero. This makes the starting table a property of the program; only its
+learned successor is collection-dependent. Outside column zero every initial
+cell is:
 
 ```text
 M[row][column] = round_even(1000 * (1.2 + 0.3 * row / column))
@@ -1710,11 +1752,32 @@ such rule and is the series:
 1405 1327 1254 1184 1119 1057  998  943  890  841
 ```
 
-A clone that starts a fresh collection can therefore generate this matrix
-rather than import one. Only a clone migrating an existing collection must
-extract it. This says nothing about how the matrix evolves once the collection
-is used: no examined collection carried enough repetition history to observe a
-rewrite, so the runtime-state description above stands.
+A clone that starts a fresh collection must generate this matrix internally.
+It must not expose the table as a settings field or ask the user to paste 400
+numbers. The initial matrix is only a starting estimate: SM20 refits all 400
+cells after every eligible item repetition. Section 13 specifies that optimizer
+in full.
+
+This record belongs to the **SM-15 component of Algorithm SM-20**, not to a
+separate legacy scheduler. SM20 runs one algorithm that evaluates several
+models per repetition and combines them; its own repetition export names the
+columns `OI2, OI15, OI19, OI20, OI_FSRS, Weighted Interval, Weighted FI
+Interval` alongside `RM2, RM15, RM19, RM20, RM_FSRS` and
+`Met2_19, Met15_19, MetFSRS_19, Met20_19`. `sm8opt.dat` is the SM-15 member's
+state; `alg17/` holds the DSR members' state.
+
+Whether a clone must implement the optimizer therefore depends on whether it
+runs that component at all. Every SM20 item repetition feeds it; topic and
+extract repetitions never touch it. A clone that schedules its items with its
+own algorithm never produces an SM-15 observation, so its matrix correctly
+stays at the initial values forever — the same state SM20 itself holds in a
+topics-only collection. See §13.8.
+
+A clone migrating an existing collection should import the complete
+optimization record (or an equivalently decoded representation), not only the
+first 800 bytes. Importing only `M` reproduces Mercy's estimate at that instant
+but discards the empirical matrix, observation counts, and fitted state needed
+for subsequent updates. Section 13.1 maps all `0x49BC` bytes.
 
 ```text
 E   = M[0][0] / 1000
@@ -1905,7 +1968,519 @@ G = max(G, R)
 The UI caps `C` at 5,000 and `R`/`G` at 3,650. A horizon above 1,825 triggers
 the executable's warning/switch/recompute path.
 
-## 13. Interaction and mutation matrix
+## 13. Adaptive O-Factor optimizer
+
+Everything §12.1 reads out of `M` is the *output* of this subsystem. `M` is not
+a constant table. SM20 refits all 400 cells after every eligible item
+repetition, so a collection's matrix diverges from the initial one as soon as
+items are learned. The routines below are the complete recovered mechanism.
+
+```text
+0xCFA570  repetition driver (calls the update, then the regeneration)
+0xCFC9E0  per-repetition evidence update
+0xCF3530  forgetting-curve fit for one (A-factor, repetition) cell
+0xCF43E0  live-matrix regeneration entry
+  0xCF4230  column-1 (first interval) refit      <- 0xCF5720
+  0xCF30E0  per-A-factor decay-exponent refit    <- 0xCF2B60
+  0xCF9740  cross-A-factor smoothing of the exponents
+  0xCF3110  writes the live matrix
+0xCFA330  initial record
+0xCF26F0  attach persisted record + allocate working record
+0xCF2620  persisted -> working (begin / rollback)
+0xCF2560  working -> persisted (commit)         <- 0xCF9A80
+0xD54110  persisted record -> \info\sm8opt.dat
+```
+
+Numeric helpers, named from their instruction bodies:
+
+```text
+0x40C5D0  Round   (cvtsd2si, SSE round-half-to-even)
+0x40C6C0  Trunc   (cvttsd2si)
+0x40C140  Ln
+0x40B0E0, 0xF8CE50  Exp
+0x4771D0  Power (float64)     0x477410  Power (float32)
+```
+
+### 13.1 Full optimization-record map
+
+The record is one flat `0x49BC`-byte block. All indices below are 1-based, and
+every address is a byte offset from the start of the record, and therefore from
+the start of `info/sm8opt.dat`.
+
+| Range | Size | Element address | Meaning |
+|---|---:|---|---|
+| `0x0000..0x031F` | 800 | `40*(a-1) + 2*(r-1)` | live O-Factor matrix `M[a][r]`, uint16 = factor x 1000 |
+| `0x0320..0x063F` | 800 | `0x2F6 + 40*a + 2*r` | empirical matrix `RF[a][r]`, uint16 = factor x 1000 |
+| `0x0640..0x095F` | 800 | `0x616 + 40*a + 2*r` | `Cases[a][r]`, uint16, saturating at 60,000 |
+| `0x0960..0x0985` | 38 | `0x95C + 2*a`, `a` = 2..20 | `DecayExp[a]`, uint16 = magnitude x 10,000, clamped to `[0, 30000]` |
+| `0x0986..0x09AB` | 38 | `0x982 + 2*a`, `a` = 2..20 | `ExpCases[a]`, uint16, clamped to 60,000 |
+| `0x09AC..0x28EB` | 8000 | `0x807 + 400*a + 20*r + u` | `Recalled[a][r][u]`, uint8 |
+| `0x28EC..0x482B` | 8000 | `0x2747 + 400*a + 20*r + u` | `Trials[a][r][u]`, uint8 |
+| `0x482C..0x48A3` | 120 | `0x4826 + 6*a` | expected-grade curve vs A-factor, 20 x Real48 |
+| `0x48A4..0x48CB` | 40 | `0x48A2 + 2*a` | its 20 uint16 case counts |
+| `0x48CC..0x497F` | 180 | `0x48C6 + 6*i` | grade-vs-forgetting-index curve, 30 x Real48 slots, 18 seeded |
+| `0x4980..0x49BB` | 60 | `0x497E + 2*i` | its 30 uint16 case counts, 18 seeded |
+
+`Recalled`/`Trials` are the raw forgetting-curve evidence: for each
+(A-factor category, repetition category, U-factor bin) they hold how many
+reviews were recalled and how many were attempted. When a `Trials` cell passes
+250, both it and the matching `Recalled` cell are halved (`shr 1`), so old
+evidence decays instead of overflowing the byte.
+
+### 13.2 Category axes
+
+```text
+AF(a) = 0.3*(a - 1) + 1.2            # 0xCF64C0, a = 1..20 -> 1.2 .. 6.9
+```
+
+The executable labels these axes itself. Its `ForgettingCurve15.csv` export
+headers read `AF range,` and `Repetition range,` for the matrix, and
+`Interval, Recall, Pass grades, Repetitions` for the evidence arrays, next to
+the caption `Global forgetting curve collected with Algorithm SM-15`.
+
+**A-factor category `a`.** For any repetition after the first, `a` is the
+element's A quantized by `0xCF66B0`. For the *first* repetition, where
+`0xCFC9E0` sees repetition number 1, the row index is instead `lapses + 1`;
+`0xCFA570` has already clamped lapses to 19 and repetition number to 20. Row 1
+therefore means "A = 1.2" on later repetitions and "no lapses yet" on the first
+one, which is why column 1 of the initial matrix decreases with the row index.
+
+**Repetition category `r`** (`0xCF54A0`), computed from the live matrix by
+walking the interval forward until it passes the interval actually used:
+
+```text
+I = M[a][1] / 1000 ; prev = I ; n = 2
+while usedInterval > I and n < 20:
+    prev = I
+    I    = I * M[a][n] / 1000
+    n   += 1
+if n > 2:  r = (n - 2) + (usedInterval - prev) / (I - prev)
+else:      r = 1
+r = clamp(r, 2, 20)                  # and r = 1 when repetition number is 1
+```
+
+**U-factor category `u`.** The U-factor is the executed interval expressed as a
+multiple of the previous one, already corrected by `0xCFA570` for early or late
+review (`U := U * usedInterval / scheduledInterval`). Its value scale is
+
+```text
+ufValue(a, r, k) = k                              if r == 1     # 0xCF51B0
+                 = 1 + k * trunc(AF(a)) / 20      if r > 1
+```
+
+`trunc(AF(a))` over `a` = 1..20 is `1 1 1 2 2 2 3 3 3 3 4 4 4 5 5 5 6 6 6 6`.
+Binning (`0xCF3320`), with `lo = ufValue(a,r,1)` and `hi = ufValue(a,r,20)`:
+
+```text
+u = Round((clamp(uf, lo, hi) - lo) / (hi - lo) * 19) + 1        # clamped to 20
+```
+
+For `r = 1` the axis is literally "interval in days, 1..20"; for `r > 1` it is
+"interval ratio, from `1 + trunc(AF)/20` to `1 + trunc(AF)`".
+
+### 13.3 Initial record
+
+`0xCFA330` fills both matrices from `0xCF29D0` and zeroes every observation
+count, then seeds `DecayExp[a] = 10000` and `ExpCases[a] = 1` for `a` = 2..20,
+the expected-grade curve from `0xCF95F0`, and the grade-vs-FI curve from a
+static table. `0xCF29D0` is exactly:
+
+```text
+M[a][1] = Exp(-0.057*(a - 1) + 0.91)                 # first interval, days
+M[a][2] = AF(a)
+M[a][r] = (r - 1)^(-1.0) * (AF(a) - 1.2) + 1.2       # r >= 3
+stored  = Round(value * 1000)
+```
+
+Evaluating that in float64 and rounding half-to-even reproduces both shipped
+`sm8opt.dat` files byte for byte, including the three near-ties §12.1 lists and
+the column-zero series. `DecayExp = 10000` means "exponent -1.0", which is the
+`(r-1)^-1` above: the initial matrix is the general parametric surface of §13.6
+evaluated at its default parameters, not a separate hard-coded table.
+
+`0xCF95F0(AF, -0.67, 2.4) = clamp(5.2 - Exp(-0.67*AF + 2.4), 0, 5)` gives the
+initial expected-grade curve `0.2667, 1.165, 1.900, ..., 5.0`.
+
+### 13.4 What one repetition changes: `0xCFC9E0`
+
+Inputs are the repetition record: grade, A, used interval, U-factor, lapses,
+repetition number, and the repetition category from `0xCF54A0`.
+
+```text
+a = (repetitionNumber == 1) ? lapses + 1 : AFactorCategory(A)
+r = (repetitionNumber == 1) ? 1          : Round(repetitionCategory)
+u = UFactorCategory(a, r, U)                                   # 0xCF3320
+countAsRecalled = (grade >= 3)
+
+# tail correction: a lapse whose U-factor already sits in the last bin is
+# admitted probabilistically instead of being discarded
+if u == 20 and not countAsRecalled:
+    d  = decay(a, r)                                           # 0xCF3530
+    pA = Exp(-d * ufValue(a, r, 20))
+    pB = Exp(-d * U)
+    if (pA - pB) > Random:  countAsRecalled = true             # 0x40A390
+
+if countAsRecalled:  Recalled[a][r][u] += 1
+Trials[a][r][u] += 1
+if Trials[a][r][u] > 250:
+    Trials[a][r][u]   >>= 1
+    Recalled[a][r][u] >>= 1
+if Cases[a][r] < 60000:  Cases[a][r] += 1
+
+d     = decay(a, r)                                            # refit, 0xCF3530
+newRF = (d == 0) ? ufValue(a, r, 20) : -Ln(0.9) / d
+
+if r == 1:  newRF = clamp(newRF, 1, 20)                        # days
+else:       newRF = clamp(newRF, 1.2, AF(a))                   # interval ratio
+RF[a][r] = Round(newRF * 1000)
+```
+
+The `0.9` is hard-coded: the empirical matrix is anchored at a 10 % forgetting
+index, and the user's requested forgetting index is applied later, outside the
+record. Exactly one `RF` cell and one `Cases` cell move per repetition.
+
+### 13.5 Forgetting-curve fit: `0xCF3530`
+
+`decay(a, r)` is the exponential decay constant of the measured retention curve
+for that cell.
+
+```text
+if Cases[a][r] == 0:
+    return -Ln(0.9) / (RF[a][r] / 1000)          # invert the stored factor
+for k = 1..20:
+    x[k] = ufValue(a, r, k)
+    n[k] = Trials[a][r][k]
+    ret  = n[k] > 0 ? Recalled[a][r][k] / n[k] : 0
+    y[k] = n[k] == 0 ? 0 : (ret > 0 ? max(Ln(ret), -3) : -3)
+return -WeightedSlopeThrough(x, y, n, 20, C = 0)
+```
+
+The model is `R(u) = Exp(-decay * u)`, fitted through the origin with the trial
+counts as weights, so `-Ln(0.9)/decay` in §13.4 is the U-factor at which that
+curve predicts 90 % recall. The value when a cell has no evidence at all is
+`0.07`.
+
+### 13.6 Live-matrix regeneration: `0xCF43E0`
+
+Called on every repetition, immediately after `0xCFC9E0`. It rebuilds all 400
+cells from a five-parameter surface, which is why a single review visibly moves
+cells far away from the one that was measured.
+
+**Step 1, column 1** (`0xCF4230`, fit by `0xCF5720`):
+
+```text
+X[a] = a - 1
+Y[a] = Ln(RF[a][1] / 1000)
+W[a] = Cases[a][1] + 1
+(s1, c1) = WeightedLine(X, Y, W, 20)                   # fallback (-0.18, 2.5)
+M[a][1]  = Round(clamp(Exp(s1*(a-1) + c1), 1, 20) * 1000)      a = 1..20
+```
+
+**Step 2, one decay exponent per A-factor category** (`0xCF30E0` over
+`0xCF2B60`, for `a` = 2..20):
+
+```text
+for r = 3..20:                              # r = 2 is the anchor, excluded
+    Z[r] = Ln(r - 1)
+    T[r] = RF[a][r]/1000 > 1.21 ? clamp(Ln(RF[a][r]/1000 - 1.2), -4, 4) : -10000
+    N[r] = Cases[a][r]
+if all N[r] == 0:  N[20] = 1
+slope = WeightedSlopeThrough(Z, T, N, 18, C = Ln(AF(a) - 1.2))
+DecayExp[a] = Round(clamp(-slope * 10000, 0, 30000))
+ExpCases[a] = Round(min(sum of N, 60000))
+```
+
+The regression is forced through `(0, Ln(AF(a) - 1.2))`. That pins
+`M[a][2] = AF(a)` and fits only the decay of the later columns.
+
+**Step 3, smoothing across A-factor categories** (`0xCF9740`):
+
+```text
+X[a] = AF(a)
+Y[a] = DecayExp[a] / 10000
+W[a] = ExpCases[a]                                     a = 2..20
+(s2, c2) = WeightedLine(X, Y, W, 20)                   # fallback (0.004, 0.98)
+if s2 outside [-0.5, 0.5]:                             # pivot about AF = 3.6
+    t  = s2*3.6 + c2
+    s2 = clamp(s2, -0.5, 0.5)
+    c2 = t - s2*3.6
+```
+
+**Step 4, write the matrix** (`0xCF3110`):
+
+```text
+M[1][r] = 1200                                         for r = 2..20
+for a = 2..20:
+    D = clamp(s2*AF(a) + c2, 0, 3)                     # 0xCF3F30
+    for r = 2..20:
+        M[a][r] = Round((1.2 + (AF(a) - 1.2) * (r - 1)^(-D)) * 1000)
+```
+
+Column 1 is not touched here; it is step 1's result. The live matrix is
+therefore always the closed form
+
+```text
+M[a][1] = Exp(s1*(a-1) + c1)                     clamped to [1, 20] days
+M[a][r] = 1.2 + (AF(a) - 1.2) * (r - 1)^(-D(a)) ,  D(a) = clamp(s2*AF(a)+c2, 0, 3)
+```
+
+and the collection-specific state that shapes it is `(s1, c1, s2, c2)`, derived
+in turn from `RF`, `Cases`, `DecayExp`, and `ExpCases`.
+
+**Weighted regression helpers.**
+
+```text
+WeightedLine(X, Y, W, n) -> (slope, intercept)          # 0xA875B0, 0xA87BE0
+    w  = Round(W[k]) + 1e-5
+    SW = sum w
+    mX = sum(w*X)/SW   ; mY  = sum(w*Y)/SW
+    mXX= sum(w*X*X)/SW ; mXY = sum(w*X*Y)/SW
+    slope     = (mXY - mX*mY) / (mXX - mX*mX)
+    intercept = mY - mX*slope
+
+WeightedSlopeThrough(X, Y, W, n, C) -> slope            # 0xA87350, 0xA87FF0
+    S1 = sum(W[k]*X[k]*X[k])
+    S2 = sum(2*X[k]*W[k]*(C - Y[k]))
+    return S1 == 0 ? 0 : -S2 / (2*S1)
+```
+
+Both are 1-based over `k` = 1..n.
+
+### 13.7 Transaction boundary
+
+Two record pointers exist: the persisted record and a same-sized working copy
+allocated by `0xCF26F0`. Every mutation in §13.4 and §13.6 targets the working
+copy.
+
+```text
+0xCFA570 entry : if dirty flag set -> 0xCF2620 (persisted -> working); set dirty
+repetition     : 0xCFC9E0 then 0xCF43E0, both on the working copy
+completion     : 0xCF9A80 -> 0xCF2560 copies working -> persisted, clears dirty
+collection save: 0xD54110 writes the persisted record to \info\sm8opt.dat
+```
+
+An abandoned repetition never reaches `0xCF2560`, and the next repetition's
+entry rollback discards its edits. A *failed* repetition is not abandoned: it
+commits normally and, per §13.4, still contributes a `Trials` observation.
+
+Because stored cells are uint16 scaled by 1000, a review can raise a `Cases`
+count and shift the fitted parameters without changing any visible matrix cell.
+
+### 13.8 Consequences for a clone
+
+1. The matrix in §12.1 is derived state, not configuration. This section is
+   the SM-15 component of Algorithm SM-20, so whether a clone needs it depends
+   on whether the clone runs that component:
+   - a clone that reproduces the SM-15 component — port §13, or `M` freezes
+     and the Mercy investment estimate drifts from SM20's on any reviewed
+     collection;
+   - a clone that schedules its items by its own algorithm — nothing produces
+     an SM-15 observation, so the frozen initial matrix is the correct and
+     faithful state. This repository's items are cards scheduled by FSRS, so
+     §13 is reference material here, not a porting target.
+2. Topic and extract repetitions do not train the record: they use the §5
+   scheduler and its own commit path (`0xD7CA60`), which never reaches
+   `0xCFA570`. The shipped `second collection` is the direct evidence:
+   `stats/topicreps.dat` = 3 and `info/RepetitionHistory.dat` is populated,
+   yet its `sm8opt.dat` is byte-identical to the untouched
+   `ABC of SuperMemo 20` record, with all 400 observation counts zero.
+3. Porting the record means porting all `0x49BC` bytes. `M` alone cannot be
+   updated: the next repetition needs `RF`, `Cases`, `Recalled`, `Trials`,
+   `DecayExp`, and `ExpCases` to regenerate it.
+4. The randomized tail admission in §13.4 consumes the global PRNG (§3.3). A
+   port that wants sequence identity must draw from the same stream at the same
+   point.
+5. `RF[a][r]` and FSRS stability are the same physical quantity. §13.4 solves
+   each cell for `-Ln(0.9)/decay`, the interval at 90 % recall; FSRS defines
+   stability as the interval at 90 % recall (`fsrs4anki-helper` computes its
+   forgetting curve from `factor = 0.9 ** (1 / decay) - 1`). SM20 estimates it
+   from a population bucket because Algorithm SM-15 stores no per-element
+   memory strength; FSRS measures it per card. A clone whose cards carry a
+   measured stability should feed that to Mercy's investment estimate in place
+   of the §12.1 matrix product, and keep the matrix product for topics, which
+   have no such measurement. This repository does exactly that
+   (`Sm20MercyCandidate.stability`, `Sm20MercyEngine.matrixExpectedInterval`)
+   and it is the one deliberate departure from executable-identical Mercy
+   scoring.
+
+### 13.9 The SM-15 component's item repetition path
+
+The optimizer above is fed by, and feeds back into, the SM-15 component's own
+per-item state. This subsection records what has been recovered of that path.
+It is documentation of `sm20.exe`, not a porting target for a clone whose items
+use another algorithm; see §13.8.
+
+`0xCFA570` runs the following chain for one item repetition, after the interval
+correction and repetition-category step already described in §13.2:
+
+```text
+0xCF54A0  repetition category                    -> rep[+0x10F]
+0xCF3F80  load current matrix values into rep
+0xCFC9E0  update RF and the case arrays          (§13.4)
+0xCF43E0  regenerate the live matrix             (§13.6)
+0xCF3F80  reload the post-update values
+0xCF8400  forgetting-index estimates             -> rep[+0xE7], [+0xEF],
+                                                    [+0xFF], [+0x107]
+0xCF3C90  update the grade-vs-FI curve
+0xCF80D0  new A-factor                           -> rep[+0xBB]
+0xCF8DB0  update the expected-grade-vs-A curve
+0xCF5990  not decoded
+0xCF8B90  not decoded                            -> rep[+0xC3]
+```
+
+#### Interpolated matrix read — `0xCF3A40`
+
+The repetition category is fractional, so reads of the live matrix interpolate
+between adjacent columns:
+
+```text
+OF(a, r):
+    r  = min(r, 20)
+    lo = Trunc(r)
+    hi = lo < 20 ? lo + 1 : 20
+    return (M[a][lo] + (r - lo) * (M[a][hi] - M[a][lo])) / 1000
+```
+
+#### Forgetting index and interval — `0xCF9C00`
+
+This is the conversion the matrix is anchored to. `0xCF9C00` returns the
+forgetting index, in percent, that the executed interval implies:
+
+```text
+if repetitionNumber == 1:  OF = M[lapses + 1][1] / 1000        # days
+else:                      OF = OF(AFactorCategory(A), rep[+0x10F])
+FI = (1 - Exp(Ln(0.9) * U / OF)) * 100
+FI = clamp(FI, 0.1, 99.5)
+```
+
+The retention model is therefore
+
+```text
+R(u) = 0.9 ^ (u / OF)
+```
+
+with `u` the U-factor for a later repetition and the interval in days for the
+first. `OF` is by construction the point where `R = 0.9`, which is what §13.4
+solves each `RF` cell for.
+
+Inverting it gives the scheduling direction, i.e. how a requested forgetting
+index `f` (percent) becomes a date:
+
+```text
+R = 1 - f/100
+I = I_previous * OF * Ln(R) / Ln(0.9)          # repetition 2 and later
+I =              OF * Ln(R) / Ln(0.9)          # first repetition, OF in days
+```
+
+`Ln(R)/Ln(0.9)` is 1 at `f = 10`, about 0.487 at `f = 5`, and about 2.118 at
+`f = 20`. So the stored matrix is a 10 %-forgetting-index table and the
+requested index is a single multiplier applied on top of it. `0xCF52F0` uses
+the same relation in the opposite direction, rescaling an executed interval to
+its 10 % equivalent with `I * Ln(0.9) / Ln(1 - FI/100)`.
+
+#### A-factor update — `0xCF80D0`
+
+The new A is an exponential blend of the old value with a stage-dependent
+estimate:
+
+```text
+newA = w * estimate + (1 - w) * oldA
+```
+
+| stage | `w` | estimate |
+|---|---:|---|
+| repetition number 0 | 0.6 | `(grade - 4) * 0.3 + 3.0` |
+| repetition 1, no lapses | 0.85 | `0xCF7F60(rep[+0xF7])` |
+| repetition 1, after a lapse | 0.4 | `(grade - 4) * 0.3 + 3.0` |
+| repetition 2 and later | 0.4 | `0xCF52F0(rep)` |
+
+If `rep[+0xF7]` or `rep[+0xE7]` is non-positive on a repetition that has
+history, the routine reports an error and returns the old A unchanged.
+
+**`0xCF7F60(g)`** inverts the expected-grade curve of §13.1. With
+`(slope, intercept)` fitted over that 20-entry table by `0xCF9340`:
+
+```text
+A = slope == 0 ? 6.9 : (Ln(5.2 - g) - intercept) / slope
+A = clamp(A, 1.2, 6.9)
+```
+
+That is the exact inverse of the `0xCF95F0` generator in §13.3,
+`g = 5.2 - Exp(slope * A + intercept)`.
+
+**`0xCF52F0(rep)`** estimates A from an ordinary repetition by asking which
+A-factor category's matrix curve would have produced the interval just
+executed:
+
+```text
+target = usedInterval * Ln(0.9) / Ln(1 - rep[+0xE7]/100)     # 10% equivalent
+u      = (target / usedInterval) * U
+k      = 20
+while k > 0 and u <= OF(k, rep[+0x10F]):  k -= 1
+if k == 0:  k = 1
+return AFactor(k)
+```
+
+#### The two tail curves of §13.1
+
+Both are exponentially-weighted running means of the grade, each with its own
+saturating case counter.
+
+**Grade versus forgetting index** — `0xCF3C90(x, grade)`, over the 30-slot
+Real48 table at `0x48C6` and its counts at `0x497E`:
+
+```text
+i = clamp(Round(x), 1, 18)
+Counts[i] = min(Counts[i] + 1, 60000)
+w         = 1 / (10 * Ln(Counts[i] + 2))
+Table[i]  = Table[i] * (1 - w) + grade * w
+```
+
+`0xCFA570` calls it with `x = rep[+0xEF]`, the forgetting index estimate from
+`0xCF8400`.
+
+**Expected grade versus A-factor** — `0xCF8DB0(rep)`, over the 20-slot Real48
+table at `0x4826` and its counts at `0x48A2`:
+
+```text
+skip if repetitionNumber == 0
+skip if repetitionNumber == 1 and lapses == 0
+skip unless 0 <= grade <= 5
+a         = AFactorCategory(rep[+0xBB])          # the A just written
+Counts[a] = min(Counts[a] + 1, 60000)
+w         = repetitionNumber == 2 ? 0.15 : 0.07
+Table[a]  = Table[a] * (1 - w) + grade * w
+if Table[a] < 0:  report and reset the slot to zero
+```
+
+The grade guard is direct evidence that SM-15 grades are integers 0 through 5;
+§13.4's pass test is `grade >= 3`.
+
+#### Grade normalization — `0xCF8400`, partial
+
+`0xCF8400` sets `rep[+0xF7] = 4.0`, fits the grade-vs-FI table with
+`0xCF8860`, then writes:
+
+```text
+rep[+0xE7] = 0xCF6B30(grade, slope, intercept)      # FI implied by the grade
+rep[+0xEF] = 0xCF9C00(rep)                          # FI implied by the interval
+```
+
+It then evaluates `0xCF69A0` — the inverse map, forgetting index to grade — at
+four points (`10`, `rep[+0xEF]`, `rep[+0xE7]/rep[+0xEF] * 10`, and
+`rep[+0xE7] + 10 - rep[+0xEF]`) and reduces them into a low bound at
+`rep[+0xFF]` and a high bound at `rep[+0x107]`. These bracket the grade
+normalized to a 10 % forgetting index. The reduction is recovered; the four
+estimators `0xCF6B30`, `0xCF69A0`, `0xCF8860`, `0xCF9340` are not disassembled,
+and `rep[+0xF7]`'s later use is not traced.
+
+#### Not recovered
+
+`0xCF5990` and `0xCF8B90` in the chain above, the four estimator/fit routines
+just named, and the item dispatcher's element-type codes. Beyond this
+component, §19 lists what remains of Algorithm SM-20 as a whole.
+
+## 14. Interaction and mutation matrix
 
 This table is the shortest reliable guide to which subsystem a clone should
 invoke. “Due state” means due date, stored interval, Real48 ratio, and possible
@@ -1956,7 +2531,7 @@ Two qualifications apply:
    Smart Postpone run explicitly including pending/non-outstanding elements can
    have initialization effects instead of the usual memorized row.
 
-## 14. Adjustment clearing, protection, and admission rules
+## 15. Adjustment clearing, protection, and admission rules
 
 There is no identified per-element postponement-adjustment overlay to clear.
 The relevant tools operate on two concrete stores:
@@ -1994,7 +2569,7 @@ queue insertion plus `0.9` priority target in section 9.7, with the Add-all
 same-day exception. The absence of a label is not replaced here by an external
 description.
 
-## 15. Recommended clone architecture
+## 16. Recommended clone architecture
 
 Keep these layers separate in the new software:
 
@@ -2023,7 +2598,7 @@ This separation prevents the most serious fidelity errors: updating A during
 postponement, treating priority as a scalar field, regenerating a random seed
 per feature, or injecting Pending/Final Drill into the daily merge.
 
-## 16. Minimum deterministic conformance suite
+## 17. Minimum deterministic conformance suite
 
 Before migrating real data, verify at least:
 
@@ -2062,13 +2637,18 @@ Before migrating real data, verify at least:
     normal Smart Postpone, Advance rejection/success, and fixed-size
     randomization.
 11. The fresh-collection interval-factor matrix: generate all 400 cells by the
-    section 12.1 rule and compare the full 800 bytes against `info/sm8opt.dat`
+    section 13.3 rule and compare the full 800 bytes against `info/sm8opt.dat`
     from a collection the executable created. This is cheap, needs no live SM20
     run, and is what catches a rounding rule that is right on paper and wrong
-    in float64.
-12. A copied collection fixture containing the real Mercy matrix, profiles,
-    all-element rank order, and queue files; compare every mutated byte after
-    one operation in SM20 and the port.
+    in float64. Both shipped collections have been checked this way and match
+    byte for byte.
+12. *Only for a clone that schedules its items with Algorithm SM-15; see
+    section 13.8.* A copied collection fixture containing eligible item
+    repetition history: compare the live matrix at `+0x000`, empirical matrix
+    at `+0x320`, and counts at `+0x640` after one committed repetition in SM20
+    and the port; verify an abandoned repetition commits none of them. Also
+    compare the fixture's profiles, all-element rank order, queue files, and
+    every other byte mutated by the operation.
 13. Browser batch-priority fixtures with mixed pending, memorized, dismissed,
     and deleted records; verify sequential reinsertions, dismissed Spread gaps,
     the memorized-only Adjust range scan, and exact-capacity rejection.
@@ -2083,7 +2663,7 @@ Before migrating real data, verify at least:
     verify that the boxes do not change selected elements, delays, writes, or
     PRNG consumption.
 
-## 17. Executable evidence map
+## 18. Executable evidence map
 
 | Area | Virtual address(es) |
 |---|---|
@@ -2116,11 +2696,54 @@ Before migrating real data, verify at least:
 | Smart Postpone evaluation/apply/outer pass | `0xB81280`, `0xB81850`, `0xB81980` |
 | Branch profile merge | `0xB7EDB0`, `0xB7F580`, `0xB7FE80` |
 | Automatic postponement | `0xD60450` |
+| O-Factor record create/load/update/recompute/commit/write | `0xCFA330`, `0xD6FB10`, `0xCFC9E0`, `0xCF43E0`, `0xCF9A80`, `0xCF2560`, `0xD54110` |
+| O-Factor optimizer internals (§13) | `0xCF29D0`, `0xCF3530`, `0xCF2B60`, `0xCF30E0`, `0xCF9740`, `0xCF3110`, `0xCF4230`, `0xCF5720`, `0xCF3F30` |
+| Optimizer category mapping | `0xCF64C0`, `0xCF65D0`, `0xCF66B0`, `0xCF51B0`, `0xCF3320`, `0xCF54A0` |
+| Weighted regressions | `0xA875B0`, `0xA87BE0`, `0xA87350`, `0xA87FF0` |
+| SM-15 item repetition path (§13.9) | `0xCF3A40`, `0xCF9C00`, `0xCF80D0`, `0xCF7F60`, `0xCF52F0`, `0xCF3C90`, `0xCF8DB0`, `0xCF8400` |
 | Mercy preparation/matrix/score/gather | `0xD8CB70`, `0xCF44C0`, `0xCF6D00`, `0xD87380`, `0xD3E8D0` |
 | Mercy weight defaults / planner recompute | `0xB26070`, `0xD3D8B0` |
 | Priority-command pre-commit and handlers | `0xF2BBF0`, `0xF00190`, `0xF001B0`, `0xF26580`, `0xD71320`, `0xD45E30` |
 
-## 18. What remains collection-dependent, not algorithm-unknown
+## 19. Algorithm SM-20 components not yet recovered
+
+This document covers the topic/extract scheduling path completely, plus the
+SM-15 component that Mercy depends on. The item memory model is not
+reconstructed. What that leaves open, in the executable's own vocabulary:
+
+1. **The weighted combination.** SM20's repetition export writes
+   `OI2, OI15, OI19, OI20, OI_FSRS, Weighted Interval, Weighted FI Interval`.
+   Five component models each predict an optimum interval; the scheduled
+   interval is the weighted result. Neither the weighting nor its inputs are
+   recovered. This is the direct answer to "how does SuperMemo 20 schedule a
+   card" and nothing here answers it.
+2. **The SM-19 and SM-20 DSR models.** Their state is the `alg17/` folder:
+   `StabilityIncrease.dat` (74,088 bytes), `FirstInterval.dat` (127,008),
+   `Retrievability.dat` (18,240), `Recall.dat` and `RecallCases.dat` (37,044
+   each), `StabilityIncreaseCases.dat`, `SleepRecall.dat`,
+   `SleepRecallCases.dat`, `ForgettingCurve.dat`, `DifficultyDistribution.dat`.
+   Multi-dimensional tables, larger than everything §13 covers. The export
+   columns `R19, R20, D19, D20` are their outputs.
+3. **SM20's internal FSRS component.** Columns `OI_FSRS, R_FSRS, D_FSRS,
+   RM_FSRS`, string `Cannot compute new FSRS interval`, and
+   `stats/Metric FSRS.dat`. Note this is SM20 running FSRS itself, not an
+   import path.
+4. **The SM-2 component.** Columns `EFactor, NewEFactor, OI2, R2, RM2`.
+5. **Metric tracking.** `RM2, RM15, RM19, RM20, RM_FSRS` and
+   `Met2_19, Met15_19, MetFSRS_19, Met20_19`, persisted as
+   `stats/Metric SM16.dat`, `Metric SM17.dat`, `Metric FSRS.dat`,
+   `Metric Weighted.dat`, `R SM16.dat`, `R SM17.dat`. Presumably how the
+   weighting in item 1 is derived.
+
+Both shipped collections confirm the boundary from the other side: every
+`alg17/` file is byte-identical between them, exactly as `info/sm8opt.dat` is.
+Three topic repetitions trained no item model of any kind.
+
+Two smaller gaps sit inside what is otherwise covered: the routines listed as
+not recovered at the end of §13.9, and the element-type codes the item
+dispatcher maps to `3` before choosing a repetition path.
+
+## 20. What remains collection-dependent, not algorithm-unknown
 
 The code paths and formulas above are resolved for the hashed binary. The
 following values must still be extracted from the user's live collection or
@@ -2131,7 +2754,8 @@ inside the executable:
 - raw per-element records and exact due-calendar/queue state;
 - all-element priority order;
 - processed text presented to the text-length routine at creation time;
-- 20 by 20 Mercy interval-factor matrix;
+- `info/sm8opt.dat` optimizer state, including its live and empirical
+  O-Factor matrices, observation counts, and fitted parameters;
 - active Smart Postpone and branch profiles;
 - daily randomization/merge settings and current learning mode;
 - first-interval range settings at collection offsets `+0x2D/+0x2F`;

@@ -98,5 +98,6 @@ const Set<String> _replacedSchedulerKeys = <String>{
   'postpone.auto_max_days',
   'postpone.mercy_horizon_days',
   'postpone.mercy_daily_cap',
+  'mercy.interval_factor_matrix',
   'reader.default_later_days',
 };

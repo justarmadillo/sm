@@ -20,8 +20,3 @@ bool doubleListsAreEqual(List<double> first, List<double> second) {
   }
   return true;
 }
-
-bool nullableIntListsAreEqual(List<int>? a, List<int>? b) {
-  if (a == null || b == null) return a == b;
-  return intListsAreEqual(a, b);
-}

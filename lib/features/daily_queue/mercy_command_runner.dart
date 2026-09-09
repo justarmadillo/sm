@@ -67,9 +67,14 @@ final class MercyCommandRunner {
 
         final AppSettings app = await _context.settings();
         final MercySettings settings = app.mercy;
-        // A collection that has never customized its matrix falls back to
-        // SM20's own starting table rather than refusing to run.
-        final Sm20MercyMatrix matrix = Sm20MercyMatrix.fromSettings(settings);
+        // SM20 owns this as internal collection optimizer state, not as a
+        // user preference. SM20 only ever trains it from Algorithm SM-15 item
+        // repetitions; topics and extracts never touch it. Our items are cards
+        // scheduled by FSRS, so nothing here can train it and the executable's
+        // fresh-collection matrix is the correct standing value, not a stub.
+        // Cards bypass it anyway via their measured stability; see
+        // Sm20MercyCandidate.stability.
+        final Sm20MercyMatrix matrix = Sm20MercyMatrix.sm20Default;
 
         final StudyDayCalendar calendar = await _context.calendar();
         final PriorityScale priorityScale = await _context.priorityScale();
@@ -833,6 +838,7 @@ final class MercyCommandRunner {
           0,
           sm20RoundEven(card.memory.scheduledDays ?? 0),
         ),
+        stability: card.memory.stability,
         isScheduled: card.memory.repetitionCount > 0,
         isDeleted: card.schedule.lifecycle == ElementLifecycle.deleted,
         revision: math.max(card.schedule.revision, card.memory.revision),

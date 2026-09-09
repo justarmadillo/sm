@@ -17,7 +17,6 @@ void main() {
     });
 
     test('every scheduler and application section survives editing', () {
-      final List<int> matrix = List<int>.generate(400, (int i) => i * 7);
       final AppSettings edited = AppSettings(
         studyDay: const StudyDaySettings(
           zoneId: 'Europe/Berlin',
@@ -76,7 +75,7 @@ void main() {
             shouldModifyTopicByAFactor: false,
           ),
         ),
-        mercy: MercySettings(
+        mercy: const MercySettings(
           mode: MercyMode.random,
           reschedulingDays: 28,
           gatheringDays: 45,
@@ -87,7 +86,6 @@ void main() {
           investmentWeight: 5,
           easinessWeight: 2,
           recencyWeight: 3,
-          intervalFactorMatrix: matrix,
         ),
         diagnostics: const DiagnosticsSettings(
           isLogEnabled: false,
@@ -98,13 +96,6 @@ void main() {
       );
 
       expect(AppSettings.fromMap(edited.toMap()), edited);
-    });
-
-    test('an absent Mercy matrix round-trips as absent', () {
-      final AppSettings restored = AppSettings.fromMap(
-        const AppSettings().toMap(),
-      );
-      expect(restored.mercy.intervalFactorMatrix, isNull);
     });
 
     test('empty FSRS step lists round-trip as direct scheduling', () {
@@ -131,6 +122,7 @@ void main() {
       expect(stored, isNot(contains('queue.max_cards')));
       expect(stored, isNot(contains('queue.study_more_step')));
       expect(stored, isNot(contains('postpone.auto_base_fraction')));
+      expect(stored, isNot(contains('mercy.interval_factor_matrix')));
       expect(stored, isNot(contains('reader.default_later_days')));
     });
   });
@@ -155,7 +147,6 @@ void main() {
         'postpone.default.scope': 'future-build-value',
         'postpone.default.topic_a_factor_cutoff': 'Infinity',
         'mercy.mode': 'unknown',
-        'mercy.interval_factor_matrix': '1,2,3',
         'diagnostics.log_enabled': 'perhaps',
       });
 
@@ -188,7 +179,6 @@ void main() {
         defaults.postpone.defaultProfile.topicAFactorCutoff,
       );
       expect(settings.mercy.mode, defaults.mercy.mode);
-      expect(settings.mercy.intervalFactorMatrix, isNull);
       expect(
         settings.diagnostics.isLogEnabled,
         defaults.diagnostics.isLogEnabled,
@@ -258,6 +248,7 @@ void main() {
           'queue.max_cards': '1',
           'topic.base_a_factor': '4',
           'postpone.auto_base_fraction': '0.9',
+          'mercy.interval_factor_matrix': '1,2,3',
         }),
         const AppSettings(),
       );

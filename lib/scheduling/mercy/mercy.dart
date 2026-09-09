@@ -24,9 +24,9 @@ const int kSm20MercyLongHorizonWarningDays = 1825;
 
 /// The collection's live 20 by 20 UInt16 interval-factor matrix.
 ///
-/// Values are row-major and scaled by 1000. A collection that has never been
-/// customized uses [sm20Default], which is what SM20 itself writes into a
-/// brand-new collection; see that member for the evidence.
+/// Values are row-major and scaled by 1000. A collection with no learned
+/// optimization cases starts with [sm20Default], which is what SM20 itself
+/// writes into a brand-new collection; see that member for the evidence.
 @immutable
 final class Sm20MercyMatrix {
   Sm20MercyMatrix(Iterable<int> values)
@@ -46,13 +46,6 @@ final class Sm20MercyMatrix {
         'values[$index]',
       );
     }
-  }
-
-  /// Uses the collection's own matrix, or SM20's starting matrix when the
-  /// collection has never customized one.
-  factory Sm20MercyMatrix.fromSettings(MercySettings settings) {
-    final List<int>? values = settings.intervalFactorMatrix;
-    return values == null ? sm20Default : Sm20MercyMatrix(values);
   }
 
   /// The matrix SM20 writes into a newly created collection.
@@ -181,12 +174,16 @@ final class Sm20MercyCandidate {
     required this.repetitionCount,
     required this.lapseCount,
     this.storedInterval = 0,
+    this.stability,
     this.isScheduled = true,
     this.isDeleted = false,
     this.revision = 1,
   }) {
     if (repetitionCount < 0 || lapseCount < 0 || storedInterval < 0) {
       throw RangeError('Mercy counters and interval cannot be negative');
+    }
+    if (stability case final double value when !value.isFinite || value <= 0) {
+      throw RangeError.value(value, 'stability', 'must be positive');
     }
     if (revision < 1) {
       throw RangeError.value(revision, 'revision', 'must be positive');
@@ -201,6 +198,16 @@ final class Sm20MercyCandidate {
   final int repetitionCount;
   final int lapseCount;
   final int storedInterval;
+
+  /// FSRS memory stability in days, for cards that have been reviewed.
+  ///
+  /// SM20 has no per-element stability, so its Mercy estimates the same
+  /// quantity from the O-Factor matrix: see [Sm20MercyEngine.scoreCandidate].
+  /// Both are anchored at 90% recall, so a card that carries a measured
+  /// stability uses it instead of the matrix's population average. Null for
+  /// topics, and for cards that have not been reviewed yet.
+  final double? stability;
+
   final bool isScheduled;
   final bool isDeleted;
   final int revision;
@@ -427,6 +434,21 @@ final class Sm20MercyEngine {
     );
   }
 
+  /// SM20's collection-dependent investment estimate, read from the live
+  /// O-Factor matrix at the fixed forgetting-index bin the executable uses
+  /// for Mercy (`0xCF44C0`, row 6 = A-factor 3.0).
+  ///
+  /// This is SM20's population-average stand-in for "days this element holds
+  /// at 90% recall", because Algorithm SM-15 stores no per-element stability.
+  /// Elements that do carry a measured stability bypass it.
+  double matrixExpectedInterval(Sm20MercyMatrix matrix, int repetitions) {
+    var expectedInterval = matrix.factorAt(0, 0);
+    for (var k = 2; k <= repetitions; k += 1) {
+      expectedInterval *= matrix.factorAt(6, k - 1);
+    }
+    return expectedInterval;
+  }
+
   /// Executable-derived collection-dependent score for one candidate.
   Sm20MercyScore scoreCandidate(
     Sm20MercyCandidate candidate, {
@@ -446,10 +468,8 @@ final class Sm20MercyEngine {
     }
     weights.validate();
     final int repetitions = math.min(candidate.repetitionCount, 20);
-    var expectedInterval = matrix.factorAt(0, 0);
-    for (var k = 2; k <= repetitions; k += 1) {
-      expectedInterval *= matrix.factorAt(6, k - 1);
-    }
+    final double expectedInterval =
+        candidate.stability ?? matrixExpectedInterval(matrix, repetitions);
 
     final int age = candidate.ageOn(today);
     final double investmentBase = math.min(expectedInterval, age.toDouble());

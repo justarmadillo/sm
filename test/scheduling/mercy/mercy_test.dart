@@ -77,6 +77,92 @@ void main() {
       expect(above.investmentBase, twenty.investmentBase);
       expect(above.value, twenty.value);
     });
+
+    test('measured FSRS stability replaces the matrix estimate', () {
+      final Sm20MercyEngine engine = const Sm20MercyEngine();
+      final Sm20MercyMatrix matrix = _matrix();
+
+      // SM20's matrix stand-in for this candidate: 2.0 * 1.5 * 1.25.
+      expect(engine.matrixExpectedInterval(matrix, 3), 3.75);
+
+      Sm20MercyScore scoreOf(Sm20MercyCandidate candidate) =>
+          engine.scoreCandidate(
+            candidate,
+            today: _day(100),
+            reschedulingDays: 5,
+            matrix: matrix,
+            weights: const Sm20MercyWeights(),
+            priorityPercent: 25,
+          );
+
+      // Age is ten days, so investmentBase is min(estimate, age).
+      final Sm20MercyScore fromMatrix = scoreOf(
+        _candidate('no-stability', rank: 'B', repetitions: 3, lapses: 2),
+      );
+      final Sm20MercyScore measured = scoreOf(
+        _candidate(
+          'measured',
+          rank: 'B',
+          repetitions: 3,
+          lapses: 2,
+          stability: 8,
+        ),
+      );
+      final Sm20MercyScore clamped = scoreOf(
+        _candidate(
+          'clamped',
+          rank: 'B',
+          repetitions: 3,
+          lapses: 2,
+          stability: 40,
+        ),
+      );
+
+      expect(fromMatrix.investmentBase, 3.75);
+      expect(measured.investmentBase, 8.0);
+      expect(clamped.investmentBase, 10.0);
+
+      // A larger investment base raises Investment but lowers Lateness and
+      // Easiness, so the score moves without a fixed direction. What matters
+      // is that the measured value is what feeds the formula.
+      expect(measured.value, isNot(fromMatrix.value));
+      expect(measured.investment, greaterThan(fromMatrix.investment));
+      expect(measured.lateness, lessThan(fromMatrix.lateness));
+    });
+
+    test('topics and unreviewed cards keep the matrix estimate', () {
+      final Sm20MercyEngine engine = const Sm20MercyEngine();
+      Sm20MercyScore scoreOf(Sm20MercyCandidate candidate) =>
+          engine.scoreCandidate(
+            candidate,
+            today: _day(100),
+            reschedulingDays: 5,
+            matrix: _matrix(),
+            weights: const Sm20MercyWeights(),
+            priorityPercent: 25,
+          );
+
+      final Sm20MercyScore topic = scoreOf(
+        _candidate(
+          'topic',
+          type: ElementType.extract,
+          rank: 'B',
+          repetitions: 3,
+          lapses: 2,
+        ),
+      );
+      expect(topic.investmentBase, 3.75);
+      expect(topic.value, 579854);
+    });
+
+    test('rejects a non-positive stability', () {
+      expect(() => _candidate('zero', stability: 0), throwsRangeError);
+      expect(() => _candidate('negative', stability: -1), throwsRangeError);
+      expect(
+        () => _candidate('nan', stability: double.nan),
+        throwsRangeError,
+      );
+    });
   });
 
   group('Mercy gathering, ordering, and assignment', () {
@@ -392,6 +478,7 @@ Sm20MercyCandidate _candidate(
   int? lastReview = 90,
   int repetitions = 1,
   int lapses = 0,
+  double? stability,
   bool isScheduled = true,
   bool isDeleted = false,
 }) => Sm20MercyCandidate(
@@ -402,6 +489,7 @@ Sm20MercyCandidate _candidate(
   repetitionCount: repetitions,
   lapseCount: lapses,
   storedInterval: 10,
+  stability: stability,
   isScheduled: isScheduled,
   isDeleted: isDeleted,
 );

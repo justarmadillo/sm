@@ -359,10 +359,6 @@ final class AppSettings {
           stored['mercy.recency_weight'],
           fallback.mercy.recencyWeight,
         ),
-        intervalFactorMatrix: _readIntMatrix(
-          stored['mercy.interval_factor_matrix'],
-          fallback.mercy.intervalFactorMatrix,
-        ),
       ),
       diagnostics: DiagnosticsSettings(
         isLogEnabled: _readBool(
@@ -478,9 +474,6 @@ final class AppSettings {
       'mercy.investment_weight': '${mercy.investmentWeight}',
       'mercy.easiness_weight': '${mercy.easinessWeight}',
       'mercy.recency_weight': '${mercy.recencyWeight}',
-      // Empty explicitly clears a previously imported optional matrix.
-      'mercy.interval_factor_matrix':
-          mercy.intervalFactorMatrix?.join(',') ?? '',
       'diagnostics.log_enabled': '${diagnostics.isLogEnabled}',
       'diagnostics.log_max_bytes': '${diagnostics.logMaxBytes}',
       'diagnostics.log_retained_files': '${diagnostics.logRetainedFiles}',
@@ -594,20 +587,6 @@ List<double> _readFsrsParameters(String? raw, List<double> fallback) {
     parameters.add(parameter);
   }
   return List<double>.unmodifiable(parameters);
-}
-
-List<int>? _readIntMatrix(String? raw, List<int>? fallback) {
-  if (raw == null) return fallback;
-  if (raw.trim().isEmpty) return null;
-  final List<String> parts = raw.split(',');
-  if (parts.length != 400) return fallback;
-  final values = <int>[];
-  for (final String part in parts) {
-    final int? value = int.tryParse(part.trim());
-    if (value == null || value < 0 || value > 0xFFFF) return fallback;
-    values.add(value);
-  }
-  return List<int>.unmodifiable(values);
 }
 
 /// Encodes managed profiles as a JSON object keyed by profile name.

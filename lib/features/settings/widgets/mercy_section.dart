@@ -28,7 +28,6 @@ class MercySection extends StatelessWidget {
       ..._mercyRangeRows(),
       ..._mercyCapacityRows(),
       ..._mercyWeightRows(),
-      ..._mercyMatrixRows(),
     ],
   );
 
@@ -183,26 +182,6 @@ class MercySection extends StatelessWidget {
       value: draft.mercy.recencyWeight,
       change: (MercySettings mercy, double value) =>
           mercy.copyWith(recencyWeight: value),
-    ),
-  ];
-
-  List<Widget> _mercyMatrixRows() => <Widget>[
-    SettingsRow(
-      label: 'Interval-factor matrix',
-      hint:
-          'An optional 20×20 table of interval factors imported from '
-          'SuperMemo, describing how intervals grow in your own '
-          'collection. Mercy reads it to judge how much work an element '
-          'has had. Leave it empty unless you have one to paste in.',
-      controlWidth: 390,
-      control: UInt16MatrixField(
-        value: draft.mercy.intervalFactorMatrix,
-        onChanged: (List<int>? value) => model.edit(
-          (AppSettings settings) => settings.copyWith(
-            mercy: settings.mercy.copyWith(intervalFactorMatrix: value),
-          ),
-        ),
-      ),
     ),
   ];
 

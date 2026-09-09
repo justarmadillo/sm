@@ -2,8 +2,6 @@
 /// Mirrors the controls described by `SM20_AIO_SCHEDULER.md`.
 library;
 
-import 'package:incremental_reader/settings/settings_list_equality.dart';
-
 import 'package:meta/meta.dart';
 
 /// Ordering used by Mercy before it redistributes candidates.
@@ -23,7 +21,6 @@ final class MercySettings {
     this.investmentWeight = 4,
     this.easinessWeight = 1,
     this.recencyWeight = 1,
-    this.intervalFactorMatrix,
   });
 
   final MercyMode mode;
@@ -37,12 +34,6 @@ final class MercySettings {
   final double easinessWeight;
   final double recencyWeight;
 
-  /// Optional row-major 20 by 20 UInt16 matrix, scaled by 1000.
-  ///
-  /// The executable does not ship one universal matrix; it is live collection
-  /// state. Null means no matrix has yet been imported for this collection.
-  final List<int>? intervalFactorMatrix;
-
   MercySettings copyWith({
     MercyMode? mode,
     int? reschedulingDays,
@@ -54,7 +45,6 @@ final class MercySettings {
     double? investmentWeight,
     double? easinessWeight,
     double? recencyWeight,
-    Object? intervalFactorMatrix = _notProvided,
   }) => MercySettings(
     mode: mode ?? this.mode,
     reschedulingDays: reschedulingDays ?? this.reschedulingDays,
@@ -66,9 +56,6 @@ final class MercySettings {
     investmentWeight: investmentWeight ?? this.investmentWeight,
     easinessWeight: easinessWeight ?? this.easinessWeight,
     recencyWeight: recencyWeight ?? this.recencyWeight,
-    intervalFactorMatrix: identical(intervalFactorMatrix, _notProvided)
-        ? this.intervalFactorMatrix
-        : intervalFactorMatrix as List<int>?,
   );
 
   @override
@@ -83,8 +70,7 @@ final class MercySettings {
       other.latenessWeight == latenessWeight &&
       other.investmentWeight == investmentWeight &&
       other.easinessWeight == easinessWeight &&
-      other.recencyWeight == recencyWeight &&
-      nullableIntListsAreEqual(other.intervalFactorMatrix, intervalFactorMatrix);
+      other.recencyWeight == recencyWeight;
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
@@ -98,8 +84,5 @@ final class MercySettings {
     investmentWeight,
     easinessWeight,
     recencyWeight,
-    intervalFactorMatrix == null ? null : Object.hashAll(intervalFactorMatrix!),
   ]);
 }
-
-const Object _notProvided = Object();

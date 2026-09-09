@@ -44,6 +44,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Day rollover'), findsOneWidget);
+    expect(find.text('Interval-factor matrix'), findsNothing);
     await tester.scrollUntilVisible(
       find.text('Collection data'),
       600,

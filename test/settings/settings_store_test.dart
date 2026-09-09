@@ -16,6 +16,7 @@ void main() {
             'topic.base_a_factor': '1.8',
             'profile.days.normal': '1,3,7',
             'postpone.auto_base_fraction': '0.2',
+            'mercy.interval_factor_matrix': '1200,1200',
             'reader.default_later_days': '5',
             'unrelated.plugin.setting': 'preserve me',
           });
@@ -39,6 +40,10 @@ void main() {
       expect(repository.values, isNot(contains('topic.base_a_factor')));
       expect(repository.values, isNot(contains('profile.days.normal')));
       expect(repository.values, isNot(contains('postpone.auto_base_fraction')));
+      expect(
+        repository.values,
+        isNot(contains('mercy.interval_factor_matrix')),
+      );
       expect(repository.values, isNot(contains('reader.default_later_days')));
       expect(repository.values['unrelated.plugin.setting'], 'preserve me');
     },
