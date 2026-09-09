@@ -220,7 +220,7 @@ class _NeighbourLine extends StatelessWidget {
     decoration: BoxDecoration(
       color: AppColors.background,
       border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(AppRadius.row),
     ),
     child: Row(
       children: <Widget>[
@@ -287,18 +287,26 @@ class PriorityBadge extends StatelessWidget {
       message: 'Priority ${percent.toStringAsFixed(0)}% (Alt+P to change)',
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          // One width for every reading. 0%, 3% and 46% are one, two and
+          // three glyphs wide, and a column of pills that each shrink to
+          // their own text reads as a ragged edge rather than a scale.
+          alignment: Alignment.center,
+          constraints: const BoxConstraints(minWidth: 42),
           decoration: BoxDecoration(
-            color: AppColors.accent.withValues(alpha: 0.10 * weight + 0.04),
+            color: AppColors.accentBright.withValues(
+              alpha: 0.14 * weight + 0.05,
+            ),
             border: Border.all(
               color: AppColors.accent.withValues(alpha: 0.55 * weight + 0.12),
             ),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
           ),
           child: Text(
             '${percent.toStringAsFixed(0)}%',
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,

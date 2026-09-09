@@ -1444,12 +1444,12 @@ class _CompactReaderAction extends StatelessWidget {
         excludeSemantics: true,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.button),
           child: Container(
             height: 43,
             decoration: BoxDecoration(
               color: background,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.button),
             ),
             child: Opacity(
               opacity: onPressed == null ? 0.4 : 1,

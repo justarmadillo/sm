@@ -123,9 +123,7 @@ class _ToastCardState extends State<_ToastCard>
 
   @override
   Widget build(BuildContext context) {
-    final background = widget.isError
-        ? const Color(0xFF8C2F2F)
-        : AppColors.text;
+    final background = widget.isError ? AppColors.danger : AppColors.text;
 
     return Positioned(
       right: 20,
@@ -171,14 +169,8 @@ class _ToastCardState extends State<_ToastCard>
                   ),
                   decoration: BoxDecoration(
                     color: background,
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x33000000),
-                        blurRadius: 12,
-                        offset: Offset(0, 3),
-                      ),
-                    ],
+                    borderRadius: BorderRadius.circular(AppRadius.button),
+                    boxShadow: AppShadows.elevated,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,

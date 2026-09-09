@@ -29,6 +29,7 @@ import 'package:incremental_reader/features/settings/widgets/study_day_section.d
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/settings/postpone_settings.dart';
 import 'package:incremental_reader/settings/smart_postpone_settings.dart';
+import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/desktop_scroll_view.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
@@ -101,14 +102,18 @@ class SettingsScreen extends ConsumerWidget {
               ],
             )
           else ...<Widget>[
+            // Muted, because Save is the action of this screen. Three accented
+            // labels in one bar make the user find the one that matters.
             TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.muted),
               onPressed: settingsState == null || settingsState.isBusy
                   ? null
                   : model.restoreDefaults,
               child: const Text('Restore defaults'),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: AppSpacing.hair),
             TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.muted),
               onPressed:
                   settingsState == null ||
                       !settingsState.isDirty ||
@@ -117,7 +122,7 @@ class SettingsScreen extends ConsumerWidget {
                   : model.revert,
               child: const Text('Discard'),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: AppSpacing.tight),
           ],
           FilledButton(
             onPressed:

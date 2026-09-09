@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:incremental_reader/app/startup_gate.dart';
+import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/storage/files/backup_restore_service.dart';
 import 'package:incremental_reader/storage/files/backup_service.dart';
 import 'package:path/path.dart' as p;
@@ -24,6 +25,10 @@ final class RecoveryApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     title: 'Incremental Reader recovery',
     debugShowCheckedModeBanner: false,
+    // The one screen that opens without a collection still opens in the
+    // app's own palette: a Material-blue recovery screen would read as a
+    // different program at the exact moment the user needs to trust this one.
+    theme: buildAppTheme(),
     home: RecoveryScreen(failure: failure, backupDirectory: backupDirectory),
   );
 }

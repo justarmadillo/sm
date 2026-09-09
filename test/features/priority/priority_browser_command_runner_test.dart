@@ -6,13 +6,9 @@
 /// Advance really is a repetition for a topic but not for a card.
 library;
 
-import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/source.dart';
-import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/priority/priority_browser_commands.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
-import 'package:incremental_reader/features/review/review_command_runner.dart';
-import 'package:incremental_reader/features/review/review_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/postpone/sm20_advance.dart';
@@ -24,6 +20,7 @@ import 'package:incremental_reader/shared/result.dart';
 import 'package:test/test.dart';
 
 import '../../support/app_harness.dart';
+import '../../support/harness_fixtures.dart';
 
 const String _markdown = '''
 # Chapter
@@ -43,12 +40,6 @@ extension _Fixtures on AppHarness {
         ),
       )).unwrap();
 
-  ElementRef refOf(Source source) =>
-      ElementRef(id: source.id, type: ElementType.source);
-
-  Future<TopicState> topicOf(Source source) async =>
-      (await learning.findTopic(refOf(source)))!;
-
   /// Imports a source and completes one encounter, which memorizes it.
   Future<Source> memorizedSource([String title = 'Article']) async {
     final Source source = await importSource(title);
@@ -62,30 +53,6 @@ extension _Fixtures on AppHarness {
     );
     expect(completed.isOk, isTrue, reason: '${completed.failureOrNull}');
     return source;
-  }
-
-  Future<CardState> memorizedCard(String sourceId) async {
-    final List<Card> cards = (await formulation.formulate(
-      FormulateCards(
-        operation(),
-        parent: CardParent.source(sourceId),
-        drafts: const <CardDraft>[
-          ClozeCardDraft('Working memory holds {{c1::four items}}.'),
-        ],
-        timestampUtc: clock.nowUtc(),
-      ),
-    )).unwrap();
-    final Result<ReviewOutcome> graded = await review.review(
-      ReviewCard(
-        operation(),
-        cardId: cards.single.id,
-        rating: CardRating.easy,
-        elapsedMs: 1500,
-        timestampUtc: clock.nowUtc(),
-      ),
-    );
-    expect(graded.isOk, isTrue, reason: '${graded.failureOrNull}');
-    return (await learning.findCardState(cards.single.id))!;
   }
 }
 

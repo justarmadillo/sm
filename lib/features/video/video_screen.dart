@@ -573,7 +573,7 @@ class _ClipTile extends StatelessWidget {
     elevation: 0,
     shape: RoundedRectangleBorder(
       side: const BorderSide(color: AppColors.border),
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(AppRadius.row),
     ),
     child: ListTile(
       dense: true,

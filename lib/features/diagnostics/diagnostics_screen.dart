@@ -560,7 +560,7 @@ class _ElementPanel extends ConsumerWidget {
       decoration: BoxDecoration(
         color: AppColors.background,
         border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.row),
       ),
       child: Text(
         'Next SM20 topic interval: $preview days. '
@@ -680,7 +680,7 @@ class _DiagnosticsPanel extends StatelessWidget {
     decoration: BoxDecoration(
       color: AppColors.surface,
       border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AppRadius.card),
     ),
     child: Padding(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),

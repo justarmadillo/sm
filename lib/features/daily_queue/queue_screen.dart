@@ -94,7 +94,10 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
     // same order they had, so the wide layout is still the readable one.
     final bool isNarrow = isCompactWidth(context);
     return AppBar(
-      title: const Text('Study'),
+      // No title. The page's own headline says what this screen is, and the
+      // bar carries no colour or rule of its own any more, so a second word
+      // above the headline read as a label for a strip that is not there.
+      toolbarHeight: 52,
       actions: <Widget>[
         if (isNarrow)
           IconButton(
@@ -271,57 +274,111 @@ class _QueueBody extends StatelessWidget {
   final VoidCallback onStart;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 820),
-      child: ListView(
-        // Tighter margins on a phone: 24 on each side of a 360-pixel screen
-        // is a sixth of the width spent before the first word.
-        padding: isCompactWidth(context)
-            ? const EdgeInsets.fromLTRB(14, 16, 14, 60)
-            : const EdgeInsets.fromLTRB(24, 24, 24, 60),
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      '${state.entries.length} item'
-                      '${state.entries.length == 1 ? '' : 's'} ready',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      state.completedThisSession == 0
-                          ? 'Reviews and reading are mixed into one session.'
-                          : '${state.completedThisSession} completed this session',
-                      style: const TextStyle(color: AppColors.muted),
-                    ),
-                  ],
-                ),
-              ),
-              FilledButton.icon(
-                onPressed: isRunning ? null : onStart,
-                icon: const Icon(Icons.play_arrow),
-                label: Text(isRunning ? 'Studying…' : 'Start'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _LoadPanel(state: state, model: model, isRunning: isRunning),
-          const SizedBox(height: 18),
-          for (var index = 0; index < state.entries.length; index++)
-            _QueueTile(
-              entry: state.entries[index],
-              isNext: index == 0,
-              onTap: index == 0 && !isRunning ? onStart : null,
-            ),
-        ],
-      ),
+  Widget build(BuildContext context) => ListView(
+    // The scrollable fills the window so its desktop scrollbar belongs to the
+    // window edge. Only the readable content column is centred and capped.
+    padding: EdgeInsets.only(
+      top: isCompactWidth(context) ? 16 : 24,
+      bottom: 60,
     ),
+    children: <Widget>[
+      Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: SizedBox(
+            width: double.infinity,
+            child: Padding(
+              // Tighter margins on a phone: 24 on each side of a 360-pixel
+              // screen is a sixth of the width before the first word.
+              padding: EdgeInsets.symmetric(
+                horizontal: isCompactWidth(context) ? 14 : 24,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _SessionHeader(
+                    state: state,
+                    isRunning: isRunning,
+                    onStart: onStart,
+                  ),
+                  const SizedBox(height: AppSpacing.standard),
+                  _LoadPanel(state: state, model: model, isRunning: isRunning),
+                  const SizedBox(height: AppSpacing.standard),
+                  for (var index = 0; index < state.entries.length; index++)
+                    _QueueTile(
+                      entry: state.entries[index],
+                      isNext: index == 0,
+                      onTap: index == 0 && !isRunning ? onStart : null,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ],
   );
+}
+
+/// How much is waiting, one sentence about it, and the button that starts it.
+///
+/// The button drops to its own full-width row on a phone. Beside a sentence
+/// that wraps it left the sentence a column two words wide, and the wrapped
+/// line ran under the button — the header read as a collision rather than as
+/// a heading with an action.
+class _SessionHeader extends StatelessWidget {
+  const _SessionHeader({
+    required this.state,
+    required this.isRunning,
+    required this.onStart,
+  });
+
+  final QueueUiState state;
+  final bool isRunning;
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget headline = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          '${state.entries.length} ready to study',
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: AppSpacing.hair),
+        Text(
+          state.completedThisSession == 0
+              ? 'Reviews and reading are mixed into one session.'
+              : '${state.completedThisSession} completed this session',
+          style: const TextStyle(color: AppColors.muted),
+        ),
+      ],
+    );
+    final Widget startButton = FilledButton.icon(
+      onPressed: isRunning ? null : onStart,
+      icon: const Icon(Icons.play_arrow, size: 18),
+      label: Text(isRunning ? 'Studying…' : 'Start'),
+    );
+    if (isCompactWidth(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          headline,
+          const SizedBox(height: AppSpacing.snug),
+          SizedBox(height: 44, child: startButton),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Expanded(child: headline),
+        const SizedBox(width: AppSpacing.loose),
+        startButton,
+      ],
+    );
+  }
 }
 
 /// The destinations that do not fit on a phone's app bar.
@@ -399,59 +456,61 @@ class _LoadPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final QueueCounters counters = state.counters;
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      padding: const EdgeInsets.all(AppSpacing.standard),
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.card),
       ),
-      // Counts and bulk actions sit side by side while there is room for
-      // both, and stack once there is not: three labelled buttons and four
-      // chips on one line is what overflows first on a phone.
-      child: isCompactWidth(context)
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                _counters(state, counters),
-                const SizedBox(height: 10),
-                _bulkActions(context),
-              ],
-            )
-          : Row(
-              children: <Widget>[
-                Expanded(child: _counters(state, counters)),
-                _bulkActions(context),
-              ],
-            ),
+      // Counts above, actions below, a hairline between them. They used to sit
+      // side by side wherever they fitted, which put a row of buttons and a
+      // row of numbers on one baseline with nothing saying they were two
+      // different things — and on a phone the buttons wrapped into a ragged
+      // block under the counts anyway.
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _counters(state, counters),
+          const SizedBox(height: AppSpacing.snug),
+          const Divider(),
+          const SizedBox(height: AppSpacing.snug),
+          _bulkActions(context),
+        ],
+      ),
     );
   }
 
   /// Which stage the queue is in, and how much of each kind is due.
   Widget _counters(QueueUiState state, QueueCounters counters) => Wrap(
-    spacing: 20,
-    runSpacing: 6,
+    spacing: AppSpacing.standard,
+    runSpacing: AppSpacing.tight,
+    crossAxisAlignment: WrapCrossAlignment.center,
     children: <Widget>[
       _StageBadge(lane: state.projection.lane),
       _CounterChip(label: 'due', value: '${counters.dueTotal}'),
-      _CounterChip(label: 'items', value: '${counters.dueCards}'),
+      _CounterChip(label: 'cards', value: '${counters.dueCards}'),
       _CounterChip(label: 'topics', value: '${counters.dueTopics}'),
     ],
   );
 
   /// The commands that move a whole day's work at once.
+  ///
+  /// White utility buttons, not accented ones. Three orange labels beside an
+  /// orange Start made four things claim to be the action of the screen; only
+  /// Start is.
   Widget _bulkActions(BuildContext context) => Wrap(
-    spacing: 4,
-    runSpacing: 4,
+    spacing: AppSpacing.tight,
+    runSpacing: AppSpacing.tight,
     crossAxisAlignment: WrapCrossAlignment.center,
     children: <Widget>[
-      TextButton.icon(
+      OutlinedButton.icon(
         onPressed: isRunning || state.isBusy
             ? null
             : () => _confirmSmartPostpone(context),
         icon: const Icon(Icons.update, size: 16),
         label: const Text('Smart Postpone'),
       ),
-      TextButton.icon(
+      OutlinedButton.icon(
         onPressed: isRunning || state.isBusy
             ? null
             : () => _confirmMercy(context),
@@ -460,7 +519,7 @@ class _LoadPanel extends StatelessWidget {
       ),
       // Always offered rather than hidden behind a query: a bulk calendar
       // move the user cannot find the reverse of is not really reversible.
-      TextButton.icon(
+      OutlinedButton.icon(
         onPressed: isRunning || state.isBusy ? null : model.undoMercy,
         icon: const Icon(Icons.undo, size: 16),
         label: const Text('Undo Mercy'),
@@ -693,12 +752,19 @@ class _QueueTile extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               _typeIcon(style.icon, style.color),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.snug),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    _titleRow(context, ref, style.color),
+                    _metaRow(context: context, ref: ref, color: style.color),
+                    const SizedBox(height: AppSpacing.hair + 2),
+                    Text(
+                      entry.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.title,
+                    ),
                     if (entry.tagNames.isNotEmpty) ...<Widget>[
                       const SizedBox(height: 5),
                       ColoredTagList(
@@ -732,68 +798,84 @@ class _QueueTile extends ConsumerWidget {
       height: 34,
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.button),
       ),
       child: Icon(icon, size: 18, color: color),
     );
   }
 
-  /// The action to take, what the element is, its title, and the flags that
-  /// change how the user should treat it.
+  /// The action to take, what the element is, and the flags that change how
+  /// the user should treat it.
   ///
   /// The action says what to do; the badge says what the element is. A mixed
   /// queue needs both, because Read means something different for a topic
   /// than Review does for a card.
-  Widget _titleRow(BuildContext context, WidgetRef ref, Color color) {
-    return Row(
-      children: <Widget>[
-        ElementTypeBadge(type: entry.ref.type),
-        const SizedBox(width: 6),
-        Text(
-          entry.actionLabel.toUpperCase(),
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: color,
-          ),
+  ///
+  /// These sit on their own line above the title rather than beside it. Five
+  /// labels sharing one line with the title left the title about two words
+  /// wide on a phone, and the title is the only part of the row that says
+  /// which element this actually is.
+  Widget _metaRow({
+    required BuildContext context,
+    required WidgetRef ref,
+    required Color color,
+  }) => Row(
+    children: <Widget>[
+      // Keep all left-side labels inside one Expanded child. A Flexible label
+      // beside a Spacer splits the spare width between two flex children,
+      // which stopped the trailing priority badge around the row's midpoint.
+      Expanded(
+        child: Row(
+          children: <Widget>[
+            ElementTypeBadge(type: entry.ref.type),
+            const SizedBox(width: AppSpacing.tight),
+            // On the narrowest screens this is the one label that can lose
+            // its tail without the row losing its meaning.
+            Flexible(
+              child: Text(
+                entry.actionLabel.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.eyebrow.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            entry.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ),
-        if (entry.isLeech) ...<Widget>[
-          const _LeechWarning(),
-          const SizedBox(width: 8),
-        ],
-        if (entry.priorityPercent case final percent?) ...<Widget>[
-          PriorityBadge(
-            percent: percent,
-            onTap: () async {
-              final bool hasChanged = await showPriorityDialog(
-                context,
-                ref,
-                elementRef: entry.ref,
-              );
-              if (hasChanged) {
-                await ref.read(queueViewModelProvider.notifier).refresh();
-              }
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
-        if (isNext)
-          const Text(
-            'UP NEXT',
-            style: TextStyle(fontSize: 10, color: AppColors.muted),
-          ),
+      ),
+      if (entry.isLeech) ...<Widget>[
+        const _LeechWarning(),
+        const SizedBox(width: AppSpacing.tight),
       ],
-    );
-  }
+      if (isNext) ...<Widget>[
+        Text(
+          'UP NEXT',
+          style: AppTextStyles.eyebrow.copyWith(color: AppColors.faint),
+        ),
+        const SizedBox(width: AppSpacing.tight),
+      ],
+      // Last in the row on every tile, so the priorities read down the list as
+      // one column. Anything allowed to follow it — UP NEXT on the first tile
+      // — shunted that tile's badge left and broke the column at the top,
+      // which is the one place the eye starts.
+      if (entry.priorityPercent case final percent?)
+        PriorityBadge(
+          percent: percent,
+          onTap: () async {
+            final bool hasChanged = await showPriorityDialog(
+              context,
+              ref,
+              elementRef: entry.ref,
+            );
+            if (hasChanged) {
+              await ref.read(queueViewModelProvider.notifier).refresh();
+            }
+          },
+        ),
+    ],
+  );
 }
 
 /// Marks a card that keeps failing, and says what to do about it.
@@ -894,13 +976,20 @@ class _StageBadge extends StatelessWidget {
       QueueLane.pending => ('pending', AppColors.softMarker),
       _ => ('outstanding', AppColors.muted),
     };
+    // A pill, because this is a state the queue is in rather than a name for
+    // what a row is — the square badges on the rows below mean the other
+    // thing, and the two must not read as one kind of label.
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-        borderRadius: BorderRadius.circular(4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.tight,
+        vertical: 3,
       ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 12)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Text(label, style: AppTextStyles.eyebrow.copyWith(color: color)),
     );
   }
 }
@@ -920,6 +1009,20 @@ class _LearnMenu extends StatelessWidget {
     enabled: enabled,
     tooltip: 'Choose a learning stage to execute',
     icon: const Icon(Icons.playlist_play, size: 18),
+    // Squared off to the same height and hairline as the buttons it stands
+    // beside, so a bare glyph does not read as a stray mark at the end of a
+    // row of buttons.
+    style: ButtonStyle(
+      minimumSize: const WidgetStatePropertyAll<Size>(Size(40, 36)),
+      side: const WidgetStatePropertyAll<BorderSide>(
+        BorderSide(color: AppColors.border),
+      ),
+      shape: WidgetStatePropertyAll<OutlinedBorder>(
+        RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.button),
+        ),
+      ),
+    ),
     onSelected: (String value) async {
       switch (value) {
         case 'outstanding':

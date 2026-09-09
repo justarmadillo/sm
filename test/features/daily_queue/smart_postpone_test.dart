@@ -5,13 +5,9 @@
 /// the calendar without touching anything a repetition owns.
 library;
 
-import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
-import 'package:incremental_reader/features/extract/formulation_commands.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
-import 'package:incremental_reader/features/review/review_command_runner.dart';
-import 'package:incremental_reader/features/review/review_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/history/review_log.dart';
@@ -26,6 +22,7 @@ import 'package:incremental_reader/shared/result.dart';
 import 'package:test/test.dart';
 
 import '../../support/app_harness.dart';
+import '../../support/harness_fixtures.dart';
 
 const String _markdown = '''
 # Chapter
@@ -66,9 +63,6 @@ extension _Fixtures on AppHarness {
     return sources;
   }
 
-  ElementRef refOf(Source source) =>
-      ElementRef(id: source.id, type: ElementType.source);
-
   /// Everything a postpone must not touch, in one comparable value.
   ///
   /// [TopicState] has identity equality, so a whole-object expectation would
@@ -87,34 +81,6 @@ extension _Fixtures on AppHarness {
       topic.status,
       topic.schedule.priority.orderKey,
     ];
-  }
-
-  Future<TopicState> topicOf(Source source) async =>
-      (await learning.findTopic(refOf(source)))!;
-
-  /// One card, graded once so it leaves the new-card Pending stage.
-  Future<CardState> memorizedCard(String sourceId) async {
-    final List<Card> cards = (await formulation.formulate(
-      FormulateCards(
-        operation(),
-        parent: CardParent.source(sourceId),
-        drafts: const <CardDraft>[
-          ClozeCardDraft('Working memory holds {{c1::four items}}.'),
-        ],
-        timestampUtc: clock.nowUtc(),
-      ),
-    )).unwrap();
-    final Result<ReviewOutcome> graded = await review.review(
-      ReviewCard(
-        operation(),
-        cardId: cards.single.id,
-        rating: CardRating.easy,
-        elapsedMs: 1500,
-        timestampUtc: clock.nowUtc(),
-      ),
-    );
-    expect(graded.isOk, isTrue, reason: '${graded.failureOrNull}');
-    return (await learning.findCardState(cards.single.id))!;
   }
 }
 

@@ -22,36 +22,9 @@ import 'package:incremental_reader/shared/result.dart';
 import 'package:test/test.dart';
 
 import '../../support/app_harness.dart';
-
-const String _markdown = '''
-# Chapter
-
-A paragraph that is long enough to be parsed into a readable block.
-''';
+import '../../support/harness_fixtures.dart';
 
 extension _Fixtures on AppHarness {
-  /// Imports [count] articles, all due today.
-  Future<List<Source>> importSources(int count) async {
-    final List<Source> sources = <Source>[];
-    for (var i = 0; i < count; i++) {
-      final Result<Source> result = await reader.importSource(
-        ImportSource(
-          operation(),
-          title: 'Article ${i.toString().padLeft(2, '0')}',
-          markdown: _markdown,
-          // Each import lands at the bottom of the collection, so creation
-          // order is priority order and the valve has something to
-          // discriminate on.
-          priorityPercent: 100,
-          timestampUtc: clock.nowUtc(),
-        ),
-      );
-      expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
-      sources.add(result.unwrap());
-    }
-    return sources;
-  }
-
   /// Imports [count] articles and gives each one a real repetition.
   ///
   /// Mercy moves scheduled repetitions. A freshly imported source is Pending
@@ -75,10 +48,6 @@ extension _Fixtures on AppHarness {
     }
     return sources;
   }
-
-  Future<TopicState> topicOf(Source source) async => (await learning.findTopic(
-    ElementRef(id: source.id, type: ElementType.source),
-  ))!;
 }
 
 void main() {

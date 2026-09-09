@@ -20,6 +20,7 @@ import 'package:incremental_reader/shared/result.dart';
 import 'package:test/test.dart';
 
 import '../../support/app_harness.dart';
+import '../../support/harness_fixtures.dart';
 
 const String _markdown = '''
 # Chapter
@@ -64,9 +65,6 @@ extension _Fixtures on AppHarness {
       state.copyWith(finalDrill: <ElementRef>[...state.finalDrill, ...refs]),
     );
   }
-
-  ElementRef refOf(Source source) =>
-      ElementRef(id: source.id, type: ElementType.source);
 }
 
 void main() {

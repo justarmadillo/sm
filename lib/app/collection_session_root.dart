@@ -401,7 +401,7 @@ final class _CollectionProgressOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ColoredBox(
-    color: const Color(0xB3FFFFFF),
+    color: AppColors.background.withValues(alpha: 0.7),
     child: Material(
       color: Colors.transparent,
       child: _CollectionProgress(message: message),

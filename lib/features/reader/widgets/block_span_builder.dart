@@ -155,7 +155,7 @@ Widget _missingImage(Size size) => Container(
   decoration: BoxDecoration(
     color: AppColors.codeBackground,
     border: Border.all(color: AppColors.border),
-    borderRadius: BorderRadius.circular(6),
+    borderRadius: BorderRadius.circular(AppRadius.row),
   ),
   child: const Icon(Icons.broken_image_outlined, color: AppColors.muted),
 );

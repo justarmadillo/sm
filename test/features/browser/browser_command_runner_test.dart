@@ -25,6 +25,7 @@ import 'package:test/test.dart';
 
 import '../../support/anchors.dart';
 import '../../support/app_harness.dart';
+import '../../support/harness_fixtures.dart';
 
 const String _alphaMarkdown = '''
 # Alpha
@@ -44,9 +45,6 @@ void main() {
   late Source alpha;
   late Source beta;
   late Extract alphaExtract;
-
-  ElementRef refOf(Source source) =>
-      ElementRef(id: source.id, type: ElementType.source);
 
   Future<Source> importSource(String title, String markdown) async =>
       (await harness.reader.importSource(
@@ -116,7 +114,7 @@ void main() {
 
     test('moving down swaps a row with the one below it', () async {
       final Result<BrowserFilingOutcome> result = await harness.filing.moveDown(
-        MoveElementDown(harness.operation(), ref: refOf(beta)),
+        MoveElementDown(harness.operation(), ref: harness.refOf(beta)),
       );
 
       expect(result.isOk, isTrue);
@@ -125,10 +123,10 @@ void main() {
 
     test('moving up puts it back', () async {
       await harness.filing.moveDown(
-        MoveElementDown(harness.operation(), ref: refOf(beta)),
+        MoveElementDown(harness.operation(), ref: harness.refOf(beta)),
       );
       await harness.filing.moveUp(
-        MoveElementUp(harness.operation(), ref: refOf(beta)),
+        MoveElementUp(harness.operation(), ref: harness.refOf(beta)),
       );
 
       expect(await rootTitles(), <String>['Beta', 'Alpha']);
@@ -136,7 +134,7 @@ void main() {
 
     test('the first row refuses to move up', () async {
       final Result<BrowserFilingOutcome> result = await harness.filing.moveUp(
-        MoveElementUp(harness.operation(), ref: refOf(beta)),
+        MoveElementUp(harness.operation(), ref: harness.refOf(beta)),
       );
 
       expect(result.isErr, isTrue);
@@ -147,22 +145,25 @@ void main() {
   group('nesting', () {
     test('a row nests under the row above it, and lifts back out', () async {
       await harness.filing.nestUnderPreviousSibling(
-        NestElementUnderPreviousSibling(harness.operation(), ref: refOf(alpha)),
+        NestElementUnderPreviousSibling(
+          harness.operation(),
+          ref: harness.refOf(alpha),
+        ),
       );
 
       expect(await rootTitles(), <String>['Beta']);
       expect(
-        (await nodeFor(refOf(alpha))).parentRef,
-        refOf(beta),
+        (await nodeFor(harness.refOf(alpha))).parentRef,
+        harness.refOf(beta),
         reason: 'Alpha is now filed under Beta',
       );
 
       await harness.filing.liftOutOfParent(
-        LiftElementOutOfParent(harness.operation(), ref: refOf(alpha)),
+        LiftElementOutOfParent(harness.operation(), ref: harness.refOf(alpha)),
       );
 
       expect(await rootTitles(), <String>['Beta', 'Alpha']);
-      expect((await nodeFor(refOf(alpha))).parentRef, isNull);
+      expect((await nodeFor(harness.refOf(alpha))).parentRef, isNull);
     });
 
     test('an element cannot be filed under its own child', () async {
@@ -175,13 +176,13 @@ void main() {
           .fileUnder(
             FileElementUnder(
               harness.operation(),
-              ref: refOf(alpha),
+              ref: harness.refOf(alpha),
               parentRef: extractRef,
             ),
           );
 
       expect(result.isErr, isTrue);
-      expect((await nodeFor(extractRef)).parentRef, refOf(alpha));
+      expect((await nodeFor(extractRef)).parentRef, harness.refOf(alpha));
     });
   });
 
@@ -195,7 +196,7 @@ void main() {
         await harness.tagCommands.save(
           SaveTagsOfElement(
             harness.operation(),
-            ref: refOf(alpha),
+            ref: harness.refOf(alpha),
             tagIds: <String>{tag.id},
           ),
         );
@@ -213,7 +214,7 @@ void main() {
           FileElementUnder(
             harness.operation(),
             ref: extractRef,
-            parentRef: refOf(beta),
+            parentRef: harness.refOf(beta),
           ),
         );
         extractNode = await nodeFor(extractRef);
@@ -232,13 +233,13 @@ void main() {
         FileElementUnder(
           harness.operation(),
           ref: extractRef,
-          parentRef: refOf(beta),
+          parentRef: harness.refOf(beta),
         ),
       );
 
       expect(
         (await nodeFor(extractRef)).parentRef,
-        refOf(beta),
+        harness.refOf(beta),
         reason: 'the Browser shows it where the user put it',
       );
 
@@ -256,7 +257,7 @@ void main() {
     });
 
     test('a move changes no due day, priority, or lifecycle', () async {
-      final ElementRef ref = refOf(beta);
+      final ElementRef ref = harness.refOf(beta);
       final ElementSchedule before = (await harness.learning.findSchedule(
         ref,
       ))!;
@@ -281,7 +282,7 @@ void main() {
     test('replaying one move is not two moves', () async {
       final MoveElementDown command = MoveElementDown(
         harness.operation(),
-        ref: refOf(beta),
+        ref: harness.refOf(beta),
       );
 
       await harness.filing.moveDown(command);

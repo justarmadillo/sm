@@ -194,7 +194,7 @@ class _ResultTile extends ConsumerWidget {
     final (IconData icon, Color color) = switch (result.ref.type) {
       ElementType.source => (Icons.menu_book_outlined, AppColors.accent),
       ElementType.extract => (Icons.content_cut, AppColors.extractInk),
-      ElementType.card => (Icons.quiz_outlined, Colors.teal),
+      ElementType.card => (Icons.quiz_outlined, AppColors.cardInk),
       ElementType.video => (Icons.smart_display_outlined, AppColors.softMarker),
     };
 

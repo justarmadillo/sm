@@ -389,16 +389,16 @@ class _ElementRow extends ConsumerWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.row),
       ),
       // Tapping a row opens the element, the same as in the Browser: a queue
       // of titles is where a badly written extract is noticed, and having to
       // find it again somewhere else to fix it is how it stays badly written.
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.row),
         child: InkWell(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(AppRadius.row),
           onTap: () => unawaited(_open(context, ref)),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),

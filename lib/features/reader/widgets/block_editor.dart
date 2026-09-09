@@ -159,7 +159,7 @@ class _BlockEditorState extends State<BlockEditor> {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.codeBackground,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.row),
         border: Border.all(color: AppColors.accent.withValues(alpha: 0.6)),
       ),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),

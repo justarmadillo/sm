@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:incremental_reader/documents/occlusion.dart';
 import 'package:incremental_reader/features/reader/widgets/block_span_builder.dart';
+import 'package:incremental_reader/shared/ui/app_theme.dart';
 
 /// Displays one occlusion image at the same fitted size used by the Reader.
 class OcclusionView extends StatelessWidget {
@@ -44,8 +45,8 @@ class OcclusionView extends StatelessWidget {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: region.id == occlusion.activeRegionId
-                          ? const Color(0xFFD14E3E)
-                          : const Color(0xFF242A32),
+                          ? AppColors.danger
+                          : AppColors.mask,
                       border: region.id == occlusion.activeRegionId
                           ? Border.all(color: Colors.white, width: 3)
                           : null,

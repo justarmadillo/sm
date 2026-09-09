@@ -11,34 +11,7 @@ import 'package:incremental_reader/shared/result.dart';
 import 'package:test/test.dart';
 
 import '../../support/app_harness.dart';
-
-const String _markdown = '''
-# Chapter
-
-A paragraph with enough words in it to be worth reading twice over.
-
-A second paragraph, so the document has some shape to it.
-''';
-
-extension _Fixtures on AppHarness {
-  Future<List<Source>> importSources(int count) async {
-    final List<Source> sources = <Source>[];
-    for (var i = 0; i < count; i++) {
-      final Result<Source> result = await reader.importSource(
-        ImportSource(
-          operation(),
-          title: 'Article ${i.toString().padLeft(2, '0')}',
-          markdown: _markdown,
-          priorityPercent: 100,
-          timestampUtc: clock.nowUtc(),
-        ),
-      );
-      expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
-      sources.add(result.unwrap());
-    }
-    return sources;
-  }
-}
+import '../../support/harness_fixtures.dart';
 
 void main() {
   late AppHarness harness;

@@ -86,15 +86,9 @@ class SelectionToolbar extends StatelessWidget {
           constraints: BoxConstraints(maxWidth: width),
           decoration: BoxDecoration(
             color: AppColors.surface,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AppRadius.button),
             border: Border.all(color: AppColors.border),
-            boxShadow: const <BoxShadow>[
-              BoxShadow(
-                color: Color(0x22000000),
-                blurRadius: 10,
-                offset: Offset(0, 2),
-              ),
-            ],
+            boxShadow: AppShadows.soft,
           ),
           // Scrolls sideways rather than dropping a button: every action here
           // is one the reader came for, and a hidden Extract is worse than a

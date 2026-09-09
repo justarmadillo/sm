@@ -327,7 +327,7 @@ class _BlockViewState extends State<BlockView> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.codeBackground,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.row),
         border: Border.all(color: AppColors.border),
       ),
       child: SingleChildScrollView(
@@ -344,7 +344,7 @@ class _BlockViewState extends State<BlockView> {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: AppColors.codeBackground,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.row),
       ),
       child: paragraph,
     );

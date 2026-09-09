@@ -332,7 +332,7 @@ class _OcclusionPanel extends ConsumerWidget {
     decoration: BoxDecoration(
       color: AppColors.surface,
       border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(AppRadius.card),
     ),
     child: OcclusionView(
       imageProvider: FileImage(
@@ -373,7 +373,7 @@ class _ReviewStatus extends StatelessWidget {
 
   Widget _reviewStateLine(BuildContext context) => Row(
     children: <Widget>[
-      const Icon(Icons.quiz_outlined, size: 16, color: Colors.teal),
+      const Icon(Icons.quiz_outlined, size: 16, color: AppColors.cardInk),
       const SizedBox(width: 8),
       Text(
         state.cardState.memory.isNew
@@ -428,13 +428,11 @@ class _CardPanel extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: emphasized
-            ? AppColors.accent.withValues(alpha: 0.06)
-            : AppColors.surface,
+        color: emphasized ? AppColors.accentWash : AppColors.surface,
         border: Border.all(
           color: emphasized ? AppColors.accent : AppColors.border,
         ),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.card),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -511,7 +509,7 @@ class _ReviewActions extends StatelessWidget {
                   _RatingButton(
                     number: 4,
                     label: 'Easy',
-                    color: Colors.teal,
+                    color: AppColors.cardInk,
                     onPressed: state.isBusy
                         ? null
                         : () => model.grade(CardRating.easy),
@@ -576,7 +574,7 @@ class _CardEditorState extends State<_CardEditor> {
     decoration: BoxDecoration(
       color: AppColors.surface,
       border: Border.all(color: AppColors.accent),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(AppRadius.card),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -664,7 +662,7 @@ class _LeechNotice extends StatelessWidget {
     decoration: BoxDecoration(
       color: AppColors.softMarker.withValues(alpha: 0.10),
       border: Border.all(color: AppColors.softMarker.withValues(alpha: 0.45)),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AppRadius.button),
     ),
     child: Row(
       children: <Widget>[

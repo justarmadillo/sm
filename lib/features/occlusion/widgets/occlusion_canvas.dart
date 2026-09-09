@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:incremental_reader/documents/occlusion.dart';
 import 'package:incremental_reader/features/reader/widgets/block_span_builder.dart';
+import 'package:incremental_reader/shared/ui/app_theme.dart';
 
 /// Draws masks by dragging, selects them by tapping, and deletes with Delete.
 class OcclusionCanvas extends StatefulWidget {
@@ -98,8 +99,11 @@ class _OcclusionCanvasState extends State<OcclusionCanvas> {
                     child: IgnorePointer(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF242A32),
-                          border: Border.all(color: Colors.teal, width: 2),
+                          color: AppColors.mask,
+                          border: Border.all(
+                            color: AppColors.accentBright,
+                            width: 2,
+                          ),
                         ),
                       ),
                     ),
@@ -152,9 +156,9 @@ class _OcclusionCanvasState extends State<OcclusionCanvas> {
           onPointerCancel: (_) => _finishTransform(),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: const Color(0xFF242A32),
+              color: AppColors.mask,
               border: Border.all(
-                color: isSelected ? Colors.tealAccent : Colors.white70,
+                color: isSelected ? AppColors.accentBright : Colors.white70,
                 width: isSelected ? 3 : 1,
               ),
             ),

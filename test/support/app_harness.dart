@@ -13,7 +13,6 @@ import 'package:incremental_reader/features/daily_queue/mercy_command_runner.dar
 import 'package:incremental_reader/features/daily_queue/queue_candidates_query.dart';
 import 'package:incremental_reader/features/daily_queue/queue_command_runner.dart';
 import 'package:incremental_reader/features/daily_queue/queue_query.dart';
-import 'package:incremental_reader/features/diagnostics/diagnostics_query.dart';
 import 'package:incremental_reader/features/diagnostics/scheduler_metrics_query.dart';
 import 'package:incremental_reader/features/extract/extract_command_runner.dart';
 import 'package:incremental_reader/features/extract/formulation_command_runner.dart';
@@ -280,14 +279,6 @@ final class AppHarness {
     search: search,
     learning: learning,
     effectiveDue: effectiveDue,
-  );
-
-  late final DiagnosticsQuery diagnosticsQuery = DiagnosticsQuery(
-    learning: learning,
-    content: content,
-    videos: videos,
-    search: search,
-    context: context,
   );
 
   int _operations = 0;

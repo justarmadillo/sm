@@ -28,6 +28,7 @@ import 'package:test/test.dart';
 
 import '../../support/anchors.dart';
 import '../../support/app_harness.dart';
+import '../../support/harness_fixtures.dart';
 
 const String _alphaMarkdown = '''
 # Alpha
@@ -48,9 +49,6 @@ void main() {
   late Source beta;
   late Extract alphaExtract;
   late Card alphaCard;
-
-  ElementRef refOf(Source source) =>
-      ElementRef(id: source.id, type: ElementType.source);
 
   Future<Source> importSource(String title, String markdown) async =>
       (await harness.reader.importSource(
@@ -111,7 +109,9 @@ void main() {
     'deleting a source takes its extracts and their cards with it',
     () async {
       final Result<BrowserDeletionOutcome> result = await harness.filing
-          .deleteElement(DeleteElement(harness.operation(), ref: refOf(alpha)));
+          .deleteElement(
+            DeleteElement(harness.operation(), ref: harness.refOf(alpha)),
+          );
 
       expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
       expect(result.unwrap().deletedRefs, hasLength(3));
@@ -124,7 +124,7 @@ void main() {
 
   test('the row disappears from the tree, which is the point', () async {
     await harness.filing.deleteElement(
-      DeleteElement(harness.operation(), ref: refOf(alpha)),
+      DeleteElement(harness.operation(), ref: harness.refOf(alpha)),
     );
 
     expect(await rootTitles(), <String>['Beta']);
@@ -132,11 +132,11 @@ void main() {
 
   test('nothing scheduled survives the element it belonged to', () async {
     await harness.filing.deleteElement(
-      DeleteElement(harness.operation(), ref: refOf(alpha)),
+      DeleteElement(harness.operation(), ref: harness.refOf(alpha)),
     );
 
     for (final ElementRef ref in <ElementRef>[
-      refOf(alpha),
+      harness.refOf(alpha),
       ElementRef(id: alphaExtract.id, type: ElementType.extract),
       ElementRef(id: alphaCard.id, type: ElementType.card),
     ]) {
@@ -148,7 +148,7 @@ void main() {
 
   test('a deleted element is no longer findable by its own words', () async {
     await harness.filing.deleteElement(
-      DeleteElement(harness.operation(), ref: refOf(alpha)),
+      DeleteElement(harness.operation(), ref: harness.refOf(alpha)),
     );
 
     final List<SearchHit> hits = await harness.search.search('massing');
@@ -168,7 +168,9 @@ void main() {
     );
 
     final Result<BrowserDeletionOutcome> result = await harness.filing
-        .deleteElement(DeleteElement(harness.operation(), ref: refOf(alpha)));
+        .deleteElement(
+          DeleteElement(harness.operation(), ref: harness.refOf(alpha)),
+        );
 
     expect(result.isOk, isTrue, reason: '${result.failureOrNull}');
     expect(await harness.content.findExtract(alphaExtract.id), isNull);
@@ -179,11 +181,14 @@ void main() {
     'deleting one element leaves the rest of the collection alone',
     () async {
       await harness.filing.deleteElement(
-        DeleteElement(harness.operation(), ref: refOf(alpha)),
+        DeleteElement(harness.operation(), ref: harness.refOf(alpha)),
       );
 
       expect(await harness.content.findSource(beta.id), isNotNull);
-      expect(await harness.learning.findSchedule(refOf(beta)), isNotNull);
+      expect(
+        await harness.learning.findSchedule(harness.refOf(beta)),
+        isNotNull,
+      );
     },
   );
 
@@ -213,12 +218,12 @@ void main() {
     );
     expect(
       (await harness.context.runtimeState()).pending,
-      containsAll(<ElementRef>[refOf(alpha), cardRef]),
+      containsAll(<ElementRef>[harness.refOf(alpha), cardRef]),
       reason: 'the fixture has to reach a queue before this can be tested',
     );
 
     await harness.filing.deleteElement(
-      DeleteElement(harness.operation(), ref: refOf(alpha)),
+      DeleteElement(harness.operation(), ref: harness.refOf(alpha)),
     );
 
     final Sm20CollectionState runtime = await harness.context.runtimeState();
@@ -230,14 +235,14 @@ void main() {
       runtime.finalDrill,
     ]) {
       expect(queue, isNot(contains(cardRef)));
-      expect(queue, isNot(contains(refOf(alpha))));
+      expect(queue, isNot(contains(harness.refOf(alpha))));
     }
   });
 
   test('a resent delete does not report a second removal', () async {
     final DeleteElement command = DeleteElement(
       harness.operation(),
-      ref: refOf(alpha),
+      ref: harness.refOf(alpha),
     );
     await harness.filing.deleteElement(command);
 
@@ -253,7 +258,7 @@ void main() {
         .deleteElements(
           DeleteElements(
             harness.operation(),
-            refs: <ElementRef>[refOf(alpha), refOf(beta)],
+            refs: <ElementRef>[harness.refOf(alpha), harness.refOf(beta)],
           ),
         );
 
@@ -270,7 +275,7 @@ void main() {
             DeleteElements(
               harness.operation(),
               refs: <ElementRef>[
-                refOf(alpha),
+                harness.refOf(alpha),
                 ElementRef(id: alphaExtract.id, type: ElementType.extract),
               ],
             ),
@@ -297,11 +302,13 @@ void main() {
 
   test('deleting something already gone is reported, not thrown', () async {
     await harness.filing.deleteElement(
-      DeleteElement(harness.operation(), ref: refOf(alpha)),
+      DeleteElement(harness.operation(), ref: harness.refOf(alpha)),
     );
 
     final Result<BrowserDeletionOutcome> again = await harness.filing
-        .deleteElement(DeleteElement(harness.operation(), ref: refOf(alpha)));
+        .deleteElement(
+          DeleteElement(harness.operation(), ref: harness.refOf(alpha)),
+        );
 
     expect(again.isErr, isTrue);
     expect(again.failureOrNull, isA<NotFoundFailure>());

@@ -1011,7 +1011,7 @@ class _NodeRow extends StatelessWidget {
           : DecoratedBox(
               decoration: BoxDecoration(
                 border: Border.all(color: AppColors.accent, width: 2),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(AppRadius.row),
               ),
               child: card,
             ),
@@ -1032,9 +1032,9 @@ class _NodeRow extends StatelessWidget {
       color: isSelected
           ? Color.alphaBlend(AppColors.selection, restingColor)
           : restingColor,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(AppRadius.row),
       child: InkWell(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.row),
         onTap: isSelectionMode ? onSelect : onOpen,
         onLongPress: onSelect,
         child: Padding(
@@ -1268,7 +1268,7 @@ const BoxConstraints _kRowButtonConstraints = BoxConstraints.tightFor(
 );
 
 /// The warm wash used by Anki-style suspended notes without obscuring text.
-const Color _kDismissedElementWash = Color(0xFFFFF0A8);
+const Color _kDismissedElementWash = AppColors.dismissedWash;
 
 /// What the New menu can make.
 enum _NewElement {
@@ -1374,14 +1374,14 @@ class _DragLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     elevation: 4,
-    borderRadius: BorderRadius.circular(6),
+    borderRadius: BorderRadius.circular(AppRadius.row),
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       constraints: const BoxConstraints(maxWidth: 280),
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.accent),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.row),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

@@ -230,14 +230,12 @@ class _TabChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
-    borderRadius: BorderRadius.circular(6),
+    borderRadius: BorderRadius.circular(AppRadius.row),
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: selected
-            ? AppColors.accent.withValues(alpha: 0.12)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
+        color: selected ? AppColors.accentWash : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.row),
       ),
       child: Text(
         '$label  $count',
@@ -442,9 +440,9 @@ class _OutlineListState extends State<_OutlineList> {
     return Container(
       decoration: BoxDecoration(
         color: isSelected
-            ? AppColors.accent.withValues(alpha: 0.16)
+            ? AppColors.accentBright.withValues(alpha: 0.18)
             : isCurrent
-            ? AppColors.accent.withValues(alpha: 0.08)
+            ? AppColors.accentBright.withValues(alpha: 0.09)
             : Colors.transparent,
         // The bar down the left says which row the toolbar will act on, which
         // the tint alone cannot: the reading position is tinted too.
@@ -795,7 +793,7 @@ class _ExtractList extends StatelessWidget {
   Widget _extractTile(Extract extract, {required bool isFocused}) {
     return InkWell(
       onTap: () => onGoToExtract(extract),
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(AppRadius.row),
       child: Container(
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
@@ -808,7 +806,7 @@ class _ExtractList extends StatelessWidget {
               alpha: isFocused ? 0.55 : 0.18,
             ),
           ),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(AppRadius.row),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

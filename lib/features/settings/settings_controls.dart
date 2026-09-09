@@ -32,35 +32,32 @@ class SettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 18),
+    margin: const EdgeInsets.only(bottom: AppSpacing.standard),
     decoration: BoxDecoration(
       color: AppColors.surface,
       border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AppRadius.card),
     ),
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.loose,
+        AppSpacing.standard,
+        AppSpacing.loose,
+        AppSpacing.tight,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.text,
-            ),
-          ),
-          const SizedBox(height: 4),
+          Text(title, style: AppTextStyles.title),
+          const SizedBox(height: AppSpacing.hair),
           Text(
             description,
-            style: const TextStyle(
-              fontSize: 12,
+            style: AppTextStyles.caption.copyWith(
               color: AppColors.muted,
               height: 1.5,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpacing.standard),
           ...children,
         ],
       ),
@@ -88,7 +85,7 @@ class SettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 14),
+    padding: const EdgeInsets.only(bottom: AppSpacing.standard),
     // A 190-pixel control beside a sentence leaves the sentence a column too
     // narrow to read on a phone, so there the control moves underneath it.
     child: isCompactWidth(context)
@@ -96,7 +93,7 @@ class SettingsRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               _settingDescription(),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.tight),
               _control(context),
             ],
           )
@@ -104,7 +101,7 @@ class SettingsRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Expanded(child: _settingDescription()),
-              const SizedBox(width: 18),
+              const SizedBox(width: AppSpacing.loose),
               SizedBox(width: controlWidth, child: control),
             ],
           ),
@@ -114,12 +111,13 @@ class SettingsRow extends StatelessWidget {
   Widget _settingDescription() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: <Widget>[
-      Text(label, style: const TextStyle(fontSize: 13, color: AppColors.text)),
+      Text(label, style: AppTextStyles.bodyDense),
       const SizedBox(height: 2),
       Text(
         hint,
-        style: const TextStyle(
-          fontSize: 11,
+        style: AppTextStyles.eyebrow.copyWith(
+          fontWeight: FontWeight.w400,
+          letterSpacing: 0,
           color: AppColors.muted,
           height: 1.45,
         ),
@@ -185,11 +183,7 @@ class _IntFieldState extends State<IntField> {
     inputFormatters: <TextInputFormatter>[
       FilteringTextInputFormatter.digitsOnly,
     ],
-    decoration: InputDecoration(
-      isDense: true,
-      border: const OutlineInputBorder(),
-      suffixText: widget.suffix,
-    ),
+    decoration: InputDecoration(suffixText: widget.suffix),
     style: const TextStyle(fontSize: 13),
     onChanged: (String text) {
       final int? parsed = int.tryParse(text);
@@ -254,11 +248,7 @@ class _DoubleFieldState extends State<DoubleField> {
     inputFormatters: <TextInputFormatter>[
       FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
     ],
-    decoration: InputDecoration(
-      isDense: true,
-      border: const OutlineInputBorder(),
-      suffixText: widget.suffix,
-    ),
+    decoration: InputDecoration(suffixText: widget.suffix),
     style: const TextStyle(fontSize: 13),
     onChanged: (String text) {
       final double? parsed = double.tryParse(text);
@@ -303,10 +293,6 @@ class _StringFieldState extends State<StringField> {
   @override
   Widget build(BuildContext context) => TextField(
     controller: _controller,
-    decoration: const InputDecoration(
-      isDense: true,
-      border: OutlineInputBorder(),
-    ),
     style: const TextStyle(fontSize: 13),
     onChanged: widget.onChanged,
   );
@@ -388,8 +374,6 @@ class _UInt16MatrixFieldState extends State<UInt16MatrixField> {
     minLines: 3,
     maxLines: 6,
     decoration: InputDecoration(
-      isDense: true,
-      border: const OutlineInputBorder(),
       hintText: '400 numbers, separated by commas or spaces',
       errorText: _error,
     ),
@@ -432,10 +416,9 @@ class DoubleSliderField extends StatelessWidget {
         ),
       ),
       SliderTheme(
-        data: SliderThemeData(
-          trackHeight: 3,
-          overlayShape: SliderComponentShape.noOverlay,
-        ),
+        data: SliderTheme.of(
+          context,
+        ).copyWith(overlayShape: SliderComponentShape.noOverlay),
         child: Slider(
           value: value.clamp(min, max),
           min: min,
@@ -498,11 +481,7 @@ class _IntListFieldState extends State<IntListField> {
   @override
   Widget build(BuildContext context) => TextField(
     controller: _controller,
-    decoration: const InputDecoration(
-      isDense: true,
-      border: OutlineInputBorder(),
-      hintText: '1, 3, 7, 14',
-    ),
+    decoration: const InputDecoration(hintText: '1, 3, 7, 14'),
     style: const TextStyle(fontSize: 13),
     onChanged: (String text) {
       widget.onChanged(_parse(text, widget.maximum));
@@ -542,10 +521,6 @@ class ChoiceField<T> extends StatelessWidget {
     initialValue: value,
     isExpanded: true,
     isDense: true,
-    decoration: const InputDecoration(
-      isDense: true,
-      border: OutlineInputBorder(),
-    ),
     style: const TextStyle(fontSize: 13, color: AppColors.text),
     items: <DropdownMenuItem<T>>[
       for (final MapEntry<T, String> entry in options.entries)

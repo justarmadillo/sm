@@ -26,7 +26,7 @@ import 'package:incremental_reader/shared/ui/app_theme.dart';
   ),
   ElementType.card => (
     icon: Icons.quiz_outlined,
-    color: Colors.teal,
+    color: AppColors.cardInk,
     label: 'card',
   ),
   // One word for a whole talk and for a clip cut out of it, because this
@@ -68,7 +68,7 @@ class ElementTypeBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: style.color.withValues(alpha: 0.10),
         border: Border.all(color: style.color.withValues(alpha: 0.35)),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(AppRadius.field),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

@@ -115,7 +115,7 @@ class _ExtractContextDialogState extends State<_ExtractContextDialog> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
             color: AppColors.softMarker.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
           ),
           child: const Text(
             'Browsing',
@@ -163,7 +163,7 @@ class _ExtractContextDialogState extends State<_ExtractContextDialog> {
       decoration: BoxDecoration(
         color: AppColors.background,
         border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.row),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,9 +212,9 @@ class _ExtractCard extends StatelessWidget {
     margin: const EdgeInsets.only(bottom: 8),
     padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
     decoration: BoxDecoration(
-      color: AppColors.accent.withValues(alpha: 0.06),
-      border: Border.all(color: AppColors.accent.withValues(alpha: 0.25)),
-      borderRadius: BorderRadius.circular(6),
+      color: AppColors.accentWash,
+      border: Border.all(color: AppColors.accentBright),
+      borderRadius: BorderRadius.circular(AppRadius.row),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
