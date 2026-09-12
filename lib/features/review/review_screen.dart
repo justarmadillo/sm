@@ -15,36 +15,47 @@ import 'package:incremental_reader/features/extract/extract_screen.dart';
 import 'package:incremental_reader/features/extract/extract_view_model.dart';
 import 'package:incremental_reader/features/occlusion/occlusion_screen.dart';
 import 'package:incremental_reader/features/occlusion/widgets/occlusion_view.dart';
+import 'package:incremental_reader/features/priority/learning_command_menu.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/features/reader/typography_controller.dart';
 import 'package:incremental_reader/features/reader/widgets/block_span_builder.dart';
 import 'package:incremental_reader/features/review/review_view_model.dart';
+import 'package:incremental_reader/features/review/widgets/review_occlusion_panel.dart';
 import 'package:incremental_reader/features/tags/tags_picker_dialog.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/colored_tag_list.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
+import 'package:incremental_reader/shared/ui/status_pill.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
+import 'package:incremental_reader/shared/ui/zoomable_image_page.dart';
 
 Future<StudyRouteResult> openReview(
   BuildContext context,
   WidgetRef ref, {
   required String cardId,
+  bool isPractice = false,
 }) async =>
     await Navigator.of(context).push<StudyRouteResult>(
       MaterialPageRoute<StudyRouteResult>(
-        builder: (BuildContext context) => ReviewScreen(cardId: cardId),
+        builder: (BuildContext context) =>
+            ReviewScreen(cardId: cardId, isPractice: isPractice),
       ),
     ) ??
     StudyRouteResult.canceled;
 
 class ReviewScreen extends ConsumerStatefulWidget {
-  const ReviewScreen({required this.cardId, super.key});
+  const ReviewScreen({
+    required this.cardId,
+    this.isPractice = false,
+    super.key,
+  });
 
   final String cardId;
+  final bool isPractice;
 
   @override
   ConsumerState<ReviewScreen> createState() => _ReviewScreenState();
@@ -103,16 +114,25 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
         appBar: AppBar(),
         body: Center(child: Text('Could not open this card.\n$error')),
       ),
-      data: (ReviewUiState review) => _ReviewBody(state: review, model: model),
+      data: (ReviewUiState review) => _ReviewBody(
+        state: review,
+        model: model,
+        isPractice: widget.isPractice,
+      ),
     );
   }
 }
 
 class _ReviewBody extends ConsumerWidget {
-  const _ReviewBody({required this.state, required this.model});
+  const _ReviewBody({
+    required this.state,
+    required this.model,
+    required this.isPractice,
+  });
 
   final ReviewUiState state;
   final ReviewViewModel model;
+  final bool isPractice;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -124,9 +144,13 @@ class _ReviewBody extends ConsumerWidget {
           autofocus: true,
           child: Column(
             children: <Widget>[
-              _ReviewStatus(state: state),
+              _ReviewStatus(state: state, isPractice: isPractice),
               Expanded(child: _cardArea()),
-              _ReviewActions(state: state, model: model),
+              _ReviewActions(
+                state: state,
+                model: model,
+                isPractice: isPractice,
+              ),
             ],
           ),
         ),
@@ -140,6 +164,17 @@ class _ReviewBody extends ConsumerWidget {
     return AppBar(
       title: const Text('Review'),
       actions: <Widget>[
+        LearningCommandMenu(
+          isEnabled: !state.isBusy,
+          onSelected: (command) => unawaited(
+            applyLearningCommandFromToolbar(
+              context: context,
+              ref: ref,
+              command: command,
+              elementRef: ElementRef(id: state.card.id, type: ElementType.card),
+            ),
+          ),
+        ),
         IconButton(
           tooltip: 'Tags',
           onPressed: state.isBusy
@@ -233,21 +268,21 @@ class _ReviewBody extends ConsumerWidget {
       const SingleActivator(LogicalKeyboardKey.space): model.revealAnswer,
       const SingleActivator(LogicalKeyboardKey.enter): model.revealAnswer,
       const SingleActivator(LogicalKeyboardKey.digit1): () =>
-          model.grade(CardRating.again),
+          model.grade(CardRating.again, isPractice: isPractice),
       const SingleActivator(LogicalKeyboardKey.digit2): () =>
-          model.grade(CardRating.hard),
+          model.grade(CardRating.hard, isPractice: isPractice),
       const SingleActivator(LogicalKeyboardKey.digit3): () =>
-          model.grade(CardRating.good),
+          model.grade(CardRating.good, isPractice: isPractice),
       const SingleActivator(LogicalKeyboardKey.digit4): () =>
-          model.grade(CardRating.easy),
+          model.grade(CardRating.easy, isPractice: isPractice),
       const SingleActivator(LogicalKeyboardKey.numpad1): () =>
-          model.grade(CardRating.again),
+          model.grade(CardRating.again, isPractice: isPractice),
       const SingleActivator(LogicalKeyboardKey.numpad2): () =>
-          model.grade(CardRating.hard),
+          model.grade(CardRating.hard, isPractice: isPractice),
       const SingleActivator(LogicalKeyboardKey.numpad3): () =>
-          model.grade(CardRating.good),
+          model.grade(CardRating.good, isPractice: isPractice),
       const SingleActivator(LogicalKeyboardKey.numpad4): () =>
-          model.grade(CardRating.easy),
+          model.grade(CardRating.easy, isPractice: isPractice),
       const SingleActivator(LogicalKeyboardKey.keyE): () =>
           unawaited(_editCard(context, ref)),
       kPriorityShortcut: () => _openPriority(context, ref),
@@ -305,6 +340,7 @@ class _ReviewBody extends ConsumerWidget {
                   ),
                 ],
               ],
+              ..._extraPanel(),
               if (state.isLeech && !state.isEditing) ...<Widget>[
                 const SizedBox(height: 18),
                 _LeechNotice(lapses: state.lapses),
@@ -315,6 +351,14 @@ class _ReviewBody extends ConsumerWidget {
       ),
     );
   }
+
+  List<Widget> _extraPanel() =>
+      state.isAnswerRevealed && state.extra.trim().isNotEmpty
+      ? <Widget>[
+          const SizedBox(height: 18),
+          _CardPanel(label: 'EXTRA', markdown: state.extra),
+        ]
+      : const <Widget>[];
 }
 
 class _OcclusionPanel extends ConsumerWidget {
@@ -327,29 +371,34 @@ class _OcclusionPanel extends ConsumerWidget {
   final bool isAnswerRevealed;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Container(
-    padding: const EdgeInsets.all(22),
-    decoration: BoxDecoration(
-      color: AppColors.surface,
-      border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(AppRadius.card),
-    ),
-    child: OcclusionView(
-      imageProvider: FileImage(
-        ref
-            .watch(sourceAssetFileStoreProvider)
-            .fileForSha256(occlusion.imageSha256),
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ImageProvider imageProvider = FileImage(
+      ref
+          .watch(sourceAssetFileStoreProvider)
+          .fileForSha256(occlusion.imageSha256),
+    );
+    return ReviewOcclusionPanel(
+      imageProvider: imageProvider,
       occlusion: occlusion,
       isAnswerRevealed: isAnswerRevealed,
-    ),
-  );
+      onOpenImage: (bool shouldRevealAllOcclusions) => openZoomableImage(
+        context,
+        buildImage: (BuildContext context) => OcclusionView(
+          imageProvider: imageProvider,
+          occlusion: occlusion,
+          isAnswerRevealed: isAnswerRevealed,
+          shouldRevealAllOcclusions: shouldRevealAllOcclusions,
+        ),
+      ),
+    );
+  }
 }
 
 class _ReviewStatus extends StatelessWidget {
-  const _ReviewStatus({required this.state});
+  const _ReviewStatus({required this.state, required this.isPractice});
 
   final ReviewUiState state;
+  final bool isPractice;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -363,6 +412,10 @@ class _ReviewStatus extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _reviewStateLine(context),
+        if (isPractice) ...<Widget>[
+          const SizedBox(height: 6),
+          const StatusPill(text: 'Practice', color: AppColors.softMarker),
+        ],
         if (state.tagNames.isNotEmpty) ...<Widget>[
           const SizedBox(height: 6),
           ColoredTagList(tagNames: state.tagNames, maximumVisibleTags: 6),
@@ -458,10 +511,15 @@ class _CardPanel extends ConsumerWidget {
 }
 
 class _ReviewActions extends StatelessWidget {
-  const _ReviewActions({required this.state, required this.model});
+  const _ReviewActions({
+    required this.state,
+    required this.model,
+    required this.isPractice,
+  });
 
   final ReviewUiState state;
   final ReviewViewModel model;
+  final bool isPractice;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -488,7 +546,10 @@ class _ReviewActions extends StatelessWidget {
                     color: Colors.red.shade700,
                     onPressed: state.isBusy
                         ? null
-                        : () => model.grade(CardRating.again),
+                        : () => model.grade(
+                            CardRating.again,
+                            isPractice: isPractice,
+                          ),
                   ),
                   _RatingButton(
                     number: 2,
@@ -496,7 +557,10 @@ class _ReviewActions extends StatelessWidget {
                     color: Colors.orange.shade800,
                     onPressed: state.isBusy
                         ? null
-                        : () => model.grade(CardRating.hard),
+                        : () => model.grade(
+                            CardRating.hard,
+                            isPractice: isPractice,
+                          ),
                   ),
                   _RatingButton(
                     number: 3,
@@ -504,7 +568,10 @@ class _ReviewActions extends StatelessWidget {
                     color: AppColors.accent,
                     onPressed: state.isBusy
                         ? null
-                        : () => model.grade(CardRating.good),
+                        : () => model.grade(
+                            CardRating.good,
+                            isPractice: isPractice,
+                          ),
                   ),
                   _RatingButton(
                     number: 4,
@@ -512,16 +579,20 @@ class _ReviewActions extends StatelessWidget {
                     color: AppColors.cardInk,
                     onPressed: state.isBusy
                         ? null
-                        : () => model.grade(CardRating.easy),
+                        : () => model.grade(
+                            CardRating.easy,
+                            isPractice: isPractice,
+                          ),
                   ),
-                  TextButton.icon(
-                    // Not a grade. "Wrong task right now" is a different fact
-                    // about the day from "I could not recall this", and the log
-                    // keeps them apart.
-                    onPressed: state.isBusy ? null : model.postpone,
-                    icon: const Icon(Icons.schedule, size: 16),
-                    label: const Text('Later'),
-                  ),
+                  if (!isPractice)
+                    TextButton.icon(
+                      // Not a grade. "Wrong task right now" is a different fact
+                      // about the day from "I could not recall this", and the log
+                      // keeps them apart.
+                      onPressed: state.isBusy ? null : model.postpone,
+                      icon: const Icon(Icons.schedule, size: 16),
+                      label: const Text('Later'),
+                    ),
                 ],
               )
             : FilledButton.icon(
@@ -556,6 +627,9 @@ class _CardEditorState extends State<_CardEditor> {
   late final TextEditingController _back = TextEditingController(
     text: widget.state.card.back,
   );
+  late final TextEditingController _extra = TextEditingController(
+    text: widget.state.card.extra,
+  );
 
   bool get _isCloze =>
       widget.state.card.type == CardType.cloze ||
@@ -565,6 +639,7 @@ class _CardEditorState extends State<_CardEditor> {
   void dispose() {
     _front.dispose();
     _back.dispose();
+    _extra.dispose();
     super.dispose();
   }
 
@@ -579,74 +654,86 @@ class _CardEditorState extends State<_CardEditor> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text(
-          _isCloze ? 'CLOZE TEXT' : 'QUESTION',
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: AppColors.muted,
-            letterSpacing: 0.8,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _front,
-          autofocus: true,
-          maxLines: null,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
-        ),
-        if (_isCloze)
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
-            child: Text(
-              'Keep the {{c1::…}} deletions. The canonical text is the single '
-              'source of truth, so editing the sentence can never '
-              'desynchronize what this card tests.',
-              style: TextStyle(fontSize: 11, color: AppColors.muted),
-            ),
-          )
-        else ...<Widget>[
-          const SizedBox(height: 14),
-          const Text(
-            'ANSWER',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.muted,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _back,
-            maxLines: null,
-            decoration: const InputDecoration(border: OutlineInputBorder()),
-          ),
-        ],
-        const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: <Widget>[
-            TextButton(
-              onPressed: widget.state.isBusy
-                  ? null
-                  : () => widget.model.setEditing(false),
-              child: const Text('Cancel'),
-            ),
-            const SizedBox(width: 8),
-            FilledButton(
-              onPressed: widget.state.isBusy
-                  ? null
-                  : () => widget.model.edit(
-                      front: _front.text,
-                      back: _isCloze ? null : _back.text,
-                    ),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+        ..._frontEditor(),
+        if (!_isCloze) ..._answerEditor(),
+        ..._extraEditor(),
+        _editorActions(),
       ],
     ),
+  );
+
+  List<Widget> _frontEditor() => <Widget>[
+    Text(_isCloze ? 'CLOZE TEXT' : 'QUESTION', style: _fieldLabelStyle),
+    const SizedBox(height: 8),
+    TextField(
+      controller: _front,
+      autofocus: true,
+      maxLines: null,
+      decoration: const InputDecoration(border: OutlineInputBorder()),
+    ),
+    if (_isCloze)
+      const Padding(
+        padding: EdgeInsets.only(top: 6),
+        child: Text(
+          'Keep the {{c1::…}} deletions. The canonical text is the single '
+          'source of truth, so editing the sentence can never '
+          'desynchronize what this card tests.',
+          style: TextStyle(fontSize: 11, color: AppColors.muted),
+        ),
+      ),
+  ];
+
+  List<Widget> _answerEditor() => <Widget>[
+    const SizedBox(height: 14),
+    const Text('ANSWER', style: _fieldLabelStyle),
+    const SizedBox(height: 8),
+    TextField(
+      controller: _back,
+      maxLines: null,
+      decoration: const InputDecoration(border: OutlineInputBorder()),
+    ),
+  ];
+
+  List<Widget> _extraEditor() => <Widget>[
+    const SizedBox(height: 14),
+    const Text('EXTRA (SHOWN AFTER REVEAL)', style: _fieldLabelStyle),
+    const SizedBox(height: 8),
+    TextField(
+      controller: _extra,
+      maxLines: null,
+      decoration: const InputDecoration(border: OutlineInputBorder()),
+    ),
+    const SizedBox(height: 14),
+  ];
+
+  Widget _editorActions() => Row(
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: <Widget>[
+      TextButton(
+        onPressed: widget.state.isBusy
+            ? null
+            : () => widget.model.setEditing(false),
+        child: const Text('Cancel'),
+      ),
+      const SizedBox(width: 8),
+      FilledButton(
+        onPressed: widget.state.isBusy
+            ? null
+            : () => widget.model.edit(
+                front: _front.text,
+                back: _isCloze ? null : _back.text,
+                extra: _extra.text,
+              ),
+        child: const Text('Save'),
+      ),
+    ],
+  );
+
+  static const TextStyle _fieldLabelStyle = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    color: AppColors.muted,
+    letterSpacing: 0.8,
   );
 }
 

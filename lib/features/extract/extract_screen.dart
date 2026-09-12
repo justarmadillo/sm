@@ -14,6 +14,7 @@ import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dar
 import 'package:incremental_reader/features/extract/extract_context_overlay.dart';
 import 'package:incremental_reader/features/extract/extract_view_model.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
+import 'package:incremental_reader/features/priority/learning_command_menu.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
@@ -225,6 +226,17 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
     return AppBar(
       title: const Text('Process extract'),
       actions: <Widget>[
+        LearningCommandMenu(
+          isEnabled: !state.isBusy,
+          onSelected: (command) => unawaited(
+            applyLearningCommandFromToolbar(
+              context: context,
+              ref: ref,
+              command: command,
+              elementRef: state.topic.ref,
+            ),
+          ),
+        ),
         if (!state.canMutate)
           TextButton(
             onPressed: model.continueScheduled,
@@ -463,7 +475,7 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
     ExtractUiState state,
     ExtractViewModel model,
   ) async {
-    final FormulationResult? formulation = await showFormulationDialog(
+    final FormulationResult? formulation = await openFormulationPage(
       context,
       ref: ref,
       seedText: state.extract.markdown,

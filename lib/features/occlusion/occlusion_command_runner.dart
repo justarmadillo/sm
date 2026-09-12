@@ -142,7 +142,7 @@ final class OcclusionCommandRunner {
     }
     final Card updated = card.copyWith(
       front: command.header.trim(),
-      back: command.remarks.trim(),
+      extra: command.extra.trim(),
       editedAtUtc: command.timestampUtc,
     );
     await _content.updateCard(updated);
@@ -208,7 +208,7 @@ final class OcclusionCommandRunner {
           id: _ids.newId(),
           parent: command.parent,
           header: command.header.trim(),
-          remarks: command.remarks.trim(),
+          extra: command.extra.trim(),
           createdAtUtc: now,
         ),
     ];
@@ -270,7 +270,7 @@ final class OcclusionCommandRunner {
         SearchDocument(
           ref: ref,
           title: 'Image occlusion',
-          body: '${card.front}\n${card.back}',
+          body: '${card.front}\n${card.extra}',
           sourceId: parentSchedule?.rootId ?? command.parent?.id,
           updatedAtUtc: now,
         ),

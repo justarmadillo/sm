@@ -40,6 +40,7 @@ final class EditCard extends AppCommand {
     required this.cardId,
     this.front,
     this.back,
+    this.extra,
     super.timestampUtc,
   });
 
@@ -50,6 +51,9 @@ final class EditCard extends AppCommand {
 
   /// New answer. Ignored for cloze cards, whose answer is derived.
   final String? back;
+
+  /// New optional Markdown shown only after reveal.
+  final String? extra;
 }
 
 /// Move a card's eligibility without reviewing it.

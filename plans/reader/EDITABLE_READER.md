@@ -137,9 +137,9 @@ final class TextSplice {
 }
 ```
 
-**[Invariant]** Source text changes **only** through a `TextSplice`. There is no code path that assigns a new whole-document string.
+**[Invariant]** Source text changes **only** through a `TextSplice`. There is no code path that assigns a new whole-document string. The full-document editor trims the byte-identical prefix and suffix and submits only the unique middle splice.
 
-**[Rationale]** If the editor hands over a replacement document, the splice must be recovered by diffing. Diffing is a heuristic: for repeated text it has several equally plausible answers, and the wrong one relocates positions into the wrong paragraph. With an explicit splice the migration is arithmetic and provably exact. This single constraint is what makes the rest of the contract sound.
+**[Rationale]** A structural diff is a heuristic: for repeated text it has several equally plausible answers, and the wrong one relocates positions into the wrong paragraph. Block edits carry explicit bounds; a full rewrite has exactly one span after trimming its common prefix and suffix. In both cases migration receives one exact splice and stays arithmetic.
 
 ### 5.1 Validation
 
@@ -380,7 +380,7 @@ An extract's provenance may name another extract as parent, and extract text is 
 
 ## 11. Editing surface
 
-**[Normative]** Editing is **block-scoped**. Activating a block replaces it with a plain text field containing that block's `raw` markdown. Committing produces a splice of exactly `[block.startUtf8, block.endUtf8)`.
+**[Normative]** The common editing path is **block-scoped**. Activating a block replaces it with a plain text field containing that block's `raw` markdown. Committing produces a splice of exactly `[block.startUtf8, block.endUtf8)`. A separate full-document editor derives the unique minimal replaced span by trimming the common prefix and suffix; anchors outside it remain untouched.
 
 **[Rationale]** Three properties fall out at once. The splice is exact and free — no diffing, because the bounds are known before the user types a character. The virtualized list is untouched, so a 50k-word document does not have to be materialized to edit one paragraph. And a full rich-text editor — the component that consumes most of the budget of projects like this, and produces most of their position bugs — is never built.
 
@@ -410,7 +410,7 @@ An extract's provenance may name another extract as parent, and extract text is 
 
 **[Rationale]** The reader mounts only the blocks currently on screen. A block whose height changes after mount makes `scrollable_positioned_list` mis-estimate, and the page jumps under the user's cursor — the single most common way a reader with images comes to feel broken.
 
-**[Normative]** A block whose content is a single image renders centred, with the alt text as a caption. Extraction over a range containing an image yields markdown containing the `![alt](src)` text verbatim; the extract records the asset ids it references so the asset survives deletion of the source.
+**[Normative]** A block whose content is a single image renders centred without a caption. Extraction over a range containing an image yields markdown containing the `![alt](src)` text verbatim; the extract records the asset ids it references so the asset survives deletion of the source.
 
 **[Deferred]** Image occlusion. The `SourceAssets` shape is chosen so that occlusion cards need only a rectangle list on the card, not a new asset model.
 

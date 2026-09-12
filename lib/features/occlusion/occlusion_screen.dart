@@ -132,7 +132,7 @@ class OcclusionScreen extends ConsumerStatefulWidget {
 
 class _OcclusionScreenState extends ConsumerState<OcclusionScreen> {
   final TextEditingController _header = TextEditingController();
-  final TextEditingController _remarks = TextEditingController();
+  final TextEditingController _extra = TextEditingController();
   late List<OcclusionRegion> _regions;
   late OcclusionMode _mode;
   bool _isBusy = false;
@@ -143,7 +143,7 @@ class _OcclusionScreenState extends ConsumerState<OcclusionScreen> {
   void initState() {
     super.initState();
     _header.text = widget.card?.front ?? '';
-    _remarks.text = widget.card?.back ?? '';
+    _extra.text = widget.card?.extra ?? '';
     _regions = widget.occlusion?.regions ?? const <OcclusionRegion>[];
     _mode = widget.occlusion?.mode ?? OcclusionMode.hideAllGuessOne;
   }
@@ -151,7 +151,7 @@ class _OcclusionScreenState extends ConsumerState<OcclusionScreen> {
   @override
   void dispose() {
     _header.dispose();
-    _remarks.dispose();
+    _extra.dispose();
     super.dispose();
   }
 
@@ -211,10 +211,8 @@ class _OcclusionScreenState extends ConsumerState<OcclusionScreen> {
           SizedBox(
             width: 240,
             child: TextField(
-              controller: _remarks,
-              decoration: const InputDecoration(
-                labelText: 'Remarks (optional)',
-              ),
+              controller: _extra,
+              decoration: const InputDecoration(labelText: 'Extra (optional)'),
             ),
           ),
           DropdownButton<OcclusionMode>(
@@ -257,7 +255,7 @@ class _OcclusionScreenState extends ConsumerState<OcclusionScreen> {
               regions: _regions,
               mode: _mode,
               header: _header.text,
-              remarks: _remarks.text,
+              extra: _extra.text,
             ),
           );
       if (!mounted) return;
@@ -279,7 +277,7 @@ class _OcclusionScreenState extends ConsumerState<OcclusionScreen> {
             regions: _regions,
             mode: _mode,
             header: _header.text,
-            remarks: _remarks.text,
+            extra: _extra.text,
           ),
         );
     if (!mounted) return;

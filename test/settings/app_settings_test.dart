@@ -1,4 +1,5 @@
 import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/backup_settings.dart';
 import 'package:incremental_reader/settings/card_settings.dart';
 import 'package:incremental_reader/settings/diagnostics_settings.dart';
 import 'package:incremental_reader/settings/mercy_settings.dart';
@@ -93,6 +94,11 @@ void main() {
           logRetainedFiles: 9,
           shouldShowContentInPanel: true,
         ),
+        backup: const BackupSettings(
+          interval: AutomaticBackupInterval.everyThreeDays,
+          directoryLocation: r'C:\Backups',
+          directoryLabel: r'C:\Backups',
+        ),
       );
 
       expect(AppSettings.fromMap(edited.toMap()), edited);
@@ -148,6 +154,7 @@ void main() {
         'postpone.default.topic_a_factor_cutoff': 'Infinity',
         'mercy.mode': 'unknown',
         'diagnostics.log_enabled': 'perhaps',
+        'backup.interval': 'sometimes',
       });
 
       const AppSettings defaults = AppSettings();
@@ -179,6 +186,7 @@ void main() {
         defaults.postpone.defaultProfile.topicAFactorCutoff,
       );
       expect(settings.mercy.mode, defaults.mercy.mode);
+      expect(settings.backup.interval, defaults.backup.interval);
       expect(
         settings.diagnostics.isLogEnabled,
         defaults.diagnostics.isLogEnabled,

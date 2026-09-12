@@ -46,7 +46,7 @@ double measureBlockHeight(
       heightPx: asset?.heightPx ?? 180,
       maxWidth: bodyWidth,
     );
-    return size.height + 28 + typography.paragraphSpacing;
+    return size.height + typography.paragraphSpacing;
   }
 
   double textHeight(double maxWidth, {TextStyle? markerStyle}) {
@@ -110,6 +110,7 @@ class BlockView extends StatefulWidget {
     this.onEditCancel,
     this.onEditDelete,
     this.onEditChooseImages,
+    this.onEditPasteImages,
     this.images = const <String, ReaderImagePresentation>{},
     this.imageMaxWidth = 560,
     super.key,
@@ -161,6 +162,8 @@ class BlockView extends StatefulWidget {
   final void Function(Block block)? onEditDelete;
 
   final Future<List<SourceImageImport>> Function()? onEditChooseImages;
+
+  final Future<List<SourceImageImport>> Function()? onEditPasteImages;
 
   @override
   State<BlockView> createState() => _BlockViewState();
@@ -274,6 +277,7 @@ class _BlockViewState extends State<BlockView> {
             ? null
             : () => widget.onEditDelete!(block),
         onChooseImages: widget.onEditChooseImages,
+        onPasteImages: widget.onEditPasteImages,
       );
     }
 

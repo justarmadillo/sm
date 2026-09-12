@@ -1,9 +1,9 @@
 /// Turning a block-scoped edit into an exact splice.
 ///
-/// Editing is block-scoped, and that is not only a UI preference: the byte
-/// range of the block is known *before* the user types a character, so the
-/// resulting splice needs no diffing and has no ambiguity. Everything in this
-/// file is that translation.
+/// A block's byte range is known *before* the user types a character, so the
+/// resulting splice needs no comparison and has no ambiguity. Full-document
+/// editing uses a separate minimal-span comparison; everything in this file
+/// remains the direct block-scoped translation.
 ///
 /// See `plans/reader/EDITABLE_READER.md` §11.
 library;

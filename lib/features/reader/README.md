@@ -20,12 +20,13 @@ Pieces of this screen too big to keep in the screen file.
 
 | File | What it is |
 |---|---|
-| `block_editor.dart` | Editing one block in place |
+| `block_editor.dart` | Editing one block in place, with picker and clipboard image insertion |
+| `document_editor.dart` | Fullscreen editing of one source's complete Markdown |
 | `block_span_builder.dart` | Turns a block's inline layout into Flutter spans |
 | `block_view.dart` | Renders one block of a document |
 | `extract_highlights.dart` | Turns provenance into what the reader actually sees on the page |
 | `reader_selection.dart` | Block-aware text selection with exact source coordinates |
-| `reader_side_panel.dart` | The Reader's side panel: outline and extracts |
+| `reader_side_panel.dart` | The Reader's side panel: outline navigation everywhere, Windows-only outline editing, and extracts |
 | `reader_view.dart` | The virtualized reading surface |
 | `selection_knobs.dart` | The two draggable ends of a touch selection |
 | `selection_toolbar.dart` | The floating toolbar that follows a selection |

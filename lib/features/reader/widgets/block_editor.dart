@@ -4,13 +4,14 @@
 /// raw markdown, and nothing else on the page changes. That is not only a
 /// visual choice: the block's byte range is known before the user types a
 /// character, so committing produces an exact splice with nothing to infer.
-/// A whole-document editor would have to recover the edit by diffing, and a
-/// diff over repeated text picks one of several equally plausible answers —
-/// silently relocating every position that followed the one it guessed wrong.
+/// The separate whole-document editor deliberately does not diff repeated
+/// passages: it trims the one shared prefix and suffix and replaces the unique
+/// middle span. This block editor keeps the still-smaller known bounds.
 ///
 /// See `plans/reader/EDITABLE_READER.md` §11.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:incremental_reader/documents/block.dart';
@@ -25,6 +26,7 @@ class BlockEditor extends StatefulWidget {
     required this.onCommit,
     required this.onCancel,
     this.onChooseImages,
+    this.onPasteImages,
     this.onDelete,
     this.isBusy = false,
     super.key,
@@ -40,6 +42,9 @@ class BlockEditor extends StatefulWidget {
 
   /// Opens the platform picker; selected images remain pending until Save.
   final Future<List<SourceImageImport>> Function()? onChooseImages;
+
+  /// Reads a clipboard image; it remains pending until the same Save.
+  final Future<List<SourceImageImport>> Function()? onPasteImages;
 
   /// Removes the block outright, separator included.
   final VoidCallback? onDelete;
@@ -83,10 +88,11 @@ class _BlockEditorState extends State<BlockEditor> {
 
   /// Inserts references at the caret while retaining the bytes for the one
   /// transactional Save that follows.
-  Future<void> _insertImages() async {
-    final chooseImages = widget.onChooseImages;
-    if (chooseImages == null || widget.isBusy) return;
-    final List<SourceImageImport> images = await chooseImages();
+  Future<void> _insertImages(
+    Future<List<SourceImageImport>> Function()? readImages,
+  ) async {
+    if (readImages == null || widget.isBusy) return;
+    final List<SourceImageImport> images = await readImages();
     if (images.isEmpty || !mounted) return;
     final String markdown = images
         .map(
@@ -177,6 +183,10 @@ class _BlockEditorState extends State<BlockEditor> {
   /// The raw markdown of the block, in the reader's code face so what is
   /// typed lines up with what was parsed.
   Widget _markdownField(ReaderTypography typography) {
+    final EdgeInsets contentPadding =
+        defaultTargetPlatform == TargetPlatform.android
+        ? const EdgeInsets.symmetric(horizontal: 10, vertical: 10)
+        : EdgeInsets.zero;
     return Focus(
       onKeyEvent: _onKeyPressed,
       child: TextField(
@@ -187,10 +197,10 @@ class _BlockEditorState extends State<BlockEditor> {
         enableSuggestions: false,
         enabled: !widget.isBusy,
         style: typography.code.copyWith(height: 1.45),
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           isDense: true,
           border: InputBorder.none,
-          contentPadding: EdgeInsets.zero,
+          contentPadding: contentPadding,
         ),
         onChanged: (_) => setState(() {}),
       ),
@@ -226,9 +236,19 @@ class _BlockEditorState extends State<BlockEditor> {
             ),
           if (widget.onChooseImages != null)
             TextButton.icon(
-              onPressed: widget.isBusy ? null : _insertImages,
+              onPressed: widget.isBusy
+                  ? null
+                  : () => _insertImages(widget.onChooseImages),
               icon: const Icon(Icons.image_outlined, size: 18),
-              label: const Text('Insert image'),
+              label: const Text('Choose image'),
+            ),
+          if (widget.onPasteImages != null)
+            TextButton.icon(
+              onPressed: widget.isBusy
+                  ? null
+                  : () => _insertImages(widget.onPasteImages),
+              icon: const Icon(Icons.content_paste, size: 18),
+              label: const Text('Paste image'),
             ),
           TextButton(
             onPressed: widget.isBusy ? null : widget.onCancel,

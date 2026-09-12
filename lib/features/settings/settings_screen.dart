@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/features/settings/settings_controls.dart';
 import 'package:incremental_reader/features/settings/settings_view_model.dart';
+import 'package:incremental_reader/features/settings/widgets/backup_section.dart';
 import 'package:incremental_reader/features/settings/widgets/card_memory_section.dart';
 import 'package:incremental_reader/features/settings/widgets/collection_data_section.dart';
 import 'package:incremental_reader/features/settings/widgets/diagnostics_section.dart';
@@ -173,6 +174,7 @@ class _SettingsBody extends StatelessWidget {
           SmartPostponeAdjustSection(state: state, model: model),
           _ProfileRegistry(draft: state.draft, model: model),
           MercySection(state: state, model: model),
+          BackupSection(state: state, model: model),
           CollectionDataSection(state: state, model: model),
           MaintenanceSection(state: state, model: model),
           DiagnosticsSection(state: state, model: model),

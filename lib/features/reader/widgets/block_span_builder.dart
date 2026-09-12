@@ -13,6 +13,7 @@ import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/inline_markup.dart';
 import 'package:incremental_reader/documents/source_asset.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
+import 'package:incremental_reader/shared/ui/zoomable_image_page.dart';
 
 /// A highlighted character range within one block's rendered text.
 @immutable
@@ -78,9 +79,7 @@ TextSpan buildBlockSpan(
 
   for (final segment in block.inline.segments) {
     if (segment.styles.contains(InlineStyle.image)) {
-      children.add(
-        _imageSpan(segment, images[segment.imageUrl], base, imageMaxWidth),
-      );
+      children.add(_imageSpan(images[segment.imageUrl], imageMaxWidth));
       continue;
     }
     final style = _styleForSegment(segment, base, typography);
@@ -94,57 +93,49 @@ TextSpan buildBlockSpan(
   return TextSpan(style: base, children: children);
 }
 
-WidgetSpan _imageSpan(
-  InlineSegment segment,
-  ReaderImagePresentation? presentation,
-  TextStyle base,
-  double maxWidth,
-) {
+WidgetSpan _imageSpan(ReaderImagePresentation? presentation, double maxWidth) {
   final asset = presentation?.asset;
   final size = fittedReaderImageSize(
     widthPx: asset?.widthPx ?? 320,
     heightPx: asset?.heightPx ?? 180,
     maxWidth: maxWidth,
   );
-  final altText = segment.imageAlt?.trim().isNotEmpty == true
-      ? segment.imageAlt!
-      : 'Image';
   final bool canDisplay =
       asset?.state == SourceAssetState.ok && presentation != null;
   return WidgetSpan(
     alignment: PlaceholderAlignment.middle,
     child: SizedBox(
       width: size.width,
-      height: size.height + 28,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SizedBox(
-            width: size.width,
-            height: size.height,
-            child: canDisplay
-                ? Image(
-                    image: presentation.imageProvider,
-                    width: size.width,
-                    height: size.height,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => _missingImage(size),
-                  )
-                : _missingImage(size),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            altText,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: base.copyWith(
-              color: AppColors.muted,
-              fontSize: (base.fontSize ?? 16) * 0.82,
-            ),
-          ),
-        ],
-      ),
+      height: size.height,
+      child: canDisplay
+          ? _ZoomableReaderImage(presentation: presentation, size: size)
+          : _missingImage(size),
     ),
+  );
+}
+
+/// Supplies the route context a WidgetSpan does not otherwise have.
+class _ZoomableReaderImage extends StatelessWidget {
+  const _ZoomableReaderImage({required this.presentation, required this.size});
+
+  final ReaderImagePresentation presentation;
+  final Size size;
+
+  Widget _image() => Image(
+    image: presentation.imageProvider,
+    width: size.width,
+    height: size.height,
+    fit: BoxFit.contain,
+    errorBuilder: (_, _, _) => _missingImage(size),
+  );
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: () => openZoomableImage(
+      context,
+      buildImage: (BuildContext context) => Center(child: _image()),
+    ),
+    child: _image(),
   );
 }
 
@@ -196,7 +187,7 @@ List<PlaceholderDimensions> readerImagePlaceholderDimensions(
             heightPx: asset?.heightPx ?? 180,
             maxWidth: maxWidth,
           );
-          return Size(imageSize.width, imageSize.height + 28);
+          return imageSize;
         }(),
         alignment: PlaceholderAlignment.middle,
       ),

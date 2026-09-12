@@ -341,6 +341,7 @@ final class ReviewCommandRunner {
 
         final String front = (command.front ?? card.front).trim();
         final String back = (command.back ?? card.back).trim();
+        final String extra = (command.extra ?? card.extra).trim();
         if (front.isEmpty) {
           return const Err<Card>(
             ValidationFailure('a card needs a question', field: 'front'),
@@ -374,6 +375,7 @@ final class ReviewCommandRunner {
                   card.type == CardType.clozeOverlapper
               ? front
               : back,
+          extra: extra,
           editedAtUtc: command.timestampUtc,
         );
         await _content.updateCard(updated);

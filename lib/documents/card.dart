@@ -130,6 +130,7 @@ final class Card {
     required this.front,
     required this.back,
     required this.createdAtUtc,
+    this.extra = '',
     this.clozeOrdinal,
     this.contextBefore,
     this.contextAfter,
@@ -143,12 +144,14 @@ final class Card {
     required String question,
     required String answer,
     required DateTime createdAtUtc,
+    String extra = '',
   }) => Card(
     id: id,
     parent: parent,
     type: CardType.qa,
     front: question,
     back: answer,
+    extra: extra,
     createdAtUtc: createdAtUtc.toUtc(),
   );
 
@@ -159,12 +162,14 @@ final class Card {
     required String text,
     required int ordinal,
     required DateTime createdAtUtc,
+    String extra = '',
   }) => Card(
     id: id,
     parent: parent,
     type: CardType.cloze,
     front: text,
     back: '',
+    extra: extra,
     clozeOrdinal: ordinal,
     createdAtUtc: createdAtUtc.toUtc(),
   );
@@ -178,31 +183,34 @@ final class Card {
     required int contextBefore,
     required int contextAfter,
     required DateTime createdAtUtc,
+    String extra = '',
   }) => Card(
     id: id,
     parent: parent,
     type: CardType.clozeOverlapper,
     front: text,
     back: '',
+    extra: extra,
     clozeOrdinal: ordinal,
     contextBefore: contextBefore,
     contextAfter: contextAfter,
     createdAtUtc: createdAtUtc.toUtc(),
   );
 
-  /// An image-occlusion card with optional explanatory text.
+  /// An image-occlusion card with optional text shown after reveal.
   factory Card.imageOcclusion({
     required String id,
     required CardParent? parent,
     required String header,
-    required String remarks,
+    required String extra,
     required DateTime createdAtUtc,
   }) => Card(
     id: id,
     parent: parent,
     type: CardType.imageOcclusion,
     front: header,
-    back: remarks,
+    back: '',
+    extra: extra,
     createdAtUtc: createdAtUtc.toUtc(),
   );
 
@@ -228,8 +236,11 @@ final class Card {
   /// Question text, or the full cloze passage.
   final String front;
 
-  /// Answer text. Empty for cloze cards, whose answer is in [front].
+  /// Answer text. Empty when the answer is derived from cloze or image data.
   final String back;
+
+  /// Optional Markdown shown only after the answer is revealed.
+  final String extra;
 
   /// Which deletion this cloze card tests.
   final int? clozeOrdinal;
@@ -254,6 +265,7 @@ final class Card {
   Card copyWith({
     String? front,
     String? back,
+    String? extra,
     int? contextBefore,
     int? contextAfter,
     DateTime? editedAtUtc,
@@ -263,6 +275,7 @@ final class Card {
     type: type,
     front: front ?? this.front,
     back: back ?? this.back,
+    extra: extra ?? this.extra,
     clozeOrdinal: clozeOrdinal,
     contextBefore: contextBefore ?? this.contextBefore,
     contextAfter: contextAfter ?? this.contextAfter,

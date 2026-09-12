@@ -13,6 +13,7 @@ back from stored key/value pairs.
 | `smart_postpone_settings.dart` | the manual Smart Postpone pass, and its profiles |
 | `mercy_settings.dart` | how a backlog is spread over future days |
 | `diagnostics_settings.dart` | whether the log is written, and how large it gets |
+| `backup_settings.dart` | automatic backup folder and fixed cadence |
 | `settings_store.dart` | reads them once, caches them, writes changes back |
 | `settings_list_equality.dart` | compares the list-shaped values by content |
 

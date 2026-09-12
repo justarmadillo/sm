@@ -417,95 +417,73 @@ void main() {
     },
   );
 
-  test(
-    'queue projection mixes due cards and topics without leaking answers',
-    () async {
-      final (source, extract) = await harness.createFixture();
-      final extractRef = ElementRef(id: extract.id, type: ElementType.extract);
-      await harness.setRank(
-        extractRef,
-        PriorityRank.above(PriorityRank.middle),
-      );
-      final cards = await harness.formulateFixture(extract.id);
-      await harness.makeDueToday(extractRef);
-      // Sibling burying would push two of the three cards off today, which is
-      // right in a session and wrong in a test about the mix itself.
-      await harness.tuneSettings(
-        (settings) => settings.copyWith(
-          cards: settings.cards.copyWith(shouldBurySiblings: false),
-        ),
-      );
-      // Outstanding is a queue of memorized elements. A freshly formulated
-      // card has no repetition yet and belongs to Pending, so it has to be
-      // learned before it can take part in the mix at all.
-      for (final Card card in cards) {
-        await harness.memorizeAndMakeDue(card.id);
-      }
+  test('queue projection mixes due cards and topics', () async {
+    final (source, extract) = await harness.createFixture();
+    final extractRef = ElementRef(id: extract.id, type: ElementType.extract);
+    await harness.setRank(extractRef, PriorityRank.above(PriorityRank.middle));
+    final cards = await harness.formulateFixture(extract.id);
+    await harness.makeDueToday(extractRef);
+    // Sibling burying would push two of the three cards off today, which is
+    // right in a session and wrong in a test about the mix itself.
+    await harness.tuneSettings(
+      (settings) => settings.copyWith(
+        cards: settings.cards.copyWith(shouldBurySiblings: false),
+      ),
+    );
+    // Outstanding is a queue of memorized elements. A freshly formulated
+    // card has no repetition yet and belongs to Pending, so it has to be
+    // learned before it can take part in the mix at all.
+    for (final Card card in cards) {
+      await harness.memorizeAndMakeDue(card.id);
+    }
 
-      final QueueProjection projection = await harness.queueQuery.load();
-      final List<QueueEntry> entries = projection.entries;
+    final QueueProjection projection = await harness.queueQuery.load();
+    final List<QueueEntry> entries = projection.entries;
 
-      // Section 9.4: with the default 20 percent topic share the merge takes
-      // items while (1 - 0.2) > ni / (ni + nt + 1), which first fails at
-      // ni = 4. The three cards here are exhausted before that, so every card
-      // precedes every topic.
-      expect(
-        entries.take(cards.length).map((QueueEntry entry) => entry.ref.type),
-        everyElement(ElementType.card),
-        reason: 'the merge takes items until the item side runs out',
-      );
-      // The extract has been through extraction, which memorizes it, so it
-      // reaches Outstanding. The imported source has had no repetition and
-      // is still Pending, and Pending is a fallback stage that is never
-      // injected into the mixed queue.
-      final ElementRef sourceRef = ElementRef(
-        id: source.id,
-        type: ElementType.source,
-      );
-      expect(
-        entries.map((QueueEntry entry) => entry.ref),
-        contains(extractRef),
-      );
-      expect(
-        (await harness.learning.findTopic(sourceRef))!.status,
-        Sm20ElementStatus.pending,
-      );
-      expect(
-        entries.map((QueueEntry entry) => entry.ref),
-        isNot(contains(sourceRef)),
-        reason: 'a Pending source does not join Outstanding',
-      );
-      expect(
-        entries.where((QueueEntry e) => e.ref.type == ElementType.card),
-        hasLength(cards.length),
-      );
-      expect(
-        entries.map((QueueEntry entry) => entry.actionLabel).toSet(),
-        <String>{'Review', 'Process'},
-        reason:
-            'cards are reviewed and the extract is processed; the only '
-            'Read row would have been the still-Pending source',
-      );
-      expect(
-        entries.every((QueueEntry entry) => entry.priorityPercent != null),
-        isTrue,
-        reason: 'every row carries its derived percentile',
-      );
-
-      final qa = entries.firstWhere(
-        (QueueEntry entry) => entry.ref.id == cards.first.id,
-      );
-      expect(qa.preview, 'How many items does working memory hold?');
-      expect(qa.preview, isNot(contains('About four items')));
-      final cloze = entries.firstWhere(
-        (QueueEntry entry) =>
-            entry.ref.id ==
-            cards.firstWhere((Card card) => card.type == CardType.cloze).id,
-      );
-      expect(cloze.preview, contains('[...]'));
-      expect(cloze.preview, isNot(contains('four items')));
-    },
-  );
+    // Section 9.4: with the default 20 percent topic share the merge takes
+    // items while (1 - 0.2) > ni / (ni + nt + 1), which first fails at
+    // ni = 4. The three cards here are exhausted before that, so every card
+    // precedes every topic.
+    expect(
+      entries.take(cards.length).map((QueueEntry entry) => entry.ref.type),
+      everyElement(ElementType.card),
+      reason: 'the merge takes items until the item side runs out',
+    );
+    // The extract has been through extraction, which memorizes it, so it
+    // reaches Outstanding. The imported source has had no repetition and
+    // is still Pending, and Pending is a fallback stage that is never
+    // injected into the mixed queue.
+    final ElementRef sourceRef = ElementRef(
+      id: source.id,
+      type: ElementType.source,
+    );
+    expect(entries.map((QueueEntry entry) => entry.ref), contains(extractRef));
+    expect(
+      (await harness.learning.findTopic(sourceRef))!.status,
+      Sm20ElementStatus.pending,
+    );
+    expect(
+      entries.map((QueueEntry entry) => entry.ref),
+      isNot(contains(sourceRef)),
+      reason: 'a Pending source does not join Outstanding',
+    );
+    expect(
+      entries.where((QueueEntry e) => e.ref.type == ElementType.card),
+      hasLength(cards.length),
+    );
+    expect(
+      entries.map((QueueEntry entry) => entry.actionLabel).toSet(),
+      <String>{'Review', 'Process'},
+      reason:
+          'cards are reviewed and the extract is processed; the only '
+          'Read row would have been the still-Pending source',
+    );
+    expect(
+      entries.every((QueueEntry entry) => entry.priorityPercent != null),
+      isTrue,
+      reason: 'every row carries its derived percentile',
+    );
+  });
 
   test('overlapper formulation keeps its window on every ordinal', () async {
     final (_, extract) = await harness.createFixture();

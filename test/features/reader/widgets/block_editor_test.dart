@@ -5,8 +5,7 @@
 /// hit-testable while it is gone, and cancelling writes nothing.
 library;
 
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:incremental_reader/documents/block.dart';
@@ -37,6 +36,7 @@ void main() {
     void Function(Block block)? onCancel,
     void Function(Block block)? onDelete,
     Future<List<SourceImageImport>> Function()? onChooseImages,
+    Future<List<SourceImageImport>> Function()? onPasteImages,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -53,6 +53,7 @@ void main() {
               onEditCancel: onCancel,
               onEditDelete: onDelete,
               onEditChooseImages: onChooseImages,
+              onEditPasteImages: onPasteImages,
             ),
           ),
         ),
@@ -180,7 +181,7 @@ void main() {
     expect(deleted?.id, document.blocks[1].id);
   });
 
-  testWidgets('Insert image adds Markdown at the caret and waits for Save', (
+  testWidgets('chosen image adds Markdown at the caret and waits for Save', (
     WidgetTester tester,
   ) async {
     final Document document = Document.parse(
@@ -214,7 +215,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.text('Insert image'));
+    await tester.tap(find.text('Choose image'));
     await tester.pump();
     expect(committed, isNull, reason: 'choosing remains a cancellable draft');
     final TextField field = tester.widget<TextField>(find.byType(TextField));
@@ -226,6 +227,47 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pump();
     expect(committed, contains('![Diagram](ir-asset:${'a' * 64})'));
+    expect(committedImages, <SourceImageImport>[image]);
+  });
+
+  testWidgets('clipboard image can be inserted while editing', (
+    WidgetTester tester,
+  ) async {
+    final Document document = Document.parse(
+      sourceId: 's',
+      markdown: _markdown,
+    );
+    final ReaderSelectionController controller = ReaderSelectionController(
+      document,
+    );
+    final SourceImageImport image = SourceImageImport(
+      bytes: Uint8List.fromList(<int>[4, 5, 6]),
+      altText: 'Pasted image',
+      sha256: 'b' * 64,
+      mime: 'image/png',
+      widthPx: 20,
+      heightPx: 12,
+    );
+    List<SourceImageImport>? committedImages;
+
+    await pumpReader(
+      tester,
+      document,
+      controller,
+      editingBlockId: document.blocks[1].id,
+      onPasteImages: () async => <SourceImageImport>[image],
+      onCommit: (Block _, String _, List<SourceImageImport> images) {
+        committedImages = images;
+      },
+    );
+
+    await tester.tap(find.text('Paste image'));
+    await tester.pump();
+    final TextField field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.controller!.text, contains('![Pasted image](ir-asset:'));
+
+    await tester.tap(find.text('Save'));
+    await tester.pump();
     expect(committedImages, <SourceImageImport>[image]);
   });
 
@@ -292,5 +334,32 @@ void main() {
 
     final field = tester.widget<TextField>(find.byType(TextField));
     expect(field.style!.fontFamily, typography.code.fontFamily);
+  });
+
+  testWidgets('Android editor text has an inner touch-screen inset', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    final Document document = Document.parse(
+      sourceId: 's',
+      markdown: _markdown,
+    );
+    final ReaderSelectionController controller = ReaderSelectionController(
+      document,
+    );
+
+    await pumpReader(
+      tester,
+      document,
+      controller,
+      editingBlockId: document.blocks[1].id,
+    );
+
+    final TextField field = tester.widget<TextField>(find.byType(TextField));
+    expect(
+      field.decoration?.contentPadding,
+      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    );
+    debugDefaultTargetPlatformOverride = null;
   });
 }

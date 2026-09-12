@@ -81,9 +81,28 @@ void main() {
       'Child:level:1',
     ]);
   });
+
+  testWidgets('outline stays navigable when editing controls are hidden', (
+    WidgetTester tester,
+  ) async {
+    String? openedBlockId;
+    await tester.pumpWidget(
+      _panel(onGoToBlock: (String blockId) => openedBlockId = blockId),
+    );
+
+    expect(find.byIcon(Icons.format_indent_increase), findsNothing);
+    expect(find.byIcon(Icons.edit_outlined), findsNothing);
+    await tester.tap(find.text('Child'));
+    await tester.pump();
+
+    expect(openedBlockId, isNotNull);
+  });
 }
 
-Widget _panel({required OutlineEditing editing}) {
+Widget _panel({
+  OutlineEditing? editing,
+  void Function(String blockId)? onGoToBlock,
+}) {
   return MaterialApp(
     home: Scaffold(
       body: SizedBox(
@@ -94,7 +113,7 @@ Widget _panel({required OutlineEditing editing}) {
           extracts: const [],
           tab: ReaderPanelTab.outline,
           onTabChanged: (_) {},
-          onGoToBlock: (_) {},
+          onGoToBlock: onGoToBlock ?? (_) {},
           onGoToExtract: (_) {},
           onClose: () {},
           outlineEditing: editing,

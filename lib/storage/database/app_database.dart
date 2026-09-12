@@ -16,7 +16,7 @@ import 'package:incremental_reader/storage/database/tables.dart';
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 18;
+const int kSchemaVersion = 19;
 
 /// Name of the external-content FTS5 index over [SearchDocuments].
 const String kSearchIndexTable = 'search_index';
@@ -83,6 +83,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 17 && await _hasTable('cards')) {
         await _addColumnIfMissing(m, cards, cards.contextBefore);
         await _addColumnIfMissing(m, cards, cards.contextAfter);
+      }
+      if (from < 19 && await _hasTable('cards')) {
+        await _addColumnIfMissing(m, cards, cards.extra);
       }
       if (from < 17 && await _hasTable('videos')) {
         await _addColumnIfMissing(m, videos, videos.thumbnailUrl);
@@ -671,6 +674,16 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(elementTags);
         }
         await _createIndexes(m);
+      }
+      if (from < 19) {
+        await _addColumnIfMissing(m, cards, cards.extra);
+        // Occlusion remarks were the old shape of Extra. Moving them keeps
+        // existing cards visually identical while giving every card type one
+        // canonical revealed-side field from this version onward.
+        await customStatement(
+          "UPDATE cards SET extra = back, back = '' "
+          "WHERE type = 3 AND extra = ''",
+        );
       }
     },
     beforeOpen: (OpeningDetails details) async {

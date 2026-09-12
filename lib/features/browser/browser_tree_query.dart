@@ -37,7 +37,7 @@ final class BrowserTreeNode {
   const BrowserTreeNode({
     required this.ref,
     required this.title,
-    required this.preview,
+    required this.addedAtUtc,
     required this.children,
     required this.directTagIds,
     required this.effectiveTagIds,
@@ -51,9 +51,7 @@ final class BrowserTreeNode {
 
   final ElementRef ref;
   final String title;
-
-  /// A short excerpt, empty when the element has no body worth showing.
-  final String preview;
+  final DateTime addedAtUtc;
 
   /// A video's optional remote or embedded preview; null for other elements.
   final String? thumbnailSource;
@@ -149,7 +147,7 @@ final class BrowserTreeQuery {
     );
   }
 
-  /// Sources, extracts, and cards, each with the text the tree displays.
+  /// Sources, extracts, videos, and cards with their visible tree titles.
   ///
   /// The fallback order is the order this list is built in: sources newest
   /// first, as the import list always showed them, then extracts and cards
@@ -172,7 +170,7 @@ final class BrowserTreeQuery {
         _Element(
           ref: ElementRef(id: source.id, type: ElementType.source),
           title: source.title,
-          preview: _excerpt(source.markdown),
+          addedAtUtc: source.importedAtUtc,
           provenanceParentId: null,
           fallbackIndex: elements.length,
         ),
@@ -183,7 +181,7 @@ final class BrowserTreeQuery {
         _Element(
           ref: ElementRef(id: extract.id, type: ElementType.extract),
           title: _titleOf(extract.markdown),
-          preview: _excerpt(extract.markdown),
+          addedAtUtc: extract.createdAtUtc,
           provenanceParentId: extract.provenance.parentId,
           fallbackIndex: elements.length,
         ),
@@ -194,9 +192,7 @@ final class BrowserTreeQuery {
         _Element(
           ref: ElementRef(id: element.id, type: ElementType.video),
           title: element.displayTitle,
-          preview: element.note.trim().isEmpty
-              ? element.rangeLabel
-              : _excerpt(element.note),
+          addedAtUtc: element.createdAtUtc,
           thumbnailSource: videosById[element.videoId]?.thumbnailUrl,
           provenanceParentId: element.parentVideoElementId,
           fallbackIndex: elements.length,
@@ -210,7 +206,7 @@ final class BrowserTreeQuery {
           title: card.type == CardType.imageOcclusion && card.front.isEmpty
               ? 'Image occlusion'
               : _titleOf(card.front),
-          preview: '',
+          addedAtUtc: card.createdAtUtc,
           provenanceParentId: card.parent?.id,
           fallbackIndex: elements.length,
         ),
@@ -290,7 +286,7 @@ final class BrowserTreeQuery {
         BrowserTreeNode(
           ref: element.ref,
           title: element.title,
-          preview: element.preview,
+          addedAtUtc: element.addedAtUtc,
           thumbnailSource: element.thumbnailSource,
           parentRef: parentRef,
           dueDay: schedule?.dueDay,
@@ -343,15 +339,6 @@ final class BrowserTreeQuery {
     if (flat.length <= 70) return flat;
     return '${flat.substring(0, 70)}…';
   }
-
-  static String _excerpt(String body) {
-    final String flat = body
-        .replaceAll(RegExp(r'^#+\s*', multiLine: true), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    if (flat.length <= 110) return flat;
-    return '${flat.substring(0, 110)}…';
-  }
 }
 
 /// One element of the collection, before it is placed in the tree.
@@ -360,7 +347,7 @@ final class _Element {
   const _Element({
     required this.ref,
     required this.title,
-    required this.preview,
+    required this.addedAtUtc,
     required this.provenanceParentId,
     required this.fallbackIndex,
     this.thumbnailSource,
@@ -368,7 +355,7 @@ final class _Element {
 
   final ElementRef ref;
   final String title;
-  final String preview;
+  final DateTime addedAtUtc;
   final String? thumbnailSource;
 
   /// The element this was cut or written from. Used only when nothing has been

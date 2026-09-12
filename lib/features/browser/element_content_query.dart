@@ -23,6 +23,7 @@ final class ElementContent {
     required this.title,
     required this.body,
     this.back,
+    this.extra = '',
     this.isEditable = false,
     this.notEditableReason,
   });
@@ -40,6 +41,9 @@ final class ElementContent {
   /// A card's answer, absent for every other kind and for cloze cards, whose
   /// answer is derived from the question.
   final String? back;
+
+  /// A card's optional revealed-side addition; empty for other elements.
+  final String extra;
 
   /// Whether this pane may write the text back.
   final bool isEditable;
@@ -120,6 +124,7 @@ final class ElementContentQuery {
                   card.type == CardType.clozeOverlapper
               ? null
               : card.back,
+          extra: card.extra,
           isEditable: card.type != CardType.imageOcclusion,
           notEditableReason: card.type == CardType.imageOcclusion
               ? 'Open the image occlusion editor to change its masks.'

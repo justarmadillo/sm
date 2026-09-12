@@ -15,7 +15,7 @@ final class CreateOcclusionCards extends AppCommand {
     required this.regions,
     required this.mode,
     required this.header,
-    required this.remarks,
+    required this.extra,
     super.timestampUtc,
   });
 
@@ -24,7 +24,7 @@ final class CreateOcclusionCards extends AppCommand {
   final List<OcclusionRegion> regions;
   final OcclusionMode mode;
   final String header;
-  final String remarks;
+  final String extra;
 }
 
 /// Replaces one occlusion card's wording, mode, and complete mask set.
@@ -35,7 +35,7 @@ final class EditOcclusionCard extends AppCommand {
     required this.regions,
     required this.mode,
     required this.header,
-    required this.remarks,
+    required this.extra,
     super.timestampUtc,
   });
 
@@ -43,5 +43,5 @@ final class EditOcclusionCard extends AppCommand {
   final List<OcclusionRegion> regions;
   final OcclusionMode mode;
   final String header;
-  final String remarks;
+  final String extra;
 }

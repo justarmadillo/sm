@@ -100,12 +100,14 @@ void main() {
           front:
               'Working memory holds {{c1::about four items}} while '
               '{{c2::attention}} remains {{c3::limited}}.',
+          extra: 'A short explanatory note.',
           timestampUtc: clock.nowUtc(),
         ),
       );
 
       expect(edited.isOk, isTrue, reason: '${edited.failureOrNull}');
       expect(edited.unwrap().front, contains('about four items'));
+      expect(edited.unwrap().extra, 'A short explanatory note.');
       expect(edited.unwrap().editedAtUtc, isNotNull);
 
       final CardState after = await harness.stateOf(card.id);

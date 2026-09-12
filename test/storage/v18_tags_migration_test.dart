@@ -43,7 +43,7 @@ void main() {
     final version = await upgraded
         .customSelect('PRAGMA user_version')
         .getSingle();
-    expect(version.data.values.single, 18);
+    expect(version.data.values.single, kSchemaVersion);
     for (final String table in <String>['tags', 'element_tags']) {
       final rows = await upgraded
           .customSelect('PRAGMA table_info($table)')

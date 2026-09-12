@@ -1,13 +1,19 @@
 /// The Learning menu, and the questions a command asks before it runs.
 ///
-/// Drawn identically on the Priority queue and on every Browser row, so the
+/// Drawn identically in Priority, Browser, and processing toolbars, so the
 /// same element offers the same commands wherever the user found it.
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/priority/learning_commands.dart';
+import 'package:incremental_reader/features/priority/priority_providers.dart';
+import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/screen_width.dart';
+import 'package:incremental_reader/shared/ui/toast_message.dart';
 
 /// The Learning commands for one element, behind a button.
 class LearningCommandMenu extends StatelessWidget {
@@ -53,6 +59,45 @@ class LearningCommandMenu extends StatelessWidget {
       padding: EdgeInsets.zero,
       icon: Icon(Icons.school_outlined, size: iconSize),
     ),
+  );
+}
+
+/// Applies one toolbar command through the same runner as the Priority screen.
+///
+/// Screens keep their own processing actions, but this menu must not grow a
+/// second interpretation of Set A, Forget, or Outstanding. The shared runner
+/// remains the authority; this function only collects answers and reports its
+/// result where the menu was opened.
+Future<void> applyLearningCommandFromToolbar({
+  required BuildContext context,
+  required WidgetRef ref,
+  required LearningCommand command,
+  required ElementRef elementRef,
+}) async {
+  final LearningCommandAnswers? answers = await askForLearningCommand(
+    context,
+    command,
+  );
+  if (answers == null || !context.mounted) return;
+  final result = await runLearningCommand(
+    command,
+    commandRunner: ref.read(priorityBrowserCommandRunnerProvider),
+    operation: OperationId(ref.read(idGeneratorProvider).newId()),
+    refs: <ElementRef>[elementRef],
+    day: await ref.read(schedulingContextProvider).today(),
+    timestampUtc: ref.read(clockProvider).nowUtc(),
+    answers: answers,
+  );
+  if (!context.mounted) return;
+  result.fold(
+    (outcome) => showToast(
+      context,
+      outcome.changedRefCount == 0
+          ? 'Nothing was eligible'
+          : '${command.successVerb} ${outcome.changedRefCount} element'
+                '${outcome.changedRefCount == 1 ? '' : 's'}',
+    ),
+    (failure) => showToast(context, failure.message, isError: true),
   );
 }
 

@@ -6,6 +6,8 @@
 /// this screen gets out of the way.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +18,7 @@ import 'package:incremental_reader/documents/video_time.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
+import 'package:incremental_reader/features/priority/learning_command_menu.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/tags/tags_picker_dialog.dart';
 import 'package:incremental_reader/features/video/video_clip_dialog.dart';
@@ -158,7 +161,7 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
   }
 
   Future<void> _formulate(VideoUiState state) async {
-    final FormulationResult? formulation = await showFormulationDialog(
+    final FormulationResult? formulation = await openFormulationPage(
       context,
       ref: ref,
       seedText: state.element.note,
@@ -246,6 +249,17 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
       style: const TextStyle(fontSize: 16),
     ),
     actions: <Widget>[
+      LearningCommandMenu(
+        isEnabled: !state.isBusy,
+        onSelected: (command) => unawaited(
+          applyLearningCommandFromToolbar(
+            context: context,
+            ref: ref,
+            command: command,
+            elementRef: state.topic.ref,
+          ),
+        ),
+      ),
       IconButton(
         tooltip: 'Tags',
         icon: const Icon(Icons.label_outline),

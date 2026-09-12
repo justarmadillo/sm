@@ -29,12 +29,14 @@ void main() {
       parent: const CardParent.extract('extract'),
       question: 'What is FSRS?',
       answer: 'A memory scheduler.',
+      extra: 'It models stability and difficulty.',
       createdAtUtc: DateTime.utc(2026),
     );
     final ui = ReviewUiState(card: card, cardState: stateFor(card.id));
 
     expect(ui.question, 'What is FSRS?');
     expect(ui.answer, 'A memory scheduler.');
+    expect(ui.extra, 'It models stability and difficulty.');
     expect(ui.isAnswerRevealed, isFalse);
     expect(ui.copyWith(isAnswerRevealed: true).isAnswerRevealed, isTrue);
   });

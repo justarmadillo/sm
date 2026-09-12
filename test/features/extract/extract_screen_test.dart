@@ -135,6 +135,7 @@ void main() {
 
     await start(tester);
     expect(find.text('Process extract'), findsOneWidget);
+    expect(find.byTooltip('Learning commands'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Done'));
     await tester.pumpAndSettle();
     expect(outcomes, <StudyRouteResult>[StudyRouteResult.committed]);

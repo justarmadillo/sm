@@ -5,7 +5,9 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
+import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/backup_settings.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/settings_repository.dart';
@@ -13,15 +15,15 @@ import 'package:incremental_reader/storage/contracts/settings_repository.dart';
 /// Setting key holding the day of the last successful backup.
 const String kLastBackupDayKey = 'backup.last_day';
 
-/// Takes at most one rolling backup per study day, at startup.
+/// Takes a rolling backup at the selected cadence, at startup.
 ///
 /// Startup is the only moment guaranteed to happen before the day's writes,
 /// which is what makes it the right moment: the copy predates whatever the
 /// session is about to do. A failure is never fatal — the user came here to
 /// read, and a missing backup is reported rather than blocking the app.
-Future<File?> runDailyBackupIfDue(ProviderContainer container) async {
+Future<File?> runAutomaticBackupIfDue(ProviderContainer container) async {
   try {
-    return await _runDailyBackupIfDue(container);
+    return await _runAutomaticBackupIfDue(container);
   } on Object catch (error, stackTrace) {
     container
         .read(diagnosticsProvider)
@@ -31,7 +33,7 @@ Future<File?> runDailyBackupIfDue(ProviderContainer container) async {
             name: 'backup.startup_failed',
             timestampUtc: container.read(clockProvider).nowUtc(),
             failure: UnexpectedFailure(
-              'daily backup failed unexpectedly',
+              'automatic backup failed unexpectedly',
               cause: error,
               stackTrace: stackTrace,
             ),
@@ -41,14 +43,25 @@ Future<File?> runDailyBackupIfDue(ProviderContainer container) async {
   }
 }
 
-Future<File?> _runDailyBackupIfDue(ProviderContainer container) async {
+Future<File?> _runAutomaticBackupIfDue(ProviderContainer container) async {
   final SettingsRepository settings = container.read(
     settingsRepositoryProvider,
   );
-  final String today = (await container.read(schedulingContextProvider).today())
-      .toString();
+  final StudyDay today = await container
+      .read(schedulingContextProvider)
+      .today();
+  final BackupSettings backup = container
+      .read(settingsStoreProvider)
+      .currentOrDefaults
+      .backup;
 
-  if (await settings.findValue(kLastBackupDayKey) == today) return null;
+  if (!isAutomaticBackupDue(
+    today: today,
+    lastBackupDay: await settings.findValue(kLastBackupDayKey),
+    interval: backup.interval,
+  )) {
+    return null;
+  }
 
   final List<String> quickCheck = await container
       .read(databaseProvider)
@@ -69,8 +82,68 @@ Future<File?> _runDailyBackupIfDue(ProviderContainer container) async {
 
   final result = await container.read(backupServiceProvider).createBackup();
   if (result.isErr) return null;
-  await settings.saveValue(kLastBackupDayKey, today);
-  return result.valueOrNull;
+  final File packageFile = result.unwrap();
+  if (!await _mirrorAutomaticBackup(
+    container: container,
+    backup: backup,
+    packageFile: packageFile,
+  )) {
+    return null;
+  }
+  await settings.saveValue(kLastBackupDayKey, today.toString());
+  return packageFile;
+}
+
+/// Mirrors only when a folder was selected; a failed mirror remains due so a
+/// later startup retries instead of advancing the successful-backup day.
+Future<bool> _mirrorAutomaticBackup({
+  required ProviderContainer container,
+  required BackupSettings backup,
+  required File packageFile,
+}) async {
+  if (!backup.hasSelectedDirectory) return true;
+  try {
+    await container
+        .read(automaticBackupFolderAccessProvider)
+        .saveBackup(
+          packageFile: packageFile,
+          directoryLocation: backup.directoryLocation,
+        );
+    return true;
+  } on Object catch (error, stackTrace) {
+    container
+        .read(diagnosticsProvider)
+        .record(
+          DiagnosticEvent(
+            level: DiagnosticLevel.error,
+            name: 'backup.selected_folder_failed',
+            timestampUtc: container.read(clockProvider).nowUtc(),
+            failure: StorageFailure(
+              'could not copy the automatic backup to the selected folder',
+              cause: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        );
+    return false;
+  }
+}
+
+/// Treats a missing, future, or malformed last day as due rather than letting
+/// a damaged bookkeeping value silently disable backups.
+bool isAutomaticBackupDue({
+  required StudyDay today,
+  required String? lastBackupDay,
+  required AutomaticBackupInterval interval,
+}) {
+  if (lastBackupDay == null) return true;
+  try {
+    final StudyDay last = StudyDay.parse(lastBackupDay, zoneId: today.zoneId);
+    final int elapsedDays = last.daysUntil(today);
+    return elapsedDays < 0 || elapsedDays >= interval.days;
+  } on FormatException {
+    return true;
+  }
 }
 
 /// Loads settings once before the first frame.

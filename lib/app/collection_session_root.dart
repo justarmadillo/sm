@@ -250,7 +250,7 @@ final class _CollectionSessionRootState extends State<CollectionSessionRoot> {
     try {
       await _prepareCollectionFiles(container);
       await warmSettings(container);
-      if (shouldRunDailyBackup) await runDailyBackupIfDue(container);
+      if (shouldRunDailyBackup) await runAutomaticBackupIfDue(container);
       return Ok<_OpenedCollection>(
         _OpenedCollection(database: database, container: container),
       );

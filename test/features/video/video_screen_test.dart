@@ -117,6 +117,7 @@ void main() {
 
     await start(tester);
     expect(find.text('Retinal detachment'), findsOneWidget);
+    expect(find.byTooltip('Learning commands'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Done'));
     await tester.pumpAndSettle();
     expect(outcomes, <StudyRouteResult>[StudyRouteResult.committed]);

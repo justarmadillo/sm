@@ -217,6 +217,24 @@ final class EditSourceBlock extends AppCommand {
   final int baseContentRevision;
 }
 
+/// Replace the rewritten portion of a source's full markdown.
+///
+/// The runner derives one minimal exact splice from the source revision this
+/// editor opened. Image blobs remain the block editor's responsibility.
+final class EditSourceDocument extends AppCommand {
+  EditSourceDocument(
+    super.operationId, {
+    required this.sourceId,
+    required this.markdown,
+    required this.baseContentRevision,
+    super.timestampUtc,
+  });
+
+  final String sourceId;
+  final String markdown;
+  final int baseContentRevision;
+}
+
 /// Remove one block and the separator that went with it.
 final class DeleteSourceBlock extends AppCommand {
   DeleteSourceBlock(

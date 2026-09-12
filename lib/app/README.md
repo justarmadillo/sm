@@ -5,7 +5,7 @@
 | `collection_replacement.dart` | the narrow promise Settings uses to request a complete collection replacement |
 | `collection_session_root.dart` | opens, closes, and recreates the database-backed provider scope |
 | `providers.dart` | builds every object more than one screen needs |
-| `startup_tasks.dart` | warms settings and runs the guarded daily backup before the first frame |
+| `startup_tasks.dart` | warms settings and runs the guarded automatic backup cadence before the first frame |
 | `startup_gate.dart` | inspects and opens the collection, or preserves a classified recovery failure |
 | `incremental_reader_app.dart` | the root widget, and which screen opens first |
 
@@ -30,6 +30,8 @@ imports the features: the arrows point one way now.
 1. `warmSettings` — the synchronous providers read a cached settings object, so
    the store has to be loaded first or the first frame renders against shipped
    defaults and then visibly jumps to the user's own values.
-2. `runDailyBackupIfDue` — at most one rolling backup per study day, taken at
-   startup because that is the only moment guaranteed to precede the day's
-   writes. A failure is reported, never fatal: the user came here to read.
+2. `runAutomaticBackupIfDue` — one rolling backup whenever the selected fixed
+   cadence is due, taken at startup because that is the only moment guaranteed
+   to precede the session's writes. A selected Windows or Android folder gets
+   a mirrored package. A failure is reported, never fatal: the user came here
+   to read.

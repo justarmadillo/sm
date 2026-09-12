@@ -4992,6 +4992,16 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _extraMeta = const VerificationMeta('extra');
+  @override
+  late final GeneratedColumn<String> extra = GeneratedColumn<String>(
+    'extra',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _clozeOrdinalMeta = const VerificationMeta(
     'clozeOrdinal',
   );
@@ -5055,6 +5065,7 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
     type,
     front,
     back,
+    extra,
     clozeOrdinal,
     contextBefore,
     contextAfter,
@@ -5119,6 +5130,12 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
       );
     } else if (isInserting) {
       context.missing(_backMeta);
+    }
+    if (data.containsKey('extra')) {
+      context.handle(
+        _extraMeta,
+        extra.isAcceptableOrUnknown(data['extra']!, _extraMeta),
+      );
     }
     if (data.containsKey('cloze_ordinal')) {
       context.handle(
@@ -5200,6 +5217,10 @@ class $CardsTable extends Cards with TableInfo<$CardsTable, CardRow> {
         DriftSqlType.string,
         data['${effectivePrefix}back'],
       )!,
+      extra: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}extra'],
+      )!,
       clozeOrdinal: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}cloze_ordinal'],
@@ -5246,6 +5267,9 @@ class CardRow extends DataClass implements Insertable<CardRow> {
   final int type;
   final String front;
   final String back;
+
+  /// Optional Markdown shown only on the revealed side of the card.
+  final String extra;
   final int? clozeOrdinal;
   final int? contextBefore;
   final int? contextAfter;
@@ -5258,6 +5282,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     required this.type,
     required this.front,
     required this.back,
+    required this.extra,
     this.clozeOrdinal,
     this.contextBefore,
     this.contextAfter,
@@ -5277,6 +5302,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     map['type'] = Variable<int>(type);
     map['front'] = Variable<String>(front);
     map['back'] = Variable<String>(back);
+    map['extra'] = Variable<String>(extra);
     if (!nullToAbsent || clozeOrdinal != null) {
       map['cloze_ordinal'] = Variable<int>(clozeOrdinal);
     }
@@ -5305,6 +5331,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       type: Value(type),
       front: Value(front),
       back: Value(back),
+      extra: Value(extra),
       clozeOrdinal: clozeOrdinal == null && nullToAbsent
           ? const Value.absent()
           : Value(clozeOrdinal),
@@ -5333,6 +5360,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       type: serializer.fromJson<int>(json['type']),
       front: serializer.fromJson<String>(json['front']),
       back: serializer.fromJson<String>(json['back']),
+      extra: serializer.fromJson<String>(json['extra']),
       clozeOrdinal: serializer.fromJson<int?>(json['clozeOrdinal']),
       contextBefore: serializer.fromJson<int?>(json['contextBefore']),
       contextAfter: serializer.fromJson<int?>(json['contextAfter']),
@@ -5350,6 +5378,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       'type': serializer.toJson<int>(type),
       'front': serializer.toJson<String>(front),
       'back': serializer.toJson<String>(back),
+      'extra': serializer.toJson<String>(extra),
       'clozeOrdinal': serializer.toJson<int?>(clozeOrdinal),
       'contextBefore': serializer.toJson<int?>(contextBefore),
       'contextAfter': serializer.toJson<int?>(contextAfter),
@@ -5365,6 +5394,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     int? type,
     String? front,
     String? back,
+    String? extra,
     Value<int?> clozeOrdinal = const Value.absent(),
     Value<int?> contextBefore = const Value.absent(),
     Value<int?> contextAfter = const Value.absent(),
@@ -5381,6 +5411,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     type: type ?? this.type,
     front: front ?? this.front,
     back: back ?? this.back,
+    extra: extra ?? this.extra,
     clozeOrdinal: clozeOrdinal.present ? clozeOrdinal.value : this.clozeOrdinal,
     contextBefore: contextBefore.present
         ? contextBefore.value
@@ -5401,6 +5432,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
       type: data.type.present ? data.type.value : this.type,
       front: data.front.present ? data.front.value : this.front,
       back: data.back.present ? data.back.value : this.back,
+      extra: data.extra.present ? data.extra.value : this.extra,
       clozeOrdinal: data.clozeOrdinal.present
           ? data.clozeOrdinal.value
           : this.clozeOrdinal,
@@ -5428,6 +5460,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
           ..write('type: $type, ')
           ..write('front: $front, ')
           ..write('back: $back, ')
+          ..write('extra: $extra, ')
           ..write('clozeOrdinal: $clozeOrdinal, ')
           ..write('contextBefore: $contextBefore, ')
           ..write('contextAfter: $contextAfter, ')
@@ -5445,6 +5478,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
     type,
     front,
     back,
+    extra,
     clozeOrdinal,
     contextBefore,
     contextAfter,
@@ -5461,6 +5495,7 @@ class CardRow extends DataClass implements Insertable<CardRow> {
           other.type == this.type &&
           other.front == this.front &&
           other.back == this.back &&
+          other.extra == this.extra &&
           other.clozeOrdinal == this.clozeOrdinal &&
           other.contextBefore == this.contextBefore &&
           other.contextAfter == this.contextAfter &&
@@ -5475,6 +5510,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
   final Value<int> type;
   final Value<String> front;
   final Value<String> back;
+  final Value<String> extra;
   final Value<int?> clozeOrdinal;
   final Value<int?> contextBefore;
   final Value<int?> contextAfter;
@@ -5488,6 +5524,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     this.type = const Value.absent(),
     this.front = const Value.absent(),
     this.back = const Value.absent(),
+    this.extra = const Value.absent(),
     this.clozeOrdinal = const Value.absent(),
     this.contextBefore = const Value.absent(),
     this.contextAfter = const Value.absent(),
@@ -5502,6 +5539,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     required int type,
     required String front,
     required String back,
+    this.extra = const Value.absent(),
     this.clozeOrdinal = const Value.absent(),
     this.contextBefore = const Value.absent(),
     this.contextAfter = const Value.absent(),
@@ -5520,6 +5558,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     Expression<int>? type,
     Expression<String>? front,
     Expression<String>? back,
+    Expression<String>? extra,
     Expression<int>? clozeOrdinal,
     Expression<int>? contextBefore,
     Expression<int>? contextAfter,
@@ -5534,6 +5573,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
       if (type != null) 'type': type,
       if (front != null) 'front': front,
       if (back != null) 'back': back,
+      if (extra != null) 'extra': extra,
       if (clozeOrdinal != null) 'cloze_ordinal': clozeOrdinal,
       if (contextBefore != null) 'context_before': contextBefore,
       if (contextAfter != null) 'context_after': contextAfter,
@@ -5550,6 +5590,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     Value<int>? type,
     Value<String>? front,
     Value<String>? back,
+    Value<String>? extra,
     Value<int?>? clozeOrdinal,
     Value<int?>? contextBefore,
     Value<int?>? contextAfter,
@@ -5564,6 +5605,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
       type: type ?? this.type,
       front: front ?? this.front,
       back: back ?? this.back,
+      extra: extra ?? this.extra,
       clozeOrdinal: clozeOrdinal ?? this.clozeOrdinal,
       contextBefore: contextBefore ?? this.contextBefore,
       contextAfter: contextAfter ?? this.contextAfter,
@@ -5593,6 +5635,9 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
     }
     if (back.present) {
       map['back'] = Variable<String>(back.value);
+    }
+    if (extra.present) {
+      map['extra'] = Variable<String>(extra.value);
     }
     if (clozeOrdinal.present) {
       map['cloze_ordinal'] = Variable<int>(clozeOrdinal.value);
@@ -5624,6 +5669,7 @@ class CardsCompanion extends UpdateCompanion<CardRow> {
           ..write('type: $type, ')
           ..write('front: $front, ')
           ..write('back: $back, ')
+          ..write('extra: $extra, ')
           ..write('clozeOrdinal: $clozeOrdinal, ')
           ..write('contextBefore: $contextBefore, ')
           ..write('contextAfter: $contextAfter, ')
@@ -12298,6 +12344,14 @@ class SchedulerEventRow extends DataClass
   final String id;
   final String operationId;
   final String? elementId;
+
+  /// Index into `ElementType`, deliberately without a `CHECK`.
+  ///
+  /// Every other stored element type is bounded by the database. This one is
+  /// not, because a log row outlives the element it names and may name a type
+  /// a later version added: constraining it would make an old build refuse to
+  /// open a collection a newer one wrote. `refFromLogRow` guards the read
+  /// instead and leaves the row unattached rather than throwing.
   final int? elementType;
   final String eventType;
   final int occurredAtUtc;
@@ -14953,6 +15007,14 @@ class ActivityEventRow extends DataClass
   final String id;
   final String operationId;
   final String? elementId;
+
+  /// Index into `ElementType`, deliberately without a `CHECK`.
+  ///
+  /// Every other stored element type is bounded by the database. This one is
+  /// not, because a log row outlives the element it names and may name a type
+  /// a later version added: constraining it would make an old build refuse to
+  /// open a collection a newer one wrote. `refFromLogRow` guards the read
+  /// instead and leaves the row unattached rather than throwing.
   final int? elementType;
 
   /// Stable dotted event name, for example `reader.done`.
@@ -19398,6 +19460,7 @@ typedef $$CardsTableCreateCompanionBuilder =
       required int type,
       required String front,
       required String back,
+      Value<String> extra,
       Value<int?> clozeOrdinal,
       Value<int?> contextBefore,
       Value<int?> contextAfter,
@@ -19413,6 +19476,7 @@ typedef $$CardsTableUpdateCompanionBuilder =
       Value<int> type,
       Value<String> front,
       Value<String> back,
+      Value<String> extra,
       Value<int?> clozeOrdinal,
       Value<int?> contextBefore,
       Value<int?> contextAfter,
@@ -19515,6 +19579,11 @@ class $$CardsTableFilterComposer extends Composer<_$AppDatabase, $CardsTable> {
 
   ColumnFilters<String> get back => $composableBuilder(
     column: $table.back,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get extra => $composableBuilder(
+    column: $table.extra,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19658,6 +19727,11 @@ class $$CardsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get extra => $composableBuilder(
+    column: $table.extra,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get clozeOrdinal => $composableBuilder(
     column: $table.clozeOrdinal,
     builder: (column) => ColumnOrderings(column),
@@ -19714,6 +19788,9 @@ class $$CardsTableAnnotationComposer
 
   GeneratedColumn<String> get back =>
       $composableBuilder(column: $table.back, builder: (column) => column);
+
+  GeneratedColumn<String> get extra =>
+      $composableBuilder(column: $table.extra, builder: (column) => column);
 
   GeneratedColumn<int> get clozeOrdinal => $composableBuilder(
     column: $table.clozeOrdinal,
@@ -19854,6 +19931,7 @@ class $$CardsTableTableManager
                 Value<int> type = const Value.absent(),
                 Value<String> front = const Value.absent(),
                 Value<String> back = const Value.absent(),
+                Value<String> extra = const Value.absent(),
                 Value<int?> clozeOrdinal = const Value.absent(),
                 Value<int?> contextBefore = const Value.absent(),
                 Value<int?> contextAfter = const Value.absent(),
@@ -19867,6 +19945,7 @@ class $$CardsTableTableManager
                 type: type,
                 front: front,
                 back: back,
+                extra: extra,
                 clozeOrdinal: clozeOrdinal,
                 contextBefore: contextBefore,
                 contextAfter: contextAfter,
@@ -19882,6 +19961,7 @@ class $$CardsTableTableManager
                 required int type,
                 required String front,
                 required String back,
+                Value<String> extra = const Value.absent(),
                 Value<int?> clozeOrdinal = const Value.absent(),
                 Value<int?> contextBefore = const Value.absent(),
                 Value<int?> contextAfter = const Value.absent(),
@@ -19895,6 +19975,7 @@ class $$CardsTableTableManager
                 type: type,
                 front: front,
                 back: back,
+                extra: extra,
                 clozeOrdinal: clozeOrdinal,
                 contextBefore: contextBefore,
                 contextAfter: contextAfter,

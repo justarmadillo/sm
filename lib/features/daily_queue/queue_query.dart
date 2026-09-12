@@ -25,7 +25,6 @@ import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
-import 'package:incremental_reader/shared/text_excerpt.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/tag_repository.dart';
@@ -40,7 +39,6 @@ final class QueueEntry {
     required this.lane,
     required this.actionLabel,
     required this.title,
-    required this.preview,
     this.tagNames = const <String>[],
     this.priorityPercent,
     this.isLeech = false,
@@ -50,7 +48,6 @@ final class QueueEntry {
   final QueueLane lane;
   final String actionLabel;
   final String title;
-  final String preview;
   final List<String> tagNames;
 
   /// Where the element sits in the collection, `0` being most important.
@@ -262,7 +259,6 @@ final class QueueQuery {
       lane: lane,
       actionLabel: _actionLabel(lane, 'Read'),
       title: source.title,
-      preview: singleLineExcerpt(source.markdown, maximumCharacters: 180),
       tagNames: tagNameIndex.listNamesOf(candidate.ref),
       priorityPercent: _percentOf(candidate, scale),
     );
@@ -284,7 +280,6 @@ final class QueueQuery {
       lane: lane,
       actionLabel: _actionLabel(lane, 'Process'),
       title: source?.title ?? 'Extract',
-      preview: singleLineExcerpt(extract.markdown, maximumCharacters: 180),
       tagNames: tagNameIndex.listNamesOf(candidate.ref),
       priorityPercent: _percentOf(candidate, scale),
     );
@@ -310,9 +305,6 @@ final class QueueQuery {
       lane: lane,
       actionLabel: _actionLabel(lane, 'Watch'),
       title: element.displayTitle,
-      preview: element.note.trim().isEmpty
-          ? element.rangeLabel
-          : singleLineExcerpt(element.note, maximumCharacters: 180),
       priorityPercent: _percentOf(candidate, scale),
       tagNames: tagNameIndex.listNamesOf(candidate.ref),
     );
@@ -339,17 +331,12 @@ final class QueueQuery {
     final Card? card = await _content.findCard(candidate.ref.id);
     if (card == null) return null;
     final Source? source = await _sourceOfCard(card);
-    final String question = cardQuestionText(
-      card,
-      imageOcclusionFallback: 'Image occlusion',
-    );
     final int lapses = candidate.card?.memory.lapses ?? 0;
     return QueueEntry(
       candidate: candidate,
       lane: lane,
       actionLabel: _actionLabel(lane, 'Review'),
       title: source?.title ?? 'Card',
-      preview: singleLineExcerpt(question, maximumCharacters: 180),
       priorityPercent: _percentOf(candidate, scale),
       tagNames: tagNameIndex.listNamesOf(candidate.ref),
       isLeech: leechLapses > 0 && lapses >= leechLapses,

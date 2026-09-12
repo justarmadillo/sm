@@ -61,6 +61,7 @@ void main() {
                       QaCardDraft(
                         question: 'How many items does working memory hold?',
                         answer: 'Four.',
+                        extra: 'Miller proposed seven in an older estimate.',
                       ),
                     ],
                   ),
@@ -75,7 +76,7 @@ void main() {
   });
 
   /// A stand-in for the queue: a screen that opens the same card on demand.
-  Future<void> pumpQueue(WidgetTester tester) async {
+  Future<void> pumpQueue(WidgetTester tester, {bool isPractice = false}) async {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -86,7 +87,12 @@ void main() {
                   Center(
                     child: FilledButton(
                       onPressed: () async => outcomes.add(
-                        await openReview(context, ref, cardId: cardId),
+                        await openReview(
+                          context,
+                          ref,
+                          cardId: cardId,
+                          isPractice: isPractice,
+                        ),
                       ),
                       child: const Text('Start'),
                     ),
@@ -127,6 +133,27 @@ void main() {
     await start(tester);
 
     expect(find.text('#memory'), findsOneWidget);
+    expect(find.byTooltip('Learning commands'), findsOneWidget);
+  });
+
+  testWidgets('shows Extra only after revealing the answer', (
+    WidgetTester tester,
+  ) async {
+    await pumpQueue(tester);
+    await start(tester);
+
+    expect(
+      find.text('Miller proposed seven in an older estimate.'),
+      findsNothing,
+    );
+    await tester.tap(find.text('Show answer  (Space)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EXTRA'), findsOneWidget);
+    expect(
+      find.text('Miller proposed seven in an older estimate.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a card reopened after grading asks before it answers', (
@@ -187,5 +214,29 @@ void main() {
 
     expect(find.text('Show answer  (Space)'), findsOneWidget);
     expect(find.text('Four.'), findsNothing);
+  });
+
+  testWidgets('practice route logs a grade without changing card memory', (
+    WidgetTester tester,
+  ) async {
+    final repository = container.read(learningRepositoryProvider);
+    final before = (await repository.findCardState(cardId))!;
+    await pumpQueue(tester, isPractice: true);
+
+    await start(tester);
+    expect(find.text('Practice'), findsOneWidget);
+    await tester.tap(find.text('Show answer  (Space)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3  Good'));
+    await tester.pumpAndSettle();
+
+    final after = (await repository.findCardState(cardId))!;
+    expect(after.memory.dueAtUtc, before.memory.dueAtUtc);
+    expect(after.memory.stability, before.memory.stability);
+    expect(after.memory.difficulty, before.memory.difficulty);
+    expect(after.memory.repetitionCount, before.memory.repetitionCount);
+    final reviews = await repository.listReviewsForCard(cardId);
+    expect(reviews, hasLength(1));
+    expect(reviews.single.isPractice, isTrue);
   });
 }

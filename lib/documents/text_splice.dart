@@ -4,12 +4,10 @@
 /// insert, and replace are all the same shape: a delete inserts nothing, an
 /// insert removes nothing.
 ///
-/// Nothing in this application computes an edit by comparing an old document
-/// against a new one. Diffing is a heuristic — given text that repeats, several
-/// answers are equally consistent with the result, and the wrong one relocates
-/// stored positions into the wrong paragraph while reporting success. Because
-/// every edit arrives as an explicit splice, position migration is arithmetic
-/// with exactly one defined answer per input.
+/// Block edits arrive with explicit bounds. A full-document rewrite trims only
+/// its byte-identical prefix and suffix, leaving one unique middle span rather
+/// than asking a diff to choose among repeated passages. Position migration is
+/// therefore still arithmetic with exactly one defined answer per input.
 ///
 /// See `plans/reader/EDITABLE_READER.md` §5.
 library;
@@ -158,6 +156,5 @@ final class TextSplice {
   int get hashCode => Object.hash(startUtf8, endUtf8, inserted);
 
   @override
-  String toString() =>
-      'TextSplice($startUtf8..$endUtf8 -> ${insertedLength}b)';
+  String toString() => 'TextSplice($startUtf8..$endUtf8 -> ${insertedLength}b)';
 }

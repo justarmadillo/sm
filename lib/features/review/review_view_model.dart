@@ -60,6 +60,8 @@ final class ReviewUiState {
 
   String get answer => cardAnswerText(card);
 
+  String get extra => card.extra;
+
   /// The element this card was formulated from, when it has one.
   CardParent? get parent => card.parent;
 
@@ -156,7 +158,7 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
     );
   }
 
-  Future<void> grade(CardRating rating) async {
+  Future<void> grade(CardRating rating, {bool isPractice = false}) async {
     final ReviewUiState? current = state.valueOrNull;
     if (current == null ||
         !current.isAnswerRevealed ||
@@ -175,6 +177,7 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
             cardId: current.card.id,
             rating: rating,
             elapsedMs: _elapsedMs(now),
+            isPractice: isPractice,
             timestampUtc: now,
           ),
         );
@@ -210,7 +213,7 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
   }
 
   /// Rewrites the card's text. Never reschedules it.
-  Future<void> edit({String? front, String? back}) async {
+  Future<void> edit({String? front, String? back, String? extra}) async {
     final ReviewUiState? current = state.valueOrNull;
     if (current == null || current.isBusy) return;
     state = AsyncValue<ReviewUiState>.data(current.copyWith(isBusy: true));
@@ -223,6 +226,7 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
             cardId: current.card.id,
             front: front,
             back: back,
+            extra: extra,
             timestampUtc: ref.read(clockProvider).nowUtc(),
           ),
         );

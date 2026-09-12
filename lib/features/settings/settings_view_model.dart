@@ -18,11 +18,13 @@ import 'package:incremental_reader/features/settings/collection_file_dialogs.dar
 import 'package:incremental_reader/features/settings/fsrs_settings_rescheduler.dart';
 import 'package:incremental_reader/features/settings/settings_providers.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
+import 'package:incremental_reader/settings/backup_settings.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 import 'package:incremental_reader/storage/contracts/database_check.dart';
 import 'package:incremental_reader/storage/contracts/database_maintenance.dart';
 import 'package:incremental_reader/storage/files/backup_service.dart';
+import 'package:incremental_reader/storage/platform/automatic_backup_folder_access.dart';
 import 'package:path/path.dart' as p;
 
 enum SettingsOperation {
@@ -107,6 +109,56 @@ final class SettingsViewModel extends AsyncNotifier<SettingsUiState> {
     if (current == null || current.isBusy) return;
     state = AsyncValue<SettingsUiState>.data(
       current.copyWith(draft: const AppSettings()),
+    );
+  }
+
+  /// Selects an external automatic-backup folder without saving the draft.
+  Future<void> chooseAutomaticBackupFolder() async {
+    final SettingsUiState? current = state.valueOrNull;
+    if (current == null || current.isBusy) return;
+    final AutomaticBackupFolderAccess folderAccess = ref.read(
+      automaticBackupFolderAccessProvider,
+    );
+    if (!folderAccess.isSupported) {
+      state = AsyncValue<SettingsUiState>.data(
+        current.copyWith(
+          message: const UiMessage(
+            'Automatic backup folders are available on Windows and Android.',
+            isError: true,
+          ),
+        ),
+      );
+      return;
+    }
+    try {
+      final SelectedAutomaticBackupFolder? selected = await folderAccess
+          .chooseFolder();
+      if (selected == null) return;
+      final BackupSettings changed = current.draft.backup.copyWith(
+        directoryLocation: selected.location,
+        directoryLabel: selected.label,
+      );
+      state = AsyncValue<SettingsUiState>.data(
+        current.copyWith(draft: current.draft.copyWith(backup: changed)),
+      );
+    } on Object catch (error) {
+      state = AsyncValue<SettingsUiState>.data(
+        current.copyWith(
+          message: UiMessage(
+            'Could not choose the automatic backup folder: $error',
+            isError: true,
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Keeps automatic backups only in the app-owned recovery folder.
+  void useApplicationBackupFolder() {
+    edit(
+      (AppSettings settings) => settings.copyWith(
+        backup: BackupSettings(interval: settings.backup.interval),
+      ),
     );
   }
 

@@ -53,6 +53,7 @@ import 'package:incremental_reader/storage/files/backup_service.dart';
 import 'package:incremental_reader/storage/files/rotating_log_sink.dart';
 import 'package:incremental_reader/storage/files/source_asset_file_store.dart';
 import 'package:incremental_reader/storage/platform/app_paths.dart';
+import 'package:incremental_reader/storage/platform/automatic_backup_folder_access.dart';
 import 'package:incremental_reader/storage/platform/time_zones.dart';
 
 /// Version reported in the diagnostic log alongside the schema version.
@@ -282,6 +283,12 @@ final Provider<BackupService> backupServiceProvider = Provider<BackupService>(
     clock: ref.watch(clockProvider),
     diagnostics: ref.watch(diagnosticsProvider),
   ),
+);
+
+/// Persistent Windows and Android access to the user's backup folder.
+final Provider<AutomaticBackupFolderAccess>
+automaticBackupFolderAccessProvider = Provider<AutomaticBackupFolderAccess>(
+  (Ref ref) => const AutomaticBackupFolderAccess(),
 );
 
 /// The one adjustment-aware "when does this come back?" for screens.

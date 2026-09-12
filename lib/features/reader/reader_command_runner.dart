@@ -24,6 +24,7 @@ import 'package:incremental_reader/documents/apply_source_edit.dart';
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/block_edit.dart';
 import 'package:incremental_reader/documents/document.dart';
+import 'package:incremental_reader/documents/document_edit.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/documents/source.dart';
@@ -937,6 +938,17 @@ final class ReaderCommandRunner {
           : () => _insertImageMetadata(command.sourceId, command.images),
     );
   }
+
+  /// Replaces only the changed middle of a full-document rewrite.
+  Future<Result<SourceEdited>> editSourceDocument(EditSourceDocument command) =>
+      _runEdit(
+        command,
+        kSourceEditedType,
+        (Document document) =>
+            spliceForDocumentRewrite(document, command.markdown),
+        sourceId: command.sourceId,
+        base: command.baseContentRevision,
+      );
 
   /// Removes one block, separator included.
   Future<Result<SourceEdited>> deleteSourceBlock(DeleteSourceBlock command) =>

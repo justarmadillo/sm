@@ -6,7 +6,7 @@ The screen is deliberately shaped like the Extract screen: a range is processed 
 
 | File | What it is |
 |---|---|
-| `import_video_sheet.dart` | Adding a video: its link, title, duration, and optional thumbnail |
+| `import_video_sheet.dart` | Full-page video creation: its link, title, duration, and optional thumbnail |
 | `video_clip_dialog.dart` | Cutting a clip: two times and what you want to remember about them |
 | `video_command_runner.dart` | Runs every command that creates or changes a video or a range over one |
 | `video_commands.dart` | Every request that creates or changes a video or a range over one |

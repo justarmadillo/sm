@@ -7,21 +7,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/features/browser/add_element_flow.dart';
 import 'package:incremental_reader/features/browser/browser_screen.dart';
+import 'package:incremental_reader/features/custom_study/custom_study_screen.dart';
+import 'package:incremental_reader/features/daily_queue/open_study_element.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/features/daily_queue/queue_query.dart';
 import 'package:incremental_reader/features/daily_queue/queue_view_model.dart';
 import 'package:incremental_reader/features/daily_queue/smart_postpone_dialog.dart';
-import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dart';
 import 'package:incremental_reader/features/diagnostics/diagnostics_screen.dart';
-import 'package:incremental_reader/features/extract/extract_screen.dart';
-import 'package:incremental_reader/features/extract/extract_view_model.dart';
 import 'package:incremental_reader/features/priority/priority_browser_screen.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
-import 'package:incremental_reader/features/reader/reader_screen.dart';
-import 'package:incremental_reader/features/reader/reader_view_model.dart';
-import 'package:incremental_reader/features/review/review_screen.dart';
 import 'package:incremental_reader/features/settings/settings_screen.dart';
-import 'package:incremental_reader/features/video/video_screen.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/mercy/mercy.dart';
@@ -143,6 +138,16 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
           ),
           const SizedBox(width: 4),
         ],
+        IconButton(
+          onPressed: _isOpeningRoutes
+              ? null
+              : () => _openThenRefresh(
+                  model,
+                  () => openCustomStudy(context, ref),
+                ),
+          icon: const Icon(Icons.school_outlined),
+          tooltip: 'Custom study',
+        ),
         // Deciding what matters is part of studying, not housekeeping, so
         // this one keeps its place on the bar at every width rather than
         // costing a menu tap on the screen it is used from most.
@@ -219,7 +224,11 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
         if (entry == null) break;
         if (entry.ref == previous) break;
         previous = entry.ref;
-        final result = await _openEntry(entry);
+        final result = await openStudyElement(
+          context,
+          ref,
+          elementRef: entry.ref,
+        );
         if (!mounted || !result.advancesSession) break;
         // Later Today and Dismiss end the visit without advancing a schedule,
         // so the session moves on but nothing is counted as completed.
@@ -236,28 +245,6 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
       if (mounted) setState(() => _isOpeningRoutes = false);
     }
   }
-
-  Future<StudyRouteResult> _openEntry(QueueEntry entry) =>
-      switch (entry.ref.type) {
-        ElementType.source => openReaderForStudy(
-          context,
-          ref,
-          sourceId: entry.ref.id,
-          mode: ReaderMode.scheduled,
-        ),
-        ElementType.extract => openExtract(
-          context,
-          ref,
-          extractId: entry.ref.id,
-          mode: ExtractMode.scheduled,
-        ),
-        ElementType.video => openVideoForStudy(
-          context,
-          ref,
-          videoElementId: entry.ref.id,
-        ),
-        ElementType.card => openReview(context, ref, cardId: entry.ref.id),
-      };
 }
 
 class _QueueBody extends StatelessWidget {
@@ -772,16 +759,6 @@ class _QueueTile extends ConsumerWidget {
                         maximumVisibleTags: 3,
                       ),
                     ],
-                    const SizedBox(height: 5),
-                    Text(
-                      entry.preview,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.muted,
-                      ),
-                    ),
                   ],
                 ),
               ),

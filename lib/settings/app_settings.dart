@@ -6,6 +6,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:incremental_reader/settings/backup_settings.dart';
 import 'package:incremental_reader/settings/card_settings.dart';
 import 'package:incremental_reader/settings/diagnostics_settings.dart';
 import 'package:incremental_reader/settings/mercy_settings.dart';
@@ -27,6 +28,7 @@ final class AppSettings {
     this.postpone = const PostponeSettings(),
     this.mercy = const MercySettings(),
     this.diagnostics = const DiagnosticsSettings(),
+    this.backup = const BackupSettings(),
   });
 
   /// Total decoder for flat settings rows.
@@ -382,6 +384,19 @@ final class AppSettings {
           fallback.diagnostics.shouldShowContentInPanel,
         ),
       ),
+      backup: BackupSettings(
+        interval: _readEnum(
+          stored['backup.interval'],
+          AutomaticBackupInterval.values,
+          fallback.backup.interval,
+        ),
+        directoryLocation:
+            stored['backup.directory_location']?.trim() ??
+            fallback.backup.directoryLocation,
+        directoryLabel:
+            stored['backup.directory_label']?.trim() ??
+            fallback.backup.directoryLabel,
+      ),
     );
   }
 
@@ -392,6 +407,7 @@ final class AppSettings {
   final PostponeSettings postpone;
   final MercySettings mercy;
   final DiagnosticsSettings diagnostics;
+  final BackupSettings backup;
 
   /// Flat storage form. It contains no keys from the replaced scheduler.
   Map<String, String> toMap() {
@@ -478,6 +494,9 @@ final class AppSettings {
       'diagnostics.log_max_bytes': '${diagnostics.logMaxBytes}',
       'diagnostics.log_retained_files': '${diagnostics.logRetainedFiles}',
       'diagnostics.show_content': '${diagnostics.shouldShowContentInPanel}',
+      'backup.interval': backup.interval.name,
+      'backup.directory_location': backup.directoryLocation,
+      'backup.directory_label': backup.directoryLabel,
     };
   }
 
@@ -489,6 +508,7 @@ final class AppSettings {
     PostponeSettings? postpone,
     MercySettings? mercy,
     DiagnosticsSettings? diagnostics,
+    BackupSettings? backup,
   }) => AppSettings(
     studyDay: studyDay ?? this.studyDay,
     queue: queue ?? this.queue,
@@ -497,6 +517,7 @@ final class AppSettings {
     postpone: postpone ?? this.postpone,
     mercy: mercy ?? this.mercy,
     diagnostics: diagnostics ?? this.diagnostics,
+    backup: backup ?? this.backup,
   );
 
   @override
@@ -508,7 +529,8 @@ final class AppSettings {
       other.cards == cards &&
       other.postpone == postpone &&
       other.mercy == mercy &&
-      other.diagnostics == diagnostics;
+      other.diagnostics == diagnostics &&
+      other.backup == backup;
 
   @override
   int get hashCode => Object.hash(
@@ -519,6 +541,7 @@ final class AppSettings {
     postpone,
     mercy,
     diagnostics,
+    backup,
   );
 }
 

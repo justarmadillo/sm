@@ -4,9 +4,7 @@
 /// heading, because typing a title again for a chapter that already names
 /// itself is friction with no payoff.
 ///
-/// One dialog serves both ways in, worded for whichever the user chose. They
-/// differ in intent and in nothing else: a written topic and an imported one
-/// are the same row once saved.
+/// Typed, pasted, and opened Markdown all create the same kind of topic.
 library;
 
 import 'dart:io';
@@ -26,31 +24,22 @@ final class ImportRequest {
   final String markdown;
 }
 
-/// Shows the import dialog and returns what the user entered, or null.
-Future<ImportRequest?> showImportSheet(BuildContext context) =>
-    showDialog<ImportRequest>(
-      context: context,
-      builder: (BuildContext context) => const _ImportDialog(isWritten: false),
+/// Opens the topic creation page and returns what the user entered, or null.
+Future<ImportRequest?> openTopicCreationPage(BuildContext context) =>
+    Navigator.of(context).push<ImportRequest>(
+      MaterialPageRoute<ImportRequest>(
+        builder: (BuildContext context) => const _TopicCreationPage(),
+      ),
     );
 
-/// The same dialog, worded for a topic the user is writing themselves.
-Future<ImportRequest?> showNewTopicSheet(BuildContext context) =>
-    showDialog<ImportRequest>(
-      context: context,
-      builder: (BuildContext context) => const _ImportDialog(isWritten: true),
-    );
-
-class _ImportDialog extends StatefulWidget {
-  const _ImportDialog({required this.isWritten});
-
-  /// Whether the user came in through "New topic" rather than "Import".
-  final bool isWritten;
+class _TopicCreationPage extends StatefulWidget {
+  const _TopicCreationPage();
 
   @override
-  State<_ImportDialog> createState() => _ImportDialogState();
+  State<_TopicCreationPage> createState() => _TopicCreationPageState();
 }
 
-class _ImportDialogState extends State<_ImportDialog> {
+class _TopicCreationPageState extends State<_TopicCreationPage> {
   final TextEditingController _title = TextEditingController();
   final TextEditingController _markdown = TextEditingController();
   bool _wasTitleEditedByHand = false;
@@ -102,77 +91,93 @@ class _ImportDialogState extends State<_ImportDialog> {
     final bool canImport =
         _markdown.text.trim().isNotEmpty && _title.text.trim().isNotEmpty;
 
-    return AlertDialog(
-      title: Text(widget.isWritten ? 'New topic' : 'Import markdown'),
-      content: SizedBox(
-        width: dialogContentWidth(context, preferred: 620),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            _titleRow(),
-            const SizedBox(height: 14),
-            _markdownField(),
-            const SizedBox(height: 14),
-            _wordCountRow(),
-          ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Add topic'),
+        actions: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilledButton(
+              onPressed: canImport ? () => _submit(context) : null,
+              child: const Text('Add'),
+            ),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: Padding(
+              padding: EdgeInsets.all(isCompactWidth(context) ? 16 : 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _titleArea(context),
+                  const SizedBox(height: 18),
+                  Expanded(child: _markdownField()),
+                  const SizedBox(height: 12),
+                  _wordCountRow(),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: canImport ? () => _submit(context) : null,
-          child: Text(widget.isWritten ? 'Create' : 'Import'),
-        ),
-      ],
     );
   }
 
   /// The title field, beside the file picker that can fill both fields at once.
-  Widget _titleRow() {
+  Widget _titleArea(BuildContext context) {
+    final TextField titleField = TextField(
+      controller: _title,
+      decoration: const InputDecoration(labelText: 'Title'),
+      onChanged: (_) {
+        // Typing here stops the file picker from overwriting the title.
+        _wasTitleEditedByHand = true;
+        setState(() {});
+      },
+    );
+    final OutlinedButton openButton = OutlinedButton.icon(
+      onPressed: _openFile,
+      icon: const Icon(Icons.folder_open, size: 16),
+      label: const Text('Open markdown file'),
+    );
+    if (isCompactWidth(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          titleField,
+          const SizedBox(height: 12),
+          Align(alignment: Alignment.centerLeft, child: openButton),
+        ],
+      );
+    }
     return Row(
       children: <Widget>[
-        Expanded(
-          child: TextField(
-            controller: _title,
-            decoration: const InputDecoration(labelText: 'Title'),
-            onChanged: (_) {
-              // Typing here stops the file picker from overwriting the title.
-              _wasTitleEditedByHand = true;
-              setState(() {});
-            },
-          ),
-        ),
+        Expanded(child: titleField),
         const SizedBox(width: 12),
-        OutlinedButton.icon(
-          onPressed: _openFile,
-          icon: const Icon(Icons.folder_open, size: 16),
-          label: const Text('Open file'),
-        ),
+        openButton,
       ],
     );
   }
 
-  /// Monospaced and height-capped: this is the source text, not a preview.
+  /// Monospaced and page-filling: this is the source text, not a preview.
   Widget _markdownField() {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 260),
-      child: TextField(
-        controller: _markdown,
-        maxLines: null,
-        expands: false,
-        autofocus: true,
-        style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
-        decoration: const InputDecoration(
-          labelText: 'Markdown',
-          alignLabelWithHint: true,
-          border: OutlineInputBorder(),
-        ),
-        onChanged: (_) => setState(() {}),
+    return TextField(
+      controller: _markdown,
+      minLines: null,
+      maxLines: null,
+      expands: true,
+      autofocus: true,
+      textAlignVertical: TextAlignVertical.top,
+      style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
+      decoration: const InputDecoration(
+        labelText: 'Markdown',
+        alignLabelWithHint: true,
+        border: OutlineInputBorder(),
       ),
+      onChanged: (_) => setState(() {}),
     );
   }
 

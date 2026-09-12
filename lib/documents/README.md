@@ -13,7 +13,7 @@ plain unit test, which is why a parsing bug is cheap to reproduce.
 | `document.dart` | one source's markdown parsed at one revision |
 | `block.dart`, `block_content.dart` | one paragraph, heading, list item, or fence |
 | `extract.dart` | a passage promoted into its own learning object |
-| `card.dart` | a question formulated from an extract |
+| `card.dart` | a recall card, including optional revealed-side Extra content |
 | `occlusion.dart` | normalized image masks and their review rules |
 | `markdown_block_parser.dart` | splits markdown into blocks, keeping exact offsets |
 | `markdown_inline_parser.dart` | bold, italics, links — also keeping exact offsets |
@@ -25,6 +25,7 @@ plain unit test, which is why a parsing bug is cheap to reproduce.
 | `source_edit.dart` | the append-only record of every edit ever made |
 | `position_migration.dart` | how stored positions move when the text is spliced |
 | `block_edit.dart` | turns an edit made to one block into an exact splice |
+| `document_edit.dart` | turns a full-document rewrite into its unique minimal splice |
 | `outline.dart` | the headings, and which stretch of text each one owns |
 
 ## The thing to understand first

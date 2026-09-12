@@ -26,6 +26,7 @@ import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dar
 import 'package:incremental_reader/features/extract/extract_context_overlay.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
 import 'package:incremental_reader/features/occlusion/occlusion_screen.dart';
+import 'package:incremental_reader/features/priority/learning_command_menu.dart';
 import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/reader_image_input.dart';
@@ -33,6 +34,7 @@ import 'package:incremental_reader/features/reader/reader_providers.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/features/reader/typography_controller.dart';
 import 'package:incremental_reader/features/reader/widgets/block_span_builder.dart';
+import 'package:incremental_reader/features/reader/widgets/document_editor.dart';
 import 'package:incremental_reader/features/reader/widgets/extract_highlights.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_side_panel.dart';
@@ -437,6 +439,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       title: Text(state.source.title),
       systemOverlayStyle: _readerSystemUiStyle,
       actions: <Widget>[
+        LearningCommandMenu(
+          isEnabled: !state.isBusy,
+          onSelected: (command) => unawaited(
+            applyLearningCommandFromToolbar(
+              context: context,
+              ref: ref,
+              command: command,
+              elementRef: state.topic.ref,
+            ),
+          ),
+        ),
         if (state.mode == ReaderMode.browse)
           TextButton(
             onPressed: model.continueScheduled,
@@ -461,6 +474,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ),
           icon: const Icon(Icons.text_fields),
           tooltip: 'Reading appearance',
+        ),
+        IconButton(
+          onPressed: state.isBusy || state.isEditing
+              ? null
+              : () => unawaited(_editFullDocument(state, model)),
+          icon: const Icon(Icons.edit_note),
+          tooltip: 'Edit full markdown',
         ),
         PopupMenuButton<_ReaderImageAction>(
           tooltip: 'Add image',
@@ -496,6 +516,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         const SizedBox(width: 8),
       ],
     );
+  }
+
+  Future<void> _editFullDocument(
+    ReaderUiState state,
+    ReaderViewModel model,
+  ) async {
+    final String? markdown = await openDocumentEditor(
+      context,
+      document: state.document,
+    );
+    if (markdown != null && mounted) await model.commitDocumentEdit(markdown);
   }
 
   /// Keyboard-first on Windows: the three terminal actions and the marker are
@@ -566,6 +597,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           onEditCancel: (Block _) => model.cancelEditing(),
           onEditDelete: (Block block) => unawaited(model.deleteBlock(block)),
           onEditChooseImages: _chooseImagesForEditor,
+          onEditPasteImages: _pasteImagesForEditor,
           images: _readerImages(state),
         ),
         // Filled rather than left to size itself: its knobs are positioned,
@@ -710,6 +742,24 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
   }
 
+  /// Returns a clipboard image to the editor without committing it early.
+  Future<List<SourceImageImport>> _pasteImagesForEditor() async {
+    try {
+      return await ref.read(readerImageInputProvider).readClipboardImage();
+    } on ReaderImageInputException catch (failure) {
+      if (mounted) showToast(context, failure.message, isError: true);
+    } on Object {
+      if (mounted) {
+        showToast(
+          context,
+          'The clipboard image could not be read',
+          isError: true,
+        );
+      }
+    }
+    return const <SourceImageImport>[];
+  }
+
   Future<void> _pasteImage(ReaderUiState state, ReaderViewModel model) async {
     if (state.isEditing) return;
     try {
@@ -780,7 +830,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Widget _sidePanel(ReaderUiState state, ReaderViewModel model) {
     final bool isPanelInDrawer = isCompactWidth(context);
     return ReaderSidePanel(
-      outlineEditing: _outlineEditing(state, model),
+      outlineEditing: defaultTargetPlatform == TargetPlatform.windows
+          ? _outlineEditing(state, model)
+          : null,
       // A drawer already gives the panel its width; docked, it has to ask
       // for one or it would take the whole reading column.
       width: isPanelInDrawer ? null : kReaderSidePanelWidth,
@@ -883,7 +935,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Future<void> _formulate(ReaderViewModel model, ReaderUiState state) async {
     if (!state.canCommitProgress || state.isBusy) return;
     final resolved = _selection?.resolveSelection();
-    final FormulationResult? formulation = await showFormulationDialog(
+    final FormulationResult? formulation = await openFormulationPage(
       context,
       ref: ref,
       seedText: resolved?.markdown ?? '',

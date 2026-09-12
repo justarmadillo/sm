@@ -73,7 +73,7 @@ void main() {
         regions: regions,
         mode: OcclusionMode.hideAllGuessOne,
         header: '',
-        remarks: '',
+        extra: '',
       ),
     );
     final guessAll = await runner.create(
@@ -84,12 +84,13 @@ void main() {
         regions: regions,
         mode: OcclusionMode.hideAllGuessAll,
         header: '',
-        remarks: '',
+        extra: '',
       ),
     );
 
     expect(guessOne.unwrap(), hasLength(4));
     expect(guessAll.unwrap(), hasLength(1));
+    expect(guessOne.unwrap().first.extra, '');
     final runtime = await harness.context.runtimeState();
     expect(runtime.pending, hasLength(5));
     for (final Card card in <Card>[
@@ -110,7 +111,7 @@ void main() {
         regions: regions,
         mode: OcclusionMode.hideAllGuessOne,
         header: 'Old header',
-        remarks: 'Old remarks',
+        extra: 'Old remarks',
       ),
     );
     final card = created.unwrap().first;
@@ -132,12 +133,12 @@ void main() {
         regions: replacement,
         mode: OcclusionMode.hideOneGuessOne,
         header: 'New header',
-        remarks: 'New remarks',
+        extra: 'New remarks',
       ),
     );
 
     expect(edited.unwrap().front, 'New header');
-    expect(edited.unwrap().back, 'New remarks');
+    expect(edited.unwrap().extra, 'New remarks');
     expect(await harness.learning.findCardState(card.id), before);
     final stored = await DriftOcclusionRepository(
       harness.database,

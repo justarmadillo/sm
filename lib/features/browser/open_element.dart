@@ -133,11 +133,15 @@ class _CardEditorFieldsState extends ConsumerState<_CardEditorFields> {
   late final TextEditingController _answer = TextEditingController(
     text: widget.content.back ?? '',
   );
+  late final TextEditingController _extra = TextEditingController(
+    text: widget.content.extra,
+  );
 
   @override
   void dispose() {
     _question.dispose();
     _answer.dispose();
+    _extra.dispose();
     super.dispose();
   }
 
@@ -152,6 +156,7 @@ class _CardEditorFieldsState extends ConsumerState<_CardEditorFields> {
           widget.content.ref.id,
           front: _question.text,
           back: _hasAnswerField ? _answer.text : null,
+          extra: _extra.text,
         );
     if (!mounted) return;
     ref.invalidate(elementContentProvider(widget.content.ref));
@@ -190,6 +195,17 @@ class _CardEditorFieldsState extends ConsumerState<_CardEditorFields> {
               ),
             ),
           ],
+          _fieldLabel('Extra (shown after reveal)'),
+          TextField(
+            controller: _extra,
+            minLines: 2,
+            maxLines: null,
+            style: const TextStyle(fontSize: 13, height: 1.45),
+            decoration: const InputDecoration(
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 10),
           const Text(
             'Edits never reschedule.',

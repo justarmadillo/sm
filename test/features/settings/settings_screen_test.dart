@@ -14,6 +14,7 @@ import 'package:incremental_reader/features/settings/settings_view_model.dart';
 import 'package:incremental_reader/settings/app_settings.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
+import 'package:incremental_reader/storage/platform/automatic_backup_folder_access.dart';
 
 void main() {
   testWidgets('shows full collection import and export actions', (
@@ -46,6 +47,13 @@ void main() {
     expect(find.text('Day rollover'), findsOneWidget);
     expect(find.text('Interval-factor matrix'), findsNothing);
     await tester.scrollUntilVisible(
+      find.text('Backup'),
+      600,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Automatic backup interval'), findsOneWidget);
+    expect(find.text('Automatic backup folder'), findsOneWidget);
+    await tester.scrollUntilVisible(
       find.text('Collection data'),
       600,
       scrollable: find.byType(Scrollable).last,
@@ -57,6 +65,34 @@ void main() {
       find.textContaining('This does not merge collections.'),
       findsOneWidget,
     );
+  });
+
+  test('chosen automatic backup folder updates the unsaved draft', () async {
+    final AppDatabase database = openInMemoryDatabase();
+    final ProviderContainer container = ProviderContainer(
+      overrides: <Override>[
+        databaseProvider.overrideWithValue(database),
+        automaticBackupFolderAccessProvider.overrideWithValue(
+          const _SelectedBackupFolderAccess(),
+        ),
+      ],
+    );
+    addTearDown(() async {
+      container.dispose();
+      await database.close();
+    });
+    await container.read(settingsViewModelProvider.future);
+
+    await container
+        .read(settingsViewModelProvider.notifier)
+        .chooseAutomaticBackupFolder();
+
+    final SettingsUiState changed = container
+        .read(settingsViewModelProvider)
+        .requireValue;
+    expect(changed.isDirty, isTrue);
+    expect(changed.draft.backup.directoryLocation, 'content://chosen/folder');
+    expect(changed.draft.backup.directoryLabel, 'Documents/Reader backups');
   });
 
   testWidgets('disables collection transfer while settings are unsaved', (
@@ -174,4 +210,18 @@ final class _SelectedPackageDialogs extends CollectionFileDialogs {
   @override
   Future<SelectedCollectionPackage?> pickPackage() async =>
       SelectedCollectionPackage(file: file, shouldDeleteAfterUse: true);
+}
+
+final class _SelectedBackupFolderAccess extends AutomaticBackupFolderAccess {
+  const _SelectedBackupFolderAccess();
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Future<SelectedAutomaticBackupFolder?> chooseFolder() async =>
+      const SelectedAutomaticBackupFolder(
+        location: 'content://chosen/folder',
+        label: 'Documents/Reader backups',
+      );
 }

@@ -87,7 +87,7 @@ class ReaderSidePanel extends StatelessWidget {
     required this.onGoToBlock,
     required this.onGoToExtract,
     required this.onClose,
-    required this.outlineEditing,
+    this.outlineEditing,
     this.currentBlockId,
     this.focusedExtractId,
     this.width,
@@ -97,7 +97,7 @@ class ReaderSidePanel extends StatelessWidget {
   final Document document;
 
   /// What the outline's own rows may change about the document.
-  final OutlineEditing outlineEditing;
+  final OutlineEditing? outlineEditing;
   final List<Extract> extracts;
   final ReaderPanelTab tab;
   final ValueChanged<ReaderPanelTab> onTabChanged;
@@ -297,7 +297,7 @@ class _OutlineList extends StatefulWidget {
 
   final String? currentBlockId;
   final void Function(String blockId) onGoToBlock;
-  final OutlineEditing editing;
+  final OutlineEditing? editing;
 
   @override
   State<_OutlineList> createState() => _OutlineListState();
@@ -368,23 +368,27 @@ class _OutlineListState extends State<_OutlineList> {
   @override
   Widget build(BuildContext context) {
     if (widget.outline.isEmpty) {
-      return const _EmptyPanel(
-        'No headings yet. The outline is your own map of the ideas in this '
-        'source rather than a summary of it: an entry can name a passage '
-        'that is already here, or hold a thought the text never states. '
-        'Select a line and choose Edit to make it a heading — "# Title" — '
-        'and it appears here, ready to be renamed, indented and moved.',
+      return _EmptyPanel(
+        widget.editing == null
+            ? 'No headings yet.'
+            : 'No headings yet. The outline is your own map of the ideas in '
+                  'this source rather than a summary of it: an entry can name '
+                  'a passage that is already here, or hold a thought the text '
+                  'never states. Select a line and choose Edit to make it a '
+                  'heading — "# Title" — and it appears here, ready to be '
+                  'renamed, indented and moved.',
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        _OutlineToolbar(
-          selectedEntry: _selectedEntry,
-          outline: widget.outline,
-          isBusy: widget.editing.isBusy,
-          onAction: _run,
-        ),
+        if (widget.editing case final OutlineEditing editing)
+          _OutlineToolbar(
+            selectedEntry: _selectedEntry,
+            outline: widget.outline,
+            isBusy: editing.isBusy,
+            onAction: _run,
+          ),
         Expanded(child: _list()),
       ],
     );
@@ -412,7 +416,7 @@ class _OutlineListState extends State<_OutlineList> {
                     _selectedText = text;
                   }
                 });
-                widget.editing.onRename(entry, text);
+                widget.editing?.onRename(entry, text);
               },
             )
           else
@@ -424,7 +428,7 @@ class _OutlineListState extends State<_OutlineList> {
               onCancel: () => setState(() => _addingAfterBlockId = null),
               onSubmit: (String text) {
                 setState(() => _addingAfterBlockId = null);
-                widget.editing.onAddAfter(entry, text);
+                widget.editing?.onAddAfter(entry, text);
               },
             ),
         ],
@@ -502,6 +506,8 @@ class _OutlineListState extends State<_OutlineList> {
   }
 
   void _run(_OutlineAction action, OutlineEntry entry) {
+    final OutlineEditing? editing = widget.editing;
+    if (editing == null) return;
     switch (action) {
       case _OutlineAction.rename:
         setState(() {
@@ -514,15 +520,15 @@ class _OutlineListState extends State<_OutlineList> {
           _addingAfterBlockId = entry.blockId;
         });
       case _OutlineAction.indent:
-        widget.editing.onChangeLevel(entry, entry.level + 1);
+        editing.onChangeLevel(entry, entry.level + 1);
       case _OutlineAction.outdent:
-        widget.editing.onChangeLevel(entry, entry.level - 1);
+        editing.onChangeLevel(entry, entry.level - 1);
       case _OutlineAction.moveUp:
-        widget.editing.onMoveSection(entry, shouldMoveUp: true);
+        editing.onMoveSection(entry, shouldMoveUp: true);
       case _OutlineAction.moveDown:
-        widget.editing.onMoveSection(entry, shouldMoveUp: false);
+        editing.onMoveSection(entry, shouldMoveUp: false);
       case _OutlineAction.remove:
-        widget.editing.onRemove(entry);
+        editing.onRemove(entry);
     }
   }
 }

@@ -135,7 +135,7 @@ final class FormulationCommandRunner {
         ) {
           final draft = command.drafts[draftIndex];
           switch (draft) {
-            case QaCardDraft(:final question, :final answer):
+            case QaCardDraft(:final question, :final answer, :final extra):
               final cleanQuestion = question.trim();
               final cleanAnswer = answer.trim();
               if (cleanQuestion.isEmpty || cleanAnswer.isEmpty) {
@@ -152,17 +152,13 @@ final class FormulationCommandRunner {
                   parent: parent,
                   question: cleanQuestion,
                   answer: cleanAnswer,
+                  extra: extra.trim(),
                   createdAtUtc: now,
                 ),
               );
-            case ClozeCardDraft(:final text):
+            case ClozeCardDraft(:final text, :final extra):
               final cleanText = text.trim();
-              final deletions = parseClozeDeletions(cleanText);
-              if (deletions.isEmpty ||
-                  deletions.any(
-                    (deletion) =>
-                        deletion.ordinal < 1 || deletion.answer.trim().isEmpty,
-                  )) {
+              if (!_hasValidClozeDeletions(cleanText)) {
                 return Err<List<Card>>(
                   ValidationFailure(
                     'use canonical cloze text such as {{c1::answer}}',
@@ -177,6 +173,7 @@ final class FormulationCommandRunner {
                     parent: parent,
                     text: cleanText,
                     ordinal: ordinal,
+                    extra: extra.trim(),
                     createdAtUtc: now,
                   ),
                 );
@@ -185,14 +182,10 @@ final class FormulationCommandRunner {
               :final text,
               :final contextBefore,
               :final contextAfter,
+              :final extra,
             ):
               final cleanText = text.trim();
-              final deletions = parseClozeDeletions(cleanText);
-              if (deletions.isEmpty ||
-                  deletions.any(
-                    (deletion) =>
-                        deletion.ordinal < 1 || deletion.answer.trim().isEmpty,
-                  )) {
+              if (!_hasValidClozeDeletions(cleanText)) {
                 return Err<List<Card>>(
                   ValidationFailure(
                     'use canonical cloze text such as {{c1::answer}}',
@@ -209,6 +202,7 @@ final class FormulationCommandRunner {
                     ordinal: ordinal,
                     contextBefore: contextBefore,
                     contextAfter: contextAfter,
+                    extra: extra.trim(),
                     createdAtUtc: now,
                   ),
                 );
@@ -265,7 +259,7 @@ final class FormulationCommandRunner {
               title: 'Card',
               // The cloze text carries its own answer, so indexing the front
               // alone would make half the collection unsearchable.
-              body: '${card.front}\n${card.back}',
+              body: '${card.front}\n${card.back}\n${card.extra}',
               sourceId: rootId,
               updatedAtUtc: now,
             ),
@@ -343,6 +337,16 @@ final class FormulationCommandRunner {
         ),
       );
     }
+  }
+
+  /// One check keeps ordinary and overlapper clozes under the same contract.
+  bool _hasValidClozeDeletions(String text) {
+    final deletions = parseClozeDeletions(text);
+    return deletions.isNotEmpty &&
+        deletions.every(
+          (deletion) =>
+              deletion.ordinal >= 1 && deletion.answer.trim().isNotEmpty,
+        );
   }
 
   /// Writes only direct tags; inherited parent tags remain derived by the

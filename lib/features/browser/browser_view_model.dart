@@ -140,15 +140,25 @@ final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
       );
 
   /// Rewrites a card's wording from the Browser tree. Never reschedules it.
-  Future<void> editCard(String cardId, {String? front, String? back}) =>
-      _command<Card>(
-        (OperationId operation) => ref
-            .read(reviewCommandRunnerProvider)
-            .editCard(
-              EditCard(operation, cardId: cardId, front: front, back: back),
-            ),
-        success: (_) => 'Card updated',
-      );
+  Future<void> editCard(
+    String cardId, {
+    String? front,
+    String? back,
+    String? extra,
+  }) => _command<Card>(
+    (OperationId operation) => ref
+        .read(reviewCommandRunnerProvider)
+        .editCard(
+          EditCard(
+            operation,
+            cardId: cardId,
+            front: front,
+            back: back,
+            extra: extra,
+          ),
+        ),
+    success: (_) => 'Card updated',
+  );
 
   /// Changes how quickly a source comes back.
   /// Undismiss: returns a dismissed source to the pending store.

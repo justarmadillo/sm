@@ -7,7 +7,7 @@ Draw rectangles over an image; each becomes a card that hides that region and as
 | `occlusion_command_runner.dart` | Transactional creation of scheduled image-occlusion cards |
 | `occlusion_commands.dart` | Commands that create scheduled cards from masked image regions |
 | `occlusion_providers.dart` | Objects used only by the image-occlusion editor |
-| `occlusion_screen.dart` | Screen for drawing masks and creating image-occlusion cards |
+| `occlusion_screen.dart` | Screen for drawing masks and creating image-occlusion cards with optional revealed-side Extra content |
 
 ## `widgets/`
 

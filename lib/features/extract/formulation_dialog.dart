@@ -1,4 +1,4 @@
-/// Batch Q&A and cloze formulation without leaving the current extract.
+/// Full-page batch Q&A and cloze formulation.
 library;
 
 import 'package:flutter/material.dart';
@@ -16,13 +16,13 @@ final class FormulationResult {
   final Set<String> tagIds;
 }
 
-/// Opens batch formulation over [seedText].
+/// Opens the card creation page over [seedText].
 ///
-/// The dialog is deliberately parent-agnostic: cards can be made from an
+/// The page is deliberately parent-agnostic: cards can be made from an
 /// extract, from a selection in an article, or from nothing at all, and the
 /// only thing that changes is the text it starts with and what it calls the
 /// element the cards will hang off.
-Future<FormulationResult?> showFormulationDialog(
+Future<FormulationResult?> openFormulationPage(
   BuildContext context, {
   WidgetRef? ref,
   required String seedText,
@@ -35,22 +35,22 @@ Future<FormulationResult?> showFormulationDialog(
       ? const <Tag>[]
       : await ref.read(tagRepositoryProvider).listTags();
   if (!context.mounted) return null;
-  return showDialog<FormulationResult>(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext context) => _FormulationDialog(
-      seedText: seedText,
-      existingCardCount: existingCardCount,
-      parentNoun: parentNoun,
-      overlapContextBefore: overlapContextBefore,
-      overlapContextAfter: overlapContextAfter,
-      tags: tags,
+  return Navigator.of(context).push<FormulationResult>(
+    MaterialPageRoute<FormulationResult>(
+      builder: (BuildContext context) => _FormulationPage(
+        seedText: seedText,
+        existingCardCount: existingCardCount,
+        parentNoun: parentNoun,
+        overlapContextBefore: overlapContextBefore,
+        overlapContextAfter: overlapContextAfter,
+        tags: tags,
+      ),
     ),
   );
 }
 
-class _FormulationDialog extends StatefulWidget {
-  const _FormulationDialog({
+class _FormulationPage extends StatefulWidget {
+  const _FormulationPage({
     required this.seedText,
     required this.existingCardCount,
     required this.parentNoun,
@@ -67,14 +67,15 @@ class _FormulationDialog extends StatefulWidget {
   final List<Tag> tags;
 
   @override
-  State<_FormulationDialog> createState() => _FormulationDialogState();
+  State<_FormulationPage> createState() => _FormulationPageState();
 }
 
 enum _DraftType { qa, cloze, clozeOverlapper }
 
-class _FormulationDialogState extends State<_FormulationDialog> {
+class _FormulationPageState extends State<_FormulationPage> {
   final TextEditingController _question = TextEditingController();
   final TextEditingController _answer = TextEditingController();
+  final TextEditingController _extra = TextEditingController();
   late final TextEditingController _cloze = TextEditingController(
     text: widget.seedText,
   );
@@ -93,6 +94,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
   void dispose() {
     _question.dispose();
     _answer.dispose();
+    _extra.dispose();
     _cloze.dispose();
     _contextBefore.dispose();
     _contextAfter.dispose();
@@ -106,69 +108,93 @@ class _FormulationDialogState extends State<_FormulationDialog> {
     final totalCardCount =
         stagedCardCount + _cardCountInEditor(clozeCountInEditor);
 
-    return AlertDialog(
-      title: const Text('Formulate cards'),
-      content: SizedBox(
-        width: dialogContentWidth(context, preferred: 720),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(_introLine()),
-              const SizedBox(height: 16),
-              _cardTypeSelector(context),
-              const SizedBox(height: 16),
-              if (_type == _DraftType.qa)
-                ..._questionAnswerFields()
-              else
-                ..._clozeFields(context, clozeCountInEditor),
-              if (_error != null) ..._errorLine(context),
-              const SizedBox(height: 14),
-              _stagingRow(stagedCardCount),
-              if (_queued.isNotEmpty) ..._stagedCardChips(),
-              if (widget.tags.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 14),
-                const Text('Tags on new cards'),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: <Widget>[
-                    for (final Tag tag in widget.tags)
-                      FilterChip(
-                        label: Text('#${tag.name}'),
-                        selected: _tagIds.contains(tag.id),
-                        onSelected: (bool selected) => setState(() {
-                          selected
-                              ? _tagIds.add(tag.id)
-                              : _tagIds.remove(tag.id);
-                        }),
-                      ),
-                  ],
-                ),
-              ],
-            ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Add cards'),
+        actions: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilledButton(
+              onPressed: _submit,
+              child: Text(_submitLabel(totalCardCount)),
+            ),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: ListView(
+              padding: EdgeInsets.all(isCompactWidth(context) ? 16 : 24),
+              children: _pageContents(
+                context,
+                clozeCountInEditor: clozeCountInEditor,
+                stagedCardCount: stagedCardCount,
+              ),
+            ),
           ),
         ),
       ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _submit,
-          child: Text(
-            totalCardCount == 0
-                ? 'Create cards'
-                : 'Create $totalCardCount '
-                      'card${totalCardCount == 1 ? '' : 's'}',
-          ),
-        ),
-      ],
     );
   }
+
+  String _submitLabel(int totalCardCount) => totalCardCount == 0
+      ? 'Create cards'
+      : 'Create $totalCardCount card${totalCardCount == 1 ? '' : 's'}';
+
+  List<Widget> _pageContents(
+    BuildContext context, {
+    required int clozeCountInEditor,
+    required int stagedCardCount,
+  }) => <Widget>[
+    Text(_introLine()),
+    const SizedBox(height: 20),
+    _cardTypeSelector(context),
+    const SizedBox(height: 20),
+    if (_type == _DraftType.qa)
+      ..._questionAnswerFields()
+    else
+      ..._clozeFields(context, clozeCountInEditor),
+    const SizedBox(height: 14),
+    TextField(
+      key: const ValueKey<String>('formulation-extra'),
+      controller: _extra,
+      minLines: 2,
+      maxLines: 6,
+      decoration: const InputDecoration(
+        labelText: 'Extra (optional)',
+        helperText: 'Shown only after the answer is revealed.',
+        alignLabelWithHint: true,
+      ),
+    ),
+    if (_error != null) ..._errorLine(context),
+    const SizedBox(height: 18),
+    _stagingRow(stagedCardCount),
+    if (_queued.isNotEmpty) ..._stagedCardChips(),
+    if (widget.tags.isNotEmpty) ..._tagSelector(),
+    const SizedBox(height: 24),
+  ];
+
+  List<Widget> _tagSelector() => <Widget>[
+    const SizedBox(height: 18),
+    const Text('Tags on new cards'),
+    const SizedBox(height: 8),
+    Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: <Widget>[
+        for (final Tag tag in widget.tags)
+          FilterChip(
+            label: Text('#${tag.name}'),
+            selected: _tagIds.contains(tag.id),
+            onSelected: (bool selected) => setState(() {
+              selected ? _tagIds.add(tag.id) : _tagIds.remove(tag.id);
+            }),
+          ),
+      ],
+    ),
+  ];
 
   /// How many review cards the already-staged drafts will produce.
   ///
@@ -385,7 +411,11 @@ class _FormulationDialogState extends State<_FormulationDialog> {
           _error = 'Question and answer are both required.';
           return null;
         }
-        return QaCardDraft(question: question, answer: answer);
+        return QaCardDraft(
+          question: question,
+          answer: answer,
+          extra: _extra.text.trim(),
+        );
       case _DraftType.cloze:
       case _DraftType.clozeOverlapper:
         final text = _cloze.text.trim();
@@ -398,7 +428,9 @@ class _FormulationDialogState extends State<_FormulationDialog> {
           _error = 'Add at least one valid {{c1::answer}} deletion.';
           return null;
         }
-        if (_type == _DraftType.cloze) return ClozeCardDraft(text);
+        if (_type == _DraftType.cloze) {
+          return ClozeCardDraft(text, extra: _extra.text.trim());
+        }
         final before = int.tryParse(_contextBefore.text.trim());
         final after = int.tryParse(_contextAfter.text.trim());
         if (before == null || after == null) {
@@ -409,6 +441,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
           text: text,
           contextBefore: before,
           contextAfter: after,
+          extra: _extra.text.trim(),
         );
     }
   }
@@ -453,6 +486,7 @@ class _FormulationDialogState extends State<_FormulationDialog> {
       case _DraftType.clozeOverlapper:
         _cloze.clear();
     }
+    _extra.clear();
   }
 
   void _wrapSelectionAsCloze() {

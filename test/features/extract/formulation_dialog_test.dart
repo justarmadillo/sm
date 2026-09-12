@@ -34,7 +34,7 @@ void main() {
         home: Builder(
           builder: (BuildContext context) => FilledButton(
             onPressed: () {
-              result = showFormulationDialog(
+              result = openFormulationPage(
                 context,
                 seedText: extract.markdown,
                 existingCardCount: 0,
@@ -56,6 +56,10 @@ void main() {
       find.byKey(const ValueKey<String>('formulation-answer')),
       'Paris',
     );
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('formulation-extra')),
+      'France uses the euro.',
+    );
     await tester.tap(find.text('Add another'));
     await tester.pumpAndSettle();
 
@@ -65,6 +69,10 @@ void main() {
       find.byKey(const ValueKey<String>('formulation-cloze')),
       '{{c1::Paris}} is the capital of {{c2::France}}.',
     );
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('formulation-extra')),
+      'A map can help.',
+    );
     await tester.pump();
 
     expect(find.text('Create 3 cards'), findsOneWidget);
@@ -73,19 +81,21 @@ void main() {
 
     final drafts = (await result)!.drafts;
     expect(drafts, hasLength(2));
-    expect(drafts.first, isA<QaCardDraft>());
+    final qa = drafts.first as QaCardDraft;
+    expect(qa.extra, 'France uses the euro.');
     final cloze = drafts.last as ClozeCardDraft;
     expect(clozeOrdinals(cloze.text), <int>[1, 2]);
+    expect(cloze.extra, 'A map can help.');
   });
 
-  testWidgets('keeps the dialog open and explains an incomplete Q&A', (
+  testWidgets('keeps the page open and explains an incomplete Q&A', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
           builder: (BuildContext context) => FilledButton(
-            onPressed: () => showFormulationDialog(
+            onPressed: () => openFormulationPage(
               context,
               seedText: extract.markdown,
               existingCardCount: 0,
@@ -105,7 +115,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('Question and answer are both required.'), findsOneWidget);
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.text('Add cards'), findsOneWidget);
   });
 
   testWidgets('splits a pasted list into an overlapper draft', (
@@ -117,7 +128,7 @@ void main() {
         home: Builder(
           builder: (BuildContext context) => FilledButton(
             onPressed: () {
-              result = showFormulationDialog(
+              result = openFormulationPage(
                 context,
                 seedText: '1. Alpha\n2. Beta\n- Gamma',
                 existingCardCount: 0,
@@ -140,6 +151,11 @@ void main() {
     await tester.ensureVisible(splitButton);
     await tester.tap(splitButton);
     await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('formulation-extra')),
+      'Remember the complete sequence.',
+    );
+    await tester.pump();
     await tester.tap(find.text('Create 3 cards'));
     await tester.pumpAndSettle();
 
@@ -147,5 +163,6 @@ void main() {
     expect(draft.text, '{{c1::Alpha}}\n{{c2::Beta}}\n{{c3::Gamma}}');
     expect(draft.contextBefore, 2);
     expect(draft.contextAfter, 1);
+    expect(draft.extra, 'Remember the complete sequence.');
   });
 }

@@ -14,7 +14,7 @@ import 'package:incremental_reader/features/video/import_video_sheet.dart';
 import 'package:incremental_reader/features/video/video_screen.dart';
 import 'package:incremental_reader/features/video/video_view_model.dart';
 
-enum _StandaloneElementType { topic, markdownTopic, video, cards, occlusion }
+enum _StandaloneElementType { topic, video, cards, occlusion }
 
 /// Shows the Add choices on Home and carries the selected flow to completion.
 Future<void> showAddElementFlow(BuildContext context, WidgetRef ref) async {
@@ -27,11 +27,6 @@ Future<void> showAddElementFlow(BuildContext context, WidgetRef ref) async {
             type: _StandaloneElementType.topic,
             icon: Icons.article_outlined,
             label: 'Topic',
-          ),
-          _AddChoice(
-            type: _StandaloneElementType.markdownTopic,
-            icon: Icons.file_open_outlined,
-            label: 'Topic from Markdown',
           ),
           _AddChoice(
             type: _StandaloneElementType.video,
@@ -55,9 +50,7 @@ Future<void> showAddElementFlow(BuildContext context, WidgetRef ref) async {
   if (type == null || !context.mounted) return;
   switch (type) {
     case _StandaloneElementType.topic:
-      await _addTopic(context, ref, isWritten: true);
-    case _StandaloneElementType.markdownTopic:
-      await _addTopic(context, ref, isWritten: false);
+      await _addTopic(context, ref);
     case _StandaloneElementType.video:
       await _addVideo(context, ref);
     case _StandaloneElementType.cards:
@@ -70,19 +63,13 @@ Future<void> showAddElementFlow(BuildContext context, WidgetRef ref) async {
   }
 }
 
-Future<void> _addTopic(
-  BuildContext context,
-  WidgetRef ref, {
-  required bool isWritten,
-}) async {
-  final request = isWritten
-      ? await showNewTopicSheet(context)
-      : await showImportSheet(context);
+Future<void> _addTopic(BuildContext context, WidgetRef ref) async {
+  final request = await openTopicCreationPage(context);
   if (request == null || !context.mounted) return;
   final sourceId = await ref
       .read(browserViewModelProvider.notifier)
       .importMarkdown(title: request.title, markdown: request.markdown);
-  if (sourceId == null || isWritten || !context.mounted) return;
+  if (sourceId == null || !context.mounted) return;
   await openReader(
     context,
     ref,
@@ -92,7 +79,7 @@ Future<void> _addTopic(
 }
 
 Future<void> _addVideo(BuildContext context, WidgetRef ref) async {
-  final request = await showImportVideoSheet(context, ref);
+  final request = await openVideoCreationPage(context, ref);
   if (request == null || !context.mounted) return;
   final elementId = await ref
       .read(browserViewModelProvider.notifier)
@@ -115,7 +102,7 @@ Future<void> _addVideo(BuildContext context, WidgetRef ref) async {
 
 Future<void> _addCards(BuildContext context, WidgetRef ref) async {
   final settings = ref.read(settingsStoreProvider).currentOrDefaults.cards;
-  final FormulationResult? formulation = await showFormulationDialog(
+  final FormulationResult? formulation = await openFormulationPage(
     context,
     ref: ref,
     seedText: '',

@@ -14,5 +14,6 @@ Mercy and Smart Postpone live here rather than in `settings/` because they are t
 | `queue_query.dart` | Read model for the daily study queue |
 | `queue_screen.dart` | The user's count-based study session, mixing cards and topics |
 | `queue_view_model.dart` | Presentation state for the daily heterogeneous queue |
+| `open_study_element.dart` | Shared dispatch from an element type to its study screen |
 | `smart_postpone_dialog.dart` | The Smart Postpone simulation report and its confirmation |
 | `study_screen_outcome.dart` | Outcome returned by a screen opened from the study queue |

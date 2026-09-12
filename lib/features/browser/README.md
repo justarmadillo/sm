@@ -10,9 +10,9 @@ Two files carry more than their names suggest. `browser_view_model.dart` holds t
 | `browser_command_runner.dart` | Carries out the Browser's commands, one transaction each |
 | `browser_commands.dart` | What the Browser can change about the collection's shape |
 | `browser_providers.dart` | The objects the Browser screen needs, built once |
-| `browser_screen.dart` | The Browser: the whole collection as one tree, and the way into any element in it |
+| `browser_screen.dart` | The Browser: the filtered tree, filing or Added order, and the way into any element in it |
 | `browser_tree_query.dart` | The Browser's tree: every element in the collection, nested and ordered the way the user has filed it |
 | `browser_view_model.dart` | Element commands shared by the Browser tree and the reader |
 | `element_content_query.dart` | Reads the body of any one element, whatever kind it is |
-| `import_sheet.dart` | Making a topic: paste or write markdown, or open a `.md` file |
+| `import_sheet.dart` | The full-page topic flow: paste or write markdown, or open a `.md` file |
 | `open_element.dart` | The one way to open any element for reading or editing, wherever it was clicked |

@@ -70,8 +70,9 @@ double-tapped grade overwrite itself.
 
 `platform/app_paths.dart` decides. `files/source_asset_file_store.dart` keeps
 images under portable SHA-256 names in private application support.
-`files/backup_service.dart` packages the database and referenced images once
-per study day, before the day's first write. Pre-migration backups remain a
+`files/backup_service.dart` packages the database and referenced images when
+the configured startup cadence is due, before the session's first write.
+Pre-migration backups remain a
 database-only snapshot because their one job is to protect the schema upgrade.
 `files/backup_restore_service.dart` is the matching reader. It streams a package
 into app-owned staging, validates and migrates that expendable copy, then
@@ -115,7 +116,7 @@ writing a row itself.
 
 | File | What it is |
 |---|---|
-| `app_database.dart` | The application database: connection policy, schema version, migrations |
+| `app_database.dart` | The application database: connection policy, schema version, and migrations including card Extra |
 | `connection.dart` | Opening the live database and its in-memory test twin |
 | `row_converters.dart` | Conversion between Drift rows and domain values |
 | `tables.dart` | Drift table definitions for the whole v1 schema |
@@ -155,4 +156,5 @@ One implementation per contract, same order, same names.
 | File | What it is |
 |---|---|
 | `app_paths.dart` | Where the application keeps its files |
+| `automatic_backup_folder_access.dart` | Selects a persistent Windows or Android folder and mirrors automatic backup packages into it |
 | `time_zones.dart` | System-timezone scheduling and legacy named-zone compatibility |

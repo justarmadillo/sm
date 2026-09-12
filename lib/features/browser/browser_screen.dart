@@ -84,6 +84,9 @@ const double _kIndentStep = 26;
 /// expander of the row that owns that level.
 const double _kGuideOffset = 19;
 
+/// How siblings are ordered while preserving the collection's tree shape.
+enum _BrowserOrder { filing, addedNewest, addedOldest }
+
 class BrowserScreen extends ConsumerStatefulWidget {
   const BrowserScreen({super.key});
 
@@ -107,6 +110,8 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
 
   /// Every selected tag must be effective on a row for that row to remain.
   Set<String> _tagIds = const <String>{};
+
+  _BrowserOrder _order = _BrowserOrder.filing;
 
   /// Opens every node, once, the first time the tree loads.
   ///
@@ -367,6 +372,8 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
       _TypeFilter(
         selected: _types,
         onChanged: (Set<ElementType> types) => setState(() => _types = types),
+        order: _order,
+        onOrderChanged: (_BrowserOrder order) => setState(() => _order = order),
       ),
       _TagFilter(
         tags: ref.watch(browserTagsProvider).valueOrNull ?? const <Tag>[],
@@ -390,10 +397,8 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     BrowserTreeNode? under,
   ) async {
     switch (choice) {
-      case _NewElement.writtenTopic:
-        await _createTopic(context, under, isWritten: true);
-      case _NewElement.importedTopic:
-        await _createTopic(context, under, isWritten: false);
+      case _NewElement.topic:
+        await _createTopic(context, under);
       case _NewElement.video:
         await _createVideo(context, under);
       case _NewElement.card:
@@ -412,7 +417,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     BuildContext context,
     BrowserTreeNode? under,
   ) async {
-    final VideoImportRequest? request = await showImportVideoSheet(
+    final VideoImportRequest? request = await openVideoCreationPage(
       context,
       ref,
     );
@@ -445,19 +450,12 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     ref.invalidate(browserTreeProvider);
   }
 
-  /// Writes or imports a topic, then opens it when it was imported.
-  ///
-  /// An imported chapter is something to start reading; a topic just written
-  /// by hand is already on screen in the dialog the user typed it into, so
-  /// opening the Reader on top of it would only be in the way.
+  /// Adds a topic from typed, pasted, or opened Markdown, then opens it.
   Future<void> _createTopic(
     BuildContext context,
-    BrowserTreeNode? under, {
-    required bool isWritten,
-  }) async {
-    final ImportRequest? request = isWritten
-        ? await showNewTopicSheet(context)
-        : await showImportSheet(context);
+    BrowserTreeNode? under,
+  ) async {
+    final ImportRequest? request = await openTopicCreationPage(context);
     if (request == null || !context.mounted) return;
 
     final BrowserViewModel model = ref.read(browserViewModelProvider.notifier);
@@ -473,7 +471,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
       setState(() => _expanded.add(under.ref));
     }
     ref.invalidate(browserTreeProvider);
-    if (sourceId == null || isWritten || !context.mounted) return;
+    if (sourceId == null || !context.mounted) return;
     await openReader(
       context,
       ref,
@@ -488,7 +486,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     BuildContext context,
     BrowserTreeNode? under,
   ) async {
-    final FormulationResult? formulation = await showFormulationDialog(
+    final FormulationResult? formulation = await openFormulationPage(
       context,
       ref: ref,
       seedText: '',
@@ -775,7 +773,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
 
   List<_TreeRow> _visibleRows(List<BrowserTreeNode> roots) {
     final List<_TreeRow> rows = <_TreeRow>[];
-    for (final BrowserTreeNode root in roots) {
+    for (final BrowserTreeNode root in _ordered(roots)) {
       _flatten(root, 0, rows);
     }
     return rows;
@@ -795,9 +793,22 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         _expanded.contains(node.ref) ||
         (!matches && (_types.isNotEmpty || _tagIds.isNotEmpty));
     if (!shouldShowChildren) return;
-    for (final BrowserTreeNode child in node.children) {
+    for (final BrowserTreeNode child in _ordered(node.children)) {
       _flatten(child, matches ? depth + 1 : depth, rows);
     }
+  }
+
+  List<BrowserTreeNode> _ordered(List<BrowserTreeNode> nodes) {
+    if (_order == _BrowserOrder.filing) return nodes;
+    final List<BrowserTreeNode> ordered = <BrowserTreeNode>[...nodes];
+    ordered.sort((BrowserTreeNode first, BrowserTreeNode second) {
+      final int byAdded = first.addedAtUtc.compareTo(second.addedAtUtc);
+      if (byAdded != 0) {
+        return _order == _BrowserOrder.addedNewest ? -byAdded : byAdded;
+      }
+      return first.ref.id.compareTo(second.ref.id);
+    });
+    return ordered;
   }
 
   Iterable<ElementRef> _allRefs(List<BrowserTreeNode> nodes) sync* {
@@ -825,10 +836,17 @@ final class _TreeRow {
 }
 
 class _TypeFilter extends StatelessWidget {
-  const _TypeFilter({required this.selected, required this.onChanged});
+  const _TypeFilter({
+    required this.selected,
+    required this.onChanged,
+    required this.order,
+    required this.onOrderChanged,
+  });
 
   final Set<ElementType> selected;
   final ValueChanged<Set<ElementType>> onChanged;
+  final _BrowserOrder order;
+  final ValueChanged<_BrowserOrder> onOrderChanged;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -851,6 +869,34 @@ class _TypeFilter extends StatelessWidget {
                 selected.length == types.length && selected.containsAll(types),
             onSelected: (_) => onChanged(types),
           ),
+        PopupMenuButton<_BrowserOrder>(
+          tooltip: 'Sort order',
+          initialValue: order,
+          onSelected: onOrderChanged,
+          itemBuilder: (BuildContext context) =>
+              const <PopupMenuEntry<_BrowserOrder>>[
+                PopupMenuItem<_BrowserOrder>(
+                  value: _BrowserOrder.filing,
+                  child: Text('Filed order'),
+                ),
+                PopupMenuItem<_BrowserOrder>(
+                  value: _BrowserOrder.addedNewest,
+                  child: Text('Added — newest first'),
+                ),
+                PopupMenuItem<_BrowserOrder>(
+                  value: _BrowserOrder.addedOldest,
+                  child: Text('Added — oldest first'),
+                ),
+              ],
+          child: Chip(
+            avatar: const Icon(Icons.sort, size: 17),
+            label: Text(switch (order) {
+              _BrowserOrder.filing => 'Filed',
+              _BrowserOrder.addedNewest => 'Added ↓',
+              _BrowserOrder.addedOldest => 'Added ↑',
+            }),
+          ),
+        ),
       ],
     ),
   );
@@ -1194,13 +1240,6 @@ class _NodeRow extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ),
-        if (node.preview.isNotEmpty)
-          Text(
-            node.preview,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, color: AppColors.muted),
-          ),
         if (node.tagNames.isNotEmpty) ...<Widget>[
           const SizedBox(height: 3),
           ColoredTagList(tagNames: node.tagNames, maximumVisibleTags: 3),
@@ -1272,11 +1311,8 @@ const Color _kDismissedElementWash = AppColors.dismissedWash;
 
 /// What the New menu can make.
 enum _NewElement {
-  /// A topic typed straight into the dialog.
-  writtenTopic,
-
-  /// A topic imported from a file or pasted in.
-  importedTopic,
+  /// A topic typed, pasted, or opened from a Markdown file.
+  topic,
 
   /// A video, studied by its timestamps rather than its text.
   video,
@@ -1309,19 +1345,11 @@ class _NewElementMenu extends StatelessWidget {
     icon: isRowMenu ? const Icon(Icons.add, size: 17) : null,
     itemBuilder: (BuildContext context) => const <PopupMenuEntry<_NewElement>>[
       PopupMenuItem<_NewElement>(
-        value: _NewElement.writtenTopic,
+        value: _NewElement.topic,
         child: ListTile(
           dense: true,
           leading: Icon(Icons.article_outlined),
           title: Text('Topic'),
-        ),
-      ),
-      PopupMenuItem<_NewElement>(
-        value: _NewElement.importedTopic,
-        child: ListTile(
-          dense: true,
-          leading: Icon(Icons.file_open_outlined),
-          title: Text('Topic from markdown'),
         ),
       ),
       PopupMenuItem<_NewElement>(

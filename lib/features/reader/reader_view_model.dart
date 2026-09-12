@@ -781,6 +781,20 @@ final class ReaderViewModel
         ),
   );
 
+  /// Commits a full-markdown rewrite through the same exact edit path.
+  Future<void> commitDocumentEdit(String markdown) => _runEdit(
+    (OperationId operation, ReaderUiState current) => ref
+        .read(readerCommandRunnerProvider)
+        .editSourceDocument(
+          EditSourceDocument(
+            operation,
+            sourceId: current.source.id,
+            markdown: markdown,
+            baseContentRevision: current.document.contentRevision,
+          ),
+        ),
+  );
+
   /// Removes [block] and the separator that went with it.
   Future<void> deleteBlock(Block block) => _runEdit(
     (OperationId operation, ReaderUiState current) => ref

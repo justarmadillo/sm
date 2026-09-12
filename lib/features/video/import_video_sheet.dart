@@ -12,7 +12,6 @@ import 'package:incremental_reader/features/reader/reader_commands.dart';
 import 'package:incremental_reader/features/reader/reader_image_input.dart';
 import 'package:incremental_reader/features/reader/reader_providers.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
-import 'package:incremental_reader/shared/ui/screen_width.dart';
 import 'package:incremental_reader/shared/ui/toast_message.dart';
 import 'package:incremental_reader/shared/ui/video_thumbnail.dart';
 
@@ -32,26 +31,27 @@ final class VideoImportRequest {
   final String? thumbnailUrl;
 }
 
-/// Shows the import dialog and returns what the user entered, or null.
-Future<VideoImportRequest?> showImportVideoSheet(
+/// Opens the video creation page and returns what the user entered, or null.
+Future<VideoImportRequest?> openVideoCreationPage(
   BuildContext context,
   WidgetRef ref,
-) => showDialog<VideoImportRequest>(
-  context: context,
-  builder: (BuildContext context) =>
-      _ImportVideoDialog(imageInput: ref.read(readerImageInputProvider)),
+) => Navigator.of(context).push<VideoImportRequest>(
+  MaterialPageRoute<VideoImportRequest>(
+    builder: (BuildContext context) =>
+        _VideoCreationPage(imageInput: ref.read(readerImageInputProvider)),
+  ),
 );
 
-class _ImportVideoDialog extends StatefulWidget {
-  const _ImportVideoDialog({required this.imageInput});
+class _VideoCreationPage extends StatefulWidget {
+  const _VideoCreationPage({required this.imageInput});
 
   final ReaderImageInput imageInput;
 
   @override
-  State<_ImportVideoDialog> createState() => _ImportVideoDialogState();
+  State<_VideoCreationPage> createState() => _VideoCreationPageState();
 }
 
-class _ImportVideoDialogState extends State<_ImportVideoDialog> {
+class _VideoCreationPageState extends State<_VideoCreationPage> {
   final TextEditingController _url = TextEditingController();
   final TextEditingController _title = TextEditingController();
   final TextEditingController _length = TextEditingController();
@@ -141,50 +141,66 @@ class _ImportVideoDialogState extends State<_ImportVideoDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Add a video'),
-    content: SizedBox(
-      width: dialogContentWidth(context, preferred: 560),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            _urlField(),
-            const SizedBox(height: 6),
-            _platformLine(),
-            const SizedBox(height: 12),
-            _field(_title, 'Title', 'What this talk is'),
-            const SizedBox(height: 12),
-            _field(_length, 'Duration', '1:04:12'),
-            const SizedBox(height: 12),
-            _field(
-              _thumbnail,
-              'Thumbnail link (optional)',
-              'https://…/preview.jpg',
-            ),
-            const SizedBox(height: 8),
-            _thumbnailButtons(),
-            if (_thumbnailSource case final String thumbnailSource) ...<Widget>[
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Add video'),
+      actions: <Widget>[
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: FilledButton(
+            onPressed: _canImport ? _import : null,
+            child: const Text('Add'),
+          ),
+        ),
+      ],
+    ),
+    body: SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: <Widget>[
+              Text(
+                'Video details',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 20),
+              _urlField(),
+              const SizedBox(height: 6),
+              _platformLine(),
+              const SizedBox(height: 16),
+              _field(_title, 'Title', 'What this talk is'),
+              const SizedBox(height: 16),
+              _field(_length, 'Duration', '1:04:12'),
+              const SizedBox(height: 16),
+              _field(
+                _thumbnail,
+                'Thumbnail link (optional)',
+                'https://…/preview.jpg',
+              ),
               const SizedBox(height: 10),
-              VideoThumbnail(source: thumbnailSource, width: 180, height: 101),
+              _thumbnailButtons(),
+              if (_thumbnailSource
+                  case final String thumbnailSource) ...<Widget>[
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: VideoThumbnail(
+                    source: thumbnailSource,
+                    width: 240,
+                    height: 135,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              _problemLine(),
+              const SizedBox(height: 24),
             ],
-            const SizedBox(height: 6),
-            _problemLine(),
-          ],
+          ),
         ),
       ),
     ),
-    actions: <Widget>[
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        onPressed: _canImport ? _import : null,
-        child: const Text('Add'),
-      ),
-    ],
   );
 
   Widget _urlField() => TextField(

@@ -18,7 +18,7 @@ void main() {
       id: 'card',
       parent: null,
       header: 'Anatomy',
-      remarks: 'Left atrium',
+      extra: 'Left atrium',
       createdAtUtc: DateTime.utc(2026),
     );
     const expected = CardOcclusion(

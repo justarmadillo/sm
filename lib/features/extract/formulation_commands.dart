@@ -11,19 +11,25 @@ sealed class CardDraft {
 
 /// One explicit question and answer.
 final class QaCardDraft extends CardDraft {
-  const QaCardDraft({required this.question, required this.answer});
+  const QaCardDraft({
+    required this.question,
+    required this.answer,
+    this.extra = '',
+  });
 
   final String question;
   final String answer;
+  final String extra;
 }
 
 /// Canonical Anki cloze text.
 ///
 /// One submitted draft creates one card for every distinct `cN` ordinal.
 final class ClozeCardDraft extends CardDraft {
-  const ClozeCardDraft(this.text);
+  const ClozeCardDraft(this.text, {this.extra = ''});
 
   final String text;
+  final String extra;
 }
 
 /// Canonical cloze text rendered with a limited neighbouring context window.
@@ -32,11 +38,13 @@ final class ClozeOverlapperCardDraft extends CardDraft {
     required this.text,
     required this.contextBefore,
     required this.contextAfter,
+    this.extra = '',
   });
 
   final String text;
   final int contextBefore;
   final int contextAfter;
+  final String extra;
 }
 
 /// Creates one or more independently scheduled cards from an element.

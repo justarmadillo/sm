@@ -388,6 +388,9 @@ class Cards extends Table {
 
   TextColumn get back => text()();
 
+  /// Optional Markdown shown only on the revealed side of the card.
+  TextColumn get extra => text().withDefault(const Constant(''))();
+
   IntColumn get clozeOrdinal => integer().nullable()();
 
   IntColumn get contextBefore => integer().nullable()();

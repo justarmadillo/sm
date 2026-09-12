@@ -97,6 +97,7 @@ void main() {
     await pumpReader(tester, request);
 
     expect(find.text('#research'), findsOneWidget);
+    expect(find.byTooltip('Learning commands'), findsOneWidget);
   });
 
   testWidgets('phone status starts collapsed and expands accessibly', (

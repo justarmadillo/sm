@@ -22,6 +22,7 @@ sections in a fixed order — without scrolling past every row in every one.
 | `queue_section.dart` | how much of the collection today's queue admits |
 | `remember_section.dart` | what a newly remembered element starts out with |
 | `card_memory_section.dart` | FSRS, and the safeguards around a card's memory |
+| `backup_section.dart` | automatic backup folder and fixed cadence |
 | `smart_postpone_sections.dart` | scope, parameters, and the A-factor nudges |
 | `mercy_section.dart` | how Mercy chooses what to move, and how far |
 | `collection_data_section.dart` | exporting and importing the whole collection |

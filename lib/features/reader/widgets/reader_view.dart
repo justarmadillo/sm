@@ -50,6 +50,7 @@ class ReaderView extends StatefulWidget {
     this.onEditCancel,
     this.onEditDelete,
     this.onEditChooseImages,
+    this.onEditPasteImages,
     this.images = const <String, ReaderImagePresentation>{},
     super.key,
   });
@@ -72,6 +73,7 @@ class ReaderView extends StatefulWidget {
   final void Function(Block block)? onEditCancel;
   final void Function(Block block)? onEditDelete;
   final Future<List<SourceImageImport>> Function()? onEditChooseImages;
+  final Future<List<SourceImageImport>> Function()? onEditPasteImages;
   final ReaderTypography typography;
   final Map<String, ReaderImagePresentation> images;
 
@@ -507,6 +509,7 @@ class ReaderViewState extends State<ReaderView> {
       onEditCancel: widget.onEditCancel,
       onEditDelete: widget.onEditDelete,
       onEditChooseImages: widget.onEditChooseImages,
+      onEditPasteImages: widget.onEditPasteImages,
       onParagraphMounted: widget.controller.registerParagraph,
       onParagraphUnmounted: widget.controller.unregisterParagraph,
       images: widget.images,

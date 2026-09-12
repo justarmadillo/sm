@@ -30,6 +30,7 @@
 | `study_status_bar.dart` | the strip of status text above a study screen |
 | `toast_message.dart` | small self-dismissing success and error notices |
 | `video_thumbnail.dart` | a video's still image, at a fixed shape |
+| `zoomable_image_page.dart` | fullscreen pinch and double-tap zoom for caller-supplied images |
 
 ## Two rules
 

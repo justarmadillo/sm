@@ -2,7 +2,7 @@
 
 Priority is relative: an element does not have a score, it has a position. This folder owns both the slider that changes one position and the flat list that shows every position at once.
 
-The Learning menu also lives here. It is the bulk half of the same idea — the commands that act on a selection of rows rather than on the one element in front of you.
+The Learning menu also lives here. The Priority and Browser screens apply it to selected rows, while Reader, Extract, Video, and Review toolbars apply the same commands to the element in front of the user.
 
 | File | What it is |
 |---|---|
