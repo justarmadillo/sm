@@ -16,6 +16,7 @@ the code.
 | `priority/` | Priority browser | the slider, and the whole collection in one list |
 | `search/` | Search | full-text search across everything |
 | `tags/` | Tags | naming things, and finding them again |
+| `custom_study/` | Custom study | browsing by tag, saved decks, and cramming |
 | `settings/` | Settings | changing how the app behaves |
 | `diagnostics/` | Diagnostics | what the scheduler has been doing (development aid) |
 | `recovery/` | Collection recovery | restores a backup when the database cannot open |

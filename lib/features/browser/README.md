@@ -14,5 +14,6 @@ Two files carry more than their names suggest. `browser_view_model.dart` holds t
 | `browser_tree_query.dart` | The Browser's tree: every element in the collection, nested and ordered the way the user has filed it |
 | `browser_view_model.dart` | Element commands shared by the Browser tree and the reader |
 | `element_content_query.dart` | Reads the body of any one element, whatever kind it is |
-| `import_sheet.dart` | The full-page topic flow: paste or write markdown, or open a `.md` file |
+| `import_sheet.dart` | The full-page topic flow: paste or write markdown, or open a `.md` file or a zip of a Marker folder |
+| `markdown_file_input.dart` | Opens a markdown file, or a zip of one, together with the images it links |
 | `open_element.dart` | The one way to open any element for reading or editing, wherever it was clicked |

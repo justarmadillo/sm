@@ -14779,6 +14779,992 @@ class ElementTagsCompanion extends UpdateCompanion<ElementTagRow> {
   }
 }
 
+class $CustomDecksTable extends CustomDecks
+    with TableInfo<$CustomDecksTable, CustomDeckRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CustomDecksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 100,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameLowercaseMeta = const VerificationMeta(
+    'nameLowercase',
+  );
+  @override
+  late final GeneratedColumn<String> nameLowercase = GeneratedColumn<String>(
+    'name_lowercase',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 100,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tagMatchMeta = const VerificationMeta(
+    'tagMatch',
+  );
+  @override
+  late final GeneratedColumn<int> tagMatch = GeneratedColumn<int>(
+    'tag_match',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(tagMatch).isBetweenValues(0, 1),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _elementTypesMeta = const VerificationMeta(
+    'elementTypes',
+  );
+  @override
+  late final GeneratedColumn<int> elementTypes = GeneratedColumn<int>(
+    'element_types',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(elementTypes).isBetweenValues(1, 15),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _shouldRescheduleMeta = const VerificationMeta(
+    'shouldReschedule',
+  );
+  @override
+  late final GeneratedColumn<bool> shouldReschedule = GeneratedColumn<bool>(
+    'should_reschedule',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("should_reschedule" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _sessionLimitMeta = const VerificationMeta(
+    'sessionLimit',
+  );
+  @override
+  late final GeneratedColumn<int> sessionLimit = GeneratedColumn<int>(
+    'session_limit',
+    aliasedName,
+    true,
+    check: () => ComparableExpr(sessionLimit).isBiggerOrEqualValue(1),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _studyOrderMeta = const VerificationMeta(
+    'studyOrder',
+  );
+  @override
+  late final GeneratedColumn<int> studyOrder = GeneratedColumn<int>(
+    'study_order',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(studyOrder).isBetweenValues(0, 3),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isDueOnlyMeta = const VerificationMeta(
+    'isDueOnly',
+  );
+  @override
+  late final GeneratedColumn<bool> isDueOnly = GeneratedColumn<bool>(
+    'is_due_only',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_due_only" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> createdAtUtc = GeneratedColumn<int>(
+    'created_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtUtcMeta = const VerificationMeta(
+    'updatedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAtUtc = GeneratedColumn<int>(
+    'updated_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    nameLowercase,
+    tagMatch,
+    elementTypes,
+    shouldReschedule,
+    sessionLimit,
+    studyOrder,
+    isDueOnly,
+    createdAtUtc,
+    updatedAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'custom_decks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CustomDeckRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('name_lowercase')) {
+      context.handle(
+        _nameLowercaseMeta,
+        nameLowercase.isAcceptableOrUnknown(
+          data['name_lowercase']!,
+          _nameLowercaseMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_nameLowercaseMeta);
+    }
+    if (data.containsKey('tag_match')) {
+      context.handle(
+        _tagMatchMeta,
+        tagMatch.isAcceptableOrUnknown(data['tag_match']!, _tagMatchMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tagMatchMeta);
+    }
+    if (data.containsKey('element_types')) {
+      context.handle(
+        _elementTypesMeta,
+        elementTypes.isAcceptableOrUnknown(
+          data['element_types']!,
+          _elementTypesMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_elementTypesMeta);
+    }
+    if (data.containsKey('should_reschedule')) {
+      context.handle(
+        _shouldRescheduleMeta,
+        shouldReschedule.isAcceptableOrUnknown(
+          data['should_reschedule']!,
+          _shouldRescheduleMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_shouldRescheduleMeta);
+    }
+    if (data.containsKey('session_limit')) {
+      context.handle(
+        _sessionLimitMeta,
+        sessionLimit.isAcceptableOrUnknown(
+          data['session_limit']!,
+          _sessionLimitMeta,
+        ),
+      );
+    }
+    if (data.containsKey('study_order')) {
+      context.handle(
+        _studyOrderMeta,
+        studyOrder.isAcceptableOrUnknown(data['study_order']!, _studyOrderMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_studyOrderMeta);
+    }
+    if (data.containsKey('is_due_only')) {
+      context.handle(
+        _isDueOnlyMeta,
+        isDueOnly.isAcceptableOrUnknown(data['is_due_only']!, _isDueOnlyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_isDueOnlyMeta);
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtUtcMeta);
+    }
+    if (data.containsKey('updated_at_utc')) {
+      context.handle(
+        _updatedAtUtcMeta,
+        updatedAtUtc.isAcceptableOrUnknown(
+          data['updated_at_utc']!,
+          _updatedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtUtcMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CustomDeckRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CustomDeckRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      nameLowercase: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name_lowercase'],
+      )!,
+      tagMatch: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}tag_match'],
+      )!,
+      elementTypes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}element_types'],
+      )!,
+      shouldReschedule: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}should_reschedule'],
+      )!,
+      sessionLimit: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}session_limit'],
+      ),
+      studyOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}study_order'],
+      )!,
+      isDueOnly: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_due_only'],
+      )!,
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at_utc'],
+      )!,
+      updatedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at_utc'],
+      )!,
+    );
+  }
+
+  @override
+  $CustomDecksTable createAlias(String alias) {
+    return $CustomDecksTable(attachedDatabase, alias);
+  }
+}
+
+class CustomDeckRow extends DataClass implements Insertable<CustomDeckRow> {
+  final String id;
+  final String name;
+
+  /// Case-insensitive identity, so two decks cannot differ only by case.
+  final String nameLowercase;
+
+  /// `CustomDeckTagMatch.storedValue`: 0 every include tag, 1 any of them.
+  final int tagMatch;
+
+  /// One bit per `ElementType` index; at least one type is always chosen.
+  final int elementTypes;
+  final bool shouldReschedule;
+
+  /// The most elements one session studies, or null for no cap.
+  final int? sessionLimit;
+
+  /// `CustomDeckOrder.storedValue`.
+  final int studyOrder;
+  final bool isDueOnly;
+  final int createdAtUtc;
+  final int updatedAtUtc;
+  const CustomDeckRow({
+    required this.id,
+    required this.name,
+    required this.nameLowercase,
+    required this.tagMatch,
+    required this.elementTypes,
+    required this.shouldReschedule,
+    this.sessionLimit,
+    required this.studyOrder,
+    required this.isDueOnly,
+    required this.createdAtUtc,
+    required this.updatedAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['name_lowercase'] = Variable<String>(nameLowercase);
+    map['tag_match'] = Variable<int>(tagMatch);
+    map['element_types'] = Variable<int>(elementTypes);
+    map['should_reschedule'] = Variable<bool>(shouldReschedule);
+    if (!nullToAbsent || sessionLimit != null) {
+      map['session_limit'] = Variable<int>(sessionLimit);
+    }
+    map['study_order'] = Variable<int>(studyOrder);
+    map['is_due_only'] = Variable<bool>(isDueOnly);
+    map['created_at_utc'] = Variable<int>(createdAtUtc);
+    map['updated_at_utc'] = Variable<int>(updatedAtUtc);
+    return map;
+  }
+
+  CustomDecksCompanion toCompanion(bool nullToAbsent) {
+    return CustomDecksCompanion(
+      id: Value(id),
+      name: Value(name),
+      nameLowercase: Value(nameLowercase),
+      tagMatch: Value(tagMatch),
+      elementTypes: Value(elementTypes),
+      shouldReschedule: Value(shouldReschedule),
+      sessionLimit: sessionLimit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sessionLimit),
+      studyOrder: Value(studyOrder),
+      isDueOnly: Value(isDueOnly),
+      createdAtUtc: Value(createdAtUtc),
+      updatedAtUtc: Value(updatedAtUtc),
+    );
+  }
+
+  factory CustomDeckRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CustomDeckRow(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      nameLowercase: serializer.fromJson<String>(json['nameLowercase']),
+      tagMatch: serializer.fromJson<int>(json['tagMatch']),
+      elementTypes: serializer.fromJson<int>(json['elementTypes']),
+      shouldReschedule: serializer.fromJson<bool>(json['shouldReschedule']),
+      sessionLimit: serializer.fromJson<int?>(json['sessionLimit']),
+      studyOrder: serializer.fromJson<int>(json['studyOrder']),
+      isDueOnly: serializer.fromJson<bool>(json['isDueOnly']),
+      createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
+      updatedAtUtc: serializer.fromJson<int>(json['updatedAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'nameLowercase': serializer.toJson<String>(nameLowercase),
+      'tagMatch': serializer.toJson<int>(tagMatch),
+      'elementTypes': serializer.toJson<int>(elementTypes),
+      'shouldReschedule': serializer.toJson<bool>(shouldReschedule),
+      'sessionLimit': serializer.toJson<int?>(sessionLimit),
+      'studyOrder': serializer.toJson<int>(studyOrder),
+      'isDueOnly': serializer.toJson<bool>(isDueOnly),
+      'createdAtUtc': serializer.toJson<int>(createdAtUtc),
+      'updatedAtUtc': serializer.toJson<int>(updatedAtUtc),
+    };
+  }
+
+  CustomDeckRow copyWith({
+    String? id,
+    String? name,
+    String? nameLowercase,
+    int? tagMatch,
+    int? elementTypes,
+    bool? shouldReschedule,
+    Value<int?> sessionLimit = const Value.absent(),
+    int? studyOrder,
+    bool? isDueOnly,
+    int? createdAtUtc,
+    int? updatedAtUtc,
+  }) => CustomDeckRow(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    nameLowercase: nameLowercase ?? this.nameLowercase,
+    tagMatch: tagMatch ?? this.tagMatch,
+    elementTypes: elementTypes ?? this.elementTypes,
+    shouldReschedule: shouldReschedule ?? this.shouldReschedule,
+    sessionLimit: sessionLimit.present ? sessionLimit.value : this.sessionLimit,
+    studyOrder: studyOrder ?? this.studyOrder,
+    isDueOnly: isDueOnly ?? this.isDueOnly,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+    updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+  );
+  CustomDeckRow copyWithCompanion(CustomDecksCompanion data) {
+    return CustomDeckRow(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      nameLowercase: data.nameLowercase.present
+          ? data.nameLowercase.value
+          : this.nameLowercase,
+      tagMatch: data.tagMatch.present ? data.tagMatch.value : this.tagMatch,
+      elementTypes: data.elementTypes.present
+          ? data.elementTypes.value
+          : this.elementTypes,
+      shouldReschedule: data.shouldReschedule.present
+          ? data.shouldReschedule.value
+          : this.shouldReschedule,
+      sessionLimit: data.sessionLimit.present
+          ? data.sessionLimit.value
+          : this.sessionLimit,
+      studyOrder: data.studyOrder.present
+          ? data.studyOrder.value
+          : this.studyOrder,
+      isDueOnly: data.isDueOnly.present ? data.isDueOnly.value : this.isDueOnly,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+      updatedAtUtc: data.updatedAtUtc.present
+          ? data.updatedAtUtc.value
+          : this.updatedAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CustomDeckRow(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('nameLowercase: $nameLowercase, ')
+          ..write('tagMatch: $tagMatch, ')
+          ..write('elementTypes: $elementTypes, ')
+          ..write('shouldReschedule: $shouldReschedule, ')
+          ..write('sessionLimit: $sessionLimit, ')
+          ..write('studyOrder: $studyOrder, ')
+          ..write('isDueOnly: $isDueOnly, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('updatedAtUtc: $updatedAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    nameLowercase,
+    tagMatch,
+    elementTypes,
+    shouldReschedule,
+    sessionLimit,
+    studyOrder,
+    isDueOnly,
+    createdAtUtc,
+    updatedAtUtc,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CustomDeckRow &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.nameLowercase == this.nameLowercase &&
+          other.tagMatch == this.tagMatch &&
+          other.elementTypes == this.elementTypes &&
+          other.shouldReschedule == this.shouldReschedule &&
+          other.sessionLimit == this.sessionLimit &&
+          other.studyOrder == this.studyOrder &&
+          other.isDueOnly == this.isDueOnly &&
+          other.createdAtUtc == this.createdAtUtc &&
+          other.updatedAtUtc == this.updatedAtUtc);
+}
+
+class CustomDecksCompanion extends UpdateCompanion<CustomDeckRow> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> nameLowercase;
+  final Value<int> tagMatch;
+  final Value<int> elementTypes;
+  final Value<bool> shouldReschedule;
+  final Value<int?> sessionLimit;
+  final Value<int> studyOrder;
+  final Value<bool> isDueOnly;
+  final Value<int> createdAtUtc;
+  final Value<int> updatedAtUtc;
+  final Value<int> rowid;
+  const CustomDecksCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.nameLowercase = const Value.absent(),
+    this.tagMatch = const Value.absent(),
+    this.elementTypes = const Value.absent(),
+    this.shouldReschedule = const Value.absent(),
+    this.sessionLimit = const Value.absent(),
+    this.studyOrder = const Value.absent(),
+    this.isDueOnly = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.updatedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CustomDecksCompanion.insert({
+    required String id,
+    required String name,
+    required String nameLowercase,
+    required int tagMatch,
+    required int elementTypes,
+    required bool shouldReschedule,
+    this.sessionLimit = const Value.absent(),
+    required int studyOrder,
+    required bool isDueOnly,
+    required int createdAtUtc,
+    required int updatedAtUtc,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       nameLowercase = Value(nameLowercase),
+       tagMatch = Value(tagMatch),
+       elementTypes = Value(elementTypes),
+       shouldReschedule = Value(shouldReschedule),
+       studyOrder = Value(studyOrder),
+       isDueOnly = Value(isDueOnly),
+       createdAtUtc = Value(createdAtUtc),
+       updatedAtUtc = Value(updatedAtUtc);
+  static Insertable<CustomDeckRow> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? nameLowercase,
+    Expression<int>? tagMatch,
+    Expression<int>? elementTypes,
+    Expression<bool>? shouldReschedule,
+    Expression<int>? sessionLimit,
+    Expression<int>? studyOrder,
+    Expression<bool>? isDueOnly,
+    Expression<int>? createdAtUtc,
+    Expression<int>? updatedAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (nameLowercase != null) 'name_lowercase': nameLowercase,
+      if (tagMatch != null) 'tag_match': tagMatch,
+      if (elementTypes != null) 'element_types': elementTypes,
+      if (shouldReschedule != null) 'should_reschedule': shouldReschedule,
+      if (sessionLimit != null) 'session_limit': sessionLimit,
+      if (studyOrder != null) 'study_order': studyOrder,
+      if (isDueOnly != null) 'is_due_only': isDueOnly,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (updatedAtUtc != null) 'updated_at_utc': updatedAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CustomDecksCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? nameLowercase,
+    Value<int>? tagMatch,
+    Value<int>? elementTypes,
+    Value<bool>? shouldReschedule,
+    Value<int?>? sessionLimit,
+    Value<int>? studyOrder,
+    Value<bool>? isDueOnly,
+    Value<int>? createdAtUtc,
+    Value<int>? updatedAtUtc,
+    Value<int>? rowid,
+  }) {
+    return CustomDecksCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      nameLowercase: nameLowercase ?? this.nameLowercase,
+      tagMatch: tagMatch ?? this.tagMatch,
+      elementTypes: elementTypes ?? this.elementTypes,
+      shouldReschedule: shouldReschedule ?? this.shouldReschedule,
+      sessionLimit: sessionLimit ?? this.sessionLimit,
+      studyOrder: studyOrder ?? this.studyOrder,
+      isDueOnly: isDueOnly ?? this.isDueOnly,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (nameLowercase.present) {
+      map['name_lowercase'] = Variable<String>(nameLowercase.value);
+    }
+    if (tagMatch.present) {
+      map['tag_match'] = Variable<int>(tagMatch.value);
+    }
+    if (elementTypes.present) {
+      map['element_types'] = Variable<int>(elementTypes.value);
+    }
+    if (shouldReschedule.present) {
+      map['should_reschedule'] = Variable<bool>(shouldReschedule.value);
+    }
+    if (sessionLimit.present) {
+      map['session_limit'] = Variable<int>(sessionLimit.value);
+    }
+    if (studyOrder.present) {
+      map['study_order'] = Variable<int>(studyOrder.value);
+    }
+    if (isDueOnly.present) {
+      map['is_due_only'] = Variable<bool>(isDueOnly.value);
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<int>(createdAtUtc.value);
+    }
+    if (updatedAtUtc.present) {
+      map['updated_at_utc'] = Variable<int>(updatedAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CustomDecksCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('nameLowercase: $nameLowercase, ')
+          ..write('tagMatch: $tagMatch, ')
+          ..write('elementTypes: $elementTypes, ')
+          ..write('shouldReschedule: $shouldReschedule, ')
+          ..write('sessionLimit: $sessionLimit, ')
+          ..write('studyOrder: $studyOrder, ')
+          ..write('isDueOnly: $isDueOnly, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('updatedAtUtc: $updatedAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CustomDeckTagsTable extends CustomDeckTags
+    with TableInfo<$CustomDeckTagsTable, CustomDeckTagRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CustomDeckTagsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _deckIdMeta = const VerificationMeta('deckId');
+  @override
+  late final GeneratedColumn<String> deckId = GeneratedColumn<String>(
+    'deck_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES custom_decks (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _tagIdMeta = const VerificationMeta('tagId');
+  @override
+  late final GeneratedColumn<String> tagId = GeneratedColumn<String>(
+    'tag_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES tags (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _roleMeta = const VerificationMeta('role');
+  @override
+  late final GeneratedColumn<int> role = GeneratedColumn<int>(
+    'role',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(role).isBetweenValues(0, 1),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [deckId, tagId, role];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'custom_deck_tags';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CustomDeckTagRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('deck_id')) {
+      context.handle(
+        _deckIdMeta,
+        deckId.isAcceptableOrUnknown(data['deck_id']!, _deckIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deckIdMeta);
+    }
+    if (data.containsKey('tag_id')) {
+      context.handle(
+        _tagIdMeta,
+        tagId.isAcceptableOrUnknown(data['tag_id']!, _tagIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tagIdMeta);
+    }
+    if (data.containsKey('role')) {
+      context.handle(
+        _roleMeta,
+        role.isAcceptableOrUnknown(data['role']!, _roleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_roleMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {deckId, tagId};
+  @override
+  CustomDeckTagRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CustomDeckTagRow(
+      deckId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}deck_id'],
+      )!,
+      tagId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tag_id'],
+      )!,
+      role: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}role'],
+      )!,
+    );
+  }
+
+  @override
+  $CustomDeckTagsTable createAlias(String alias) {
+    return $CustomDeckTagsTable(attachedDatabase, alias);
+  }
+}
+
+class CustomDeckTagRow extends DataClass
+    implements Insertable<CustomDeckTagRow> {
+  final String deckId;
+  final String tagId;
+
+  /// `CustomDeckTagRole.storedValue`: 0 include, 1 exclude. One role per tag
+  /// per deck, which the primary key enforces.
+  final int role;
+  const CustomDeckTagRow({
+    required this.deckId,
+    required this.tagId,
+    required this.role,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['deck_id'] = Variable<String>(deckId);
+    map['tag_id'] = Variable<String>(tagId);
+    map['role'] = Variable<int>(role);
+    return map;
+  }
+
+  CustomDeckTagsCompanion toCompanion(bool nullToAbsent) {
+    return CustomDeckTagsCompanion(
+      deckId: Value(deckId),
+      tagId: Value(tagId),
+      role: Value(role),
+    );
+  }
+
+  factory CustomDeckTagRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CustomDeckTagRow(
+      deckId: serializer.fromJson<String>(json['deckId']),
+      tagId: serializer.fromJson<String>(json['tagId']),
+      role: serializer.fromJson<int>(json['role']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'deckId': serializer.toJson<String>(deckId),
+      'tagId': serializer.toJson<String>(tagId),
+      'role': serializer.toJson<int>(role),
+    };
+  }
+
+  CustomDeckTagRow copyWith({String? deckId, String? tagId, int? role}) =>
+      CustomDeckTagRow(
+        deckId: deckId ?? this.deckId,
+        tagId: tagId ?? this.tagId,
+        role: role ?? this.role,
+      );
+  CustomDeckTagRow copyWithCompanion(CustomDeckTagsCompanion data) {
+    return CustomDeckTagRow(
+      deckId: data.deckId.present ? data.deckId.value : this.deckId,
+      tagId: data.tagId.present ? data.tagId.value : this.tagId,
+      role: data.role.present ? data.role.value : this.role,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CustomDeckTagRow(')
+          ..write('deckId: $deckId, ')
+          ..write('tagId: $tagId, ')
+          ..write('role: $role')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(deckId, tagId, role);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CustomDeckTagRow &&
+          other.deckId == this.deckId &&
+          other.tagId == this.tagId &&
+          other.role == this.role);
+}
+
+class CustomDeckTagsCompanion extends UpdateCompanion<CustomDeckTagRow> {
+  final Value<String> deckId;
+  final Value<String> tagId;
+  final Value<int> role;
+  final Value<int> rowid;
+  const CustomDeckTagsCompanion({
+    this.deckId = const Value.absent(),
+    this.tagId = const Value.absent(),
+    this.role = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CustomDeckTagsCompanion.insert({
+    required String deckId,
+    required String tagId,
+    required int role,
+    this.rowid = const Value.absent(),
+  }) : deckId = Value(deckId),
+       tagId = Value(tagId),
+       role = Value(role);
+  static Insertable<CustomDeckTagRow> custom({
+    Expression<String>? deckId,
+    Expression<String>? tagId,
+    Expression<int>? role,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (deckId != null) 'deck_id': deckId,
+      if (tagId != null) 'tag_id': tagId,
+      if (role != null) 'role': role,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CustomDeckTagsCompanion copyWith({
+    Value<String>? deckId,
+    Value<String>? tagId,
+    Value<int>? role,
+    Value<int>? rowid,
+  }) {
+    return CustomDeckTagsCompanion(
+      deckId: deckId ?? this.deckId,
+      tagId: tagId ?? this.tagId,
+      role: role ?? this.role,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (deckId.present) {
+      map['deck_id'] = Variable<String>(deckId.value);
+    }
+    if (tagId.present) {
+      map['tag_id'] = Variable<String>(tagId.value);
+    }
+    if (role.present) {
+      map['role'] = Variable<int>(role.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CustomDeckTagsCompanion(')
+          ..write('deckId: $deckId, ')
+          ..write('tagId: $tagId, ')
+          ..write('role: $role, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $ActivityEventsTable extends ActivityEvents
     with TableInfo<$ActivityEventsTable, ActivityEventRow> {
   @override
@@ -15921,6 +16907,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $TagsTable tags = $TagsTable(this);
   late final $ElementTagsTable elementTags = $ElementTagsTable(this);
+  late final $CustomDecksTable customDecks = $CustomDecksTable(this);
+  late final $CustomDeckTagsTable customDeckTags = $CustomDeckTagsTable(this);
   late final $ActivityEventsTable activityEvents = $ActivityEventsTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
   late final $DatasetMetaTable datasetMeta = $DatasetMetaTable(this);
@@ -15948,6 +16936,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     searchDocuments,
     tags,
     elementTags,
+    customDecks,
+    customDeckTags,
     activityEvents,
     settings,
     datasetMeta,
@@ -15988,6 +16978,20 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('element_tags', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'custom_decks',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('custom_deck_tags', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'tags',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('custom_deck_tags', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -24207,6 +25211,24 @@ final class $$TagsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$CustomDeckTagsTable, List<CustomDeckTagRow>>
+  _customDeckTagsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.customDeckTags,
+    aliasName: 'tags__id__custom_deck_tags__tag_id',
+  );
+
+  $$CustomDeckTagsTableProcessedTableManager get customDeckTagsRefs {
+    final manager = $$CustomDeckTagsTableTableManager(
+      $_db,
+      $_db.customDeckTags,
+    ).filter((f) => f.tagId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_customDeckTagsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$TagsTableFilterComposer extends Composer<_$AppDatabase, $TagsTable> {
@@ -24258,6 +25280,31 @@ class $$TagsTableFilterComposer extends Composer<_$AppDatabase, $TagsTable> {
           }) => $$ElementTagsTableFilterComposer(
             $db: $db,
             $table: $db.elementTags,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> customDeckTagsRefs(
+    Expression<bool> Function($$CustomDeckTagsTableFilterComposer f) f,
+  ) {
+    final $$CustomDeckTagsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.customDeckTags,
+      getReferencedColumn: (t) => t.tagId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CustomDeckTagsTableFilterComposer(
+            $db: $db,
+            $table: $db.customDeckTags,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -24356,6 +25403,31 @@ class $$TagsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> customDeckTagsRefs<T extends Object>(
+    Expression<T> Function($$CustomDeckTagsTableAnnotationComposer a) f,
+  ) {
+    final $$CustomDeckTagsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.customDeckTags,
+      getReferencedColumn: (t) => t.tagId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CustomDeckTagsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.customDeckTags,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$TagsTableTableManager
@@ -24371,7 +25443,10 @@ class $$TagsTableTableManager
           $$TagsTableUpdateCompanionBuilder,
           (TagRow, $$TagsTableReferences),
           TagRow,
-          PrefetchHooks Function({bool elementTagsRefs})
+          PrefetchHooks Function({
+            bool elementTagsRefs,
+            bool customDeckTagsRefs,
+          })
         > {
   $$TagsTableTableManager(_$AppDatabase db, $TagsTable table)
     : super(
@@ -24422,32 +25497,61 @@ class $$TagsTableTableManager
                     (e.readTable(table), $$TagsTableReferences(db, table, e)),
               )
               .toList(),
-          prefetchHooksCallback: ({elementTagsRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (elementTagsRefs) db.elementTags],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (elementTagsRefs)
-                    await $_getPrefetchedData<
-                      TagRow,
-                      $TagsTable,
-                      ElementTagRow
-                    >(
-                      currentTable: table,
-                      referencedTable: $$TagsTableReferences
-                          ._elementTagsRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$TagsTableReferences(db, table, p0).elementTagsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.tagId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({elementTagsRefs = false, customDeckTagsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (elementTagsRefs) db.elementTags,
+                    if (customDeckTagsRefs) db.customDeckTags,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (elementTagsRefs)
+                        await $_getPrefetchedData<
+                          TagRow,
+                          $TagsTable,
+                          ElementTagRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$TagsTableReferences
+                              ._elementTagsRefsTable(db),
+                          managerFromTypedResult: (p0) => $$TagsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).elementTagsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.tagId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (customDeckTagsRefs)
+                        await $_getPrefetchedData<
+                          TagRow,
+                          $TagsTable,
+                          CustomDeckTagRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$TagsTableReferences
+                              ._customDeckTagsRefsTable(db),
+                          managerFromTypedResult: (p0) => $$TagsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).customDeckTagsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.tagId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -24464,7 +25568,7 @@ typedef $$TagsTableProcessedTableManager =
       $$TagsTableUpdateCompanionBuilder,
       (TagRow, $$TagsTableReferences),
       TagRow,
-      PrefetchHooks Function({bool elementTagsRefs})
+      PrefetchHooks Function({bool elementTagsRefs, bool customDeckTagsRefs})
     >;
 typedef $$ElementTagsTableCreateCompanionBuilder =
     ElementTagsCompanion Function({
@@ -24767,6 +25871,811 @@ typedef $$ElementTagsTableProcessedTableManager =
       (ElementTagRow, $$ElementTagsTableReferences),
       ElementTagRow,
       PrefetchHooks Function({bool tagId})
+    >;
+typedef $$CustomDecksTableCreateCompanionBuilder =
+    CustomDecksCompanion Function({
+      required String id,
+      required String name,
+      required String nameLowercase,
+      required int tagMatch,
+      required int elementTypes,
+      required bool shouldReschedule,
+      Value<int?> sessionLimit,
+      required int studyOrder,
+      required bool isDueOnly,
+      required int createdAtUtc,
+      required int updatedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$CustomDecksTableUpdateCompanionBuilder =
+    CustomDecksCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> nameLowercase,
+      Value<int> tagMatch,
+      Value<int> elementTypes,
+      Value<bool> shouldReschedule,
+      Value<int?> sessionLimit,
+      Value<int> studyOrder,
+      Value<bool> isDueOnly,
+      Value<int> createdAtUtc,
+      Value<int> updatedAtUtc,
+      Value<int> rowid,
+    });
+
+final class $$CustomDecksTableReferences
+    extends BaseReferences<_$AppDatabase, $CustomDecksTable, CustomDeckRow> {
+  $$CustomDecksTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$CustomDeckTagsTable, List<CustomDeckTagRow>>
+  _customDeckTagsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.customDeckTags,
+    aliasName: 'custom_decks__id__custom_deck_tags__deck_id',
+  );
+
+  $$CustomDeckTagsTableProcessedTableManager get customDeckTagsRefs {
+    final manager = $$CustomDeckTagsTableTableManager(
+      $_db,
+      $_db.customDeckTags,
+    ).filter((f) => f.deckId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_customDeckTagsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$CustomDecksTableFilterComposer
+    extends Composer<_$AppDatabase, $CustomDecksTable> {
+  $$CustomDecksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nameLowercase => $composableBuilder(
+    column: $table.nameLowercase,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get tagMatch => $composableBuilder(
+    column: $table.tagMatch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get elementTypes => $composableBuilder(
+    column: $table.elementTypes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get shouldReschedule => $composableBuilder(
+    column: $table.shouldReschedule,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sessionLimit => $composableBuilder(
+    column: $table.sessionLimit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get studyOrder => $composableBuilder(
+    column: $table.studyOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isDueOnly => $composableBuilder(
+    column: $table.isDueOnly,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> customDeckTagsRefs(
+    Expression<bool> Function($$CustomDeckTagsTableFilterComposer f) f,
+  ) {
+    final $$CustomDeckTagsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.customDeckTags,
+      getReferencedColumn: (t) => t.deckId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CustomDeckTagsTableFilterComposer(
+            $db: $db,
+            $table: $db.customDeckTags,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$CustomDecksTableOrderingComposer
+    extends Composer<_$AppDatabase, $CustomDecksTable> {
+  $$CustomDecksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nameLowercase => $composableBuilder(
+    column: $table.nameLowercase,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get tagMatch => $composableBuilder(
+    column: $table.tagMatch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get elementTypes => $composableBuilder(
+    column: $table.elementTypes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get shouldReschedule => $composableBuilder(
+    column: $table.shouldReschedule,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sessionLimit => $composableBuilder(
+    column: $table.sessionLimit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get studyOrder => $composableBuilder(
+    column: $table.studyOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isDueOnly => $composableBuilder(
+    column: $table.isDueOnly,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CustomDecksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CustomDecksTable> {
+  $$CustomDecksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get nameLowercase => $composableBuilder(
+    column: $table.nameLowercase,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get tagMatch =>
+      $composableBuilder(column: $table.tagMatch, builder: (column) => column);
+
+  GeneratedColumn<int> get elementTypes => $composableBuilder(
+    column: $table.elementTypes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get shouldReschedule => $composableBuilder(
+    column: $table.shouldReschedule,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sessionLimit => $composableBuilder(
+    column: $table.sessionLimit,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get studyOrder => $composableBuilder(
+    column: $table.studyOrder,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isDueOnly =>
+      $composableBuilder(column: $table.isDueOnly, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => column,
+  );
+
+  Expression<T> customDeckTagsRefs<T extends Object>(
+    Expression<T> Function($$CustomDeckTagsTableAnnotationComposer a) f,
+  ) {
+    final $$CustomDeckTagsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.customDeckTags,
+      getReferencedColumn: (t) => t.deckId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CustomDeckTagsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.customDeckTags,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$CustomDecksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CustomDecksTable,
+          CustomDeckRow,
+          $$CustomDecksTableFilterComposer,
+          $$CustomDecksTableOrderingComposer,
+          $$CustomDecksTableAnnotationComposer,
+          $$CustomDecksTableCreateCompanionBuilder,
+          $$CustomDecksTableUpdateCompanionBuilder,
+          (CustomDeckRow, $$CustomDecksTableReferences),
+          CustomDeckRow,
+          PrefetchHooks Function({bool customDeckTagsRefs})
+        > {
+  $$CustomDecksTableTableManager(_$AppDatabase db, $CustomDecksTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CustomDecksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CustomDecksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CustomDecksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> nameLowercase = const Value.absent(),
+                Value<int> tagMatch = const Value.absent(),
+                Value<int> elementTypes = const Value.absent(),
+                Value<bool> shouldReschedule = const Value.absent(),
+                Value<int?> sessionLimit = const Value.absent(),
+                Value<int> studyOrder = const Value.absent(),
+                Value<bool> isDueOnly = const Value.absent(),
+                Value<int> createdAtUtc = const Value.absent(),
+                Value<int> updatedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CustomDecksCompanion(
+                id: id,
+                name: name,
+                nameLowercase: nameLowercase,
+                tagMatch: tagMatch,
+                elementTypes: elementTypes,
+                shouldReschedule: shouldReschedule,
+                sessionLimit: sessionLimit,
+                studyOrder: studyOrder,
+                isDueOnly: isDueOnly,
+                createdAtUtc: createdAtUtc,
+                updatedAtUtc: updatedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required String nameLowercase,
+                required int tagMatch,
+                required int elementTypes,
+                required bool shouldReschedule,
+                Value<int?> sessionLimit = const Value.absent(),
+                required int studyOrder,
+                required bool isDueOnly,
+                required int createdAtUtc,
+                required int updatedAtUtc,
+                Value<int> rowid = const Value.absent(),
+              }) => CustomDecksCompanion.insert(
+                id: id,
+                name: name,
+                nameLowercase: nameLowercase,
+                tagMatch: tagMatch,
+                elementTypes: elementTypes,
+                shouldReschedule: shouldReschedule,
+                sessionLimit: sessionLimit,
+                studyOrder: studyOrder,
+                isDueOnly: isDueOnly,
+                createdAtUtc: createdAtUtc,
+                updatedAtUtc: updatedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CustomDecksTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({customDeckTagsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (customDeckTagsRefs) db.customDeckTags,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (customDeckTagsRefs)
+                    await $_getPrefetchedData<
+                      CustomDeckRow,
+                      $CustomDecksTable,
+                      CustomDeckTagRow
+                    >(
+                      currentTable: table,
+                      referencedTable: $$CustomDecksTableReferences
+                          ._customDeckTagsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$CustomDecksTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).customDeckTagsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.deckId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CustomDecksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CustomDecksTable,
+      CustomDeckRow,
+      $$CustomDecksTableFilterComposer,
+      $$CustomDecksTableOrderingComposer,
+      $$CustomDecksTableAnnotationComposer,
+      $$CustomDecksTableCreateCompanionBuilder,
+      $$CustomDecksTableUpdateCompanionBuilder,
+      (CustomDeckRow, $$CustomDecksTableReferences),
+      CustomDeckRow,
+      PrefetchHooks Function({bool customDeckTagsRefs})
+    >;
+typedef $$CustomDeckTagsTableCreateCompanionBuilder =
+    CustomDeckTagsCompanion Function({
+      required String deckId,
+      required String tagId,
+      required int role,
+      Value<int> rowid,
+    });
+typedef $$CustomDeckTagsTableUpdateCompanionBuilder =
+    CustomDeckTagsCompanion Function({
+      Value<String> deckId,
+      Value<String> tagId,
+      Value<int> role,
+      Value<int> rowid,
+    });
+
+final class $$CustomDeckTagsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $CustomDeckTagsTable, CustomDeckTagRow> {
+  $$CustomDeckTagsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $CustomDecksTable _deckIdTable(_$AppDatabase db) =>
+      db.customDecks.createAlias('custom_deck_tags__deck_id__custom_decks__id');
+
+  $$CustomDecksTableProcessedTableManager get deckId {
+    final $_column = $_itemColumn<String>('deck_id')!;
+
+    final manager = $$CustomDecksTableTableManager(
+      $_db,
+      $_db.customDecks,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_deckIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $TagsTable _tagIdTable(_$AppDatabase db) =>
+      db.tags.createAlias('custom_deck_tags__tag_id__tags__id');
+
+  $$TagsTableProcessedTableManager get tagId {
+    final $_column = $_itemColumn<String>('tag_id')!;
+
+    final manager = $$TagsTableTableManager(
+      $_db,
+      $_db.tags,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_tagIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CustomDeckTagsTableFilterComposer
+    extends Composer<_$AppDatabase, $CustomDeckTagsTable> {
+  $$CustomDeckTagsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$CustomDecksTableFilterComposer get deckId {
+    final $$CustomDecksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.deckId,
+      referencedTable: $db.customDecks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CustomDecksTableFilterComposer(
+            $db: $db,
+            $table: $db.customDecks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TagsTableFilterComposer get tagId {
+    final $$TagsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tagId,
+      referencedTable: $db.tags,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TagsTableFilterComposer(
+            $db: $db,
+            $table: $db.tags,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CustomDeckTagsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CustomDeckTagsTable> {
+  $$CustomDeckTagsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$CustomDecksTableOrderingComposer get deckId {
+    final $$CustomDecksTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.deckId,
+      referencedTable: $db.customDecks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CustomDecksTableOrderingComposer(
+            $db: $db,
+            $table: $db.customDecks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TagsTableOrderingComposer get tagId {
+    final $$TagsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tagId,
+      referencedTable: $db.tags,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TagsTableOrderingComposer(
+            $db: $db,
+            $table: $db.tags,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CustomDeckTagsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CustomDeckTagsTable> {
+  $$CustomDeckTagsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get role =>
+      $composableBuilder(column: $table.role, builder: (column) => column);
+
+  $$CustomDecksTableAnnotationComposer get deckId {
+    final $$CustomDecksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.deckId,
+      referencedTable: $db.customDecks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CustomDecksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.customDecks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TagsTableAnnotationComposer get tagId {
+    final $$TagsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tagId,
+      referencedTable: $db.tags,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TagsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.tags,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CustomDeckTagsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CustomDeckTagsTable,
+          CustomDeckTagRow,
+          $$CustomDeckTagsTableFilterComposer,
+          $$CustomDeckTagsTableOrderingComposer,
+          $$CustomDeckTagsTableAnnotationComposer,
+          $$CustomDeckTagsTableCreateCompanionBuilder,
+          $$CustomDeckTagsTableUpdateCompanionBuilder,
+          (CustomDeckTagRow, $$CustomDeckTagsTableReferences),
+          CustomDeckTagRow,
+          PrefetchHooks Function({bool deckId, bool tagId})
+        > {
+  $$CustomDeckTagsTableTableManager(
+    _$AppDatabase db,
+    $CustomDeckTagsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CustomDeckTagsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CustomDeckTagsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CustomDeckTagsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> deckId = const Value.absent(),
+                Value<String> tagId = const Value.absent(),
+                Value<int> role = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CustomDeckTagsCompanion(
+                deckId: deckId,
+                tagId: tagId,
+                role: role,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String deckId,
+                required String tagId,
+                required int role,
+                Value<int> rowid = const Value.absent(),
+              }) => CustomDeckTagsCompanion.insert(
+                deckId: deckId,
+                tagId: tagId,
+                role: role,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CustomDeckTagsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({deckId = false, tagId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (deckId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.deckId,
+                                referencedTable: $$CustomDeckTagsTableReferences
+                                    ._deckIdTable(db),
+                                referencedColumn:
+                                    $$CustomDeckTagsTableReferences
+                                        ._deckIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+                    if (tagId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.tagId,
+                                referencedTable: $$CustomDeckTagsTableReferences
+                                    ._tagIdTable(db),
+                                referencedColumn:
+                                    $$CustomDeckTagsTableReferences
+                                        ._tagIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CustomDeckTagsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CustomDeckTagsTable,
+      CustomDeckTagRow,
+      $$CustomDeckTagsTableFilterComposer,
+      $$CustomDeckTagsTableOrderingComposer,
+      $$CustomDeckTagsTableAnnotationComposer,
+      $$CustomDeckTagsTableCreateCompanionBuilder,
+      $$CustomDeckTagsTableUpdateCompanionBuilder,
+      (CustomDeckTagRow, $$CustomDeckTagsTableReferences),
+      CustomDeckTagRow,
+      PrefetchHooks Function({bool deckId, bool tagId})
     >;
 typedef $$ActivityEventsTableCreateCompanionBuilder =
     ActivityEventsCompanion Function({
@@ -25416,6 +27325,10 @@ class $AppDatabaseManager {
   $$TagsTableTableManager get tags => $$TagsTableTableManager(_db, _db.tags);
   $$ElementTagsTableTableManager get elementTags =>
       $$ElementTagsTableTableManager(_db, _db.elementTags);
+  $$CustomDecksTableTableManager get customDecks =>
+      $$CustomDecksTableTableManager(_db, _db.customDecks);
+  $$CustomDeckTagsTableTableManager get customDeckTags =>
+      $$CustomDeckTagsTableTableManager(_db, _db.customDeckTags);
   $$ActivityEventsTableTableManager get activityEvents =>
       $$ActivityEventsTableTableManager(_db, _db.activityEvents);
   $$SettingsTableTableManager get settings =>

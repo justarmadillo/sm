@@ -22,6 +22,7 @@ final class ImportSource extends AppCommand {
     required this.title,
     required this.markdown,
     this.priorityPercent,
+    this.images = const <SourceImageImport>[],
     super.timestampUtc,
   });
 
@@ -33,6 +34,10 @@ final class ImportSource extends AppCommand {
   /// Null starts it in the middle. Set at import because an article's
   /// priority is also what decides how soon it first comes back.
   final double? priorityPercent;
+
+  /// Validated image files the markdown already references, such as the
+  /// figures a PDF converter saved beside it.
+  final List<SourceImageImport> images;
 }
 
 /// Place the authoritative resume marker.
@@ -103,6 +108,24 @@ final class CompleteTopicEncounter extends AppCommand {
 
   /// Extracts taken during this session, the other half of that ratio.
   final int extractsCreated;
+}
+
+/// Next in a practice sitting: the topic was read, and nothing about its
+/// schedule moves.
+///
+/// What a custom deck sends for a cram-only topic, or for any topic when the
+/// deck does not reschedule. The repetition log still records the sitting so
+/// the history shows it happened.
+final class CompleteTopicPractice extends AppCommand {
+  CompleteTopicPractice(
+    super.operationId, {
+    required this.ref,
+    this.foregroundMs,
+    super.timestampUtc,
+  });
+
+  final ElementRef ref;
+  final int? foregroundMs;
 }
 
 /// Later: move eligibility without advancing the interval sequence.
@@ -266,6 +289,9 @@ final class InsertSourceBlock extends AppCommand {
   final String markdown;
   final int baseContentRevision;
 }
+
+/// Most distinct images one source may own.
+const int kMaximumImagesPerSource = 2000;
 
 /// One validated image whose immutable bytes are ready for app-owned storage.
 @immutable

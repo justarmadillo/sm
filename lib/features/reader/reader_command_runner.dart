@@ -33,6 +33,7 @@ import 'package:incremental_reader/documents/source_edit.dart';
 import 'package:incremental_reader/documents/text_splice.dart';
 import 'package:incremental_reader/documents/video.dart';
 import 'package:incremental_reader/features/reader/reader_commands.dart';
+import 'package:incremental_reader/scheduling/cram_scope_query.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduler_event.dart';
@@ -80,6 +81,19 @@ const String kTopicRescheduledType = 'topic.rescheduled';
 /// let a retried Done commit a second repetition.
 const String kTopicEncounterCompletedType = 'topic.encounter_completed';
 
+/// Activity kind for a topic read in a practice sitting.
+const String kTopicPracticedType = 'topic.practiced';
+
+/// One message for the image limit, whichever way images arrive.
+const ValidationFailure _tooManyImagesFailure = ValidationFailure(
+  'a source can contain at most 2,000 images',
+);
+
+/// One message for bytes that no longer match the hash they were checked by.
+const ValidationFailure _changedImageFailure = ValidationFailure(
+  'an image changed while it was being imported',
+);
+
 /// What one text edit produced, for the caller that has to redraw.
 ///
 /// [outcome] is null when nothing was written — a no-op edit, or a command
@@ -118,6 +132,7 @@ final class ReaderCommandRunner {
     required SchedulingContext context,
     required Clock clock,
     required IdGenerator ids,
+    required CramScopeQuery cramScope,
     DiagnosticSink diagnostics = const NullDiagnosticSink(),
   }) : _content = content,
        _videos = videos,
@@ -130,6 +145,7 @@ final class ReaderCommandRunner {
        _context = context,
        _clock = clock,
        _ids = ids,
+       _cramScope = cramScope,
        _journal = SchedulingJournal(learning: learning, ids: ids),
        _diagnostics = diagnostics;
 
@@ -144,6 +160,7 @@ final class ReaderCommandRunner {
   final SchedulingContext _context;
   final Clock _clock;
   final IdGenerator _ids;
+  final CramScopeQuery _cramScope;
   final SchedulingJournal _journal;
   final DiagnosticSink _diagnostics;
 
@@ -165,6 +182,9 @@ final class ReaderCommandRunner {
       return const Err<Source>(
         ValidationFailure('a source needs a title', field: 'title'),
       );
+    }
+    if (_countDistinctReferences(command.images) > kMaximumImagesPerSource) {
+      return const Err<Source>(_tooManyImagesFailure);
     }
 
     final Source source = Source.import(
@@ -219,6 +239,7 @@ final class ReaderCommandRunner {
     );
 
     await _content.insertSource(source, document);
+    await _attachImportedImages(source.id, command.images);
     await _learning.insertTopic(topic);
     final runtime = await _context.runtimeState();
     await _context.saveRuntimeState(
@@ -334,6 +355,7 @@ final class ReaderCommandRunner {
   ) => _run<TopicState>(command, kTopicEncounterCompletedType, () async {
     final TopicState? topic = await _learning.findTopic(command.ref);
     if (topic == null) return _missingSchedule<TopicState>(command.ref.id);
+    if (await _cramScope.isCramOnly(command.ref)) return _cramOnlyRefusal();
 
     final StudyDay day = await today();
     final TopicScheduler scheduler = await _context.topicScheduler();
@@ -466,12 +488,40 @@ final class ReaderCommandRunner {
     return Ok<TopicState>(transition.state);
   });
 
+  /// Next in a practice sitting: journals the read with identical before and
+  /// after snapshots and never calls the topic scheduler, so neither the
+  /// schedule nor the shared random-number stream moves.
+  Future<Result<TopicState>> completePractice(CompleteTopicPractice command) =>
+      _run<TopicState>(command, kTopicPracticedType, () async {
+        final TopicState? topic = await _learning.findTopic(command.ref);
+        if (topic == null) return _missingSchedule<TopicState>(command.ref.id);
+        final StudyDayCalendar calendar = await _context.calendar();
+        await _journal.append(
+          operationId: command.operationId.value,
+          ref: command.ref,
+          eventType: ReviewLogEventType.practice,
+          atUtc: command.timestampUtc,
+          before: _journal.topicSnapshot(topic, calendar: calendar),
+          after: _journal.topicSnapshot(topic, calendar: calendar),
+          durationMs: command.foregroundMs,
+          metadata: const <String, Object?>{'practice': true},
+        );
+        await _log(
+          command,
+          kTopicPracticedType,
+          ref: command.ref,
+          durationMs: command.foregroundMs,
+        );
+        return Ok<TopicState>(topic);
+      });
+
   /// SM20 Later Today: queue-only when already Outstanding; otherwise it
   /// performs Jump Interval 0 without priority adaptation.
   Future<Result<TopicState>> postpone(PostponeElement command) =>
       _run<TopicState>(command, 'topic.postponed', () async {
         final TopicState? topic = await _learning.findTopic(command.ref);
         if (topic == null) return _missingSchedule<TopicState>(command.ref.id);
+        if (await _cramScope.isCramOnly(command.ref)) return _cramOnlyRefusal();
 
         final StudyDay day = await today();
         final StudyDayCalendar calendar = await _context.calendar();
@@ -1047,19 +1097,13 @@ final class ReaderCommandRunner {
         .map((SourceImageImport image) => image.srcRef)
         .where((String reference) => !existingReferences.contains(reference))
         .toSet();
-    if (existingAssets.length + newReferences.length > 2000) {
-      return const Err<Unit>(
-        ValidationFailure('a source can contain at most 2,000 images'),
-      );
+    if (existingAssets.length + newReferences.length >
+        kMaximumImagesPerSource) {
+      return const Err<Unit>(_tooManyImagesFailure);
     }
     try {
-      for (final SourceImageImport image in images) {
-        final stored = await findAssetFiles().saveBytes(image.bytes);
-        if (stored.sha256 != image.sha256) {
-          return const Err<Unit>(
-            ValidationFailure('an image changed while it was being imported'),
-          );
-        }
+      if (!await _saveImageBlobs(findAssetFiles(), images)) {
+        return const Err<Unit>(_changedImageFailure);
       }
       return okUnit;
     } on Object catch (error, stackTrace) {
@@ -1072,6 +1116,45 @@ final class ReaderCommandRunner {
       );
     }
   }
+
+  /// Stores an imported source's images inside the import's transaction.
+  ///
+  /// The files are written before the transaction commits, so no reader ever
+  /// sees a reference whose blob is missing. They cannot roll back with it,
+  /// but they are content-addressed: a blob left by a rolled-back import is
+  /// harmless and the next import reuses it. Failures throw, so the shared
+  /// command boundary records them and the import rolls back.
+  Future<void> _attachImportedImages(
+    String sourceId,
+    List<SourceImageImport> images,
+  ) async {
+    if (images.isEmpty) return;
+    final SourceAssetFileStore Function()? findAssetFiles = _assetFiles;
+    if (_assets == null || findAssetFiles == null) {
+      throw StateError('image storage is not configured');
+    }
+    if (!await _saveImageBlobs(findAssetFiles(), images)) {
+      throw StateError(_changedImageFailure.message);
+    }
+    await _insertImageMetadata(sourceId, images);
+  }
+
+  /// Writes each image's bytes to [files], returning false as soon as a
+  /// stored file's hash is not the one the image was validated with.
+  Future<bool> _saveImageBlobs(
+    SourceAssetFileStore files,
+    List<SourceImageImport> images,
+  ) async {
+    for (final SourceImageImport image in images) {
+      final StoredSourceAsset stored = await files.saveBytes(image.bytes);
+      if (stored.sha256 != image.sha256) return false;
+    }
+    return true;
+  }
+
+  /// How many distinct files [images] would store; repeats share one.
+  int _countDistinctReferences(List<SourceImageImport> images) =>
+      images.map((SourceImageImport image) => image.srcRef).toSet().length;
 
   /// Inserts only metadata not already owned by this source; repeated image
   /// references deliberately share one content-addressed asset row.
@@ -1433,6 +1516,11 @@ final class ReaderCommandRunner {
 
   Err<T> _missingSource<T>(String id) =>
       Err<T>(NotFoundFailure('no such source', entity: 'source', id: id));
+
+  /// Refused before any scheduler call, so a cram-only topic's schedule and
+  /// the shared random-number stream stay exactly as they were.
+  Err<TopicState> _cramOnlyRefusal() =>
+      const Err<TopicState>(ConflictFailure(kCramOnlyRefusal));
 
   Err<T> _missingSchedule<T>(String id) => Err<T>(
     NotFoundFailure('no schedule for that element', entity: 'schedule', id: id),

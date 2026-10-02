@@ -10,6 +10,7 @@ import 'package:incremental_reader/features/browser/browser_tree_query.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
+import 'package:incremental_reader/storage/contracts/tag_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
 
@@ -79,6 +80,77 @@ void main() {
 
     expect(find.text('Topic'), findsOneWidget);
     expect(find.text('Topic from markdown'), findsNothing);
+  });
+
+  testWidgets('the row menu ticks Cram only and creates #cram', (
+    WidgetTester tester,
+  ) async {
+    browserRoots = <BrowserTreeNode>[
+      _node(id: 'topic', title: 'Pharmacology', day: 1),
+    ];
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: BrowserScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Element actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cram only'));
+    await tester.pumpAndSettle();
+
+    final TagRepository tags = container.read(tagRepositoryProvider);
+    final Tag? cram = await tester.runAsync<Tag?>(
+      () => tags.findTagByLowercaseName(Tag.cramLowercaseName),
+    );
+    expect(cram, isNotNull);
+    expect(
+      await tester.runAsync(() => tags.listElementsWithTag(cram!.id)),
+      <ElementRef>{const ElementRef(id: 'topic', type: ElementType.source)},
+    );
+  });
+
+  testWidgets('a row cram-only through its parent cannot be unticked', (
+    WidgetTester tester,
+  ) async {
+    final Tag cram = Tag(
+      id: 'cram-tag',
+      name: 'cram',
+      createdAtUtc: DateTime.utc(2026),
+      updatedAtUtc: DateTime.utc(2026),
+    );
+    await tester.runAsync(
+      () => container.read(tagRepositoryProvider).insertTag(cram),
+    );
+    browserRoots = <BrowserTreeNode>[
+      BrowserTreeNode(
+        ref: const ElementRef(id: 'card', type: ElementType.card),
+        title: 'Inherited card',
+        addedAtUtc: DateTime.utc(2026),
+        children: const <BrowserTreeNode>[],
+        directTagIds: const <String>{},
+        effectiveTagIds: const <String>{'cram-tag'},
+      ),
+    ];
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: BrowserScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Element actions'));
+    await tester.pumpAndSettle();
+
+    final CheckedPopupMenuItem<String> item = tester.widget(
+      find.byType(CheckedPopupMenuItem<String>),
+    );
+    expect(item.checked, isTrue);
+    expect(item.enabled, isFalse);
+    expect(find.text('Cram only (from a parent)'), findsOneWidget);
   });
 
   tearDown(() async {

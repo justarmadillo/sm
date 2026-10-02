@@ -10,6 +10,7 @@ import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/occlusion.dart';
+import 'package:incremental_reader/features/daily_queue/study_scheduling.dart';
 import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dart';
 import 'package:incremental_reader/features/extract/extract_screen.dart';
 import 'package:incremental_reader/features/extract/extract_view_model.dart';
@@ -37,12 +38,16 @@ Future<StudyRouteResult> openReview(
   BuildContext context,
   WidgetRef ref, {
   required String cardId,
-  bool isPractice = false,
+  StudyScheduling scheduling = StudyScheduling.scheduled,
+  String? customDeckId,
 }) async =>
     await Navigator.of(context).push<StudyRouteResult>(
       MaterialPageRoute<StudyRouteResult>(
-        builder: (BuildContext context) =>
-            ReviewScreen(cardId: cardId, isPractice: isPractice),
+        builder: (BuildContext context) => ReviewScreen(
+          cardId: cardId,
+          scheduling: scheduling,
+          customDeckId: customDeckId,
+        ),
       ),
     ) ??
     StudyRouteResult.canceled;
@@ -50,12 +55,16 @@ Future<StudyRouteResult> openReview(
 class ReviewScreen extends ConsumerStatefulWidget {
   const ReviewScreen({
     required this.cardId,
-    this.isPractice = false,
+    this.scheduling = StudyScheduling.scheduled,
+    this.customDeckId,
     super.key,
   });
 
   final String cardId;
-  final bool isPractice;
+  final StudyScheduling scheduling;
+
+  /// The saved deck this card was opened from, kept in the log only.
+  final String? customDeckId;
 
   @override
   ConsumerState<ReviewScreen> createState() => _ReviewScreenState();
@@ -117,7 +126,10 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       data: (ReviewUiState review) => _ReviewBody(
         state: review,
         model: model,
-        isPractice: widget.isPractice,
+        scheduling: review.isCramOnly
+            ? StudyScheduling.practice
+            : widget.scheduling,
+        customDeckId: widget.customDeckId,
       ),
     );
   }
@@ -127,12 +139,17 @@ class _ReviewBody extends ConsumerWidget {
   const _ReviewBody({
     required this.state,
     required this.model,
-    required this.isPractice,
+    required this.scheduling,
+    required this.customDeckId,
   });
 
   final ReviewUiState state;
   final ReviewViewModel model;
-  final bool isPractice;
+  final StudyScheduling scheduling;
+  final String? customDeckId;
+
+  void _grade(CardRating rating) =>
+      model.grade(rating, scheduling: scheduling, customDeckId: customDeckId);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -144,12 +161,13 @@ class _ReviewBody extends ConsumerWidget {
           autofocus: true,
           child: Column(
             children: <Widget>[
-              _ReviewStatus(state: state, isPractice: isPractice),
+              _ReviewStatus(state: state, isPractice: scheduling.isPractice),
               Expanded(child: _cardArea()),
               _ReviewActions(
                 state: state,
                 model: model,
-                isPractice: isPractice,
+                scheduling: scheduling,
+                onGrade: _grade,
               ),
             ],
           ),
@@ -268,21 +286,21 @@ class _ReviewBody extends ConsumerWidget {
       const SingleActivator(LogicalKeyboardKey.space): model.revealAnswer,
       const SingleActivator(LogicalKeyboardKey.enter): model.revealAnswer,
       const SingleActivator(LogicalKeyboardKey.digit1): () =>
-          model.grade(CardRating.again, isPractice: isPractice),
+          _grade(CardRating.again),
       const SingleActivator(LogicalKeyboardKey.digit2): () =>
-          model.grade(CardRating.hard, isPractice: isPractice),
+          _grade(CardRating.hard),
       const SingleActivator(LogicalKeyboardKey.digit3): () =>
-          model.grade(CardRating.good, isPractice: isPractice),
+          _grade(CardRating.good),
       const SingleActivator(LogicalKeyboardKey.digit4): () =>
-          model.grade(CardRating.easy, isPractice: isPractice),
+          _grade(CardRating.easy),
       const SingleActivator(LogicalKeyboardKey.numpad1): () =>
-          model.grade(CardRating.again, isPractice: isPractice),
+          _grade(CardRating.again),
       const SingleActivator(LogicalKeyboardKey.numpad2): () =>
-          model.grade(CardRating.hard, isPractice: isPractice),
+          _grade(CardRating.hard),
       const SingleActivator(LogicalKeyboardKey.numpad3): () =>
-          model.grade(CardRating.good, isPractice: isPractice),
+          _grade(CardRating.good),
       const SingleActivator(LogicalKeyboardKey.numpad4): () =>
-          model.grade(CardRating.easy, isPractice: isPractice),
+          _grade(CardRating.easy),
       const SingleActivator(LogicalKeyboardKey.keyE): () =>
           unawaited(_editCard(context, ref)),
       kPriorityShortcut: () => _openPriority(context, ref),
@@ -514,12 +532,14 @@ class _ReviewActions extends StatelessWidget {
   const _ReviewActions({
     required this.state,
     required this.model,
-    required this.isPractice,
+    required this.scheduling,
+    required this.onGrade,
   });
 
   final ReviewUiState state;
   final ReviewViewModel model;
-  final bool isPractice;
+  final StudyScheduling scheduling;
+  final ValueChanged<CardRating> onGrade;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -546,10 +566,7 @@ class _ReviewActions extends StatelessWidget {
                     color: Colors.red.shade700,
                     onPressed: state.isBusy
                         ? null
-                        : () => model.grade(
-                            CardRating.again,
-                            isPractice: isPractice,
-                          ),
+                        : () => onGrade(CardRating.again),
                   ),
                   _RatingButton(
                     number: 2,
@@ -557,10 +574,7 @@ class _ReviewActions extends StatelessWidget {
                     color: Colors.orange.shade800,
                     onPressed: state.isBusy
                         ? null
-                        : () => model.grade(
-                            CardRating.hard,
-                            isPractice: isPractice,
-                          ),
+                        : () => onGrade(CardRating.hard),
                   ),
                   _RatingButton(
                     number: 3,
@@ -568,10 +582,7 @@ class _ReviewActions extends StatelessWidget {
                     color: AppColors.accent,
                     onPressed: state.isBusy
                         ? null
-                        : () => model.grade(
-                            CardRating.good,
-                            isPractice: isPractice,
-                          ),
+                        : () => onGrade(CardRating.good),
                   ),
                   _RatingButton(
                     number: 4,
@@ -579,12 +590,11 @@ class _ReviewActions extends StatelessWidget {
                     color: AppColors.cardInk,
                     onPressed: state.isBusy
                         ? null
-                        : () => model.grade(
-                            CardRating.easy,
-                            isPractice: isPractice,
-                          ),
+                        : () => onGrade(CardRating.easy),
                   ),
-                  if (!isPractice)
+                  // Later belongs to the daily queue: a deck sitting has no
+                  // "today" to move the card out of.
+                  if (scheduling == StudyScheduling.scheduled)
                     TextButton.icon(
                       // Not a grade. "Wrong task right now" is a different fact
                       // about the day from "I could not recall this", and the log

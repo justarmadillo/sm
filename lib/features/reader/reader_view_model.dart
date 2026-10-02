@@ -39,6 +39,11 @@ enum ReaderMode {
 
   /// Opened for reference. Cannot mutate progress or schedules.
   browse,
+
+  /// Opened from a custom deck that does not reschedule, or for a cram-only
+  /// source. Reading, marking, and extracting work as usual; Done becomes
+  /// Next, which logs the sitting and leaves the schedule where it was.
+  practice,
 }
 
 /// Which source to open, and how.
@@ -159,8 +164,12 @@ final class ReaderUiState {
   /// they must not be counted as work completed.
   final bool wasRepetition;
 
-  /// Whether terminal actions are offered at all.
-  bool get canCommitProgress => mode == ReaderMode.scheduled;
+  /// Whether reading progress — the marker, extracts, cards, Dismiss — can
+  /// be recorded. True in practice too: cramming a source still reads it.
+  bool get canCommitProgress => mode != ReaderMode.browse;
+
+  /// Whether Done, Later, and Postpone may move the schedule.
+  bool get canAdvanceSchedule => mode == ReaderMode.scheduled;
 
   /// The authoritative resume marker.
   ReaderAnchor? get marker => source.resume.marker;
@@ -312,7 +321,7 @@ final class ReaderViewModel
       document: document,
       topic: topic,
       tagNames: tagNameIndex.listNamesOf(topic.ref),
-      mode: mode,
+      mode: await _practiceIfCramOnly(mode, topic.ref),
       effectiveDueDay: await ref
           .read(effectiveDueQueryProvider)
           .forTopic(topic),
@@ -481,10 +490,23 @@ final class ReaderViewModel
     );
   }
 
-  /// Done: commits one encounter and closes the Reader.
+  /// A cram-only source never advances, so a scheduled opening — a queue
+  /// entry made before the tick, or Continue reading — becomes practice.
+  Future<ReaderMode> _practiceIfCramOnly(
+    ReaderMode mode,
+    ElementRef topicRef,
+  ) async =>
+      mode == ReaderMode.scheduled &&
+          await ref.read(cramScopeQueryProvider).isCramOnly(topicRef)
+      ? ReaderMode.practice
+      : mode;
+
+  /// Done: commits one encounter and closes the Reader. In practice it is
+  /// Next, which logs the sitting without touching the schedule.
   Future<void> done() async {
     final current = state.valueOrNull;
     if (current == null || !current.canCommitProgress) return;
+    if (!current.canAdvanceSchedule) return _completePractice(current);
     await _command<TopicState>(
       (OperationId operation) => ref
           .read(readerCommandRunnerProvider)
@@ -507,6 +529,20 @@ final class ReaderViewModel
     );
   }
 
+  Future<void> _completePractice(ReaderUiState current) => _command<TopicState>(
+    (OperationId operation) => ref
+        .read(readerCommandRunnerProvider)
+        .completePractice(
+          CompleteTopicPractice(
+            operation,
+            ref: current.topic.ref,
+            foregroundMs: _foregroundMs(),
+          ),
+        ),
+    apply: (ReaderUiState s, TopicState topic) =>
+        s.copyWith(topic: topic, isDone: true, wasRepetition: true),
+  );
+
   /// Later: moves eligibility without growing the interval.
   ///
   /// With no explicit day the command runner scales the delay by the source's
@@ -514,7 +550,7 @@ final class ReaderViewModel
   /// equally full queue.
   Future<void> later({int? days}) async {
     final current = state.valueOrNull;
-    if (current == null || !current.canCommitProgress) return;
+    if (current == null || !current.canAdvanceSchedule) return;
     final StudyDay? until = days == null
         ? null
         : (await ref.read(readerCommandRunnerProvider).today()).addDays(days);

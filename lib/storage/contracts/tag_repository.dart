@@ -30,6 +30,14 @@ final class Tag {
   /// The case-insensitive identity persisted in the unique column.
   static String toLowercaseName(String typed) =>
       normalizeName(typed).toLowerCase();
+
+  /// The one tag name the app gives a meaning: an element carrying it, or
+  /// filed under something carrying it, is studied only in custom decks and
+  /// never appears in the daily queue.
+  static const String cramLowercaseName = 'cram';
+
+  /// Whether this is the tag that marks elements cram-only.
+  bool get isCram => toLowercaseName(name) == cramLowercaseName;
 }
 
 /// Persists tag definitions and direct element-tag relationships.
@@ -41,6 +49,9 @@ abstract interface class TagRepository {
   Future<void> updateTag(Tag tag);
   Future<void> deleteTag(String id);
   Future<Map<ElementRef, Set<String>>> listAllElementTags();
+
+  /// Every element linked directly to [tagId]; inherited links are not stored.
+  Future<Set<ElementRef>> listElementsWithTag(String tagId);
   Future<List<String>> listTagIdsOfElement(ElementRef ref);
   Future<void> saveTagsOfElement(
     ElementRef ref,

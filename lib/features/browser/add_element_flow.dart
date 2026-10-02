@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
+import 'package:incremental_reader/features/browser/browser_providers.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/browser/import_sheet.dart';
 import 'package:incremental_reader/features/extract/formulation_dialog.dart';
@@ -64,11 +65,18 @@ Future<void> showAddElementFlow(BuildContext context, WidgetRef ref) async {
 }
 
 Future<void> _addTopic(BuildContext context, WidgetRef ref) async {
-  final request = await openTopicCreationPage(context);
+  final request = await openTopicCreationPage(
+    context,
+    markdownFileInput: ref.read(markdownFileInputProvider),
+  );
   if (request == null || !context.mounted) return;
   final sourceId = await ref
       .read(browserViewModelProvider.notifier)
-      .importMarkdown(title: request.title, markdown: request.markdown);
+      .importMarkdown(
+        title: request.title,
+        markdown: request.markdown,
+        images: request.images,
+      );
   if (sourceId == null || !context.mounted) return;
   await openReader(
     context,

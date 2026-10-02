@@ -97,6 +97,23 @@ final class DriftVideoRepository implements VideoRepository {
   Future<List<VideoElement>> listVideoElements() =>
       _listVideoElementsMatching(null);
 
+  @override
+  Future<Map<String, String?>> listVideoElementParents() async {
+    final rows =
+        await (_database.selectOnly(_database.videoElements)
+              ..addColumns(<Expression<Object>>[
+                _database.videoElements.id,
+                _database.videoElements.parentVideoElementId,
+              ]))
+            .get();
+    return <String, String?>{
+      for (final row in rows)
+        row.read(_database.videoElements.id)!: row.read(
+          _database.videoElements.parentVideoElementId,
+        ),
+    };
+  }
+
   /// Uses creation order globally and playback order inside a video branch.
   Future<List<VideoElement>> _listVideoElementsMatching(
     Expression<bool> Function($VideoElementsTable table)? rowMatches, {

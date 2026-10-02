@@ -14,6 +14,7 @@ import 'package:incremental_reader/documents/inline_markup.dart';
 import 'package:incremental_reader/documents/source_asset.dart';
 import 'package:incremental_reader/shared/ui/app_theme.dart';
 import 'package:incremental_reader/shared/ui/zoomable_image_page.dart';
+import 'package:incremental_reader/storage/files/source_asset_file_store.dart';
 
 /// A highlighted character range within one block's rendered text.
 @immutable
@@ -60,6 +61,27 @@ final class ReaderImagePresentation {
 
   final SourceAsset asset;
   final ImageProvider imageProvider;
+}
+
+/// What [assets] look like on the page, keyed by the `ir-asset:` reference
+/// the markdown uses.
+///
+/// One function for every screen that draws source markdown, so a figure an
+/// extract carries renders exactly as it did in the source it came from. A
+/// text without images never asks for the file store at all.
+Map<String, ReaderImagePresentation> readerImagesFor(
+  List<SourceAsset> assets,
+  SourceAssetFileStore Function() findFiles,
+) {
+  if (assets.isEmpty) return const <String, ReaderImagePresentation>{};
+  final SourceAssetFileStore files = findFiles();
+  return <String, ReaderImagePresentation>{
+    for (final SourceAsset asset in assets)
+      asset.srcRef: ReaderImagePresentation(
+        asset: asset,
+        imageProvider: FileImage(files.fileForSha256(asset.sha256)),
+      ),
+  };
 }
 
 /// Builds the span tree for [block] under [typography].

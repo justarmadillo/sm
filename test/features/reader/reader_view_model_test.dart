@@ -7,10 +7,13 @@ import 'package:incremental_reader/features/browser/browser_tree_query.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/browser/import_sheet.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
+import 'package:incremental_reader/features/tags/tags_commands.dart';
+import 'package:incremental_reader/features/tags/tags_providers.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/clock.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
+import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
 
@@ -316,5 +319,56 @@ void main() {
       expect(countWords('  one   two\n\nthree  '), 3);
       expect(countWords(''), 0);
     });
+  });
+
+  group('practice', () {
+    test('Next logs the sitting and leaves the schedule alone', () async {
+      final String id = await importFixture();
+      final TopicState before = (await readerFor(
+        id,
+        ReaderMode.practice,
+      )).topic;
+
+      await modelFor(id, ReaderMode.practice).done();
+
+      final ReaderUiState state = container
+          .read(
+            readerViewModelProvider(
+              ReaderRequest(sourceId: id, mode: ReaderMode.practice),
+            ),
+          )
+          .requireValue;
+      expect(state.isDone, isTrue);
+      expect(state.wasRepetition, isTrue);
+      final TopicState after = (await container
+          .read(learningRepositoryProvider)
+          .findTopic(before.ref))!;
+      expect(after.schedule.dueDay, before.schedule.dueDay);
+      expect(after.repetitionCount, before.repetitionCount);
+    });
+
+    test(
+      'a cram-only source opened from the queue reads as practice',
+      () async {
+        final String id = await importFixture();
+        await container
+            .read(tagsCommandRunnerProvider)
+            .markCramOnly(
+              MarkCramOnly(
+                OperationId('cram-op'),
+                refs: <ElementRef>[
+                  ElementRef(id: id, type: ElementType.source),
+                ],
+                isCramOnly: true,
+              ),
+            );
+
+        final ReaderUiState state = await readerFor(id, ReaderMode.scheduled);
+
+        expect(state.mode, ReaderMode.practice);
+        expect(state.canAdvanceSchedule, isFalse);
+        expect(state.canCommitProgress, isTrue);
+      },
+    );
   });
 }

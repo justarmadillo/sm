@@ -16,6 +16,7 @@ library;
 
 import 'package:incremental_reader/features/priority/priority_browser_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
+import 'package:incremental_reader/scheduling/cram_scope_query.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduling_journal.dart';
@@ -58,6 +59,7 @@ final class PriorityBrowserCommandRunner {
     required SchedulingContext context,
     required Clock clock,
     required IdGenerator ids,
+    required CramScopeQuery cramScope,
     DiagnosticSink diagnostics = const NullDiagnosticSink(),
   }) : _learning = learning,
        _transfer = transfer,
@@ -65,10 +67,12 @@ final class PriorityBrowserCommandRunner {
        _context = context,
        _clock = clock,
        _ids = ids,
+       _cramScope = cramScope,
        _journal = SchedulingJournal(learning: learning, ids: ids),
        _diagnostics = diagnostics;
 
   final LearningRepository _learning;
+  final CramScopeQuery _cramScope;
   final TransferRepository _transfer;
   final TransactionRunner _transactions;
   final SchedulingContext _context;
@@ -424,12 +428,14 @@ final class PriorityBrowserCommandRunner {
     final Sm20CollectionState runtime = await _context.runtimeState();
     final List<ElementRef> drill = <ElementRef>[...runtime.finalDrill];
     final Set<ElementRef> present = drill.toSet();
+    final Set<ElementRef> cramOnly = await _cramScope.listCramOnlyRefs();
     final List<ElementRef> changedRefs = <ElementRef>[];
     var skipped = 0;
 
     for (final ElementRef ref in command.refs) {
       final ElementSchedule? schedule = await _learning.findSchedule(ref);
       if (schedule == null ||
+          cramOnly.contains(ref) ||
           schedule.lifecycle == ElementLifecycle.deleted ||
           !present.add(ref)) {
         skipped += 1;
@@ -465,10 +471,11 @@ final class PriorityBrowserCommandRunner {
     final List<ElementRef> changedRefs = <ElementRef>[];
     var skipped = 0;
     var target = command.everyWhich < 3 ? command.everyWhich : 3;
+    final Set<ElementRef> cramOnly = await _cramScope.listCramOnlyRefs();
 
     for (final ElementRef ref in command.refs) {
       final _BrowserRecord? record = await _record(ref);
-      if (record == null || !record.isMemorized) {
+      if (record == null || !record.isMemorized || cramOnly.contains(ref)) {
         skipped += 1;
         continue;
       }

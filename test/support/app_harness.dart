@@ -9,6 +9,7 @@ library;
 
 import 'package:incremental_reader/features/browser/browser_command_runner.dart';
 import 'package:incremental_reader/features/browser/browser_tree_query.dart';
+import 'package:incremental_reader/features/custom_study/custom_study_command_runner.dart';
 import 'package:incremental_reader/features/daily_queue/mercy_command_runner.dart';
 import 'package:incremental_reader/features/daily_queue/queue_candidates_query.dart';
 import 'package:incremental_reader/features/daily_queue/queue_command_runner.dart';
@@ -24,6 +25,7 @@ import 'package:incremental_reader/features/review/review_command_runner.dart';
 import 'package:incremental_reader/features/search/search_query.dart';
 import 'package:incremental_reader/features/tags/tags_command_runner.dart';
 import 'package:incremental_reader/features/video/video_command_runner.dart';
+import 'package:incremental_reader/scheduling/cram_scope_query.dart';
 import 'package:incremental_reader/scheduling/effective_due_query.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
 import 'package:incremental_reader/scheduling/sm20_runtime_store.dart';
@@ -37,6 +39,7 @@ import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/database/connection.dart';
 import 'package:incremental_reader/storage/drift/drift_content_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_custom_deck_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_learning_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_search_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_settings_repository.dart';
@@ -60,6 +63,7 @@ final class AppHarness {
     settings = DriftSettingsRepository(this.database);
     search = DriftSearchRepository(this.database);
     tags = DriftTagRepository(this.database);
+    decks = DriftCustomDeckRepository(this.database);
     transfer = DriftTransferRepository(
       this.database,
       FakeIdGenerator(prefix: 'dataset-$operationPrefix'),
@@ -91,6 +95,7 @@ final class AppHarness {
   late final DriftSettingsRepository settings;
   late final DriftSearchRepository search;
   late final DriftTagRepository tags;
+  late final DriftCustomDeckRepository decks;
   late final DriftTransferRepository transfer;
   late final DriftTransactionRunner transactions;
   late final SettingsStore settingsStore;
@@ -99,6 +104,14 @@ final class AppHarness {
 
   /// Collects every diagnostic event the command runners emit.
   final RecordingDiagnosticSink diagnostics = RecordingDiagnosticSink();
+
+  /// Which elements the `#cram` tag keeps out of spaced repetition.
+  late final CramScopeQuery cramScope = CramScopeQuery(
+    tags: tags,
+    content: content,
+    videos: videos,
+    learning: learning,
+  );
 
   late final ReaderCommandRunner reader = ReaderCommandRunner(
     content: content,
@@ -110,16 +123,30 @@ final class AppHarness {
     context: context,
     clock: clock,
     ids: FakeIdGenerator(prefix: 'reader-$operationPrefix'),
+    cramScope: cramScope,
     diagnostics: diagnostics,
   );
 
   late final TagsCommandRunner tagCommands = TagsCommandRunner(
     tags: tags,
+    decks: decks,
     learning: learning,
     transfer: transfer,
     transactions: transactions,
     clock: clock,
     ids: FakeIdGenerator(prefix: 'tag-$operationPrefix'),
+    diagnostics: diagnostics,
+  );
+
+  /// Saving, changing, and deleting custom-study decks.
+  late final CustomStudyCommandRunner deckCommands = CustomStudyCommandRunner(
+    decks: decks,
+    tags: tags,
+    learning: learning,
+    transfer: transfer,
+    transactions: transactions,
+    clock: clock,
+    ids: FakeIdGenerator(prefix: 'deck-$operationPrefix'),
     diagnostics: diagnostics,
   );
 
@@ -157,6 +184,7 @@ final class AppHarness {
     context: context,
     clock: clock,
     ids: FakeIdGenerator(prefix: 'review-$operationPrefix'),
+    cramScope: cramScope,
     diagnostics: diagnostics,
   );
 
@@ -178,6 +206,7 @@ final class AppHarness {
     context: context,
     clock: clock,
     ids: FakeIdGenerator(prefix: 'queue-$operationPrefix'),
+    cramScope: cramScope,
     diagnostics: diagnostics,
   );
 
@@ -189,6 +218,7 @@ final class AppHarness {
         context: context,
         clock: clock,
         ids: FakeIdGenerator(prefix: 'browser-$operationPrefix'),
+        cramScope: cramScope,
         diagnostics: diagnostics,
       );
 
@@ -234,6 +264,7 @@ final class AppHarness {
   /// The population every queue calculation starts from.
   late final QueueCandidatesQuery queueCandidates = QueueCandidatesQuery(
     learning: learning,
+    cramScope: cramScope,
   );
 
   late final MercyCommandRunner mercy = MercyCommandRunner(

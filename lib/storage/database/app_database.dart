@@ -16,7 +16,7 @@ import 'package:incremental_reader/storage/database/tables.dart';
 part 'app_database.g.dart';
 
 /// Current schema version. Bump with every migration step added below.
-const int kSchemaVersion = 19;
+const int kSchemaVersion = 20;
 
 /// Name of the external-content FTS5 index over [SearchDocuments].
 const String kSearchIndexTable = 'search_index';
@@ -42,6 +42,8 @@ const String kSearchIndexTable = 'search_index';
     SearchDocuments,
     Tags,
     ElementTags,
+    CustomDecks,
+    CustomDeckTags,
     ActivityEvents,
     Settings,
     DatasetMeta,
@@ -685,6 +687,17 @@ class AppDatabase extends _$AppDatabase {
           "WHERE type = 3 AND extra = ''",
         );
       }
+      if (from < 20) {
+        // Saved custom-study decks. Two new tables and nothing rewritten, so
+        // the step is safe to run on a collection that already has them.
+        if (!await _hasTable('custom_decks')) {
+          await m.createTable(customDecks);
+        }
+        if (!await _hasTable('custom_deck_tags')) {
+          await m.createTable(customDeckTags);
+        }
+        await _createIndexes(m);
+      }
     },
     beforeOpen: (OpeningDetails details) async {
       // SQLite disables foreign keys per connection by default, so this
@@ -834,6 +847,14 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_element_tags_element '
         'ON element_tags (element_id, element_type)',
+      );
+    }
+    // Deleting a tag cascades into custom_deck_tags; without this index the
+    // cascade scans every deck link.
+    if (await _hasTable('custom_deck_tags')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_custom_deck_tags_tag '
+        'ON custom_deck_tags (tag_id)',
       );
     }
     if (await _hasTable('source_assets')) {

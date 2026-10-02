@@ -4,6 +4,7 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/review/review_command_runner.dart';
+
 /// Applies an FSRS review exactly once, plus undo, edit, and burying.
 final Provider<ReviewCommandRunner> reviewCommandRunnerProvider =
     Provider<ReviewCommandRunner>(
@@ -15,6 +16,7 @@ final Provider<ReviewCommandRunner> reviewCommandRunnerProvider =
         context: ref.watch(schedulingContextProvider),
         clock: ref.watch(clockProvider),
         ids: ref.watch(idGeneratorProvider),
+        cramScope: ref.watch(cramScopeQueryProvider),
         diagnostics: ref.watch(diagnosticsProvider),
       ),
     );

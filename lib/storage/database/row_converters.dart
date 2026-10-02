@@ -29,6 +29,7 @@ import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/epoch_milliseconds.dart';
 import 'package:incremental_reader/shared/result.dart';
+import 'package:incremental_reader/storage/contracts/custom_deck_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 
 /// Restores the six Real48 bytes stored as a compact hexadecimal string.
@@ -756,3 +757,77 @@ ReaderAnchor? _anchorOrNull(int? offset, int? contentRevision) =>
     offset == null || contentRevision == null
     ? null
     : ReaderAnchor(utf8Offset: offset, contentRevision: contentRevision);
+
+/// Packs element types into the `custom_decks.element_types` bit set, one
+/// bit per stored `ElementType` index.
+int elementTypesToBitmask(Set<ElementType> types) => types.fold<int>(
+  0,
+  (int bits, ElementType type) => bits | (1 << type.index),
+);
+
+/// The types named by [bits]. A bit this build has no type for is dropped,
+/// which the column's CHECK already makes impossible.
+Set<ElementType> elementTypesFromBitmask(int bits) => <ElementType>{
+  for (final ElementType type in ElementType.values)
+    if (bits & (1 << type.index) != 0) type,
+};
+
+/// A saved deck from its row and the tag links that belong to it.
+CustomDeck customDeckFromRows(
+  CustomDeckRow row,
+  List<CustomDeckTagRow> tagRows,
+) => CustomDeck(
+  id: row.id,
+  name: row.name,
+  filter: CustomDeckFilter(
+    includeTagIds: <String>{
+      for (final CustomDeckTagRow link in tagRows)
+        if (link.role == CustomDeckTagRole.include.storedValue) link.tagId,
+    },
+    excludeTagIds: <String>{
+      for (final CustomDeckTagRow link in tagRows)
+        if (link.role == CustomDeckTagRole.exclude.storedValue) link.tagId,
+    },
+    match: CustomDeckTagMatch.fromStoredValue(row.tagMatch),
+    types: elementTypesFromBitmask(row.elementTypes),
+    shouldReschedule: row.shouldReschedule,
+    sessionLimit: row.sessionLimit,
+    order: CustomDeckOrder.fromStoredValue(row.studyOrder),
+    isDueOnly: row.isDueOnly,
+  ),
+  createdAtUtc: fromEpochMs(row.createdAtUtc),
+  updatedAtUtc: fromEpochMs(row.updatedAtUtc),
+);
+
+/// Row companion for a deck's own columns; its tags are separate rows.
+CustomDecksCompanion customDeckToCompanion(CustomDeck deck) =>
+    CustomDecksCompanion.insert(
+      id: deck.id,
+      name: deck.name,
+      nameLowercase: CustomDeck.toLowercaseName(deck.name),
+      tagMatch: deck.filter.match.storedValue,
+      elementTypes: elementTypesToBitmask(deck.filter.types),
+      shouldReschedule: deck.filter.shouldReschedule,
+      sessionLimit: Value<int?>(deck.filter.sessionLimit),
+      studyOrder: deck.filter.order.storedValue,
+      isDueOnly: deck.filter.isDueOnly,
+      createdAtUtc: toEpochMs(deck.createdAtUtc),
+      updatedAtUtc: toEpochMs(deck.updatedAtUtc),
+    );
+
+/// One link row per tag the deck includes or excludes.
+List<CustomDeckTagsCompanion> customDeckTagsToCompanions(CustomDeck deck) =>
+    <CustomDeckTagsCompanion>[
+      for (final String tagId in deck.filter.includeTagIds)
+        CustomDeckTagsCompanion.insert(
+          deckId: deck.id,
+          tagId: tagId,
+          role: CustomDeckTagRole.include.storedValue,
+        ),
+      for (final String tagId in deck.filter.excludeTagIds)
+        CustomDeckTagsCompanion.insert(
+          deckId: deck.id,
+          tagId: tagId,
+          role: CustomDeckTagRole.exclude.storedValue,
+        ),
+    ];

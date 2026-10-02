@@ -36,9 +36,9 @@ Future<bool> editTagsOfElement(
   WidgetRef ref,
   ElementRef elementRef,
 ) async {
-  final Set<String> current = (await ref
-      .read(tagRepositoryProvider)
-      .listTagIdsOfElement(elementRef)).toSet();
+  final Set<String> current =
+      (await ref.read(tagRepositoryProvider).listTagIdsOfElement(elementRef))
+          .toSet();
   if (!context.mounted) return false;
   final Set<String>? chosen = await showTagsPicker(
     context,
@@ -46,17 +46,19 @@ Future<bool> editTagsOfElement(
     initialTagIds: current,
   );
   if (chosen == null || !context.mounted) return false;
-  final result = await ref.read(tagsCommandRunnerProvider).save(
-    SaveTagsOfElement(
-      OperationId(ref.read(idGeneratorProvider).newId()),
-      ref: elementRef,
-      tagIds: chosen,
-    ),
-  );
+  final result = await ref
+      .read(tagsCommandRunnerProvider)
+      .save(
+        SaveTagsOfElement(
+          OperationId(ref.read(idGeneratorProvider).newId()),
+          ref: elementRef,
+          tagIds: chosen,
+        ),
+      );
   if (result.isErr && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result.failureOrNull!.message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.failureOrNull!.message)));
   }
   return result.isOk;
 }

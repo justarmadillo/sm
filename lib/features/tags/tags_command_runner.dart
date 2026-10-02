@@ -9,6 +9,7 @@ import 'package:incremental_reader/shared/command_execution.dart';
 import 'package:incremental_reader/shared/diagnostics_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/result.dart';
+import 'package:incremental_reader/storage/contracts/custom_deck_repository.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 import 'package:incremental_reader/storage/contracts/tag_repository.dart';
 import 'package:incremental_reader/storage/contracts/transaction_runner.dart';
@@ -19,11 +20,13 @@ const String kTagRenamedType = 'tags.renamed';
 const String kTagDeletedType = 'tags.deleted';
 const String kTagMergedType = 'tags.merged';
 const String kElementTagsChangedType = 'tags.element_changed';
+const String kCramOnlyChangedType = 'tags.cram_changed';
 
 /// Applies tag definition and link changes without touching scheduling state.
 final class TagsCommandRunner {
   const TagsCommandRunner({
     required TagRepository tags,
+    required CustomDeckRepository decks,
     required LearningRepository learning,
     required TransferRepository transfer,
     required TransactionRunner transactions,
@@ -31,6 +34,7 @@ final class TagsCommandRunner {
     required IdGenerator ids,
     DiagnosticSink diagnostics = const NullDiagnosticSink(),
   }) : _tags = tags,
+       _decks = decks,
        _learning = learning,
        _transfer = transfer,
        _transactions = transactions,
@@ -39,6 +43,7 @@ final class TagsCommandRunner {
        _diagnostics = diagnostics;
 
   final TagRepository _tags;
+  final CustomDeckRepository _decks;
   final LearningRepository _learning;
   final TransferRepository _transfer;
   final TransactionRunner _transactions;
@@ -62,26 +67,37 @@ final class TagsCommandRunner {
         return Ok<TagOutcome>(TagOutcome(tag));
       });
 
-  Future<Result<TagOutcome>> rename(RenameTag command) =>
-      _run<TagOutcome>(command, kTagRenamedType, () async {
-        final Tag? stored = await _tags.findTag(command.tagId);
-        if (stored == null) return _missingTag<TagOutcome>(command.tagId);
-        final String name = Tag.normalizeName(command.name);
-        final Result<void>? refusal = await _validateName(
-          name,
-          exceptTagId: command.tagId,
+  Future<Result<TagOutcome>> rename(RenameTag command) => _run<TagOutcome>(
+    command,
+    kTagRenamedType,
+    () async {
+      final Tag? stored = await _tags.findTag(command.tagId);
+      if (stored == null) return _missingTag<TagOutcome>(command.tagId);
+      final String name = Tag.normalizeName(command.name);
+      if (stored.isCram && Tag.toLowercaseName(name) != Tag.cramLowercaseName) {
+        return const Err<TagOutcome>(
+          ValidationFailure(
+            '#cram marks cram-only elements; delete it to return them to '
+            'spaced repetition',
+          ),
         );
-        if (refusal != null) return Err<TagOutcome>(refusal.failureOrNull!);
-        final Tag tag = Tag(
-          id: stored.id,
-          name: name,
-          createdAtUtc: stored.createdAtUtc,
-          updatedAtUtc: command.timestampUtc,
-        );
-        await _tags.updateTag(tag);
-        await _log(command, kTagRenamedType, tagId: tag.id);
-        return Ok<TagOutcome>(TagOutcome(tag));
-      });
+      }
+      final Result<void>? refusal = await _validateName(
+        name,
+        exceptTagId: command.tagId,
+      );
+      if (refusal != null) return Err<TagOutcome>(refusal.failureOrNull!);
+      final Tag tag = Tag(
+        id: stored.id,
+        name: name,
+        createdAtUtc: stored.createdAtUtc,
+        updatedAtUtc: command.timestampUtc,
+      );
+      await _tags.updateTag(tag);
+      await _log(command, kTagRenamedType, tagId: tag.id);
+      return Ok<TagOutcome>(TagOutcome(tag));
+    },
+  );
 
   Future<Result<TagOutcome>> delete(DeleteTag command) =>
       _run<TagOutcome>(command, kTagDeletedType, () async {
@@ -116,6 +132,12 @@ final class TagsCommandRunner {
             command.timestampUtc,
           );
         }
+        // Before the delete, whose cascade would otherwise drop the merged
+        // tags from every deck instead of moving them.
+        await _decks.updateDeckTagReferences(
+          fromTagIds: command.sourceTagIds,
+          toTagId: target.id,
+        );
         for (final String sourceId in command.sourceTagIds) {
           await _tags.deleteTag(sourceId);
         }
@@ -146,6 +168,60 @@ final class TagsCommandRunner {
   ) => _changeLinks(command, command.refs, () async {
     await _tags.deleteElementTags(command.refs, command.tagIds);
   });
+
+  /// Finds or creates `#cram` in the same transaction as the links, so two
+  /// quick ticks cannot create it twice: the unique lowercase name refuses
+  /// the second insert before either commits.
+  Future<Result<CramOutcome>> markCramOnly(MarkCramOnly command) =>
+      _run<CramOutcome>(command, kCramOnlyChangedType, () async {
+        if (command.refs.isEmpty) {
+          return const Err<CramOutcome>(
+            ValidationFailure('select at least one element'),
+          );
+        }
+        Tag? cram = await _tags.findTagByLowercaseName(Tag.cramLowercaseName);
+        if (cram == null && !command.isCramOnly) {
+          return const Ok<CramOutcome>(
+            CramOutcome(tag: null, changedRefCount: 0),
+          );
+        }
+        cram ??= await _insertCramTag(command);
+        final Set<ElementRef> alreadyTagged = await _tags.listElementsWithTag(
+          cram.id,
+        );
+        final List<ElementRef> changing = <ElementRef>[
+          for (final ElementRef ref in command.refs.toSet())
+            if (alreadyTagged.contains(ref) != command.isCramOnly) ref,
+        ];
+        if (command.isCramOnly) {
+          await _tags.insertElementTags(changing, <String>{
+            cram.id,
+          }, command.timestampUtc);
+        } else {
+          await _tags.deleteElementTags(changing, <String>{cram.id});
+        }
+        await _log(
+          command,
+          kCramOnlyChangedType,
+          tagId: cram.id,
+          ref: command.refs.first,
+        );
+        return Ok<CramOutcome>(
+          CramOutcome(tag: cram, changedRefCount: changing.length),
+        );
+      });
+
+  Future<Tag> _insertCramTag(AppCommand command) async {
+    final Tag cram = Tag(
+      id: _ids.newId(),
+      name: Tag.cramLowercaseName,
+      createdAtUtc: command.timestampUtc,
+      updatedAtUtc: command.timestampUtc,
+    );
+    await _tags.insertTag(cram);
+    await _log(command, kTagCreatedType, tagId: cram.id);
+    return cram;
+  }
 
   Future<Result<ElementTagOutcome>> _changeLinks(
     AppCommand command,

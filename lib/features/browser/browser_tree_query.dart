@@ -23,6 +23,7 @@ import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/documents/video.dart';
 import 'package:incremental_reader/features/tags/element_tag_name_index.dart';
 import 'package:incremental_reader/scheduling/element.dart';
+import 'package:incremental_reader/scheduling/filing_tree.dart';
 import 'package:incremental_reader/scheduling/study_day.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
@@ -118,31 +119,27 @@ final class BrowserTreeQuery {
       _tags,
     );
 
-    final Set<String> presentIds = <String>{
-      for (final _Element element in elements) element.ref.id,
+    final FilingTree tree = FilingTree.of(<FilingLink>[
+      for (final _Element element in elements)
+        FilingLink(
+          ref: element.ref,
+          filedParentId: schedules[element.ref.id]?.parentElementId,
+          provenanceParentId: element.provenanceParentId,
+        ),
+    ]);
+    final Map<ElementRef, _Element> elementsByRef = <ElementRef, _Element>{
+      for (final _Element element in elements) element.ref: element,
     };
-    final Map<String, List<_Element>> childrenByParent =
-        <String, List<_Element>>{};
-    final List<_Element> roots = <_Element>[];
-    for (final _Element element in elements) {
-      final String? parentId = _filingParentOf(element, schedules);
-      // A parent that is no longer in the collection cannot hold anything, so
-      // its orphans surface at the top rather than disappearing with it.
-      if (parentId == null || !presentIds.contains(parentId)) {
-        roots.add(element);
-      } else {
-        childrenByParent.putIfAbsent(parentId, () => <_Element>[]).add(element);
-      }
-    }
 
     return _nodesFrom(
-      roots,
+      tree.roots,
       parentRef: null,
-      childrenByParent: childrenByParent,
+      tree: tree,
+      elementsByRef: elementsByRef,
       schedules: schedules,
       statuses: statuses,
       tagNameIndex: tagNameIndex,
-      inheritedTagIds: const <String>{},
+      effectiveTagIds: tree.inheritTags(tagNameIndex.tagIdsByElement),
       alreadyPlaced: <String>{},
     );
   }
@@ -243,45 +240,35 @@ final class BrowserTreeQuery {
     };
   }
 
-  /// Where the Browser puts an element: its filed parent when it has one, and
-  /// otherwise the parent it was cut or written from.
-  ///
-  /// The fallback is what makes a collection built before filing existed open
-  /// in its provenance shape rather than as one flat list.
-  String? _filingParentOf(
-    _Element element,
-    Map<String, ElementSchedule> schedules,
-  ) => schedules[element.ref.id]?.parentElementId ?? element.provenanceParentId;
-
   /// Turns one level of elements into nodes, deepest last.
   ///
   /// [alreadyPlaced] stops a filing loop — which no command can create, but a
   /// hand-edited database could — from being walked forever.
   List<BrowserTreeNode> _nodesFrom(
-    List<_Element> level, {
+    List<ElementRef> level, {
     required ElementRef? parentRef,
-    required Map<String, List<_Element>> childrenByParent,
+    required FilingTree tree,
+    required Map<ElementRef, _Element> elementsByRef,
     required Map<String, ElementSchedule> schedules,
     required Map<ElementRef, Sm20ElementStatus> statuses,
     required ElementTagNameIndex tagNameIndex,
-    required Set<String> inheritedTagIds,
+    required Map<ElementRef, Set<String>> effectiveTagIds,
     required Set<String> alreadyPlaced,
   }) {
-    final List<_Element> ordered = <_Element>[...level]
-      ..sort(
-        (_Element first, _Element second) =>
-            _compareFiling(first, second, schedules),
-      );
+    final List<_Element> ordered =
+        <_Element>[for (final ElementRef ref in level) elementsByRef[ref]!]
+          ..sort(
+            (_Element first, _Element second) =>
+                _compareFiling(first, second, schedules),
+          );
 
     final List<BrowserTreeNode> nodes = <BrowserTreeNode>[];
     for (final _Element element in ordered) {
       if (!alreadyPlaced.add(element.ref.id)) continue;
       final ElementSchedule? schedule = schedules[element.ref.id];
       final Set<String> directTagIds = tagNameIndex.tagIdsOf(element.ref);
-      final Set<String> effectiveTagIds = <String>{
-        ...inheritedTagIds,
-        ...directTagIds,
-      };
+      final Set<String> inheritedAndDirect =
+          effectiveTagIds[element.ref] ?? directTagIds;
       nodes.add(
         BrowserTreeNode(
           ref: element.ref,
@@ -293,16 +280,17 @@ final class BrowserTreeQuery {
           status: statuses[element.ref],
           lifecycle: schedule?.lifecycle,
           directTagIds: directTagIds,
-          effectiveTagIds: effectiveTagIds,
-          tagNames: tagNameIndex.listNamesFor(effectiveTagIds),
+          effectiveTagIds: inheritedAndDirect,
+          tagNames: tagNameIndex.listNamesFor(inheritedAndDirect),
           children: _nodesFrom(
-            childrenByParent[element.ref.id] ?? const <_Element>[],
+            tree.childrenOf(element.ref),
             parentRef: element.ref,
-            childrenByParent: childrenByParent,
+            tree: tree,
+            elementsByRef: elementsByRef,
             schedules: schedules,
             statuses: statuses,
             tagNameIndex: tagNameIndex,
-            inheritedTagIds: effectiveTagIds,
+            effectiveTagIds: effectiveTagIds,
             alreadyPlaced: alreadyPlaced,
           ),
         ),

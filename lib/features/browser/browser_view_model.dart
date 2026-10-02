@@ -71,16 +71,23 @@ final class BrowserViewModel extends AsyncNotifier<BrowserUiState> {
 
   Future<BrowserUiState> _load() async => const BrowserUiState();
 
-  /// Imports pasted or opened markdown as a new source.
+  /// Imports pasted or opened markdown as a new source, with the images an
+  /// opened file brought.
   Future<String?> importMarkdown({
     required String title,
     required String markdown,
+    List<SourceImageImport> images = const <SourceImageImport>[],
   }) async {
     final result = await _command<Source>(
       (OperationId operation) => ref
           .read(readerCommandRunnerProvider)
           .importSource(
-            ImportSource(operation, title: title, markdown: markdown),
+            ImportSource(
+              operation,
+              title: title,
+              markdown: markdown,
+              images: images,
+            ),
           ),
       success: (Source source) => 'Imported "${source.title}"',
     );

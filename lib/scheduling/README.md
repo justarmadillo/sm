@@ -26,6 +26,8 @@ test instead of by clicking through the app.
 | `sm20_runtime_store.dart` | reads and writes that state as one versioned settings value |
 | `scheduling_context.dart` | builds the schedulers from the user's current settings |
 | `effective_due_query.dart` | the one answer to "when does this actually come back?" |
+| `filing_tree.dart` | where each element is filed, and which tags it inherits from above |
+| `cram_scope_query.dart` | the one answer to "is this kept out of spaced repetition?" (`#cram`) |
 
 ## Vocabulary
 

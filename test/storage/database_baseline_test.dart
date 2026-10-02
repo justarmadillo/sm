@@ -66,6 +66,8 @@ void main() {
         'card_memories',
         'card_occlusions',
         'cards',
+        'custom_deck_tags',
+        'custom_decks',
         'dataset_meta',
         'element_schedules',
         'element_tags',

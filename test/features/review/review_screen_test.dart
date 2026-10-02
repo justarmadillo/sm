@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/card.dart' as documents;
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
+import 'package:incremental_reader/features/daily_queue/study_scheduling.dart';
 import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dart';
 import 'package:incremental_reader/features/extract/extract_providers.dart';
 import 'package:incremental_reader/features/extract/formulation_commands.dart';
@@ -76,7 +77,10 @@ void main() {
   });
 
   /// A stand-in for the queue: a screen that opens the same card on demand.
-  Future<void> pumpQueue(WidgetTester tester, {bool isPractice = false}) async {
+  Future<void> pumpQueue(
+    WidgetTester tester, {
+    StudyScheduling scheduling = StudyScheduling.scheduled,
+  }) async {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -91,7 +95,7 @@ void main() {
                           context,
                           ref,
                           cardId: cardId,
-                          isPractice: isPractice,
+                          scheduling: scheduling,
                         ),
                       ),
                       child: const Text('Start'),
@@ -221,7 +225,7 @@ void main() {
   ) async {
     final repository = container.read(learningRepositoryProvider);
     final before = (await repository.findCardState(cardId))!;
-    await pumpQueue(tester, isPractice: true);
+    await pumpQueue(tester, scheduling: StudyScheduling.practice);
 
     await start(tester);
     expect(find.text('Practice'), findsOneWidget);
@@ -238,5 +242,29 @@ void main() {
     final reviews = await repository.listReviewsForCard(cardId);
     expect(reviews, hasLength(1));
     expect(reviews.single.isPractice, isTrue);
+  });
+
+  testWidgets('Later is offered only in the daily queue', (
+    WidgetTester tester,
+  ) async {
+    for (final (StudyScheduling scheduling, bool isLaterShown)
+        in const <(StudyScheduling, bool)>[
+          (StudyScheduling.scheduled, true),
+          (StudyScheduling.earlyReview, false),
+          (StudyScheduling.practice, false),
+        ]) {
+      await pumpQueue(tester, scheduling: scheduling);
+      await start(tester);
+      await tester.tap(find.text('Show answer  (Space)'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Later'),
+        isLaterShown ? findsOneWidget : findsNothing,
+        reason: scheduling.name,
+      );
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    }
   });
 }

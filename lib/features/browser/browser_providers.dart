@@ -9,6 +9,12 @@ import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/features/browser/browser_command_runner.dart';
 import 'package:incremental_reader/features/browser/browser_tree_query.dart';
 import 'package:incremental_reader/features/browser/element_content_query.dart';
+import 'package:incremental_reader/features/browser/markdown_file_input.dart';
+
+/// Opens markdown files and zips with their images; widget tests replace it
+/// so no platform picker is needed.
+final Provider<MarkdownFileInput> markdownFileInputProvider =
+    Provider<MarkdownFileInput>((Ref ref) => const SystemMarkdownFileInput());
 
 /// The tree: every element, nested and ordered as the user has filed it.
 final Provider<BrowserTreeQuery> browserTreeQueryProvider =

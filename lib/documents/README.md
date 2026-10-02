@@ -17,6 +17,8 @@ plain unit test, which is why a parsing bug is cheap to reproduce.
 | `occlusion.dart` | normalized image masks and their review rules |
 | `markdown_block_parser.dart` | splits markdown into blocks, keeping exact offsets |
 | `markdown_inline_parser.dart` | bold, italics, links — also keeping exact offsets |
+| `markdown_image_references.dart` | points a converter's relative image links at the stored copies |
+| `marker_cleanup.dart` | removes the HTML the Marker PDF converter leaves in its markdown |
 | `inline_markup.dart` | the rendered text, and its map back to the markdown |
 | `reader_anchor.dart` | a stable position in a document |
 | `reader_coordinates.dart` | screen position becomes stored document offset here |

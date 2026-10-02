@@ -10,6 +10,7 @@ import 'dart:math' as math;
 import 'package:incremental_reader/features/daily_queue/queue_candidates_query.dart';
 import 'package:incremental_reader/features/daily_queue/queue_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
+import 'package:incremental_reader/scheduling/cram_scope_query.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/history/review_log.dart';
@@ -66,6 +67,7 @@ final class QueueCommandRunner {
     required SchedulingContext context,
     required Clock clock,
     required IdGenerator ids,
+    required CramScopeQuery cramScope,
     DiagnosticSink diagnostics = const NullDiagnosticSink(),
   }) : _content = content,
        _learning = learning,
@@ -75,7 +77,11 @@ final class QueueCommandRunner {
        _clock = clock,
        _ids = ids,
        _diagnostics = diagnostics,
-       _candidates = QueueCandidatesQuery(learning: learning);
+       _cramScope = cramScope,
+       _candidates = QueueCandidatesQuery(
+         learning: learning,
+         cramScope: cramScope,
+       );
 
   final ContentRepository _content;
   final LearningRepository _learning;
@@ -85,6 +91,7 @@ final class QueueCommandRunner {
   final Clock _clock;
   final IdGenerator _ids;
   final DiagnosticSink _diagnostics;
+  final CramScopeQuery _cramScope;
   final QueueCandidatesQuery _candidates;
 
   Future<Result<AdmissionOutcome>> runDailyAdmission(
@@ -742,7 +749,8 @@ final class QueueCommandRunner {
   /// Unlike [QueueCandidatesQuery.listCandidates] this keeps non-Active records: a branch or
   /// browser Smart Postpone source legitimately contains dismissed, suspended,
   /// and pending elements, and the postpone engine — not this loader — is what
-  /// decides they are ineligible.
+  /// decides they are ineligible. Cram-only elements are the exception: they
+  /// have no spaced-repetition schedule to postpone, so they never enter.
   Future<List<QueueCandidate>> _listCandidatesForRefs(
     List<ElementRef> refs,
   ) async {
@@ -750,8 +758,9 @@ final class QueueCommandRunner {
     final List<String> cardIds = <String>[];
     final Set<ElementRef> seen = <ElementRef>{};
     final List<ElementRef> ordered = <ElementRef>[];
+    final Set<ElementRef> cramOnly = await _cramScope.listCramOnlyRefs();
     for (final ElementRef ref in refs) {
-      if (!seen.add(ref)) continue;
+      if (!seen.add(ref) || cramOnly.contains(ref)) continue;
       ordered.add(ref);
       if (ref.type == ElementType.card) {
         cardIds.add(ref.id);

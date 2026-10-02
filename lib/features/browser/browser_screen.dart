@@ -296,6 +296,11 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         icon: const Icon(Icons.label_outline),
       ),
       IconButton(
+        tooltip: 'Cram only',
+        onPressed: _selected.isEmpty ? null : _changeSelectedCramOnly,
+        icon: const Icon(Icons.bolt),
+      ),
+      IconButton(
         tooltip: 'Delete selected elements',
         onPressed: _selected.isEmpty
             ? null
@@ -455,13 +460,17 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     BuildContext context,
     BrowserTreeNode? under,
   ) async {
-    final ImportRequest? request = await openTopicCreationPage(context);
+    final ImportRequest? request = await openTopicCreationPage(
+      context,
+      markdownFileInput: ref.read(markdownFileInputProvider),
+    );
     if (request == null || !context.mounted) return;
 
     final BrowserViewModel model = ref.read(browserViewModelProvider.notifier);
     final String? sourceId = await model.importMarkdown(
       title: request.title,
       markdown: request.markdown,
+      images: request.images,
     );
     if (sourceId != null && under != null) {
       await model.fileUnder(
@@ -591,7 +600,77 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         }
       case 'tags':
         await _saveTags(node);
+      case 'cram':
+        await _markCramOnly(<ElementRef>[
+          node.ref,
+        ], isCramOnly: !node.directTagIds.contains(_cramTagId()));
     }
+    ref.invalidate(browserTreeProvider);
+  }
+
+  /// The `#cram` tag's id, or null before anything has been ticked.
+  String? _cramTagId() =>
+      (ref.read(browserTagsProvider).valueOrNull ?? const <Tag>[])
+          .where((Tag tag) => tag.isCram)
+          .firstOrNull
+          ?.id;
+
+  Future<void> _changeSelectedCramOnly() async {
+    final bool? isCramOnly = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => SimpleDialog(
+        title: const Text('Cram only'),
+        children: <Widget>[
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const ListTile(
+              leading: Icon(Icons.bolt),
+              title: Text('Mark cram only'),
+              subtitle: Text('Studied in custom decks, never in the queue'),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const ListTile(
+              leading: Icon(Icons.event_repeat),
+              title: Text('Return to spaced repetition'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (isCramOnly == null || !mounted) return;
+    await _markCramOnly(
+      _selected.toList(growable: false),
+      isCramOnly: isCramOnly,
+    );
+  }
+
+  /// Unticking a row that is cram-only only through a parent changes nothing,
+  /// so the toast says where the tick actually lives.
+  Future<void> _markCramOnly(
+    List<ElementRef> refs, {
+    required bool isCramOnly,
+  }) async {
+    final result = await ref
+        .read(tagsCommandRunnerProvider)
+        .markCramOnly(
+          MarkCramOnly(
+            OperationId(ref.read(idGeneratorProvider).newId()),
+            refs: refs,
+            isCramOnly: isCramOnly,
+          ),
+        );
+    if (!mounted) return;
+    if (result.isErr) {
+      showToast(context, result.failureOrNull!.message, isError: true);
+    } else if (!isCramOnly && result.unwrap().changedRefCount == 0) {
+      showToast(
+        context,
+        'Cram only comes from a parent. Untick it on the parent instead.',
+      );
+    }
+    ref.invalidate(browserTagsProvider);
     ref.invalidate(browserTreeProvider);
   }
 
@@ -736,11 +815,13 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         ),
       );
     }
+    final String? cramTagId = _cramTagId();
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 40),
       itemCount: rows.length,
       itemBuilder: (BuildContext context, int index) => _NodeRow(
         row: rows[index],
+        cramTagId: cramTagId,
         isExpanded: _expanded.contains(rows[index].node.ref),
         isSelectionMode: _isSelecting,
         isSelected: _selected.contains(rows[index].node.ref),
@@ -947,6 +1028,7 @@ class _TagFilter extends StatelessWidget {
 class _NodeRow extends StatelessWidget {
   const _NodeRow({
     required this.row,
+    required this.cramTagId,
     required this.isExpanded,
     required this.isSelectionMode,
     required this.isSelected,
@@ -962,6 +1044,9 @@ class _NodeRow extends StatelessWidget {
   });
 
   final _TreeRow row;
+
+  /// The `#cram` tag's id, or null while no element has ever been ticked.
+  final String? cramTagId;
   final bool isExpanded;
   final bool isSelectionMode;
   final bool isSelected;
@@ -1276,6 +1361,7 @@ class _NodeRow extends StatelessWidget {
           if (isSource)
             const PopupMenuItem<String>(value: 'rename', child: Text('Rename')),
           const PopupMenuItem<String>(value: 'tags', child: Text('Tags…')),
+          _cramMenuItem(node),
           if (isDismissed)
             const PopupMenuItem<String>(
               value: 'undismiss',
@@ -1289,6 +1375,21 @@ class _NodeRow extends StatelessWidget {
           const PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
         ],
       ),
+    );
+  }
+
+  /// Ticked when the row is cram-only. A row that is cram-only only because
+  /// a parent is shows the tick but cannot be unticked here: the flag lives
+  /// on the parent, and unticking the child would change nothing.
+  PopupMenuEntry<String> _cramMenuItem(BrowserTreeNode node) {
+    final String? cram = cramTagId;
+    final bool isCramOnly = cram != null && node.effectiveTagIds.contains(cram);
+    final bool isInherited = isCramOnly && !node.directTagIds.contains(cram);
+    return CheckedPopupMenuItem<String>(
+      value: 'cram',
+      checked: isCramOnly,
+      enabled: !isInherited,
+      child: Text(isInherited ? 'Cram only (from a parent)' : 'Cram only'),
     );
   }
 }

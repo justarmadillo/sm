@@ -22,7 +22,7 @@ Pieces of this screen too big to keep in the screen file.
 |---|---|
 | `block_editor.dart` | Editing one block in place, with picker and clipboard image insertion |
 | `document_editor.dart` | Fullscreen editing of one source's complete Markdown |
-| `block_span_builder.dart` | Turns a block's inline layout into Flutter spans |
+| `block_span_builder.dart` | Turns a block's inline layout into Flutter spans, and a source's stored images into what they draw |
 | `block_view.dart` | Renders one block of a document |
 | `extract_highlights.dart` | Turns provenance into what the reader actually sees on the page |
 | `reader_selection.dart` | Block-aware text selection with exact source coordinates |

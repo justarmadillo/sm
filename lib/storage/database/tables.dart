@@ -943,6 +943,70 @@ class ElementTags extends Table {
   };
 }
 
+/// A saved custom-study filter: which tags and element types it draws from,
+/// and how a session built from it is ordered, capped, and scheduled.
+///
+/// A deck holds no elements. It is read again every time it is opened, the
+/// way an Anki filtered deck is rebuilt, so a newly tagged card joins it
+/// without anything being written here.
+@DataClassName('CustomDeckRow')
+class CustomDecks extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get name => text().withLength(min: 1, max: 100)();
+
+  /// Case-insensitive identity, so two decks cannot differ only by case.
+  TextColumn get nameLowercase => text().withLength(min: 1, max: 100)();
+
+  /// `CustomDeckTagMatch.storedValue`: 0 every include tag, 1 any of them.
+  IntColumn get tagMatch => integer().check(tagMatch.isBetweenValues(0, 1))();
+
+  /// One bit per `ElementType` index; at least one type is always chosen.
+  IntColumn get elementTypes =>
+      integer().check(elementTypes.isBetweenValues(1, 15))();
+
+  BoolColumn get shouldReschedule => boolean()();
+
+  /// The most elements one session studies, or null for no cap.
+  IntColumn get sessionLimit =>
+      integer().nullable().check(sessionLimit.isBiggerOrEqualValue(1))();
+
+  /// `CustomDeckOrder.storedValue`.
+  IntColumn get studyOrder =>
+      integer().check(studyOrder.isBetweenValues(0, 3))();
+
+  BoolColumn get isDueOnly => boolean()();
+
+  IntColumn get createdAtUtc => integer()();
+  IntColumn get updatedAtUtc => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+
+  @override
+  List<String> get customConstraints => <String>['UNIQUE (name_lowercase)'];
+}
+
+/// The tags a deck includes or excludes.
+///
+/// Both foreign keys cascade: deleting a deck or a tag removes the link, so a
+/// deck can never name a tag that no longer exists.
+@DataClassName('CustomDeckTagRow')
+class CustomDeckTags extends Table {
+  TextColumn get deckId =>
+      text().references(CustomDecks, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get tagId =>
+      text().references(Tags, #id, onDelete: KeyAction.cascade)();
+
+  /// `CustomDeckTagRole.storedValue`: 0 include, 1 exclude. One role per tag
+  /// per deck, which the primary key enforces.
+  IntColumn get role => integer().check(role.isBetweenValues(0, 1))();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{deckId, tagId};
+}
+
 /// Append-only activity log for diagnosis and audit.
 @DataClassName('ActivityEventRow')
 class ActivityEvents extends Table {

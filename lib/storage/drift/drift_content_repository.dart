@@ -579,6 +579,44 @@ final class DriftContentRepository implements ContentRepository {
   @override
   Future<List<Card>> listCards() => _listCardsMatching(null);
 
+  @override
+  Future<Map<ElementRef, String?>> listProvenanceParents() async {
+    final sourceIds = await (_database.selectOnly(
+      _database.sources,
+    )..addColumns(<Expression<Object>>[_database.sources.id])).get();
+    final extractParents =
+        await (_database.selectOnly(_database.extracts)
+              ..addColumns(<Expression<Object>>[
+                _database.extracts.id,
+                _database.extracts.parentId,
+              ]))
+            .get();
+    final cardParents =
+        await (_database.selectOnly(_database.cards)
+              ..addColumns(<Expression<Object>>[
+                _database.cards.id,
+                _database.cards.parentElementId,
+              ]))
+            .get();
+    return <ElementRef, String?>{
+      for (final row in sourceIds)
+        ElementRef(
+          id: row.read(_database.sources.id)!,
+          type: ElementType.source,
+        ): null,
+      for (final row in extractParents)
+        ElementRef(
+          id: row.read(_database.extracts.id)!,
+          type: ElementType.extract,
+        ): row.read(
+          _database.extracts.parentId,
+        ),
+      for (final row in cardParents)
+        ElementRef(id: row.read(_database.cards.id)!, type: ElementType.card):
+            row.read(_database.cards.parentElementId),
+    };
+  }
+
   /// Keeps every card list on the same deterministic creation order.
   Future<List<Card>> _listCardsMatching(
     Expression<bool> Function($CardsTable table)? rowMatches,

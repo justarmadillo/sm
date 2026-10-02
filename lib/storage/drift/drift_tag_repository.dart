@@ -62,8 +62,9 @@ final class DriftTagRepository implements TagRepository {
       _database.into(_database.tags).insert(_companion(tag));
 
   @override
-  Future<void> updateTag(Tag tag) =>
-      _database.update(_database.tags).write(_companion(tag));
+  Future<void> updateTag(Tag tag) => (_database.update(
+    _database.tags,
+  )..where(($TagsTable tags) => tags.id.equals(tag.id))).write(_companion(tag));
 
   @override
   Future<void> deleteTag(String id) async {
@@ -87,6 +88,16 @@ final class DriftTagRepository implements TagRepository {
     }
     return result;
   }
+
+  @override
+  Future<Set<ElementRef>> listElementsWithTag(
+    String tagId,
+  ) async => <ElementRef>{
+    for (final ElementTagRow row in await (_database.select(
+      _database.elementTags,
+    )..where(($ElementTagsTable links) => links.tagId.equals(tagId))).get())
+      ElementRef(id: row.elementId, type: ElementType.values[row.elementType]),
+  };
 
   @override
   Future<List<String>> listTagIdsOfElement(ElementRef ref) async => <String>[

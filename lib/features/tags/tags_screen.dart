@@ -12,9 +12,9 @@ import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 
 /// Opens the Tags screen and waits until it closes.
-Future<void> openTags(BuildContext context) => Navigator.of(context).push<void>(
-  MaterialPageRoute<void>(builder: (_) => const TagsScreen()),
-);
+Future<void> openTags(BuildContext context) => Navigator.of(
+  context,
+).push<void>(MaterialPageRoute<void>(builder: (_) => const TagsScreen()));
 
 class TagsScreen extends ConsumerStatefulWidget {
   const TagsScreen({super.key});
@@ -117,17 +117,44 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
   }
 
   Future<void> _delete(TagListEntry entry) async {
+    if (entry.tag.isCram && !await _confirmCramDelete(entry)) return;
     final Result<TagOutcome> result = await _model.delete(entry.tag);
     if (!mounted) return;
     _showFailure(result);
     setState(_reload);
   }
 
+  /// Only #cram asks first: deleting any other tag loses a label, but
+  /// deleting this one puts every cram-only element back into the daily
+  /// queue at once.
+  Future<bool> _confirmCramDelete(TagListEntry entry) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) => AlertDialog(
+          title: const Text('Delete #cram?'),
+          content: Text(
+            '${entry.elementCount} elements and everything filed under them '
+            'will return to spaced repetition.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
   void _showFailure<T>(Result<T> result) {
     final AppFailure? failure = result.failureOrNull;
     if (failure == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(failure.message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(failure.message)));
   }
 }

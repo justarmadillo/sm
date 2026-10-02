@@ -18,6 +18,7 @@ library;
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
+import 'package:incremental_reader/scheduling/cram_scope_query.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/history/review_log.dart';
 import 'package:incremental_reader/scheduling/history/scheduler_event.dart';
@@ -54,6 +55,7 @@ final class ReviewOutcome {
     required this.state,
     required this.buriedSiblings,
     required this.isLeech,
+    this.wasPractice = false,
   });
 
   /// The card as it now stands.
@@ -64,6 +66,10 @@ final class ReviewOutcome {
 
   /// Whether this card has now failed often enough to deserve rewriting.
   final bool isLeech;
+
+  /// Whether the grade was logged as practice and moved nothing — always the
+  /// case for a cram-only card, whatever the screen asked for.
+  final bool wasPractice;
 }
 
 /// Runs the commands for grading, editing, and deferring cards.
@@ -76,6 +82,7 @@ final class ReviewCommandRunner {
     required SchedulingContext context,
     required Clock clock,
     required IdGenerator ids,
+    required CramScopeQuery cramScope,
     DiagnosticSink diagnostics = const NullDiagnosticSink(),
   }) : _content = content,
        _learning = learning,
@@ -84,6 +91,7 @@ final class ReviewCommandRunner {
        _context = context,
        _clock = clock,
        _ids = ids,
+       _cramScope = cramScope,
        _journal = SchedulingJournal(learning: learning, ids: ids),
        _diagnostics = diagnostics;
 
@@ -94,6 +102,7 @@ final class ReviewCommandRunner {
   final SchedulingContext _context;
   final Clock _clock;
   final IdGenerator _ids;
+  final CramScopeQuery _cramScope;
   final SchedulingJournal _journal;
   final DiagnosticSink _diagnostics;
 
@@ -137,14 +146,17 @@ final class ReviewCommandRunner {
         final PriorityScale scale = await _context.priorityScale();
         final double pressure = scale.pressureOf(before.schedule.priority);
 
-        if (command.isPractice) {
-          return _logPractice(command, before, reviewedAt, pressure);
-        }
-        if (!before.isDueAt(reviewedAt, scheduler.calendar)) {
-          return const Err<ReviewOutcome>(
-            ConflictFailure('that card is not due yet'),
-          );
-        }
+        final Result<ReviewOutcome>? withoutFsrs = await _gradeWithoutFsrs(
+          command: command,
+          before: before,
+          scheduler: scheduler,
+          pressure: pressure,
+        );
+        if (withoutFsrs != null) return withoutFsrs;
+        final Map<String, Object?> sessionMetadata = _sessionMetadata(
+          command,
+          isEarly: !before.isDueAt(reviewedAt, scheduler.calendar),
+        );
 
         final CardReviewTransition transition = scheduler.review(
           before,
@@ -182,6 +194,7 @@ final class ReviewCommandRunner {
           postponeCount: before.memory.postponeCount,
           schedulerVersion: transition.record.schedulerVersion,
           parametersVersion: transition.record.parametersVersion,
+          metadata: sessionMetadata,
         );
 
         final int buried = await _burySiblings(command, transition.state);
@@ -208,6 +221,7 @@ final class ReviewCommandRunner {
             'rating': command.rating.value,
             'buried_siblings': buried,
             if (leech) 'leech': true,
+            ...sessionMetadata,
           },
         );
 
@@ -228,19 +242,7 @@ final class ReviewCommandRunner {
         );
         await _removeFromQueues(before.ref);
         await _transfer.advanceGeneration();
-        _diagnostics.record(
-          DiagnosticEvent(
-            level: DiagnosticLevel.info,
-            name: kCardReviewedType,
-            timestampUtc: _clock.nowUtc(),
-            operationId: command.operationId,
-            fields: <String, Object?>{
-              'rating': command.rating.value,
-              'state': transition.state.memory.state.value,
-              'buried': buried,
-            },
-          ),
-        );
+        _recordReviewed(command, state: transition.state, buried: buried);
         return Ok<ReviewOutcome>(
           ReviewOutcome(
             state: transition.state,
@@ -269,13 +271,71 @@ final class ReviewCommandRunner {
     }
   }
 
+  /// Null when the grade goes through FSRS; otherwise the practice log that
+  /// replaces it, or the refusal of a card that is not due yet.
+  Future<Result<ReviewOutcome>?> _gradeWithoutFsrs({
+    required ReviewCard command,
+    required CardState before,
+    required CardScheduler scheduler,
+    required double pressure,
+  }) async {
+    final bool isCramOnly = await _cramScope.isCramOnly(before.ref);
+    if (command.isPractice || isCramOnly) {
+      return _logPractice(
+        command: command,
+        state: before,
+        reviewedAt: command.timestampUtc,
+        pressure: pressure,
+        isCramOnly: isCramOnly,
+      );
+    }
+    if (!command.isEarlyReviewAllowed &&
+        !before.isDueAt(command.timestampUtc, scheduler.calendar)) {
+      return const Err<ReviewOutcome>(
+        ConflictFailure('that card is not due yet'),
+      );
+    }
+    return null;
+  }
+
+  /// What a custom deck adds to the logs of a real FSRS grade, so an early
+  /// review can be told apart from an on-time one later.
+  Map<String, Object?> _sessionMetadata(
+    ReviewCard command, {
+    required bool isEarly,
+  }) => <String, Object?>{
+    if (isEarly) 'early_review': true,
+    if (command.customDeckId case final String deckId) 'custom_deck_id': deckId,
+  };
+
+  void _recordReviewed(
+    ReviewCard command, {
+    required CardState state,
+    required int buried,
+  }) => _diagnostics.record(
+    DiagnosticEvent(
+      level: DiagnosticLevel.info,
+      name: kCardReviewedType,
+      timestampUtc: _clock.nowUtc(),
+      operationId: command.operationId,
+      fields: <String, Object?>{
+        'rating': command.rating.value,
+        'state': state.memory.state.value,
+        'buried': buried,
+      },
+    ),
+  );
+
+  /// A cram-only card stores practice for a grade that did not ask for it, so
+  /// only the opposite mismatch — practice asked, a real grade stored — is a
+  /// reused operation id.
   Future<Result<ReviewOutcome>> _replayReview(
     ReviewCard command,
     ReviewRecord record,
   ) async {
     if (record.cardId != command.cardId ||
         record.rating != command.rating ||
-        record.isPractice != command.isPractice) {
+        (command.isPractice && !record.isPractice)) {
       return Err<ReviewOutcome>(
         ConflictFailure(
           'operation ${command.operationId} was used for a different review',
@@ -304,7 +364,7 @@ final class ReviewCommandRunner {
     final SchedulerEvent? event = await _learning
         .findSchedulerEventByOperationId(
           command.operationId.value,
-          eventType: command.isPractice
+          eventType: record.isPractice
               ? SchedulerEventType.practiceReviewed
               : SchedulerEventType.cardReviewed,
         );
@@ -315,7 +375,8 @@ final class ReviewCommandRunner {
       ReviewOutcome(
         state: originalOutcome,
         buriedSiblings: buried,
-        isLeech: !command.isPractice && scheduler.isLeech(memory),
+        isLeech: !record.isPractice && scheduler.isLeech(memory),
+        wasPractice: record.isPractice,
       ),
     );
   }
@@ -429,6 +490,9 @@ final class ReviewCommandRunner {
             ),
           );
         }
+        if (await _cramScope.isCramOnly(state.ref)) {
+          return const Err<CardState>(ConflictFailure(kCramOnlyRefusal));
+        }
 
         final StudyDayCalendar calendar = await _context.calendar();
         final StudyDay today = calendar.dayOf(command.timestampUtc);
@@ -512,12 +576,17 @@ final class ReviewCommandRunner {
   }
 
   /// Logs a practice grade and changes nothing else.
-  Future<Result<ReviewOutcome>> _logPractice(
-    ReviewCard command,
-    CardState state,
-    DateTime reviewedAt,
-    double pressure,
-  ) async {
+  Future<Result<ReviewOutcome>> _logPractice({
+    required ReviewCard command,
+    required CardState state,
+    required DateTime reviewedAt,
+    required double pressure,
+    required bool isCramOnly,
+  }) async {
+    final Map<String, Object?> practiceMetadata = <String, Object?>{
+      'practice': true,
+      if (isCramOnly) 'cram_only': true,
+    };
     final ReviewRecord record = ReviewRecord(
       operationId: command.operationId.value,
       cardId: command.cardId,
@@ -544,7 +613,7 @@ final class ReviewCommandRunner {
       durationMs: command.elapsedMs,
       schedulerVersion: state.memory.schedulerVersion,
       parametersVersion: state.memory.parametersVersion,
-      metadata: const <String, Object?>{'practice': true},
+      metadata: practiceMetadata,
     );
     final StudyDayCalendar calendar = await _context.calendar();
     await _journal.appendScheduler(
@@ -560,7 +629,7 @@ final class ReviewCommandRunner {
       stateAfter: state.memory.canonicalFsrsJson(),
       algorithmicDueBefore: SchedulerEvent.encodeUtcDue(state.memory.dueAtUtc),
       algorithmicDueAfter: SchedulerEvent.encodeUtcDue(state.memory.dueAtUtc),
-      metadata: const <String, Object?>{'practice': true},
+      metadata: practiceMetadata,
     );
     await _learning.appendActivity(
       ActivityRecord.forCommand(
@@ -572,12 +641,17 @@ final class ReviewCommandRunner {
         durationMs: command.elapsedMs,
         metadata: <String, Object?>{
           'rating': command.rating.value,
-          'practice': true,
+          ...practiceMetadata,
         },
       ),
     );
     return Ok<ReviewOutcome>(
-      ReviewOutcome(state: state, buriedSiblings: 0, isLeech: false),
+      ReviewOutcome(
+        state: state,
+        buriedSiblings: 0,
+        isLeech: false,
+        wasPractice: true,
+      ),
     );
   }
 
@@ -593,11 +667,12 @@ final class ReviewCommandRunner {
     final StudyDay today = calendar.dayOf(command.timestampUtc);
     final StudyDay tomorrow = today.addDays(1);
     final CardScheduler scheduler = await _context.cardScheduler();
+    final Set<ElementRef> cramOnly = await _cramScope.listCramOnlyRefs();
 
     final entries = <ReviewLogEntry>[];
     for (final Card sibling in siblings) {
       final CardState? state = await _learning.findCardState(sibling.id);
-      if (state == null) continue;
+      if (state == null || cramOnly.contains(state.ref)) continue;
       if (!state.schedule.lifecycle.isSchedulable) continue;
       // A sibling already inside a learning step is mid-repetition; pushing
       // it to tomorrow would abandon work the user has started.

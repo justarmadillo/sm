@@ -689,17 +689,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Map<String, ReaderImagePresentation> _readerImages(ReaderUiState state) {
     if (identical(_imageAssets, state.assets)) return _imagePresentations;
     _imageAssets = state.assets;
-    if (state.assets.isEmpty) {
-      return _imagePresentations = const <String, ReaderImagePresentation>{};
-    }
-    final files = ref.read(sourceAssetFileStoreProvider);
-    return _imagePresentations = <String, ReaderImagePresentation>{
-      for (final asset in state.assets)
-        asset.srcRef: ReaderImagePresentation(
-          asset: asset,
-          imageProvider: FileImage(files.fileForSha256(asset.sha256)),
-        ),
-    };
+    return _imagePresentations = readerImagesFor(
+      state.assets,
+      () => ref.read(sourceAssetFileStoreProvider),
+    );
   }
 
   Future<void> _chooseImages(ReaderUiState state, ReaderViewModel model) async {
@@ -1139,6 +1132,9 @@ class _StatusBar extends StatelessWidget {
     if (state.mode == ReaderMode.browse) ...<Widget>[
       const StatusPill(text: 'Browsing', color: AppColors.softMarker),
       const Text('Nothing here changes progress or scheduling'),
+    ] else if (state.mode == ReaderMode.practice) ...<Widget>[
+      const StatusPill(text: 'Practice', color: AppColors.softMarker),
+      const Text('Schedule unchanged'),
     ] else ...<Widget>[
       const StatusPill(text: 'Reading today', color: AppColors.accent),
       Text(
@@ -1366,21 +1362,23 @@ class _ActionBar extends StatelessWidget {
             label: 'Dismiss',
             onPressed: state.isBusy ? null : model.dismiss,
           ),
+          if (state.canAdvanceSchedule) ...<Widget>[
+            _CompactReaderAction(
+              icon: Icons.replay,
+              label: 'Later',
+              onPressed: state.isBusy ? null : model.later,
+            ),
+            _CompactReaderAction(
+              icon: Icons.calendar_today_outlined,
+              label: 'Postpone',
+              onPressed: state.isBusy
+                  ? null
+                  : () => unawaited(_postponeFromPrompt(context)),
+            ),
+          ],
           _CompactReaderAction(
-            icon: Icons.replay,
-            label: 'Later',
-            onPressed: state.isBusy ? null : model.later,
-          ),
-          _CompactReaderAction(
-            icon: Icons.calendar_today_outlined,
-            label: 'Postpone',
-            onPressed: state.isBusy
-                ? null
-                : () => unawaited(_postponeFromPrompt(context)),
-          ),
-          _CompactReaderAction(
-            icon: Icons.check,
-            label: 'Done',
+            icon: state.canAdvanceSchedule ? Icons.check : Icons.skip_next,
+            label: state.canAdvanceSchedule ? 'Done' : 'Next',
             isPrimary: true,
             onPressed: state.isBusy ? null : model.done,
           ),
@@ -1435,19 +1433,21 @@ class _ActionBar extends StatelessWidget {
       onPressed: state.isBusy ? null : model.dismiss,
       child: const Text('Dismiss source'),
     ),
-    OutlinedButton(
-      onPressed: state.isBusy ? null : model.later,
-      child: const Text('Later today'),
-    ),
-    OutlinedButton(
-      onPressed: state.isBusy
-          ? null
-          : () => unawaited(_postponeFromPrompt(context)),
-      child: const Text('Postpone…'),
-    ),
+    if (state.canAdvanceSchedule) ...<Widget>[
+      OutlinedButton(
+        onPressed: state.isBusy ? null : model.later,
+        child: const Text('Later today'),
+      ),
+      OutlinedButton(
+        onPressed: state.isBusy
+            ? null
+            : () => unawaited(_postponeFromPrompt(context)),
+        child: const Text('Postpone…'),
+      ),
+    ],
     FilledButton(
       onPressed: state.isBusy ? null : model.done,
-      child: const Text('Done'),
+      child: Text(state.canAdvanceSchedule ? 'Done' : 'Next'),
     ),
   ];
 

@@ -13,6 +13,7 @@ import 'package:incremental_reader/documents/reader_anchor.dart';
 import 'package:incremental_reader/documents/source.dart';
 import 'package:incremental_reader/documents/source_edit.dart';
 import 'package:incremental_reader/documents/text_splice.dart';
+import 'package:incremental_reader/scheduling/element.dart';
 
 /// Sources, their parsed documents, extracts, and cards.
 abstract interface class ContentRepository {
@@ -123,6 +124,14 @@ abstract interface class ContentRepository {
   /// Includes cards written with no parent at all, which the per-parent
   /// listings above cannot reach.
   Future<List<Card>> listCards();
+
+  /// The element every source, extract, and card was cut or written from;
+  /// null for a source and for a card written with no parent.
+  ///
+  /// Reads identifiers only. The daily queue asks this on every load to find
+  /// which elements a cram-only tag reaches, and must not pull every
+  /// extract's markdown to answer.
+  Future<Map<ElementRef, String?>> listProvenanceParents();
 
   /// Replaces a card's text, including edits made during review.
   Future<void> updateCard(Card card);

@@ -13,6 +13,7 @@ library;
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:incremental_reader/scheduling/cram_scope_query.dart';
 import 'package:incremental_reader/scheduling/effective_due_query.dart';
 import 'package:incremental_reader/scheduling/scheduling_context.dart';
 import 'package:incremental_reader/scheduling/sm20_runtime_store.dart';
@@ -25,6 +26,7 @@ import 'package:incremental_reader/shared/fan_out_diagnostic_sink.dart';
 import 'package:incremental_reader/shared/id_generator.dart';
 import 'package:incremental_reader/shared/in_memory_diagnostic_sink.dart';
 import 'package:incremental_reader/storage/contracts/content_repository.dart';
+import 'package:incremental_reader/storage/contracts/custom_deck_repository.dart';
 import 'package:incremental_reader/storage/contracts/database_check.dart';
 import 'package:incremental_reader/storage/contracts/database_maintenance.dart';
 import 'package:incremental_reader/storage/contracts/learning_repository.dart';
@@ -38,6 +40,7 @@ import 'package:incremental_reader/storage/contracts/transfer_repository.dart';
 import 'package:incremental_reader/storage/contracts/video_repository.dart';
 import 'package:incremental_reader/storage/database/app_database.dart';
 import 'package:incremental_reader/storage/drift/drift_content_repository.dart';
+import 'package:incremental_reader/storage/drift/drift_custom_deck_repository.dart';
 import 'package:incremental_reader/storage/drift/drift_database_check.dart';
 import 'package:incremental_reader/storage/drift/drift_database_maintenance.dart';
 import 'package:incremental_reader/storage/drift/drift_learning_repository.dart';
@@ -236,6 +239,12 @@ final Provider<TagRepository> tagRepositoryProvider = Provider<TagRepository>(
   (Ref ref) => DriftTagRepository(ref.watch(databaseProvider)),
 );
 
+/// Saved custom-study decks.
+final Provider<CustomDeckRepository> customDeckRepositoryProvider =
+    Provider<CustomDeckRepository>(
+      (Ref ref) => DriftCustomDeckRepository(ref.watch(databaseProvider)),
+    );
+
 /// Whole-file housekeeping: integrity, the search index, and compaction.
 final Provider<DatabaseMaintenance> databaseMaintenanceProvider =
     Provider<DatabaseMaintenance>(
@@ -297,5 +306,17 @@ final Provider<EffectiveDueQuery> effectiveDueQueryProvider =
       (Ref ref) => EffectiveDueQuery(
         learning: ref.watch(learningRepositoryProvider),
         context: ref.watch(schedulingContextProvider),
+      ),
+    );
+
+/// Which elements the `#cram` tag keeps out of spaced repetition. Shared by
+/// the queue, the review and reader runners, and the custom-study screen.
+final Provider<CramScopeQuery> cramScopeQueryProvider =
+    Provider<CramScopeQuery>(
+      (Ref ref) => CramScopeQuery(
+        tags: ref.watch(tagRepositoryProvider),
+        content: ref.watch(contentRepositoryProvider),
+        videos: ref.watch(videoRepositoryProvider),
+        learning: ref.watch(learningRepositoryProvider),
       ),
     );

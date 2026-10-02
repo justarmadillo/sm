@@ -10,6 +10,7 @@ import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/block.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/documents/source_asset.dart';
 import 'package:incremental_reader/features/daily_queue/study_screen_outcome.dart';
 import 'package:incremental_reader/features/extract/extract_context_overlay.dart';
 import 'package:incremental_reader/features/extract/extract_view_model.dart';
@@ -19,6 +20,7 @@ import 'package:incremental_reader/features/priority/priority_dialog.dart';
 import 'package:incremental_reader/features/reader/reader_screen.dart';
 import 'package:incremental_reader/features/reader/reader_view_model.dart';
 import 'package:incremental_reader/features/reader/typography_controller.dart';
+import 'package:incremental_reader/features/reader/widgets/block_span_builder.dart';
 import 'package:incremental_reader/features/reader/widgets/extract_highlights.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_selection.dart';
 import 'package:incremental_reader/features/reader/widgets/reader_view.dart';
@@ -67,6 +69,9 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
   ReaderSelectionController? _selection;
   String? _documentIdentity;
   bool _hasOpenedAtAnchor = false;
+  List<SourceAsset>? _imageAssets;
+  Map<String, ReaderImagePresentation> _imagePresentations =
+      const <String, ReaderImagePresentation>{};
 
   /// Whether this visit has already dropped the previous one's state.
   bool _hasDiscardedLastVisit = false;
@@ -284,6 +289,17 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
     };
   }
 
+  /// The figures the extract's text links, rebuilt only when the assets
+  /// change: the reading surface re-measures every block for a new map.
+  Map<String, ReaderImagePresentation> _extractImages(ExtractUiState state) {
+    if (identical(_imageAssets, state.assets)) return _imagePresentations;
+    _imageAssets = state.assets;
+    return _imagePresentations = readerImagesFor(
+      state.assets,
+      () => ref.read(sourceAssetFileStoreProvider),
+    );
+  }
+
   /// The extract's text, with the selection toolbar floating over it.
   ///
   /// Selecting inside an extract is how a further extract is cut, so the same
@@ -314,6 +330,7 @@ class _ExtractScreenState extends ConsumerState<ExtractScreen> {
           ),
           onExtractMarksTap: (Block block) =>
               _openChildContext(context, state, block),
+          images: _extractImages(state),
         ),
         // Filled rather than left to size itself: its knobs are positioned,
         // and a stack of nothing but positioned children collapses to a point
@@ -533,8 +550,12 @@ class _ExtractStatusBar extends StatelessWidget {
   /// it comes back.
   List<Widget> _statusParts() => <Widget>[
     StatusPill(
-      text: state.canMutate ? 'Processing' : 'Browsing',
-      color: state.canMutate ? AppColors.accent : AppColors.softMarker,
+      text: switch (state.mode) {
+        ExtractMode.scheduled => 'Processing',
+        ExtractMode.browse => 'Browsing',
+        ExtractMode.practice => 'Practice: schedule unchanged',
+      },
+      color: state.canAdvanceSchedule ? AppColors.accent : AppColors.softMarker,
     ),
     Text(
       '${state.children.length} nested · ${state.cards.length} cards',
@@ -617,13 +638,14 @@ class _ExtractActionBar extends StatelessWidget {
           onPressed: state.isBusy ? null : onDismiss,
           child: const Text('Dismiss'),
         ),
-        OutlinedButton(
-          onPressed: state.isBusy ? null : onLater,
-          child: const Text('Later'),
-        ),
+        if (state.canAdvanceSchedule)
+          OutlinedButton(
+            onPressed: state.isBusy ? null : onLater,
+            child: const Text('Later'),
+          ),
         FilledButton(
           onPressed: state.isBusy ? null : onDone,
-          child: const Text('Done'),
+          child: Text(state.canAdvanceSchedule ? 'Done' : 'Next'),
         ),
       ],
     ],

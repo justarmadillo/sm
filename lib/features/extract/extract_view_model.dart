@@ -8,6 +8,7 @@ import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/document.dart';
 import 'package:incremental_reader/documents/extract.dart';
 import 'package:incremental_reader/documents/reader_anchor.dart';
+import 'package:incremental_reader/documents/source_asset.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
 import 'package:incremental_reader/features/extract/extract_commands.dart';
 import 'package:incremental_reader/features/extract/extract_providers.dart';
@@ -20,8 +21,17 @@ import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 
-/// Whether the extract is being processed or only consulted for context.
-enum ExtractMode { scheduled, browse }
+/// Whether the extract is being processed, practiced, or only consulted for
+/// context.
+enum ExtractMode {
+  scheduled,
+  browse,
+
+  /// Opened from a custom deck that does not reschedule, or for a cram-only
+  /// extract: everything works except that Done becomes Next and leaves the
+  /// schedule where it was.
+  practice,
+}
 
 @immutable
 final class ExtractRequest {
@@ -55,6 +65,7 @@ final class ExtractUiState {
     required this.mode,
     required this.children,
     required this.cards,
+    this.assets = const <SourceAsset>[],
     this.effectiveDueDay,
     this.lastExtractId,
     this.message,
@@ -69,6 +80,10 @@ final class ExtractUiState {
   final List<Extract> children;
   final List<Card> cards;
 
+  /// Images the extract's text may link. They belong to the root source, not
+  /// to the extract, which owns a copy of its words but not of its figures.
+  final List<SourceAsset> assets;
+
   /// When this extract may next be presented, adjustments included. Showing
   /// the canonical date instead would report a Later as if it never happened.
   final StudyDay? effectiveDueDay;
@@ -77,7 +92,11 @@ final class ExtractUiState {
   final bool isBusy;
   final bool isDone;
 
-  bool get canMutate => mode == ExtractMode.scheduled;
+  /// Whether the extract can be changed — extracted, formulated, dismissed.
+  bool get canMutate => mode != ExtractMode.browse;
+
+  /// Whether Done and Later may move the schedule.
+  bool get canAdvanceSchedule => mode == ExtractMode.scheduled;
   bool get canEdit => children.isEmpty;
 
   Map<String, int> get extractMarksByBlock {
@@ -109,6 +128,7 @@ final class ExtractUiState {
     ExtractMode? mode,
     List<Extract>? children,
     List<Card>? cards,
+    List<SourceAsset>? assets,
     StudyDay? effectiveDueDay,
     String? lastExtractId,
     bool shouldClearLastExtract = false,
@@ -123,6 +143,7 @@ final class ExtractUiState {
     mode: mode ?? this.mode,
     children: children ?? this.children,
     cards: cards ?? this.cards,
+    assets: assets ?? this.assets,
     effectiveDueDay: effectiveDueDay ?? this.effectiveDueDay,
     lastExtractId: shouldClearLastExtract
         ? null
@@ -168,9 +189,12 @@ final class ExtractViewModel
         markdown: extract.markdown,
       ),
       topic: topic,
-      mode: mode,
+      mode: await _practiceIfCramOnly(mode, topic.ref),
       children: await content.listExtractsOfParent(extract.id),
       cards: await content.listCardsOfExtract(extract.id),
+      assets: await ref
+          .read(sourceAssetRepositoryProvider)
+          .listSourceAssets(extract.provenance.sourceId),
       effectiveDueDay: await ref
           .read(effectiveDueQueryProvider)
           .forTopic(topic),
@@ -286,9 +310,36 @@ final class ExtractViewModel
     );
   }
 
+  /// A cram-only extract never advances, so a scheduled opening — a queue
+  /// entry made before the tick, or Continue — becomes practice.
+  Future<ExtractMode> _practiceIfCramOnly(
+    ExtractMode mode,
+    ElementRef topicRef,
+  ) async =>
+      mode == ExtractMode.scheduled &&
+          await ref.read(cramScopeQueryProvider).isCramOnly(topicRef)
+      ? ExtractMode.practice
+      : mode;
+
+  /// Done; in practice, Next, which logs the sitting and moves nothing.
   Future<void> done() async {
     final current = state.valueOrNull;
     if (current == null || !current.canMutate) return;
+    if (!current.canAdvanceSchedule) {
+      return _command<TopicState>(
+        (OperationId operation) => ref
+            .read(readerCommandRunnerProvider)
+            .completePractice(
+              CompleteTopicPractice(
+                operation,
+                ref: current.topic.ref,
+                foregroundMs: _foregroundMs(),
+              ),
+            ),
+        apply: (ExtractUiState latest, TopicState topic) =>
+            latest.copyWith(topic: topic, isDone: true),
+      );
+    }
     await _command<TopicState>(
       (OperationId operation) => ref
           .read(readerCommandRunnerProvider)
@@ -311,7 +362,7 @@ final class ExtractViewModel
   /// equally full queue.
   Future<void> later({int? days}) async {
     final current = state.valueOrNull;
-    if (current == null || !current.canMutate) return;
+    if (current == null || !current.canAdvanceSchedule) return;
     final StudyDay? until = days == null
         ? null
         : (await ref.read(readerCommandRunnerProvider).today()).addDays(days);

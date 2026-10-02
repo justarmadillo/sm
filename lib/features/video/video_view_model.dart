@@ -26,8 +26,15 @@ import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
 import 'package:incremental_reader/shared/operation_id.dart';
 import 'package:incremental_reader/shared/result.dart';
 
-/// Whether the range is being processed or only consulted.
-enum VideoMode { scheduled, browse }
+/// Whether the range is being processed, practiced, or only consulted.
+enum VideoMode {
+  scheduled,
+  browse,
+
+  /// Opened from a custom deck that does not reschedule, or for a cram-only
+  /// range: Done becomes Next and leaves the schedule where it was.
+  practice,
+}
 
 @immutable
 final class VideoRequest {
@@ -81,7 +88,11 @@ final class VideoUiState {
   final bool isBusy;
   final bool isDone;
 
-  bool get canMutate => mode == VideoMode.scheduled;
+  /// Whether the range can be changed — clipped, formulated, dismissed.
+  bool get canMutate => mode != VideoMode.browse;
+
+  /// Whether Done and Later may move the schedule.
+  bool get canAdvanceSchedule => mode == VideoMode.scheduled;
 
   /// Where Open should land: where the user got to, or the range's start.
   int get openAtSeconds => element.resumeSeconds ?? element.startSeconds;
@@ -171,7 +182,7 @@ final class VideoViewModel
       element: element,
       video: video,
       topic: topic,
-      mode: mode,
+      mode: await _practiceIfCramOnly(mode, topic.ref),
       clips: await videos.listVideoElementsOfParent(element.id),
       cards: await ref
           .read(contentRepositoryProvider)
@@ -280,9 +291,36 @@ final class VideoViewModel
     return created;
   }
 
+  /// A cram-only range never advances, so a scheduled opening becomes
+  /// practice.
+  Future<VideoMode> _practiceIfCramOnly(
+    VideoMode mode,
+    ElementRef topicRef,
+  ) async =>
+      mode == VideoMode.scheduled &&
+          await ref.read(cramScopeQueryProvider).isCramOnly(topicRef)
+      ? VideoMode.practice
+      : mode;
+
+  /// Done; in practice, Next, which logs the sitting and moves nothing.
   Future<void> done() async {
     final VideoUiState? current = state.valueOrNull;
     if (current == null || !current.canMutate) return;
+    if (!current.canAdvanceSchedule) {
+      return _command<TopicState>(
+        (OperationId operation) => ref
+            .read(readerCommandRunnerProvider)
+            .completePractice(
+              CompleteTopicPractice(
+                operation,
+                ref: current.topic.ref,
+                foregroundMs: _foregroundMs(),
+              ),
+            ),
+        apply: (VideoUiState latest, TopicState topic) =>
+            latest.copyWith(topic: topic, isDone: true),
+      );
+    }
     await _command<TopicState>(
       (OperationId operation) => ref
           .read(readerCommandRunnerProvider)
@@ -301,7 +339,7 @@ final class VideoViewModel
   /// Later: moves eligibility without advancing anything.
   Future<void> later({int? days}) async {
     final VideoUiState? current = state.valueOrNull;
-    if (current == null || !current.canMutate) return;
+    if (current == null || !current.canAdvanceSchedule) return;
     final StudyDay? until = days == null
         ? null
         : (await ref.read(readerCommandRunnerProvider).today()).addDays(days);

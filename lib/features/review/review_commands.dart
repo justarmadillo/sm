@@ -13,12 +13,24 @@ final class ReviewCard extends AppCommand {
     required this.rating,
     this.elapsedMs,
     this.isPractice = false,
+    this.isEarlyReviewAllowed = false,
+    this.customDeckId,
     super.timestampUtc,
   });
 
   final String cardId;
   final CardRating rating;
   final int? elapsedMs;
+
+  /// Whether a card that is not due yet may still be graded through FSRS.
+  ///
+  /// Only a custom deck with rescheduling on sets this, the way an Anki
+  /// filtered deck reschedules early reviews. The daily queue never does: a
+  /// card that is not due there means the queue is stale.
+  final bool isEarlyReviewAllowed;
+
+  /// The saved custom deck this grade was made in, kept only in log metadata.
+  final String? customDeckId;
 
   /// A subset-review grade.
   ///

@@ -100,6 +100,7 @@ writing a row itself.
 | File | What it promises |
 |---|---|
 | `content_repository.dart` | What the app promises about saving and loading the things you read |
+| `custom_deck_repository.dart` | What the app promises about saved custom-study decks |
 | `database_check.dart` | Findings and outcomes from collection-level integrity repair |
 | `database_maintenance.dart` | What the app promises about keeping the database file in good shape |
 | `learning_repository.dart` | What the app promises about saving and loading when things come back |
@@ -130,6 +131,7 @@ One implementation per contract, same order, same names.
 | File | What it is |
 |---|---|
 | `drift_content_repository.dart` | Saves and loads sources, blocks, extracts, and cards, using Drift |
+| `drift_custom_deck_repository.dart` | Saves and loads custom-study decks, using Drift |
 | `drift_database_check.dart` | Drift implementation of the atomic collection check and repair pass |
 | `drift_database_maintenance.dart` | Compacts and repairs the database file, using Drift |
 | `drift_learning_repository.dart` | Saves and loads schedules, priority, and the repetition log, using Drift |

@@ -11,8 +11,10 @@ import 'package:incremental_reader/features/daily_queue/queue_query.dart';
 /// The population every queue calculation starts from.
 final Provider<QueueCandidatesQuery> queueCandidatesQueryProvider =
     Provider<QueueCandidatesQuery>(
-      (Ref ref) =>
-          QueueCandidatesQuery(learning: ref.watch(learningRepositoryProvider)),
+      (Ref ref) => QueueCandidatesQuery(
+        learning: ref.watch(learningRepositoryProvider),
+        cramScope: ref.watch(cramScopeQueryProvider),
+      ),
     );
 
 /// The daily queue transaction, the manual stage commands, and Mercy.
@@ -26,6 +28,7 @@ final Provider<QueueCommandRunner> queueCommandRunnerProvider =
         context: ref.watch(schedulingContextProvider),
         clock: ref.watch(clockProvider),
         ids: ref.watch(idGeneratorProvider),
+        cramScope: ref.watch(cramScopeQueryProvider),
         diagnostics: ref.watch(diagnosticsProvider),
       ),
     );

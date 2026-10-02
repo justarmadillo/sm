@@ -16,6 +16,7 @@ final Provider<TagsCommandRunner> tagsCommandRunnerProvider =
     Provider<TagsCommandRunner>(
       (Ref ref) => TagsCommandRunner(
         tags: ref.watch(tagRepositoryProvider),
+        decks: ref.watch(customDeckRepositoryProvider),
         learning: ref.watch(learningRepositoryProvider),
         transfer: ref.watch(transferRepositoryProvider),
         transactions: ref.watch(transactionRunnerProvider),

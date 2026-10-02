@@ -56,6 +56,11 @@ abstract interface class VideoRepository {
   /// all in one read.
   Future<List<VideoElement>> listVideoElements();
 
+  /// The clip each video element was cut from, keyed by element id; null for
+  /// a whole-video range. Identifiers only, for the same reason as
+  /// `ContentRepository.listProvenanceParents`.
+  Future<Map<String, String?>> listVideoElementParents();
+
   /// Replaces an element's editable fields: title, note, and range.
   Future<void> updateVideoElement(VideoElement element);
 

@@ -10,6 +10,7 @@ import 'package:incremental_reader/app/providers.dart';
 import 'package:incremental_reader/documents/card.dart';
 import 'package:incremental_reader/documents/occlusion.dart';
 import 'package:incremental_reader/features/browser/browser_view_model.dart';
+import 'package:incremental_reader/features/daily_queue/study_scheduling.dart';
 import 'package:incremental_reader/features/review/review_command_runner.dart';
 import 'package:incremental_reader/features/review/review_commands.dart';
 import 'package:incremental_reader/features/review/review_providers.dart';
@@ -33,6 +34,7 @@ final class ReviewUiState {
     this.isEditing = false,
     this.occlusion,
     this.tagNames = const <String>[],
+    this.isCramOnly = false,
   });
 
   final Card card;
@@ -55,6 +57,10 @@ final class ReviewUiState {
   final bool isEditing;
   final CardOcclusion? occlusion;
   final List<String> tagNames;
+
+  /// Whether this card is cram-only, so every grade is practice whatever the
+  /// screen was opened for — even from a queue entry made before the tick.
+  final bool isCramOnly;
 
   String get question => cardQuestionText(card);
 
@@ -80,6 +86,7 @@ final class ReviewUiState {
     bool? isEditing,
     CardOcclusion? occlusion,
     List<String>? tagNames,
+    bool? isCramOnly,
   }) => ReviewUiState(
     card: card ?? this.card,
     cardState: cardState ?? this.cardState,
@@ -92,6 +99,7 @@ final class ReviewUiState {
     isEditing: isEditing ?? this.isEditing,
     occlusion: occlusion ?? this.occlusion,
     tagNames: tagNames ?? this.tagNames,
+    isCramOnly: isCramOnly ?? this.isCramOnly,
   );
 }
 
@@ -130,6 +138,7 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
           .read(occlusionRepositoryProvider)
           .findCardOcclusion(card.id),
       isLeech: leechLapses > 0 && cardState.memory.lapses >= leechLapses,
+      isCramOnly: await ref.read(cramScopeQueryProvider).isCramOnly(cardRef),
     );
   }
 
@@ -158,7 +167,13 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
     );
   }
 
-  Future<void> grade(CardRating rating, {bool isPractice = false}) async {
+  /// [scheduling] is how the screen was opened; [customDeckId] names the
+  /// saved deck it was opened from, for the log only.
+  Future<void> grade(
+    CardRating rating, {
+    StudyScheduling scheduling = StudyScheduling.scheduled,
+    String? customDeckId,
+  }) async {
     final ReviewUiState? current = state.valueOrNull;
     if (current == null ||
         !current.isAnswerRevealed ||
@@ -177,7 +192,9 @@ final class ReviewViewModel extends FamilyAsyncNotifier<ReviewUiState, String> {
             cardId: current.card.id,
             rating: rating,
             elapsedMs: _elapsedMs(now),
-            isPractice: isPractice,
+            isPractice: scheduling.isPractice,
+            isEarlyReviewAllowed: scheduling.isEarlyReviewAllowed,
+            customDeckId: customDeckId,
             timestampUtc: now,
           ),
         );

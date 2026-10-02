@@ -7,6 +7,7 @@
 library;
 
 import 'package:incremental_reader/scheduling/cards/card_scheduler.dart';
+import 'package:incremental_reader/scheduling/cram_scope_query.dart';
 import 'package:incremental_reader/scheduling/daily_queue/queue_policy.dart';
 import 'package:incremental_reader/scheduling/element.dart';
 import 'package:incremental_reader/scheduling/topics/topic_scheduler.dart';
@@ -14,12 +15,20 @@ import 'package:incremental_reader/storage/contracts/learning_repository.dart';
 
 /// Every element eligible to appear in a queue, before any due filtering.
 final class QueueCandidatesQuery {
-  const QueueCandidatesQuery({required LearningRepository learning})
-    : _learning = learning;
+  const QueueCandidatesQuery({
+    required LearningRepository learning,
+    required CramScopeQuery cramScope,
+  }) : _learning = learning,
+       _cramScope = cramScope;
 
   final LearningRepository _learning;
+  final CramScopeQuery _cramScope;
 
-  /// All active topic records and card memories.
+  /// All active topic records and card memories, except cram-only ones.
+  ///
+  /// Leaving cram-only elements out here, at the one place every queue
+  /// calculation starts, is what keeps them out of Outstanding, Pending,
+  /// Final drill, the counters, Mercy, and automatic postpone alike.
   ///
   /// Due filtering belongs to the queue transaction because existing queue
   /// membership can intentionally contain a future repetition added by a
@@ -41,14 +50,17 @@ final class QueueCandidatesQuery {
     final List<CardState> cards = await _learning.listCardStates(
       lifecycles: const <ElementLifecycle>{ElementLifecycle.active},
     );
+    final Set<ElementRef> cramOnly = await _cramScope.listCramOnlyRefs();
     return <QueueCandidate>[
       for (final ElementSchedule schedule in topicSchedules)
         if (topics[schedule.ref] case final TopicState topic)
           if (topic.status != Sm20ElementStatus.dismissed &&
-              topic.status != Sm20ElementStatus.deleted)
+              topic.status != Sm20ElementStatus.deleted &&
+              !cramOnly.contains(schedule.ref))
             QueueCandidate.topic(topic, rootId: schedule.rootId),
       for (final CardState card in cards)
-        QueueCandidate.card(card, rootId: card.schedule.rootId),
+        if (!cramOnly.contains(card.schedule.ref))
+          QueueCandidate.card(card, rootId: card.schedule.rootId),
     ];
   }
 }

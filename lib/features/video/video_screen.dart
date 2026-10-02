@@ -48,17 +48,14 @@ Future<StudyRouteResult> openVideo(
     ) ??
     StudyRouteResult.canceled;
 
-/// Opens the video screen as a scheduled sitting from the queue.
+/// Opens the video screen as a study sitting: scheduled from the queue, or
+/// practice from a custom deck.
 Future<StudyRouteResult> openVideoForStudy(
   BuildContext context,
   WidgetRef ref, {
   required String videoElementId,
-}) => openVideo(
-  context,
-  ref,
-  videoElementId: videoElementId,
-  mode: VideoMode.scheduled,
-);
+  VideoMode mode = VideoMode.scheduled,
+}) => openVideo(context, ref, videoElementId: videoElementId, mode: mode);
 
 class VideoScreen extends ConsumerStatefulWidget {
   const VideoScreen({required this.request, super.key});
@@ -623,8 +620,12 @@ class _VideoStatusBar extends StatelessWidget {
 
   List<Widget> _statusParts() => <Widget>[
     StatusPill(
-      text: state.canMutate ? 'Processing' : 'Browsing',
-      color: state.canMutate ? AppColors.accent : AppColors.softMarker,
+      text: switch (state.mode) {
+        VideoMode.scheduled => 'Processing',
+        VideoMode.browse => 'Browsing',
+        VideoMode.practice => 'Practice: schedule unchanged',
+      },
+      color: state.canAdvanceSchedule ? AppColors.accent : AppColors.softMarker,
     ),
     Text(
       '${state.clips.length} clips · ${state.cards.length} cards · '
@@ -696,13 +697,14 @@ class _VideoActionBar extends StatelessWidget {
         onPressed: state.canMutate ? onDismiss : null,
         child: const Text('Dismiss'),
       ),
-      TextButton(
-        onPressed: state.canMutate ? onLater : null,
-        child: const Text('Later'),
-      ),
+      if (state.mode != VideoMode.practice)
+        TextButton(
+          onPressed: state.canAdvanceSchedule ? onLater : null,
+          child: const Text('Later'),
+        ),
       FilledButton(
         onPressed: state.canMutate ? onDone : null,
-        child: const Text('Done'),
+        child: Text(state.mode == VideoMode.practice ? 'Next' : 'Done'),
       ),
     ],
   );

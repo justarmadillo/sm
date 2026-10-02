@@ -17,9 +17,8 @@ final class TagsViewModel {
   Future<Result<TagOutcome>> create(String name) =>
       _runner.create(CreateTag(_newOperationId(), name: name));
 
-  Future<Result<TagOutcome>> rename(Tag tag, String name) => _runner.rename(
-    RenameTag(_newOperationId(), tagId: tag.id, name: name),
-  );
+  Future<Result<TagOutcome>> rename(Tag tag, String name) =>
+      _runner.rename(RenameTag(_newOperationId(), tagId: tag.id, name: name));
 
   Future<Result<TagOutcome>> delete(Tag tag) =>
       _runner.delete(DeleteTag(_newOperationId(), tagId: tag.id));

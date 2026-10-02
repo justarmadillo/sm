@@ -77,10 +77,34 @@ final class DeleteTagsFromElements extends AppCommand {
   final Set<String> tagIds;
 }
 
+/// Ticks or unticks "Cram only" on every selected element.
+///
+/// Ticking writes the `#cram` tag directly on each element, creating the tag
+/// the first time; unticking removes that direct link. An element that is
+/// cram-only only because a parent is cannot be unticked here.
+final class MarkCramOnly extends AppCommand {
+  MarkCramOnly(
+    super.operationId, {
+    required this.refs,
+    required this.isCramOnly,
+    super.timestampUtc,
+  });
+  final List<ElementRef> refs;
+  final bool isCramOnly;
+}
+
 /// The tag created or changed by a definition command.
 final class TagOutcome {
   const TagOutcome(this.tag);
   final Tag tag;
+}
+
+/// The `#cram` tag, or null when unticking found none, and how many
+/// elements actually gained or lost their direct link.
+final class CramOutcome {
+  const CramOutcome({required this.tag, required this.changedRefCount});
+  final Tag? tag;
+  final int changedRefCount;
 }
 
 /// How many element references a link command addressed.

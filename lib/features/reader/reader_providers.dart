@@ -25,6 +25,7 @@ final Provider<ReaderCommandRunner> readerCommandRunnerProvider =
         context: ref.watch(schedulingContextProvider),
         clock: ref.watch(clockProvider),
         ids: ref.watch(idGeneratorProvider),
+        cramScope: ref.watch(cramScopeQueryProvider),
         diagnostics: ref.watch(diagnosticsProvider),
       ),
     );
